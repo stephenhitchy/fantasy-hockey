@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   collection,
   doc,
@@ -78,6 +80,8 @@ export interface SharedProjectionSnapshotMetadata {
   projectionAsOfDate?: string;
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
+  /** Exact global-plus-commissioner availability input used for this snapshot. */
+  availabilityRevision?: string;
   authoritySchemaVersion?: number;
   generatedByAuthority?: 'server';
   catalogSnapshotId?: string;
@@ -107,6 +111,8 @@ export interface GenerateSharedProjectionSnapshotInput {
   targetCycleNumber?: number;
   requestedBy?: string;
   generationRequestId?: string;
+  /** Fails closed if availability changed after a server request was queued. */
+  expectedAvailabilityRevision?: string;
 }
 
 export interface WindowSnapshotFreshnessInput {
@@ -215,6 +221,10 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     projectionSeason:
       typeof value.projectionSeason === 'string'
         ? value.projectionSeason
+        : undefined,
+    availabilityRevision:
+      typeof value.availabilityRevision === 'string'
+        ? value.availabilityRevision
         : undefined,
     authoritySchemaVersion:
       typeof value.authoritySchemaVersion === 'number'
@@ -776,6 +786,18 @@ interface ProjectionGenerationContext {
   historicalReplayAlignment: boolean;
   ignoreAvailability: boolean;
   availabilityByPlayerId: ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>;
+  availabilityRevision: string;
+}
+
+export interface ProjectionAvailabilityEvidence {
+  revision: string | null;
+  lastSuccessfulAt: string | null;
+  lastDailySyncKey: string | null;
+  status: string | null;
+}
+
+interface ProjectionAvailabilityContext extends ProjectionAvailabilityEvidence {
+  records: ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>;
 }
 
 const VALID_AVAILABILITY_STATUSES = new Set<PlayerAvailabilityStatus>([
@@ -894,9 +916,9 @@ function normalizeAvailabilityRecord(
   };
 }
 
-async function loadAvailabilityRecords(
+async function loadAvailabilityContext(
   leagueId: string,
-): Promise<ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>> {
+): Promise<ProjectionAvailabilityContext> {
   const records = new Map<number, PlayerAvailabilityDatabaseRecord>();
   const [globalSnapshot, manualSnapshot] = await Promise.all([
     getDoc(doc(db, 'appData', 'playerAvailability')).catch(() => null),
@@ -927,7 +949,60 @@ async function loadAvailabilityRecords(
     }
   }
 
-  return records;
+  const orderedRecords = [...records.values()]
+    .sort((first, second) => first.playerId - second.playerId)
+    .map((record) => ({
+      playerId: record.playerId,
+      status: record.status,
+      note: record.note,
+      updatedAt: record.updatedAt,
+      updatedBy: record.updatedBy,
+      source: record.source,
+      externalStatus: record.externalStatus ?? '',
+      externalReturnDate: record.externalReturnDate ?? '',
+      externalInjuryDate: record.externalInjuryDate ?? '',
+      syncedAt: record.syncedAt ?? '',
+    }));
+  const lastSuccessfulAt = toIsoDate(globalData?.['lastSuccessfulSyncAt']) || null;
+  const globalStatus = typeof globalData?.['status'] === 'string'
+    ? globalData['status']
+    : null;
+  const lastDailySyncKey = typeof globalData?.['lastDailySyncKey'] === 'string'
+    ? globalData['lastDailySyncKey']
+    : null;
+  // A failed commissioner-override read is not equivalent to an empty
+  // override collection. Draft readiness must fail closed in that case.
+  const availabilityInputsComplete = globalSnapshot?.exists() && manualSnapshot !== null;
+  const revision = availabilityInputsComplete
+    ? createHash('sha256')
+        .update(JSON.stringify({
+          lastSuccessfulAt,
+          lastDailySyncKey: lastDailySyncKey ?? '',
+          records: orderedRecords,
+        }))
+        .digest('hex')
+    : null;
+
+  return {
+    records,
+    revision,
+    lastSuccessfulAt,
+    lastDailySyncKey,
+    status: globalStatus,
+  };
+}
+
+export async function loadProjectionAvailabilityEvidence(
+  leagueId: string,
+): Promise<ProjectionAvailabilityEvidence> {
+  const context = await loadAvailabilityContext(leagueId);
+
+  return {
+    revision: context.revision,
+    lastSuccessfulAt: context.lastSuccessfulAt,
+    lastDailySyncKey: context.lastDailySyncKey,
+    status: context.status,
+  };
 }
 
 async function loadHistoricalReplayProjectionContext(
@@ -1025,10 +1100,12 @@ async function getProjectionGenerationContext(
       historicalReplayAlignment: true,
       ignoreAvailability: true,
       availabilityByPlayerId: new Map(),
+      availabilityRevision: 'historical-replay:none',
     };
   }
 
   const projectionDate = new Date();
+  const availability = await loadAvailabilityContext(leagueId);
 
   return {
     projectionDate,
@@ -1037,7 +1114,8 @@ async function getProjectionGenerationContext(
     projectionSeason: seasonForDate(projectionDate),
     historicalReplayAlignment: false,
     ignoreAvailability: false,
-    availabilityByPlayerId: await loadAvailabilityRecords(leagueId),
+    availabilityByPlayerId: availability.records,
+    availabilityRevision: availability.revision ?? 'missing',
   };
 }
 
@@ -1084,6 +1162,15 @@ async function generateSnapshotInternal(
     snapshotId,
   );
   const context = await getProjectionGenerationContext(leagueId);
+
+  if (
+    input.expectedAvailabilityRevision &&
+    context.availabilityRevision !== input.expectedAvailabilityRevision
+  ) {
+    throw new Error(
+      'The player-availability input changed after Draft preparation was queued. The server will retry with the newest saved report.',
+    );
+  }
   const buildingMetadata = {
     snapshotId,
     activeSnapshotId: snapshotId,
@@ -1108,6 +1195,7 @@ async function generateSnapshotInternal(
     projectionAsOfDate: context.projectionAsOfDate,
     projectionContext: context.projectionContext,
     projectionSeason: context.projectionSeason,
+    availabilityRevision: context.availabilityRevision,
   };
 
   const buildingBatch = writeBatch(db);
@@ -1224,6 +1312,7 @@ async function generateSnapshotInternal(
       projectionAsOfDate: context.projectionAsOfDate,
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
+      availabilityRevision: context.availabilityRevision,
       authoritySchemaVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
       generatedByAuthority: 'server',
       catalogSnapshotId: catalogValidation.catalogId,

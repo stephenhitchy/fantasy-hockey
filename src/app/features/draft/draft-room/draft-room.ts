@@ -2150,6 +2150,24 @@ export class DraftRoom implements OnDestroy {
   }
 
   getPreDraftPreparationStatusLabel(): string {
+    const serverStatus = this.draft()?.serverDraftReadinessStatus;
+
+    if (serverStatus === 'ready') {
+      return 'Server Draft Data Ready';
+    }
+
+    if (serverStatus === 'preparing-projection') {
+      return 'Server Preparing Draft Data';
+    }
+
+    if (serverStatus === 'waiting-injury') {
+      return 'Waiting for Injury Report';
+    }
+
+    if (serverStatus === 'error') {
+      return 'Preparation Retry Scheduled';
+    }
+
     if (this.preDraftPreparationInProgress()) {
       return 'Preparing Draft Data';
     }
@@ -2173,6 +2191,12 @@ export class DraftRoom implements OnDestroy {
   }
 
   getPreDraftPreparationDescription(): string {
+    const serverMessage = this.draft()?.serverDraftReadinessMessage;
+
+    if (serverMessage) {
+      return serverMessage;
+    }
+
     if (this.preDraftPreparationWarning()) {
       return this.preDraftPreparationWarning();
     }
@@ -2188,6 +2212,22 @@ export class DraftRoom implements OnDestroy {
     return this.isCommissioner()
       ? `The server will open the draft automatically at the scheduled time. This page may stay closed.`
       : 'The app will check the shared daily injury report and prepare one league ranking before the scheduled start.';
+  }
+
+  isPreDraftPreparationReady(): boolean {
+    const serverStatus = this.draft()?.serverDraftReadinessStatus;
+
+    return serverStatus
+      ? serverStatus === 'ready'
+      : this.preDraftPreparationReady();
+  }
+
+  isPreDraftPreparationRunning(): boolean {
+    const serverStatus = this.draft()?.serverDraftReadinessStatus;
+
+    return serverStatus
+      ? serverStatus === 'preparing-projection'
+      : this.preDraftPreparationInProgress();
   }
 
   private async loadFreshDraftSnapshotIfAvailable(): Promise<boolean> {

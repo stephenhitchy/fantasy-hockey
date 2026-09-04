@@ -635,6 +635,43 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
       data.projectionPreparationStatus === 'error'
         ? data.projectionPreparationStatus
         : null,
+    serverDraftReadinessStatus:
+      data.serverDraftReadinessStatus === 'waiting-injury' ||
+      data.serverDraftReadinessStatus === 'preparing-projection' ||
+      data.serverDraftReadinessStatus === 'ready' ||
+      data.serverDraftReadinessStatus === 'error'
+        ? data.serverDraftReadinessStatus
+        : null,
+    serverDraftReadinessScheduledStartAt:
+      data.serverDraftReadinessScheduledStartAt ?? null,
+    serverDraftReadinessAvailabilityRevision:
+      typeof data.serverDraftReadinessAvailabilityRevision === 'string'
+        ? data.serverDraftReadinessAvailabilityRevision
+        : null,
+    serverDraftReadinessProjectionRequestId:
+      typeof data.serverDraftReadinessProjectionRequestId === 'string'
+        ? data.serverDraftReadinessProjectionRequestId
+        : null,
+    serverDraftReadinessProjectionSnapshotId:
+      typeof data.serverDraftReadinessProjectionSnapshotId === 'string'
+        ? data.serverDraftReadinessProjectionSnapshotId
+        : null,
+    serverDraftReadinessProjectionSnapshotHash:
+      typeof data.serverDraftReadinessProjectionSnapshotHash === 'string'
+        ? data.serverDraftReadinessProjectionSnapshotHash
+        : null,
+    serverDraftReadinessAttemptCount:
+      typeof data.serverDraftReadinessAttemptCount === 'number' &&
+      Number.isFinite(data.serverDraftReadinessAttemptCount)
+        ? Math.max(0, Math.trunc(data.serverDraftReadinessAttemptCount))
+        : 0,
+    serverDraftReadinessRetryAfterAt:
+      data.serverDraftReadinessRetryAfterAt ?? null,
+    serverDraftReadinessMessage:
+      typeof data.serverDraftReadinessMessage === 'string'
+        ? data.serverDraftReadinessMessage
+        : null,
+    serverDraftReadinessUpdatedAt: data.serverDraftReadinessUpdatedAt,
     serverDraftProjectionSnapshotId:
       typeof data.serverDraftProjectionSnapshotId === 'string'
         ? data.serverDraftProjectionSnapshotId
@@ -681,6 +718,15 @@ export function createDefaultFantasyDraft(roundOneOrder: string[]): FantasyDraft
     lastSettingsSubmissionId: null,
     projectionPreparationRequestId: null,
     projectionPreparationStatus: null,
+    serverDraftReadinessStatus: null,
+    serverDraftReadinessScheduledStartAt: null,
+    serverDraftReadinessAvailabilityRevision: null,
+    serverDraftReadinessProjectionRequestId: null,
+    serverDraftReadinessProjectionSnapshotId: null,
+    serverDraftReadinessProjectionSnapshotHash: null,
+    serverDraftReadinessAttemptCount: 0,
+    serverDraftReadinessRetryAfterAt: null,
+    serverDraftReadinessMessage: null,
     serverDraftProjectionSnapshotId: null,
     serverDraftProjectionSnapshotHash: null,
     serverDraftProjectionAuthorityVersion: null,

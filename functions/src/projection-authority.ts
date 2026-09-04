@@ -35,6 +35,7 @@ import {
   SharedProjectionSnapshotMetadata,
 } from './shared/core/projection/projection-snapshot.service';
 import {
+  createServerProjectionRequestId,
   isProjectionSha256,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_HASH_ALGORITHM,
@@ -78,6 +79,7 @@ interface ProjectionGenerationRequestInput {
   leagueId: string;
   generationReason: SharedProjectionGenerationReason;
   targetCycleNumber?: number;
+  availabilityRevision?: string | null;
 }
 
 interface ProjectionGenerationRequestResult {
@@ -123,6 +125,7 @@ interface ProjectionRequestDocument {
   snapshotId: string | null;
   message: string;
   lastError: string;
+  availabilityRevision?: string | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -263,6 +266,9 @@ function requestPayloadHash(
       leagueId: input.leagueId,
       generationReason: input.generationReason,
       targetCycleNumber: input.targetCycleNumber ?? null,
+      ...(input.availabilityRevision
+        ? { availabilityRevision: input.availabilityRevision }
+        : {}),
     }))
     .digest('hex');
 }
@@ -524,6 +530,18 @@ export interface ServerProjectionRefreshQueueResult {
   targetCycleNumber: number;
 }
 
+interface ServerProjectionRefreshQueueInput {
+  leagueId: string;
+  requestedBy: string;
+  requestKey: string;
+  targetCycleNumber?: number | null;
+  generationReason: 'manual' | 'pre-draft';
+  requestPrefix: 'projection-replay' | 'projection-draft';
+  availabilityRevision?: string | null;
+  queuedMessage: string;
+  queueErrorMessage: string;
+}
+
 
 async function queueHistoricalReplayProjectionCatchUp(input: {
   leagueId: string;
@@ -573,12 +591,9 @@ async function queueHistoricalReplayProjectionCatchUp(input: {
  * and dispatches the existing projection task; it never waits for the rebuild
  * and therefore cannot block scoring or historical replay completion.
  */
-export async function queueServerProjectionSnapshotRefresh(input: {
-  leagueId: string;
-  requestedBy: string;
-  requestKey: string;
-  targetCycleNumber?: number | null;
-}): Promise<ServerProjectionRefreshQueueResult> {
+async function queueServerProjectionSnapshotRefreshInternal(
+  input: ServerProjectionRefreshQueueInput,
+): Promise<ServerProjectionRefreshQueueResult> {
   const leagueId = requireServerFirestoreDocumentId(
     input.leagueId,
     'server projection league identifier',
@@ -594,7 +609,7 @@ export async function queueServerProjectionSnapshotRefresh(input: {
     'server projection request key',
     FIRESTORE_REQUEST_ID_OPTIONS,
   );
-  const generationReason: SharedProjectionGenerationReason = 'manual';
+  const generationReason: SharedProjectionGenerationReason = input.generationReason;
   const context = await resolveProjectionRequestContext(
     leagueId,
     requestedBy,
@@ -602,15 +617,19 @@ export async function queueServerProjectionSnapshotRefresh(input: {
     generationReason,
     normalizePositiveInteger(input.targetCycleNumber),
   );
-  const requestId = `projection-replay-${createHash('sha256')
-    .update(`${leagueId}:${requestKey}:${context.targetCycleNumber}`)
-    .digest('hex')
-    .slice(0, 32)}`;
+  const requestId = createServerProjectionRequestId({
+    requestPrefix: input.requestPrefix,
+    leagueId,
+    requestKey,
+    targetCycleNumber: context.targetCycleNumber,
+    availabilityRevision: input.availabilityRevision,
+  });
   const payloadHash = requestPayloadHash({
     requestId,
     leagueId,
     generationReason,
     targetCycleNumber: context.targetCycleNumber,
+    availabilityRevision: input.availabilityRevision ?? null,
   }, requestedBy);
   const requestRef = getRequestRef(requestId);
   const controlRef = getControlRef(leagueId, context.targetCycleNumber);
@@ -632,7 +651,7 @@ export async function queueServerProjectionSnapshotRefresh(input: {
       requestData['payloadHash'] === payloadHash &&
       requestData['status'] === 'ready'
     ) {
-      return 'ready' as const;
+      return { status: 'ready' as const, requestId };
     }
 
     const control = existingControl.data() ?? {};
@@ -646,7 +665,7 @@ export async function queueServerProjectionSnapshotRefresh(input: {
       (activeStatus === 'queued' || activeStatus === 'processing') &&
       activeLeaseExpiresAt > now
     ) {
-      return 'already-queued' as const;
+      return { status: 'already-queued' as const, requestId: activeRequestId };
     }
 
     const requestDocument: ProjectionRequestDocument = {
@@ -661,8 +680,9 @@ export async function queueServerProjectionSnapshotRefresh(input: {
       status: 'queued',
       payloadHash,
       snapshotId: null,
-      message: 'Historical replay player-stat refresh is queued.',
+      message: input.queuedMessage,
       lastError: '',
+      availabilityRevision: input.availabilityRevision ?? null,
     };
 
     transaction.set(requestRef, {
@@ -682,6 +702,7 @@ export async function queueServerProjectionSnapshotRefresh(input: {
       status: 'queued',
       requestedBy,
       generationReason,
+      availabilityRevision: input.availabilityRevision ?? null,
       leaseExpiresAt,
       createdAt: existingControl.exists
         ? control['createdAt'] ?? FieldValue.serverTimestamp()
@@ -689,13 +710,13 @@ export async function queueServerProjectionSnapshotRefresh(input: {
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    return 'queued' as const;
+    return { status: 'queued' as const, requestId };
   });
 
-  if (queueState !== 'queued') {
+  if (queueState.status !== 'queued') {
     return {
-      requestId,
-      status: queueState,
+      requestId: queueState.requestId,
+      status: queueState.status,
       targetCycleNumber: context.targetCycleNumber,
     };
   }
@@ -717,7 +738,7 @@ export async function queueServerProjectionSnapshotRefresh(input: {
     if (!isTaskAlreadyExistsError(error)) {
       const message = error instanceof Error
         ? error.message
-        : 'The replay player-stat refresh queue could not accept this request.';
+        : input.queueErrorMessage;
 
       await Promise.all([
         requestRef.set({
@@ -744,6 +765,44 @@ export async function queueServerProjectionSnapshotRefresh(input: {
     status: 'queued',
     targetCycleNumber: context.targetCycleNumber,
   };
+}
+
+export async function queueServerProjectionSnapshotRefresh(input: {
+  leagueId: string;
+  requestedBy: string;
+  requestKey: string;
+  targetCycleNumber?: number | null;
+}): Promise<ServerProjectionRefreshQueueResult> {
+  return queueServerProjectionSnapshotRefreshInternal({
+    ...input,
+    generationReason: 'manual',
+    requestPrefix: 'projection-replay',
+    queuedMessage: 'Historical replay player-stat refresh is queued.',
+    queueErrorMessage:
+      'The replay player-stat refresh queue could not accept this request.',
+  });
+}
+
+export async function queueServerDraftProjectionSnapshotRefresh(input: {
+  leagueId: string;
+  requestedBy: string;
+  requestKey: string;
+  availabilityRevision: string;
+}): Promise<ServerProjectionRefreshQueueResult> {
+  if (!/^[a-f0-9]{64}$/.test(input.availabilityRevision)) {
+    throw new Error('Draft readiness requires a valid player-availability revision.');
+  }
+
+  return queueServerProjectionSnapshotRefreshInternal({
+    ...input,
+    targetCycleNumber: 1,
+    generationReason: 'pre-draft',
+    requestPrefix: 'projection-draft',
+    queuedMessage:
+      `Projection V${SHARED_PROJECTION_VERSION} Draft readiness is queued.`,
+    queueErrorMessage:
+      `The Projection V${SHARED_PROJECTION_VERSION} Draft-readiness queue could not accept this request.`,
+  });
 }
 
 
@@ -1373,6 +1432,9 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         targetCycleNumber: claimed.targetCycleNumber,
         requestedBy: claimed.requestedBy,
         generationRequestId: claimed.requestId,
+        ...(claimed.availabilityRevision
+          ? { expectedAvailabilityRevision: claimed.availabilityRevision }
+          : {}),
       });
       const durationMilliseconds = Date.now() - startedAt;
 

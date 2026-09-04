@@ -330,6 +330,23 @@ export interface FantasyDraft {
   /** Latest known preparation state when Draft settings were saved. */
   projectionPreparationStatus?: 'ready' | 'queued' | 'processing' | 'error' | null;
 
+  /** Server-owned preparation state bound to this exact scheduled start. */
+  serverDraftReadinessStatus?:
+    | 'waiting-injury'
+    | 'preparing-projection'
+    | 'ready'
+    | 'error'
+    | null;
+  serverDraftReadinessScheduledStartAt?: unknown | null;
+  serverDraftReadinessAvailabilityRevision?: string | null;
+  serverDraftReadinessProjectionRequestId?: string | null;
+  serverDraftReadinessProjectionSnapshotId?: string | null;
+  serverDraftReadinessProjectionSnapshotHash?: string | null;
+  serverDraftReadinessAttemptCount?: number;
+  serverDraftReadinessRetryAfterAt?: unknown | null;
+  serverDraftReadinessMessage?: string | null;
+  serverDraftReadinessUpdatedAt?: unknown;
+
   /** Verified shared projection snapshot frozen for the entire draft. */
   serverDraftProjectionSnapshotId?: string | null;
   /** Deterministic SHA-256 root hash of the frozen Draft pool. */

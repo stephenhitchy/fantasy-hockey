@@ -120,6 +120,29 @@ export function isProjectionSha256(value: unknown): value is string {
   return typeof value === 'string' && SHA256_PATTERN.test(value);
 }
 
+/**
+ * Preserves the historical replay request identity while allowing Draft
+ * readiness to bind a request to one exact availability revision.
+ */
+export function createServerProjectionRequestId(input: {
+  requestPrefix: 'projection-replay' | 'projection-draft';
+  leagueId: string;
+  requestKey: string;
+  targetCycleNumber: number;
+  availabilityRevision?: string | null;
+}): string {
+  const legacyIdentity = [
+    input.leagueId,
+    input.requestKey,
+    String(input.targetCycleNumber),
+  ].join(':');
+  const identity = input.availabilityRevision
+    ? `${legacyIdentity}:${input.availabilityRevision}`
+    : legacyIdentity;
+
+  return `${input.requestPrefix}-${sha256(identity).slice(0, 32)}`;
+}
+
 function isSupportedHashSchema(value: unknown): value is 1 | 2 {
   return value === PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION ||
     value === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION;

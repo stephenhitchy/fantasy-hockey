@@ -168,6 +168,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/shared/core/projection/projection-snapshot-hash.util.ts',
     'src/draft-authority.ts',
     'src/draft-automation.ts',
+    // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
+    'src/draft-readiness.util.ts',
     'src/shared/core/draft/draft.models.ts',
     'package.json',
     'scripts/auth-security-baseline.cjs',

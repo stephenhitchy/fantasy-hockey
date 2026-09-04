@@ -38,6 +38,7 @@ import {
 } from './draft-pick-engine';
 import {
   ensureCurrentDraftClockTask,
+  loadPreparedProjectionSnapshotForScheduledDraft,
   loadProjectionSnapshotForDraft,
   repairDraftTurnFromCommittedPicks,
 } from './draft-automation';
@@ -394,6 +395,43 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
       value.projectionPreparationStatus === 'error'
         ? value.projectionPreparationStatus
         : null,
+    serverDraftReadinessStatus:
+      value.serverDraftReadinessStatus === 'waiting-injury' ||
+      value.serverDraftReadinessStatus === 'preparing-projection' ||
+      value.serverDraftReadinessStatus === 'ready' ||
+      value.serverDraftReadinessStatus === 'error'
+        ? value.serverDraftReadinessStatus
+        : null,
+    serverDraftReadinessScheduledStartAt:
+      value.serverDraftReadinessScheduledStartAt ?? null,
+    serverDraftReadinessAvailabilityRevision:
+      typeof value.serverDraftReadinessAvailabilityRevision === 'string'
+        ? value.serverDraftReadinessAvailabilityRevision
+        : null,
+    serverDraftReadinessProjectionRequestId:
+      typeof value.serverDraftReadinessProjectionRequestId === 'string'
+        ? value.serverDraftReadinessProjectionRequestId
+        : null,
+    serverDraftReadinessProjectionSnapshotId:
+      typeof value.serverDraftReadinessProjectionSnapshotId === 'string'
+        ? value.serverDraftReadinessProjectionSnapshotId
+        : null,
+    serverDraftReadinessProjectionSnapshotHash:
+      typeof value.serverDraftReadinessProjectionSnapshotHash === 'string'
+        ? value.serverDraftReadinessProjectionSnapshotHash
+        : null,
+    serverDraftReadinessAttemptCount:
+      typeof value.serverDraftReadinessAttemptCount === 'number' &&
+      Number.isFinite(value.serverDraftReadinessAttemptCount)
+        ? Math.max(0, Math.trunc(value.serverDraftReadinessAttemptCount))
+        : 0,
+    serverDraftReadinessRetryAfterAt:
+      value.serverDraftReadinessRetryAfterAt ?? null,
+    serverDraftReadinessMessage:
+      typeof value.serverDraftReadinessMessage === 'string'
+        ? value.serverDraftReadinessMessage
+        : null,
+    serverDraftReadinessUpdatedAt: value.serverDraftReadinessUpdatedAt,
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId
@@ -699,6 +737,16 @@ async function saveDraftSettings(
           lastSettingsSubmissionId: submissionId ?? null,
           projectionPreparationRequestId: projectionPreparation.requestId,
           projectionPreparationStatus: projectionPreparation.status,
+          serverDraftReadinessStatus: null,
+          serverDraftReadinessScheduledStartAt: null,
+          serverDraftReadinessAvailabilityRevision: null,
+          serverDraftReadinessProjectionRequestId: null,
+          serverDraftReadinessProjectionSnapshotId: null,
+          serverDraftReadinessProjectionSnapshotHash: null,
+          serverDraftReadinessAttemptCount: 0,
+          serverDraftReadinessRetryAfterAt: null,
+          serverDraftReadinessMessage: null,
+          serverDraftReadinessUpdatedAt: timestamp,
           serverDraftProjectionSnapshotId: null,
           serverDraftProjectionSnapshotHash: null,
           serverDraftProjectionAuthorityVersion: null,
@@ -829,12 +877,15 @@ async function activateScheduledDraft(
   }
 
   const preflightDraft = normalizeDraft(preflightSnapshot.data() as Partial<FantasyDraft>);
-  const projection = await loadProjectionSnapshotForDraft(leagueId, preflightDraft);
+  const projection = await loadPreparedProjectionSnapshotForScheduledDraft(
+    leagueId,
+    preflightDraft,
+  );
 
   if (!projection) {
     throw new HttpsError(
       'failed-precondition',
-      `Verified Projection V${SHARED_PROJECTION_VERSION} draft rankings are unavailable.`,
+      `Server Draft readiness for this exact start time and injury-report revision is not verified. The clock remains locked.`,
     );
   }
 
@@ -859,6 +910,28 @@ async function activateScheduledDraft(
 
     if (!scheduledStart || scheduledStart.getTime() > Date.now()) {
       throw new HttpsError('failed-precondition', 'The scheduled draft start time has not arrived.');
+    }
+
+    const readinessScheduledStart = asTimestampDate(
+      draft.serverDraftReadinessScheduledStartAt,
+    );
+
+    if (
+      draft.serverDraftReadinessStatus !== 'ready' ||
+      readinessScheduledStart?.getTime() !== scheduledStart.getTime() ||
+      draft.serverDraftReadinessProjectionSnapshotId !==
+        projection.metadata.activeSnapshotId ||
+      draft.serverDraftReadinessProjectionSnapshotHash !==
+        projection.metadata.snapshotContentHash ||
+      draft.serverDraftReadinessProjectionRequestId !==
+        projection.metadata.generationRequestId ||
+      draft.serverDraftReadinessAvailabilityRevision !==
+        projection.metadata.availabilityRevision
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Draft readiness changed before the clock could start. The server will verify the newest evidence and retry.',
+      );
     }
 
     const timestamp = FieldValue.serverTimestamp();

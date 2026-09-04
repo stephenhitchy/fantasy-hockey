@@ -26,8 +26,16 @@ import {
   SharedProjectionSnapshot,
   loadSharedProjectionSnapshot,
   loadSharedProjectionSnapshotById,
+  loadProjectionAvailabilityEvidence,
   sealSharedProjectionSnapshotIntegrity,
 } from './shared/core/projection/projection-snapshot.service';
+import { queueServerDraftProjectionSnapshotRefresh } from './projection-authority';
+import {
+  buildDraftReadinessRequestKey,
+  draftReadinessMatchesSchedule,
+  getDraftReadinessWindowState,
+  isDraftAvailabilityEvidenceUsable,
+} from './draft-readiness.util';
 import {
   isProjectionSha256,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
@@ -864,6 +872,43 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
       value.projectionPreparationStatus === 'error'
         ? value.projectionPreparationStatus
         : null,
+    serverDraftReadinessStatus:
+      value.serverDraftReadinessStatus === 'waiting-injury' ||
+      value.serverDraftReadinessStatus === 'preparing-projection' ||
+      value.serverDraftReadinessStatus === 'ready' ||
+      value.serverDraftReadinessStatus === 'error'
+        ? value.serverDraftReadinessStatus
+        : null,
+    serverDraftReadinessScheduledStartAt:
+      value.serverDraftReadinessScheduledStartAt ?? null,
+    serverDraftReadinessAvailabilityRevision:
+      typeof value.serverDraftReadinessAvailabilityRevision === 'string'
+        ? value.serverDraftReadinessAvailabilityRevision
+        : null,
+    serverDraftReadinessProjectionRequestId:
+      typeof value.serverDraftReadinessProjectionRequestId === 'string'
+        ? value.serverDraftReadinessProjectionRequestId
+        : null,
+    serverDraftReadinessProjectionSnapshotId:
+      typeof value.serverDraftReadinessProjectionSnapshotId === 'string'
+        ? value.serverDraftReadinessProjectionSnapshotId
+        : null,
+    serverDraftReadinessProjectionSnapshotHash:
+      typeof value.serverDraftReadinessProjectionSnapshotHash === 'string'
+        ? value.serverDraftReadinessProjectionSnapshotHash
+        : null,
+    serverDraftReadinessAttemptCount:
+      typeof value.serverDraftReadinessAttemptCount === 'number' &&
+      Number.isFinite(value.serverDraftReadinessAttemptCount)
+        ? Math.max(0, Math.trunc(value.serverDraftReadinessAttemptCount))
+        : 0,
+    serverDraftReadinessRetryAfterAt:
+      value.serverDraftReadinessRetryAfterAt ?? null,
+    serverDraftReadinessMessage:
+      typeof value.serverDraftReadinessMessage === 'string'
+        ? value.serverDraftReadinessMessage
+        : null,
+    serverDraftReadinessUpdatedAt: value.serverDraftReadinessUpdatedAt,
     serverDraftProjectionSnapshotId:
       typeof value.serverDraftProjectionSnapshotId === 'string'
         ? value.serverDraftProjectionSnapshotId
@@ -1107,6 +1152,379 @@ async function setDraftAutomationError(
   ).catch(() => undefined);
 }
 
+function getScheduledStartMilliseconds(draft: FantasyDraft): number | null {
+  return asTimestampDate(draft.scheduledStartAt)?.getTime() ?? null;
+}
+
+function getReadinessScheduledStartMilliseconds(
+  draft: FantasyDraft,
+): number | null {
+  return asTimestampDate(draft.serverDraftReadinessScheduledStartAt)?.getTime() ?? null;
+}
+
+async function updateScheduledDraftReadiness(
+  leagueId: string,
+  scheduledStartMilliseconds: number,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
+  const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(draftRef);
+
+    if (!snapshot.exists) {
+      return false;
+    }
+
+    const current = normalizeDraft(snapshot.data() as Partial<FantasyDraft>);
+
+    if (
+      current.status !== 'scheduled' ||
+      getScheduledStartMilliseconds(current) !== scheduledStartMilliseconds
+    ) {
+      return false;
+    }
+
+    transaction.set(
+      draftRef,
+      {
+        ...payload,
+        serverDraftReadinessScheduledStartAt:
+          Timestamp.fromMillis(scheduledStartMilliseconds),
+        serverDraftReadinessUpdatedAt: FieldValue.serverTimestamp(),
+        serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return true;
+  });
+}
+
+function getDraftReadinessRetryDelayMilliseconds(attemptCount: number): number {
+  return Math.min(10 * 60 * 1000, 60 * 1000 * Math.pow(2, Math.max(0, attemptCount - 1)));
+}
+
+async function loadPreparedProjectionFromDraftEvidence(
+  leagueId: string,
+  draft: FantasyDraft,
+  requireCurrentAvailability: boolean,
+): Promise<SharedProjectionSnapshot | null> {
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+
+  if (
+    draft.status !== 'scheduled' ||
+    draft.serverDraftReadinessStatus !== 'ready' ||
+    !draftReadinessMatchesSchedule({
+      readinessScheduledStartMilliseconds:
+        getReadinessScheduledStartMilliseconds(draft),
+      scheduledStartMilliseconds,
+    })
+  ) {
+    return null;
+  }
+
+  const availabilityRevision = draft.serverDraftReadinessAvailabilityRevision;
+  const requestId = draft.serverDraftReadinessProjectionRequestId;
+  const snapshotId = draft.serverDraftReadinessProjectionSnapshotId;
+  const snapshotHash = draft.serverDraftReadinessProjectionSnapshotHash;
+
+  if (
+    !availabilityRevision ||
+    !requestId ||
+    !snapshotId ||
+    !snapshotHash ||
+    !isProjectionSha256(availabilityRevision) ||
+    !isProjectionSha256(snapshotHash)
+  ) {
+    return null;
+  }
+
+  if (requireCurrentAvailability) {
+    const currentAvailability = await loadProjectionAvailabilityEvidence(leagueId);
+
+    if (
+      !isDraftAvailabilityEvidenceUsable({
+        revision: currentAvailability.revision,
+        lastSuccessfulAt: currentAvailability.lastSuccessfulAt,
+        lastDailySyncKey: currentAvailability.lastDailySyncKey,
+        status: currentAvailability.status,
+        nowMilliseconds: Date.now(),
+      }) ||
+      currentAvailability.revision !== availabilityRevision
+    ) {
+      return null;
+    }
+  }
+
+  const expectedScoringRulesVersion = await getLeagueScoringRulesVersion(leagueId);
+  const snapshot = await loadVerifiedProjectionSnapshotById(
+    leagueId,
+    snapshotId,
+    expectedScoringRulesVersion,
+  );
+
+  if (
+    !snapshot ||
+    snapshot.metadata.generationRequestId !== requestId ||
+    snapshot.metadata.availabilityRevision !== availabilityRevision ||
+    snapshot.metadata.snapshotContentHash !== snapshotHash
+  ) {
+    return null;
+  }
+
+  return snapshot;
+}
+
+export async function loadPreparedProjectionSnapshotForScheduledDraft(
+  leagueId: string,
+  draft: FantasyDraft,
+): Promise<SharedProjectionSnapshot | null> {
+  return loadPreparedProjectionFromDraftEvidence(leagueId, draft, true);
+}
+
+async function prepareScheduledDraftReadiness(
+  leagueId: string,
+  draft: FantasyDraft,
+  now = new Date(),
+): Promise<void> {
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+  const windowState = getDraftReadinessWindowState({
+    draftStatus: draft.status,
+    scheduledStartMilliseconds,
+    nowMilliseconds: now.getTime(),
+  });
+
+  if (
+    scheduledStartMilliseconds === null ||
+    (windowState !== 'prepare' && windowState !== 'start-due')
+  ) {
+    return;
+  }
+
+  const availability = await loadProjectionAvailabilityEvidence(leagueId);
+
+  if (!isDraftAvailabilityEvidenceUsable({
+    revision: availability.revision,
+    lastSuccessfulAt: availability.lastSuccessfulAt,
+    lastDailySyncKey: availability.lastDailySyncKey,
+    status: availability.status,
+    nowMilliseconds: now.getTime(),
+  })) {
+    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      serverDraftReadinessStatus: 'waiting-injury',
+      serverDraftReadinessAvailabilityRevision: availability.revision,
+      serverDraftReadinessProjectionRequestId: null,
+      serverDraftReadinessProjectionSnapshotId: null,
+      serverDraftReadinessProjectionSnapshotHash: null,
+      serverDraftReadinessAttemptCount: 0,
+      serverDraftReadinessRetryAfterAt: null,
+      serverDraftReadinessMessage:
+        'The server is waiting for a recent successful injury report before preparing Projection V11. The draft clock remains locked.',
+      serverAutomationStatus: 'waiting-injury',
+      serverAutomationMessage:
+        'Draft readiness is waiting for a recent successful injury report.',
+    });
+    return;
+  }
+
+  const availabilityRevision = availability.revision as string;
+  const sameReadinessInput = draftReadinessMatchesSchedule({
+    readinessScheduledStartMilliseconds:
+      getReadinessScheduledStartMilliseconds(draft),
+    scheduledStartMilliseconds,
+  }) && draft.serverDraftReadinessAvailabilityRevision === availabilityRevision;
+  const existingRequestId = sameReadinessInput
+    ? draft.serverDraftReadinessProjectionRequestId
+    : null;
+
+  if (sameReadinessInput && draft.serverDraftReadinessStatus === 'error') {
+    const retryAfter = asTimestampDate(draft.serverDraftReadinessRetryAfterAt);
+
+    if (retryAfter && retryAfter.getTime() > now.getTime()) {
+      return;
+    }
+  }
+
+  if (sameReadinessInput && draft.serverDraftReadinessStatus === 'ready') {
+    const prepared = await loadPreparedProjectionFromDraftEvidence(
+      leagueId,
+      draft,
+      false,
+    );
+
+    if (prepared) {
+      return;
+    }
+  }
+
+  if (existingRequestId) {
+    const requestSnapshot = await db
+      .doc(`projectionGenerationRequests/${existingRequestId}`)
+      .get()
+      .catch(() => null);
+    const request = requestSnapshot?.exists ? requestSnapshot.data() ?? {} : {};
+    const requestMatches =
+      request['leagueId'] === leagueId &&
+      request['generationReason'] === 'pre-draft' &&
+      request['targetCycleNumber'] === 1 &&
+      request['availabilityRevision'] === availabilityRevision;
+    const requestStatus = requestMatches && typeof request['status'] === 'string'
+      ? request['status']
+      : '';
+
+    if (requestStatus === 'ready') {
+      const snapshotId = typeof request['snapshotId'] === 'string'
+        ? request['snapshotId']
+        : '';
+      const snapshotHash = typeof request['snapshotContentHash'] === 'string'
+        ? request['snapshotContentHash']
+        : '';
+      const expectedScoringRulesVersion = await getLeagueScoringRulesVersion(leagueId);
+      const snapshot = snapshotId
+        ? await loadVerifiedProjectionSnapshotById(
+            leagueId,
+            snapshotId,
+            expectedScoringRulesVersion,
+          )
+        : null;
+
+      if (
+        snapshot &&
+        isProjectionSha256(snapshotHash) &&
+        snapshot.metadata.generationRequestId === existingRequestId &&
+        snapshot.metadata.availabilityRevision === availabilityRevision &&
+        snapshot.metadata.snapshotContentHash === snapshotHash
+      ) {
+        await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+          serverDraftReadinessStatus: 'ready',
+          serverDraftReadinessProjectionSnapshotId: snapshotId,
+          serverDraftReadinessProjectionSnapshotHash: snapshotHash,
+          serverDraftReadinessRetryAfterAt: null,
+          serverDraftReadinessMessage:
+            'The server verified the current injury input and Projection V11 Draft board. The clock can start at the scheduled time.',
+          projectionPreparationStatus: 'ready',
+          serverAutomationStatus: 'scheduled-ready',
+          serverAutomationMessage:
+            'Server Draft readiness is verified for this exact scheduled start.',
+        });
+        return;
+      }
+    }
+
+    if (requestStatus === 'queued' || requestStatus === 'processing') {
+      await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+        serverDraftReadinessStatus: 'preparing-projection',
+        serverDraftReadinessMessage:
+          'The server is building and validating Projection V11 before the scheduled start. The clock remains locked.',
+        projectionPreparationStatus: requestStatus,
+        serverAutomationStatus: 'preparing-projection',
+        serverAutomationMessage:
+          'Server Draft readiness is waiting for the verified Projection V11 task.',
+      });
+      return;
+    }
+
+    if (requestStatus === 'error') {
+      const retryAfter = asTimestampDate(draft.serverDraftReadinessRetryAfterAt);
+
+      if (!retryAfter) {
+        const attemptCount = Math.max(1, draft.serverDraftReadinessAttemptCount ?? 1);
+        const nextRetryAt = Timestamp.fromMillis(
+          now.getTime() + getDraftReadinessRetryDelayMilliseconds(attemptCount),
+        );
+        await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+          serverDraftReadinessStatus: 'error',
+          serverDraftReadinessRetryAfterAt: nextRetryAt,
+          serverDraftReadinessMessage:
+            'Projection V11 preparation failed. The clock remains locked and the server will retry automatically.',
+          projectionPreparationStatus: 'error',
+          serverAutomationStatus: 'error',
+          serverAutomationMessage:
+            'Server Draft readiness failed and is waiting for its bounded retry.',
+          serverAutomationLastErrorAt: FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      if (retryAfter.getTime() > now.getTime()) {
+        return;
+      }
+    }
+  }
+
+  const attemptCount = sameReadinessInput
+    ? Math.max(1, (draft.serverDraftReadinessAttemptCount ?? 0) + 1)
+    : 1;
+  const baseRequestKey = buildDraftReadinessRequestKey({
+    leagueId,
+    scheduledStartMilliseconds,
+    availabilityRevision,
+  });
+  let queueResult: Awaited<
+    ReturnType<typeof queueServerDraftProjectionSnapshotRefresh>
+  >;
+
+  try {
+    queueResult = await queueServerDraftProjectionSnapshotRefresh({
+      leagueId,
+      requestedBy: SERVER_DRAFT_ACTOR,
+      requestKey: `${baseRequestKey}-a${attemptCount}`,
+      availabilityRevision,
+    });
+  } catch (error: unknown) {
+    const retryAfter = Timestamp.fromMillis(
+      now.getTime() + getDraftReadinessRetryDelayMilliseconds(attemptCount),
+    );
+    const message = error instanceof Error
+      ? error.message
+      : 'The Projection V11 Draft-readiness queue rejected the request.';
+
+    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      serverDraftReadinessStatus: 'error',
+      serverDraftReadinessAvailabilityRevision: availabilityRevision,
+      serverDraftReadinessProjectionRequestId: null,
+      serverDraftReadinessProjectionSnapshotId: null,
+      serverDraftReadinessProjectionSnapshotHash: null,
+      serverDraftReadinessAttemptCount: attemptCount,
+      serverDraftReadinessRetryAfterAt: retryAfter,
+      serverDraftReadinessMessage:
+        'The Draft-readiness queue was unavailable. The clock remains locked and the server will retry automatically.',
+      projectionPreparationStatus: 'error',
+      serverAutomationStatus: 'error',
+      serverAutomationMessage: message.slice(0, 500),
+      serverAutomationLastErrorAt: FieldValue.serverTimestamp(),
+    });
+    return;
+  }
+  const queuedRequestId = queueResult.status === 'already-queued'
+    ? null
+    : queueResult.requestId;
+
+  await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+    serverDraftReadinessStatus: 'preparing-projection',
+    serverDraftReadinessAvailabilityRevision: availabilityRevision,
+    serverDraftReadinessProjectionRequestId: queuedRequestId,
+    serverDraftReadinessProjectionSnapshotId: null,
+    serverDraftReadinessProjectionSnapshotHash: null,
+    serverDraftReadinessAttemptCount:
+      queueResult.status === 'already-queued'
+        ? draft.serverDraftReadinessAttemptCount ?? 0
+        : attemptCount,
+    serverDraftReadinessRetryAfterAt: null,
+    serverDraftReadinessMessage:
+      'The server queued the exact Projection V11 Draft board for this start time and injury-report revision.',
+    ...(queuedRequestId
+      ? { projectionPreparationRequestId: queuedRequestId }
+      : {}),
+    projectionPreparationStatus:
+      queueResult.status === 'ready' ? 'ready' : 'queued',
+    serverAutomationStatus: 'preparing-projection',
+    serverAutomationMessage:
+      'Server Draft readiness is preparing the verified Projection V11 board.',
+  });
+}
+
 async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
   const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
   const initialDraftSnapshot = await draftRef.get();
@@ -1126,13 +1544,20 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
     return false;
   }
 
+  const openingScheduledDraft = initialDraft.status === 'scheduled';
   const expectedScoringRulesVersion = await getLeagueScoringRulesVersion(leagueId);
-  const projection = await loadVerifiedDraftProjectionSnapshot(
-    leagueId,
-    expectedScoringRulesVersion,
-  );
+  const projection = openingScheduledDraft
+    ? await loadPreparedProjectionSnapshotForScheduledDraft(leagueId, initialDraft)
+    : await loadVerifiedDraftProjectionSnapshot(
+        leagueId,
+        expectedScoringRulesVersion,
+      );
 
   if (!projection) {
+    if (openingScheduledDraft) {
+      return false;
+    }
+
     const preparationRequestId = resolveSafeFirestoreDocumentId(
       initialDraft.projectionPreparationRequestId,
       FIRESTORE_REQUEST_ID_OPTIONS,
@@ -1218,6 +1643,25 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
       }
 
       if (draft.status !== 'scheduled' || !isScheduledStartReached(draft)) {
+        return false;
+      }
+
+      if (
+        draft.serverDraftReadinessStatus !== 'ready' ||
+        draft.serverDraftReadinessProjectionSnapshotId !==
+          projection.metadata.activeSnapshotId ||
+        draft.serverDraftReadinessProjectionSnapshotHash !==
+          projection.metadata.snapshotContentHash ||
+        draft.serverDraftReadinessProjectionRequestId !==
+          projection.metadata.generationRequestId ||
+        draft.serverDraftReadinessAvailabilityRevision !==
+          projection.metadata.availabilityRevision ||
+        !draftReadinessMatchesSchedule({
+          readinessScheduledStartMilliseconds:
+            getReadinessScheduledStartMilliseconds(draft),
+          scheduledStartMilliseconds: getScheduledStartMilliseconds(draft),
+        })
+      ) {
         return false;
       }
 
@@ -1510,6 +1954,12 @@ async function processLeagueDraftAutomation(
 
     let draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
     let opened = false;
+
+    if (draft.status === 'scheduled') {
+      await prepareScheduledDraftReadiness(leagueId, draft);
+      draftSnapshot = await draftRef.get();
+      draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+    }
 
     if (
       (draft.status === 'scheduled' && isScheduledStartReached(draft)) ||

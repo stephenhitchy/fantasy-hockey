@@ -363,6 +363,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/observability/scoring-phase-timing.util.ts',
     'draft-authority.ts',
     'draft-automation.ts',
+    // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
+    'draft-readiness.util.ts',
     'shared/core/draft/draft.models.ts',
     'projection-authority.ts',
     'shared/core/projection/projection-asset-catalog.service.ts',

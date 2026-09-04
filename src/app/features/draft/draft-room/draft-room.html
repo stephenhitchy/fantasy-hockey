@@ -105,8 +105,8 @@
     ) {
       <section
         class="waiting-card scheduled-card"
-        [class.preparation-ready-card]="preDraftPreparationReady()"
-        [class.preparation-running-card]="preDraftPreparationInProgress()"
+        [class.preparation-ready-card]="isPreDraftPreparationReady()"
+        [class.preparation-running-card]="isPreDraftPreparationRunning()"
       >
         <span class="eyebrow">Draft Scheduled</span>
         <h2>{{ formatDraftStart() }}</h2>

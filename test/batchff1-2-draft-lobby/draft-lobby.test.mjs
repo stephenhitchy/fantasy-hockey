@@ -176,7 +176,7 @@ test('FF1.18 roadmap and release boundary documentation stay synchronized', asyn
 
   assert.equal(rootRoadmap, docsRoadmap);
   assert.match(rootRoadmap, /\[~\] FF1\.18/);
-  assert.match(rootRoadmap, /\[ \] FF1\.19/);
+  assert.match(rootRoadmap, /\[~\] FF1\.19/);
   assert.match(implementationDoc, /hosting:app/);
   assert.match(implementationDoc, /No Functions, Rules, indexes, TTL, App Check, queue, or worker/);
   assert.match(implementationDoc, /Production Scoring V4/);

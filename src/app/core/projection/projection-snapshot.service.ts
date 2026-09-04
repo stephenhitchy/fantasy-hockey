@@ -75,6 +75,7 @@ export interface SharedProjectionSnapshotMetadata {
   projectionAsOfDate?: string;
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
+  availabilityRevision?: string;
   authoritySchemaVersion?: number;
   generatedByAuthority?: 'server';
   catalogSnapshotId?: string;
@@ -225,6 +226,10 @@ function normalizeMetadata(
     projectionSeason:
       typeof data.projectionSeason === 'string'
         ? data.projectionSeason
+        : undefined,
+    availabilityRevision:
+      typeof data.availabilityRevision === 'string'
+        ? data.availabilityRevision
         : undefined,
     authoritySchemaVersion:
       typeof data.authoritySchemaVersion === 'number'
