@@ -453,6 +453,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
       ]),
     }),
-    'fbffd287343e1545f009e7576e897ecede44a7cdb8712f8366c4b036476eceef',
+    '5494f2b953dafe66e3341e282f821af8b87b8e8aa776cf917cbc7d9f1c5641a5',
   );
 });

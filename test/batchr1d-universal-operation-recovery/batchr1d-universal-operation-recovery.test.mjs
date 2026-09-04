@@ -447,6 +447,6 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 29,
-    digest: '54b78021ce1bbbc1c6be5bc5eb92fe5fc5fc344e57f492ee2b45b312ff730110',
+    digest: '5bc563f62b14fe35a5c7abed155a3536d4a36e42050a6f4442fbbbcff9d7b9cd',
   });
 });

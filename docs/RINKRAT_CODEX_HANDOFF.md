@@ -196,17 +196,28 @@ its three targeted staging Functions remain ACTIVE. The exact `e0a69017`
 staging Hosting manifest and FF1.20 guarded positive/duplicate evidence passed:
 readiness reached `ready` before zero on attempt one without a browser,
 duplicate delivery retained the same request/snapshot identity, the clock
-stayed stopped, and no pick was created. The existing minute worker
-prepares during the 20-minute window, binds a
+stayed stopped, and no pick was created. FF1.21 adversarial evidence also
+passed on exact staging source `0150ad98`: delayed input locked safely,
+rescheduling superseded the prior request, changed availability rebuilt,
+attempt-one failure produced a 60-second bounded retry that recovered on
+attempt two, the clock stayed stopped, no pick was created, and the fixture
+reset seven days ahead. The existing minute worker prepares during the
+20-minute window and binds a
 deterministic Projection V11 request to the exact schedule and hashed
 availability input, and starts the clock only with the exact verified
 request/snapshot/hash. The first no-browser execution correctly persisted
 `waiting-injury` and kept the clock stopped when the synthetic fixture lacked
-fresh daily injury evidence. FF1.21 now supplies a separate Production-refusing
-adversarial source candidate for delayed input, reschedule supersession,
-changed availability, bounded retry, audit preservation, and safe restoration.
-No queue or worker limit changed, and real Draft authorization remains blocked
-on the evidence below.
+fresh daily injury evidence.
+
+A subsequent supported Commissioner Draft Setup rehearsal found a separate
+staging integration blocker: the shared callable CORS allowlist omitted the
+dedicated staging Hosting origins. Two authenticated tabs reproduced the same
+failure, the authoritative seven-day schedule remained unchanged, the exact
+preflight response omitted `Access-Control-Allow-Origin`, and Function request
+logs contained only `OPTIONS`, not `POST`. FF1.22 is the narrow exact-origin
+source candidate; it adds no wildcard and changes no authorization or Draft
+logic. No queue or worker limit changed, and real Draft authorization remains
+blocked on the evidence below.
 
 ## Release and deployment rules
 
@@ -222,8 +233,8 @@ on the evidence below.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.21 staging
-  evidence runner is `npm run verify:batchff1-5`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.22 staging
+  origin repair is `npm run verify:batchff1-6`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -253,21 +264,23 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review, merge, and run FF1.21 against its exact staging
-   manifest to prove delayed input, reschedule supersession, changed injury
-   input, explicit terminal-task backoff/retry, zero picks, and safe reset.
-   FF1.20 already proved the positive no-browser/duplicate path. Then complete
-   controlled reconnect and rollback evidence.
-2. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
+1. Independently review and merge FF1.22, deploy only its five named staging
+   callables followed by staging Hosting, and prove exact-origin preflight plus
+   authenticated `POST` through supported Draft Setup. FF1.20 and FF1.21 have
+   already passed their positive, duplicate, delayed, supersession,
+   changed-input, bounded-retry, zero-pick, and safe-reset paths.
+2. Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and
+   rollback Draft evidence on the exact repaired staging build.
+3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
-3. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
+4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
    on desktop and physical phones, including reconnect and stale multi-tab.
-4. Record the no-post-Draft-replacement or account-transfer decision.
-5. Generate and independently review the D1J season-freeze kit, exact tag,
+5. Record the no-post-Draft-replacement or account-transfer decision.
+6. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-7. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 
