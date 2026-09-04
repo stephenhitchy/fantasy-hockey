@@ -10,6 +10,7 @@ import {
   D1N_FIXTURE_PROJECT_ID,
   assertD1nFixtureSafety,
   buildD1nFixtureDocuments,
+  resolveD1nFixtureDraftStartOffsetMinutes,
   resolveD1nFixtureDraftStatus,
 } from '../../scripts/capacity/seed-d1n-route-fixture.mjs';
 
@@ -100,6 +101,30 @@ test('D1N fixture phase is explicit and limited to route-evidence states', () =>
   ).documents.get('leagues/d1n-capacity-league/draft/current');
   assert.equal(scheduled.status, 'scheduled');
   assert.equal(scheduled.scheduledStartAt.toISOString(), '2026-09-08T00:00:00.000Z');
+
+  assert.equal(resolveD1nFixtureDraftStartOffsetMinutes({}), 10_080);
+  assert.equal(
+    resolveD1nFixtureDraftStartOffsetMinutes({
+      D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES: '45',
+    }),
+    45,
+  );
+
+  for (const invalidOffset of ['0', '10081', '1.5', '-1', 'soon']) {
+    assert.throws(
+      () => resolveD1nFixtureDraftStartOffsetMinutes({
+        D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES: invalidOffset,
+      }),
+      /must be an integer from 1 to 10080/,
+    );
+  }
+
+  const lobby = buildD1nFixtureDocuments(
+    'fixture-commissioner',
+    new Date('2026-09-01T00:00:00Z'),
+    { draftStatus: 'scheduled', draftStartOffsetMinutes: 45 },
+  ).documents.get('leagues/d1n-capacity-league/draft/current');
+  assert.equal(lobby.scheduledStartAt.toISOString(), '2026-09-01T00:45:00.000Z');
 });
 
 test('D1N fixture contains only bounded synthetic route data', () => {

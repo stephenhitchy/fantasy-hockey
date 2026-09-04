@@ -144,11 +144,13 @@ test('staging fixture writes require exact project, acknowledgement, and secret 
     D1N_STAGING_ACK: D1N_STAGING_SEED_ACKNOWLEDGEMENT,
     D1N_STAGING_FIXTURE_PASSWORD: 'D1N-Staging-Secret-2026!',
     D1N_FIXTURE_DRAFT_STATUS: 'scheduled',
+    D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES: '45',
   };
 
   assert.deepEqual(assertD1nStagingSeedSafety(validEnvironment), {
     password: validEnvironment.D1N_STAGING_FIXTURE_PASSWORD,
     draftStatus: 'scheduled',
+    draftStartOffsetMinutes: 45,
   });
   assert.throws(
     () => assertD1nStagingSeedSafety({ ...validEnvironment, D1N_STAGING_PROJECT_ID: 'wrong' }),
@@ -171,5 +173,12 @@ test('staging fixture writes require exact project, acknowledgement, and secret 
       D1N_STAGING_FIXTURE_PASSWORD: 'too-short',
     }),
     /20–128 characters/,
+  );
+  assert.throws(
+    () => assertD1nStagingSeedSafety({
+      ...validEnvironment,
+      D1N_FIXTURE_DRAFT_START_OFFSET_MINUTES: '0',
+    }),
+    /must be an integer from 1 to 10080/,
   );
 });
