@@ -13,6 +13,8 @@ export type DraftRealtimeConnectionState =
   | 'stale'
   | 'offline';
 
+export type DraftConnectionPhase = 'lobby' | 'live';
+
 export interface DraftConnectionHealthInput {
   online: boolean;
   confirmationStartedAt: number | null;
@@ -145,7 +147,23 @@ export function getDraftConnectionStatusLabel(
 
 export function getDraftConnectionStatusDetail(
   state: DraftRealtimeConnectionState,
+  phase: DraftConnectionPhase = 'live',
 ): string {
+  if (phase === 'lobby') {
+    switch (state) {
+      case 'connected':
+        return 'Your private queue is live. Picks and the draft clock remain locked until the scheduled start.';
+      case 'offline':
+        return 'Queue changes are paused until your internet connection returns.';
+      case 'stale':
+        return 'RinkRat is waiting for a fresh server confirmation before allowing another queue change.';
+      case 'reconnecting':
+        return 'RinkRat is restoring the Draft board and your private queue.';
+      default:
+        return 'Waiting for the first server-confirmed lobby snapshot.';
+    }
+  }
+
   switch (state) {
     case 'connected':
       return 'Draft picks and the server clock are live.';

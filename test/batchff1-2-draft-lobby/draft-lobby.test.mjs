@@ -76,9 +76,10 @@ test('Draft lobby fails closed for invalid schedules and non-scheduled phases', 
 });
 
 test('scheduled lobby exposes rankings, order, roster, and private queue without live controls', async () => {
-  const [component, template] = await Promise.all([
+  const [component, template, resilienceUtility] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
     read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-mobile-resilience.util.ts'),
   ]);
 
   assert.match(template, /draft\(\)\?\.status === 'scheduled'[\s\S]*?!isDraftLobbyOpen\(\)/);
@@ -107,6 +108,11 @@ test('scheduled lobby exposes rankings, order, roster, and private queue without
   );
   assert.match(component, /draft\.status !== 'live'/);
   assert.match(component, /draft\.clockStatus !== 'running'/);
+  assert.match(component, /this\.isDraftLobbyOpen\(\) \? 'lobby' : 'live'/);
+  assert.match(
+    resilienceUtility,
+    /private queue is live\. Picks and the draft clock remain locked until the scheduled start/,
+  );
 });
 
 test('lobby queue writes remain bounded to the existing private queue path', async () => {
