@@ -1,8 +1,10 @@
 # FF1.22 — Exact Staging Callable Origin
 
-Status: source candidate; it must be independently reviewed, merged, deployed
-only to the named staging Functions below, and proven through the supported UI
-before Draft evidence resumes.
+Status: completed on isolated staging source `fe5f68cc` on 2026-09-04. All
+five targeted Functions were ACTIVE, both exact staging origins passed, an
+unrelated Firebase origin remained denied, and supported Draft Setup reached
+server authority with an authenticated `POST`. The follow-up client
+confirmation defect is tracked separately as FF1.23.
 
 ## Purpose
 

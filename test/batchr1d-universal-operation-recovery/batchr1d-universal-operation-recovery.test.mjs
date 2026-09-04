@@ -247,6 +247,21 @@ test('Draft Setup uses an exact submission identifier and authoritative bounded 
   };
 
   assert.equal(draftSettingsMatchExpectation(draft, expectation), true);
+  const firestoreTimestamp = {
+    toMillis() {
+      return expectation.scheduledStartAtMilliseconds;
+    },
+    toDate() {
+      return new Date(this.toMillis());
+    },
+  };
+  assert.equal(
+    draftSettingsMatchExpectation(
+      { ...draft, scheduledStartAt: firestoreTimestamp },
+      expectation,
+    ),
+    true,
+  );
   assert.equal(
     draftSettingsMatchExpectation(
       { ...draft, lastSettingsSubmissionId: 'another_request' },

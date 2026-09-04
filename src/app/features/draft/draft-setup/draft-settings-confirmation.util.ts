@@ -21,7 +21,7 @@ function toMilliseconds(value: unknown): number | null {
     const toDate = (value as { toDate?: unknown }).toDate;
 
     if (typeof toDate === 'function') {
-      const converted = (toDate as () => Date)();
+      const converted = (toDate as (this: object) => Date).call(value);
       return Number.isNaN(converted.getTime()) ? null : converted.getTime();
     }
   }

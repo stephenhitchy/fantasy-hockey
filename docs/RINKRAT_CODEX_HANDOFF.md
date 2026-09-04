@@ -209,15 +209,20 @@ request/snapshot/hash. The first no-browser execution correctly persisted
 `waiting-injury` and kept the clock stopped when the synthetic fixture lacked
 fresh daily injury evidence.
 
-A subsequent supported Commissioner Draft Setup rehearsal found a separate
-staging integration blocker: the shared callable CORS allowlist omitted the
-dedicated staging Hosting origins. Two authenticated tabs reproduced the same
-failure, the authoritative seven-day schedule remained unchanged, the exact
-preflight response omitted `Access-Control-Allow-Origin`, and Function request
-logs contained only `OPTIONS`, not `POST`. FF1.22 is the narrow exact-origin
-source candidate; it adds no wildcard and changes no authorization or Draft
-logic. No queue or worker limit changed, and real Draft authorization remains
-blocked on the evidence below.
+FF1.22 is merged and deployed to exact staging source `fe5f68cc`. All five
+targeted Functions are ACTIVE, both named staging origins receive their exact
+`Access-Control-Allow-Origin`, an unrelated Firebase origin remains denied,
+and supported Draft Setup produced an authenticated `POST`. Server authority
+persisted the requested synthetic schedule while retaining `scheduled`, a
+stopped clock, next pick 1, zero drafted assets, and zero pick documents.
+
+That successful server commit exposed a separate client confirmation defect:
+the browser detached Firestore `Timestamp.toDate` from its receiver, so the
+method's internal `this.toMillis()` failed and displayed a false error until
+reload. FF1.23 is the narrow client-only source candidate that preserves the
+timestamp receiver and adds a realistic regression. No Draft authority,
+Function runtime, queue, or worker limit changed, and real Draft authorization
+remains blocked on the evidence below.
 
 ## Release and deployment rules
 
@@ -233,8 +238,8 @@ blocked on the evidence below.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.22 staging
-  origin repair is `npm run verify:batchff1-6`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.23 Draft
+  confirmation repair is `npm run verify:batchff1-7`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -264,11 +269,9 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge FF1.22, deploy only its five named staging
-   callables followed by staging Hosting, and prove exact-origin preflight plus
-   authenticated `POST` through supported Draft Setup. FF1.20 and FF1.21 have
-   already passed their positive, duplicate, delayed, supersession,
-   changed-input, bounded-retry, zero-pick, and safe-reset paths.
+1. Independently review and merge FF1.23, deploy only staging Hosting, and
+   prove supported Draft Setup displays the authoritative saved schedule
+   without a false post-commit error or reload.
 2. Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and
    rollback Draft evidence on the exact repaired staging build.
 3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
