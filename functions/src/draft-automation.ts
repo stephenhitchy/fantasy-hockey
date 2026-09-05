@@ -33,8 +33,10 @@ import { queueServerDraftProjectionSnapshotRefresh } from './projection-authorit
 import {
   buildScheduledDraftStartTaskId,
   buildDraftReadinessRequestKey,
+  DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
   draftReadinessMatchesSchedule,
   getDraftReadinessWindowState,
+  getScheduledDraftStartTaskDispatchMilliseconds,
   getScheduledDraftStartTaskState,
   isDraftAvailabilityEvidenceUsable,
 } from './draft-readiness.util';
@@ -731,6 +733,15 @@ async function scheduleScheduledDraftStartTask(
     leagueId,
     expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
   };
+  const taskEnqueuedAtMilliseconds = Date.now();
+  const taskDispatchMilliseconds = getScheduledDraftStartTaskDispatchMilliseconds({
+    scheduledStartMilliseconds,
+    nowMilliseconds: taskEnqueuedAtMilliseconds,
+  });
+
+  if (taskDispatchMilliseconds === null) {
+    return 'not-due';
+  }
 
   try {
     await getDraftClockTaskQueue().enqueue(payload, {
@@ -738,15 +749,16 @@ async function scheduleScheduledDraftStartTask(
         leagueId,
         scheduledStartMilliseconds,
       }),
-      scheduleTime: new Date(
-        Math.max(Date.now() + 250, scheduledStartMilliseconds + 250),
-      ),
+      scheduleTime: new Date(taskDispatchMilliseconds),
       dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
     });
 
     console.info('Scheduled exact Draft-start task.', {
       leagueId,
       scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+      taskDispatchAt: new Date(taskDispatchMilliseconds).toISOString(),
+      warmupLeadMilliseconds:
+        scheduledStartMilliseconds - taskDispatchMilliseconds,
     });
 
     return 'scheduled';
@@ -2300,7 +2312,18 @@ async function processScheduledDraftStartTask(
 
   if (taskState === 'early') {
     const millisecondsUntilStart = expectedScheduledStartMilliseconds - Date.now();
-    await sleep(Math.min(millisecondsUntilStart, 5_000));
+
+    if (millisecondsUntilStart > DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS + 1_000) {
+      throw new Error(
+        'Scheduled Draft-start task arrived outside its bounded warmup window. Retrying closer to zero.',
+      );
+    }
+
+    console.info('Scheduled Draft-start task is holding for the exact server deadline.', {
+      leagueId,
+      millisecondsUntilStart,
+    });
+    await sleep(Math.max(millisecondsUntilStart, 1));
     draftSnapshot = await draftRef.get();
 
     if (!draftSnapshot.exists) {
@@ -2320,7 +2343,7 @@ async function processScheduledDraftStartTask(
     }
 
     if (taskState === 'early') {
-      throw new Error('Scheduled Draft-start task arrived early. Retrying at zero.');
+      throw new Error('Scheduled Draft-start task timer returned early. Retrying at zero.');
     }
   }
 

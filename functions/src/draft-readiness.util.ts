@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 
 export const DRAFT_READINESS_WINDOW_MILLISECONDS = 20 * 60 * 1000;
 export const DRAFT_AVAILABILITY_MAX_AGE_MILLISECONDS = 24 * 60 * 60 * 1000;
+export const DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS = 10_000;
+export const DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS = 250;
 
 export type DraftServerReadinessStatus =
   | 'waiting-injury'
@@ -119,6 +121,23 @@ export function buildScheduledDraftStartTaskId(input: {
     )
     .digest('hex')
     .slice(0, 40);
+}
+
+export function getScheduledDraftStartTaskDispatchMilliseconds(input: {
+  scheduledStartMilliseconds: number;
+  nowMilliseconds: number;
+}): number | null {
+  if (
+    !Number.isFinite(input.scheduledStartMilliseconds) ||
+    !Number.isFinite(input.nowMilliseconds)
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    input.nowMilliseconds + DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
+    input.scheduledStartMilliseconds - DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
+  );
 }
 
 export function getScheduledDraftStartTaskState(input: {

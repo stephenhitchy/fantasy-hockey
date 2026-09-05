@@ -1,7 +1,8 @@
 # FF1.24 — Exact Scheduled Draft Start
 
-Status: source implementation candidate; local verification and isolated staging
-evidence are required before any Production release.
+Status: source implementation complete; the first isolated staging timing gate
+failed because a cold task worker opened about 6.1 seconds late. FF1.25
+supersedes only the task-dispatch timing before this gate is repeated.
 
 ## Approved problem
 
@@ -81,6 +82,16 @@ authoritative board at zero.
   converged state, and the first deadline is ensured idempotently.
 - A Draft that is not `scheduled`, has no valid timestamp, or no longer exists
   is ignored.
+
+## First staging result
+
+The disposable 25-minute staging rehearsal proved verified readiness more than
+seventeen minutes before zero, zero pre-start picks, two-tab convergence after
+a final-minute reconnect, and prompt Cloud Tasks dispatch. A cold
+`processDraftClockDeadline` instance then caused the authoritative transition
+to miss the five-second gate by about 1.1 seconds. Production was not changed.
+See `RINKRAT_FF1_9_DRAFT_START_WARMUP.md` for the bounded repair and repeat
+evidence requirements.
 
 ## Tests
 

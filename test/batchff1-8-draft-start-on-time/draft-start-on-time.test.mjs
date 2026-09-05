@@ -75,7 +75,7 @@ test('server schedules one exact start task before readiness work and retains th
   assert.ok(readinessIndex > taskIndex);
   assert.match(source, /taskType: 'scheduled-start'/);
   assert.match(source, /buildScheduledDraftStartTaskId/);
-  assert.match(source, /scheduledStartMilliseconds \+ 250/);
+  assert.match(source, /getScheduledDraftStartTaskDispatchMilliseconds/);
   assert.match(source, /isTaskAlreadyExistsError\(error\)[\s\S]*?return 'scheduled'/);
   assert.match(source, /schedule: '\* \* \* \* \*'/);
   assert.match(source, /maxInstances: 1/);

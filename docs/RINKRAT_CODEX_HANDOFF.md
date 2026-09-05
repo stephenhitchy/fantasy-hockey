@@ -223,15 +223,19 @@ reload. FF1.23 is the narrow client-only source candidate that preserves the
 timestamp receiver and adds a realistic regression; it is merged at source
 `16a3466c`.
 
-An observed start rehearsal then showed the countdown reaching zero before a
-long legacy browser ESPN/projection preparation path completed. FF1.24 is the
-current source candidate: it creates one deterministic exact scheduled-start
-task on the existing Draft deadline queue, ignores old tasks after reschedule,
-opens only through exact FF1.19 readiness, ensures the first pick deadline,
-retains the minute worker as fallback, and removes browser preparation from
-Draft Room and League Home activation. No scoring/projection formula, Draft
-transaction, queue rate, or worker limit changed. Exact staging timing and
-duplicate/reconnect evidence remain required.
+An observed start rehearsal first showed the countdown reaching zero before a
+long legacy browser ESPN/projection preparation path completed. FF1.24 removed
+that browser path and added a deterministic exact-start task. Its first
+25-minute staging rehearsal proved readiness more than seventeen minutes before
+zero, zero picks, two-tab convergence, and Cloud Tasks dispatch within a
+fraction of a second of schedule. It also exposed a cold `processDraftClockDeadline`
+instance: the authoritative start completed about 6.1 seconds late and failed
+the five-second gate. FF1.25 is the narrow source candidate that dispatches the
+same task ten seconds early, waits server-side until zero, rereads the Draft,
+and then uses the unchanged readiness transaction. No scoring/projection
+formula, Draft transaction, queue rate, minimum instance, concurrency, or
+worker limit changed. Exact staging timing and duplicate/reconnect evidence
+must be repeated.
 
 ## Release and deployment rules
 
@@ -247,8 +251,8 @@ duplicate/reconnect evidence remain required.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.24 Draft
-  start repair is `npm run verify:batchff1-8`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.25 Draft
+  start repair is `npm run verify:batchff1-9`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -278,10 +282,11 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review FF1.24, then deploy only its three exact staging
-   Functions and staging Hosting from a clean merged commit; prove
-   ready-before-zero, no-browser start within five seconds, stale-reschedule
-   no-op, duplicate convergence, and first-deadline scheduling.
+1. Independently review FF1.25, then deploy only its three exact staging
+   Functions and staging Hosting from a clean merged commit; repeat the
+   25-minute cold-worker rehearsal and prove ready-before-zero, no-browser
+   start within five seconds, stale-reschedule no-op, duplicate convergence,
+   and first-deadline scheduling.
 2. Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and
    rollback Draft evidence on the exact repaired staging build.
 3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
