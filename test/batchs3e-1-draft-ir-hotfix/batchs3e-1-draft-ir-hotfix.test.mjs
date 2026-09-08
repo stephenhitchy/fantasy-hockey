@@ -7,31 +7,33 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
 }
 
-test('Draft scheduling queues verified Projection V11 preparation instead of awaiting the full ranking job', async () => {
+test('Draft scheduling delegates exact Projection V11 preparation to server readiness', async () => {
   const [setup, projectionService, draftService] = await Promise.all([
     read('src/app/features/draft/draft-setup/draft-setup.ts'),
     read('src/app/core/projection/projection-snapshot.service.ts'),
     read('src/app/core/draft/draft.service.ts'),
   ]);
 
-  assert.match(setup, /queueSharedProjectionSnapshotGeneration/);
-  assert.match(setup, /createSharedProjectionGenerationRequestId/);
-  assert.match(setup, /settleOperationWithin\([\s\S]*queueSharedProjectionSnapshotGeneration[\s\S]*12_000/);
+  assert.doesNotMatch(setup, /queueSharedProjectionSnapshotGeneration/);
+  assert.doesNotMatch(setup, /createSharedProjectionGenerationRequestId/);
+  assert.match(setup, /getDraftSetupSchedulingGateState/);
+  assert.match(setup, /hasStoredExactDraftReadinessForSchedule/);
   assert.doesNotMatch(setup, /generateSharedProjectionSnapshot\(/);
   assert.match(setup, /projectionPreparationRequestId/);
-  assert.match(setup, /The verified Projection V\$\{SHARED_PROJECTION_VERSION\} board is building in the background/);
+  assert.match(setup, /One authoritative server preparation/);
   assert.match(projectionService, /export async function queueSharedProjectionSnapshotGeneration/);
   assert.match(draftService, /projectionPreparationRequestId/);
   assert.match(draftService, /benchSlotId,\s*\n\s*\}\);/);
 });
 
-test('Draft authority validates a ready pointer or matching queued request without loading every projection asset', async () => {
+test('Draft authority validates exact near-term readiness without accepting a generic pointer', async () => {
   const source = await read('functions/src/draft-authority.ts');
 
-  assert.match(source, /resolveDraftProjectionPreparation/);
-  assert.match(source, /projectionGenerationRequests\/\$\{requestId\}/);
-  assert.match(source, /projectionPreparationStatus:\s*projectionPreparation\.status/);
-  assert.match(source, /serverAutomationStatus:[\s\S]*waiting-projection/);
+  assert.doesNotMatch(source, /resolveDraftProjectionPreparation/);
+  assert.match(source, /loadPreparedProjectionSnapshotForScheduledDraft/);
+  assert.match(source, /createUnsafeNearTermScheduleError/);
+  assert.match(source, /serverDraftReadinessStatus: preserveVerifiedReadiness/);
+  assert.match(source, /serverAutomationStatus:[\s\S]*scheduled-ready/);
   assert.doesNotMatch(source, /loadSharedProjectionSnapshot\(/);
   assert.match(source, /League entry is now closed/);
 });

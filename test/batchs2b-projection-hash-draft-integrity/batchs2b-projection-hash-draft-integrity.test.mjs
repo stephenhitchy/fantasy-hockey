@@ -265,7 +265,19 @@ test('Draft authority pins and verifies the exact snapshot root hash for manual 
   assert.match(draftAuthoritySource, /projectionSnapshotHash = projection\.metadata\.snapshotContentHash/);
   assert.match(draftAuthoritySource, /draft\.serverDraftProjectionSnapshotHash !== projectionSnapshotHash/);
   assert.match(draftAuthoritySource, /projectionAuthorityVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION/);
-  assert.match(draftSetupSource, /serverDraftProjectionSnapshotHash: null/);
+  assert.match(
+    draftSetupSource,
+    /serverDraftProjectionSnapshotHash: preserveExactReadiness/,
+  );
+  assert.match(
+    draftSetupSource,
+    /existingDraft\?\.serverDraftProjectionSnapshotHash \?\? null/,
+  );
+  assert.doesNotMatch(
+    draftSetupSource,
+    /loadSharedProjectionSnapshotMetadata|queueSharedProjectionSnapshotGeneration/,
+  );
+  assert.match(draftAuthoritySource, /serverDraftProjectionSnapshotHash: null/);
   assert.match(draftRoomSource, /The Draft pool did not match its verified server content hash/);
 });
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const DRAFT_READINESS_WINDOW_MILLISECONDS = 20 * 60 * 1000;
+export const DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS = 25 * 60 * 1000;
 export const DRAFT_AVAILABILITY_MAX_AGE_MILLISECONDS = 24 * 60 * 60 * 1000;
 export const DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS = 10_000;
 export const DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS = 250;
@@ -22,12 +23,51 @@ export type ScheduledDraftStartTaskState =
   | 'early'
   | 'stale';
 
+export type DraftNearTermScheduleGateState =
+  | 'not-scheduled'
+  | 'safe-lead'
+  | 'exact-ready'
+  | 'requires-exact-readiness';
+
 export interface DraftAvailabilityEvidenceInput {
   revision: string | null;
   lastSuccessfulAt: string | null;
   lastDailySyncKey: string | null;
   status: string | null;
   nowMilliseconds: number;
+}
+
+export function getDraftNearTermScheduleGateState(input: {
+  scheduledStartMilliseconds: number | null;
+  nowMilliseconds: number;
+  exactReadinessVerified: boolean;
+}): DraftNearTermScheduleGateState {
+  if (
+    input.scheduledStartMilliseconds === null ||
+    !Number.isFinite(input.scheduledStartMilliseconds) ||
+    !Number.isFinite(input.nowMilliseconds)
+  ) {
+    return 'not-scheduled';
+  }
+
+  const leadMilliseconds =
+    input.scheduledStartMilliseconds - input.nowMilliseconds;
+
+  if (leadMilliseconds >= DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS) {
+    return 'safe-lead';
+  }
+
+  return input.exactReadinessVerified
+    ? 'exact-ready'
+    : 'requires-exact-readiness';
+}
+
+export function getEarliestSafeUnpreparedDraftStartMilliseconds(
+  nowMilliseconds: number,
+): number | null {
+  return Number.isFinite(nowMilliseconds)
+    ? nowMilliseconds + DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS
+    : null;
 }
 
 export function getDraftReadinessWindowState(input: {

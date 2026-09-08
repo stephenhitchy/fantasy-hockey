@@ -1168,7 +1168,6 @@ export async function saveFantasyDraft(
   leagueId: string,
   draft: FantasyDraft,
   submissionId?: string,
-  projectionPreparationRequestId?: string | null,
 ): Promise<void> {
   const scheduledStart = getScheduledStartDate(draft);
 
@@ -1176,7 +1175,6 @@ export async function saveFantasyDraft(
     leagueId,
     action: 'save-settings',
     submissionId,
-    projectionPreparationRequestId: projectionPreparationRequestId ?? null,
     roundOneOrder: [...draft.roundOneOrder],
     scheduledStartAt: scheduledStart?.toISOString() ?? null,
     pickSeconds: normalizePickSeconds(draft.pickSeconds),

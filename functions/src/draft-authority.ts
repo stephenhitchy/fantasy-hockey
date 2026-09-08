@@ -18,10 +18,6 @@ import {
   isProjectionSha256,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
-import {
-  CURRENT_SCORING_RULES_VERSION,
-  SCORING_RULES_V3_VERSION,
-} from './shared/core/scoring/scoring-rules';
 import { FantasyRoster } from './shared/core/team/roster.models';
 import {
   createEmptyFantasyRoster,
@@ -47,15 +43,17 @@ import {
   LEAGUE_AUTHORITY_SCHEMA_VERSION,
 } from './league-lifecycle-authority.util';
 import {
-  optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
   resolveSafeFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
 import {
   FIRESTORE_AUTH_USER_ID_OPTIONS,
   FIRESTORE_INVITE_CODE_OPTIONS,
-  FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
+import {
+  getDraftNearTermScheduleGateState,
+  getEarliestSafeUnpreparedDraftStartMilliseconds,
+} from './draft-readiness.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 
 const FUNCTION_REGION = 'us-central1';
@@ -86,7 +84,6 @@ interface DraftCommandRequest {
   leagueId?: unknown;
   action?: unknown;
   submissionId?: unknown;
-  projectionPreparationRequestId?: unknown;
   roundOneOrder?: unknown;
   scheduledStartAt?: unknown;
   pickSeconds?: unknown;
@@ -158,122 +155,6 @@ function getOptionalDraftSubmissionId(value: unknown): string | null {
     maxBytes: MAX_DRAFT_SUBMISSION_ID_LENGTH,
     pattern: /^[A-Za-z0-9_-]+$/,
   });
-}
-
-type DraftProjectionPreparationStatus = 'ready' | 'queued' | 'processing' | 'error';
-
-interface DraftProjectionPreparationState {
-  requestId: string | null;
-  status: DraftProjectionPreparationStatus;
-}
-
-function getOptionalProjectionPreparationRequestId(value: unknown): string | null {
-  return optionalFirestoreDocumentId(
-    value,
-    'projection preparation request ID',
-    FIRESTORE_REQUEST_ID_OPTIONS,
-  );
-}
-
-function normalizeLeagueScoringRulesVersion(value: unknown): number {
-  return typeof value === 'number' && value >= CURRENT_SCORING_RULES_VERSION
-    ? CURRENT_SCORING_RULES_VERSION
-    : SCORING_RULES_V3_VERSION;
-}
-
-function isDraftReadyProjectionPointer(
-  data: Record<string, unknown>,
-  expectedScoringRulesVersion: number,
-): boolean {
-  return data['status'] === 'ready' &&
-    data['projectionVersion'] === SHARED_PROJECTION_VERSION &&
-    normalizeLeagueScoringRulesVersion(data['scoringRulesVersion']) ===
-      expectedScoringRulesVersion &&
-    data['generationReason'] !== 'server-emergency' &&
-    typeof data['activeSnapshotId'] === 'string' &&
-    Boolean(data['activeSnapshotId']) &&
-    typeof data['assetCount'] === 'number' &&
-    Number(data['assetCount']) > 0 &&
-    data['generatedByAuthority'] === 'server' &&
-    data['catalogValidationStatus'] === 'validated' &&
-    typeof data['catalogSnapshotId'] === 'string' &&
-    Boolean(data['catalogSnapshotId']) &&
-    isProjectionSha256(data['catalogHash']) &&
-    data['snapshotIntegrityStatus'] === 'verified' &&
-    isProjectionSha256(data['snapshotContentHash']);
-}
-
-async function waitForProjectionPreparationRequest(
-  leagueId: string,
-  requestId: string,
-): Promise<DraftProjectionPreparationStatus | null> {
-  const requestRef = db.doc(`projectionGenerationRequests/${requestId}`);
-
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const snapshot = await requestRef.get();
-
-    if (snapshot.exists) {
-      const data = snapshot.data() ?? {};
-      const status = asString(data['status']) as DraftProjectionPreparationStatus;
-      const targetCycleNumber = Number(data['targetCycleNumber']);
-
-      if (
-        data['leagueId'] !== leagueId ||
-        targetCycleNumber !== 1 ||
-        !['queued', 'processing', 'ready'].includes(status) ||
-        data['generationReason'] === 'server-emergency'
-      ) {
-        throw new HttpsError(
-          'failed-precondition',
-          'The Projection V11 preparation request does not match this Draft schedule.',
-        );
-      }
-
-      return status;
-    }
-
-    if (attempt < 7) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-
-  return null;
-}
-
-async function resolveDraftProjectionPreparation(
-  leagueId: string,
-  requestId: string | null,
-): Promise<DraftProjectionPreparationState> {
-  const leagueSnapshot = await db.doc(`leagues/${leagueId}`).get();
-  const expectedScoringRulesVersion = normalizeLeagueScoringRulesVersion(
-    leagueSnapshot.exists ? leagueSnapshot.data()?.['scoringRulesVersion'] : null,
-  );
-  const pointerSnapshot = await db
-    .doc(`leagues/${leagueId}/projectionSnapshots/current`)
-    .get();
-  const pointerData = pointerSnapshot.exists ? pointerSnapshot.data() ?? {} : {};
-
-  if (isDraftReadyProjectionPointer(pointerData, expectedScoringRulesVersion)) {
-    return { requestId, status: 'ready' };
-  }
-
-  if (!requestId) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Verified Projection V${SHARED_PROJECTION_VERSION} rankings must be ready or building before scheduling the draft.`,
-    );
-  }
-
-  const status = await waitForProjectionPreparationRequest(leagueId, requestId);
-
-  if (!status) {
-    throw new HttpsError(
-      'failed-precondition',
-      `RinkRat could not confirm the Projection V${SHARED_PROJECTION_VERSION} preparation request. Try saving the draft time again.`,
-    );
-  }
-
-  return { requestId, status };
 }
 
 function getOptionalExpectedOverallPick(value: unknown): number | null {
@@ -585,6 +466,93 @@ function parseRoundOneOrder(value: unknown): string[] {
   return order;
 }
 
+interface VerifiedNearTermDraftReadiness {
+  scheduledStartMilliseconds: number;
+  availabilityRevision: string;
+  projectionRequestId: string;
+  projectionSnapshotId: string;
+  projectionSnapshotHash: string;
+}
+
+function draftSettingsMatchRequest(
+  draft: FantasyDraft | null,
+  input: {
+    submissionId: string | null;
+    roundOneOrder: string[];
+    scheduledStartMilliseconds: number | null;
+    pickSeconds: number;
+  },
+): boolean {
+  if (!draft || !input.submissionId || draft.lastSettingsSubmissionId !== input.submissionId) {
+    return false;
+  }
+
+  const existingStartMilliseconds =
+    asTimestampDate(draft.scheduledStartAt)?.getTime() ?? null;
+  const expectedStatus = input.scheduledStartMilliseconds === null
+    ? 'setup'
+    : 'scheduled';
+
+  return draft.status === expectedStatus &&
+    existingStartMilliseconds === input.scheduledStartMilliseconds &&
+    draft.pickSeconds === input.pickSeconds &&
+    draft.roundOneOrder.length === input.roundOneOrder.length &&
+    draft.roundOneOrder.every(
+      (ownerId, index) => ownerId === input.roundOneOrder[index],
+    );
+}
+
+function draftMatchesVerifiedNearTermReadiness(
+  draft: FantasyDraft | null,
+  evidence: VerifiedNearTermDraftReadiness | null,
+): boolean {
+  if (!draft || !evidence) {
+    return false;
+  }
+
+  return draft.status === 'scheduled' &&
+    draft.serverDraftReadinessStatus === 'ready' &&
+    asTimestampDate(draft.scheduledStartAt)?.getTime() ===
+      evidence.scheduledStartMilliseconds &&
+    asTimestampDate(draft.serverDraftReadinessScheduledStartAt)?.getTime() ===
+      evidence.scheduledStartMilliseconds &&
+    draft.serverDraftReadinessAvailabilityRevision ===
+      evidence.availabilityRevision &&
+    draft.serverDraftReadinessProjectionRequestId ===
+      evidence.projectionRequestId &&
+    draft.serverDraftReadinessProjectionSnapshotId ===
+      evidence.projectionSnapshotId &&
+    draft.serverDraftReadinessProjectionSnapshotHash ===
+      evidence.projectionSnapshotHash;
+}
+
+function createUnsafeNearTermScheduleError(
+  nowMilliseconds: number,
+  scheduledStartMilliseconds: number | null,
+): HttpsError {
+  const earliestSafeStartMilliseconds =
+    getEarliestSafeUnpreparedDraftStartMilliseconds(nowMilliseconds);
+  const earliestSafeStart = earliestSafeStartMilliseconds === null
+    ? 'at least 25 minutes from now'
+    : new Date(earliestSafeStartMilliseconds).toISOString();
+
+  console.warn('Rejected an unsafe near-term Draft schedule.', {
+    requestedLeadMilliseconds: scheduledStartMilliseconds === null
+      ? null
+      : scheduledStartMilliseconds - nowMilliseconds,
+    minimumUnpreparedLeadMilliseconds: earliestSafeStartMilliseconds === null
+      ? null
+      : earliestSafeStartMilliseconds - nowMilliseconds,
+    exactReadinessVerified: false,
+    priorDraftPreserved: true,
+  });
+
+  return new HttpsError(
+    'failed-precondition',
+    `That Draft start is too soon for safe server preparation. Choose a start at least 25 minutes from now (earliest safe start: ${earliestSafeStart}). A nearer start is allowed only when this exact schedule already has a current injury-bound Projection V${SHARED_PROJECTION_VERSION} snapshot verified by the server. Your existing Draft settings were not changed.`,
+  );
+}
+
 async function saveDraftSettings(
   leagueId: string,
   userId: string,
@@ -601,13 +569,6 @@ async function saveDraftSettings(
     throw new HttpsError('invalid-argument', 'Choose a supported draft clock duration.');
   }
 
-  const projectionPreparationRequestId = scheduledStartAt
-    ? getOptionalProjectionPreparationRequestId(request.projectionPreparationRequestId)
-    : null;
-  const projectionPreparation = scheduledStartAt
-    ? await resolveDraftProjectionPreparation(leagueId, projectionPreparationRequestId)
-    : { requestId: null, status: null };
-
   const draftRef = db.doc(`leagues/${leagueId}/${DRAFT_DOCUMENT_PATH_SUFFIX}`);
   const leagueRef = db.doc(`leagues/${leagueId}`);
   const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
@@ -617,6 +578,68 @@ async function saveDraftSettings(
     .digest('hex')
     .slice(0, 24)}`;
   const draftSettingsAuditRef = db.doc(`leagues/${leagueId}/audit/${draftSettingsAuditId}`);
+  const scheduledStartMilliseconds = scheduledStartAt?.getTime() ?? null;
+  const schedulingNowMilliseconds = Date.now();
+  const preflightDraftSnapshot = scheduledStartAt
+    ? await draftRef.get()
+    : null;
+  const preflightDraft = preflightDraftSnapshot?.exists
+    ? normalizeDraft(preflightDraftSnapshot.data() as Partial<FantasyDraft>)
+    : null;
+  const settingsRequest = {
+    submissionId,
+    roundOneOrder,
+    scheduledStartMilliseconds,
+    pickSeconds,
+  };
+  const idempotentPreflight = draftSettingsMatchRequest(
+    preflightDraft,
+    settingsRequest,
+  );
+  const initialNearTermGateState = getDraftNearTermScheduleGateState({
+    scheduledStartMilliseconds,
+    nowMilliseconds: schedulingNowMilliseconds,
+    exactReadinessVerified: false,
+  });
+  let verifiedNearTermReadiness: VerifiedNearTermDraftReadiness | null = null;
+
+  if (
+    initialNearTermGateState === 'requires-exact-readiness' &&
+    !idempotentPreflight
+  ) {
+    const preparedProjection = preflightDraft &&
+      asTimestampDate(preflightDraft.scheduledStartAt)?.getTime() ===
+        scheduledStartMilliseconds
+      ? await loadPreparedProjectionSnapshotForScheduledDraft(
+          leagueId,
+          preflightDraft,
+        )
+      : null;
+    const availabilityRevision = preparedProjection?.metadata.availabilityRevision;
+    const projectionRequestId = preparedProjection?.metadata.generationRequestId;
+    const projectionSnapshotId = preparedProjection?.metadata.activeSnapshotId;
+    const projectionSnapshotHash = preparedProjection?.metadata.snapshotContentHash;
+
+    if (
+      preparedProjection &&
+      scheduledStartMilliseconds !== null &&
+      isProjectionSha256(availabilityRevision) &&
+      typeof projectionRequestId === 'string' &&
+      Boolean(projectionRequestId) &&
+      typeof projectionSnapshotId === 'string' &&
+      Boolean(projectionSnapshotId) &&
+      isProjectionSha256(projectionSnapshotHash)
+    ) {
+      verifiedNearTermReadiness = {
+        scheduledStartMilliseconds,
+        availabilityRevision,
+        projectionRequestId,
+        projectionSnapshotId,
+        projectionSnapshotHash,
+      };
+    }
+
+  }
 
   await db.runTransaction(async (transaction) => {
     const [
@@ -662,36 +685,18 @@ async function saveDraftSettings(
       );
     }
 
-    let idempotentSettingsReplay = false;
+    const idempotentSettingsReplay = draftSettingsMatchRequest(
+      existingDraft,
+      settingsRequest,
+    );
 
     if (submissionId && existingDraft?.lastSettingsSubmissionId === submissionId) {
-      const existingStartAt = asTimestampDate(existingDraft.scheduledStartAt);
-      const expectedStatus = scheduledStartAt ? 'scheduled' : 'setup';
-      const sameStart =
-        (existingStartAt?.getTime() ?? null) === (scheduledStartAt?.getTime() ?? null);
-      const sameOrder =
-        existingDraft.roundOneOrder.length === roundOneOrder.length &&
-        existingDraft.roundOneOrder.every(
-          (ownerId, index) => ownerId === roundOneOrder[index],
-        );
-      const sameProjectionPreparation =
-        (existingDraft.projectionPreparationRequestId ?? null) ===
-        (projectionPreparation.requestId ?? null);
-
-      if (
-        existingDraft.status !== expectedStatus ||
-        !sameOrder ||
-        !sameStart ||
-        !sameProjectionPreparation ||
-        existingDraft.pickSeconds !== pickSeconds
-      ) {
+      if (!idempotentSettingsReplay) {
         throw new HttpsError(
           'already-exists',
           'That draft-settings submission identifier was already used for different settings. Refresh Draft Setup before trying again.',
         );
       }
-
-      idempotentSettingsReplay = true;
     }
 
     if (
@@ -711,6 +716,28 @@ async function saveDraftSettings(
 
     const timestamp = FieldValue.serverTimestamp();
     const status = scheduledStartAt ? 'scheduled' : 'setup';
+    const preserveVerifiedReadiness = draftMatchesVerifiedNearTermReadiness(
+      existingDraft,
+      verifiedNearTermReadiness,
+    );
+
+    if (
+      initialNearTermGateState === 'requires-exact-readiness' &&
+      !idempotentSettingsReplay &&
+      !preserveVerifiedReadiness
+    ) {
+      throw createUnsafeNearTermScheduleError(
+        schedulingNowMilliseconds,
+        scheduledStartMilliseconds,
+      );
+    }
+
+    const projectionPreparationRequestId = preserveVerifiedReadiness
+      ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
+      : null;
+    const projectionPreparationStatus = preserveVerifiedReadiness
+      ? 'ready'
+      : null;
 
     if (!idempotentSettingsReplay) {
       transaction.set(
@@ -735,31 +762,45 @@ async function saveDraftSettings(
           clockUpdatedAt: timestamp,
           lastPickId: null,
           lastSettingsSubmissionId: submissionId ?? null,
-          projectionPreparationRequestId: projectionPreparation.requestId,
-          projectionPreparationStatus: projectionPreparation.status,
-          serverDraftReadinessStatus: null,
-          serverDraftReadinessScheduledStartAt: null,
-          serverDraftReadinessAvailabilityRevision: null,
-          serverDraftReadinessProjectionRequestId: null,
-          serverDraftReadinessProjectionSnapshotId: null,
-          serverDraftReadinessProjectionSnapshotHash: null,
-          serverDraftReadinessAttemptCount: 0,
+          projectionPreparationRequestId,
+          projectionPreparationStatus,
+          serverDraftReadinessStatus: preserveVerifiedReadiness ? 'ready' : null,
+          serverDraftReadinessScheduledStartAt: preserveVerifiedReadiness
+            ? existingDraft?.serverDraftReadinessScheduledStartAt ?? null
+            : null,
+          serverDraftReadinessAvailabilityRevision: preserveVerifiedReadiness
+            ? existingDraft?.serverDraftReadinessAvailabilityRevision ?? null
+            : null,
+          serverDraftReadinessProjectionRequestId: preserveVerifiedReadiness
+            ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
+            : null,
+          serverDraftReadinessProjectionSnapshotId: preserveVerifiedReadiness
+            ? existingDraft?.serverDraftReadinessProjectionSnapshotId ?? null
+            : null,
+          serverDraftReadinessProjectionSnapshotHash: preserveVerifiedReadiness
+            ? existingDraft?.serverDraftReadinessProjectionSnapshotHash ?? null
+            : null,
+          serverDraftReadinessAttemptCount: preserveVerifiedReadiness
+            ? existingDraft?.serverDraftReadinessAttemptCount ?? 0
+            : 0,
           serverDraftReadinessRetryAfterAt: null,
-          serverDraftReadinessMessage: null,
+          serverDraftReadinessMessage: preserveVerifiedReadiness
+            ? 'The server preserved the exact current injury input and verified Projection V11 snapshot for this unchanged near-term start.'
+            : null,
           serverDraftReadinessUpdatedAt: timestamp,
           serverDraftProjectionSnapshotId: null,
           serverDraftProjectionSnapshotHash: null,
           serverDraftProjectionAuthorityVersion: null,
           serverDraftProjectionCatalogHash: null,
           serverAutomationStatus: status === 'scheduled'
-            ? projectionPreparation.status === 'ready'
-              ? 'scheduled'
-              : 'waiting-projection'
+            ? preserveVerifiedReadiness
+              ? 'scheduled-ready'
+              : 'scheduled'
             : 'waiting',
           serverAutomationMessage: status === 'scheduled'
-            ? projectionPreparation.status === 'ready'
-              ? 'Draft settings are saved. The server will open the draft at the scheduled time.'
-              : `Draft settings are saved. Projection V${SHARED_PROJECTION_VERSION} is building in the background, and the server will open the draft only after it is verified.`
+            ? preserveVerifiedReadiness
+              ? 'Draft settings are saved with exact server readiness. The server will open the draft at the scheduled time.'
+              : 'Draft settings are saved. One authoritative server preparation will begin inside the readiness window.'
             : 'Draft order saved without a scheduled start time.',
           serverAutomationUpdatedAt: timestamp,
           updatedAt: timestamp,
@@ -843,8 +884,8 @@ async function saveDraftSettings(
           roundOneOrder,
           scheduledStartAt: scheduledStartAt ? Timestamp.fromDate(scheduledStartAt) : null,
           pickSeconds,
-          projectionPreparationRequestId: projectionPreparation.requestId,
-          projectionPreparationStatus: projectionPreparation.status,
+          projectionPreparationRequestId,
+          projectionPreparationStatus,
         },
         createdAt: timestamp,
       });
@@ -855,9 +896,9 @@ async function saveDraftSettings(
     applied: true,
     action: 'save-settings',
     message: scheduledStartAt
-      ? projectionPreparation.status === 'ready'
-        ? 'Draft settings and scheduled start were saved. League entry is now closed.'
-        : `Draft settings and scheduled start were saved while Projection V${SHARED_PROJECTION_VERSION} finishes in the background. League entry is now closed.`
+      ? verifiedNearTermReadiness
+        ? 'Draft settings and the already verified near-term start were saved. League entry is now closed.'
+        : 'Draft settings and scheduled start were saved. The server will prepare one exact Draft board inside the readiness window. League entry is now closed.'
       : 'Draft order was saved. League entry is now closed.',
     submissionId,
   };

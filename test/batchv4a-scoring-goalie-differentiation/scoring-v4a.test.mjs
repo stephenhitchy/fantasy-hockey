@@ -282,7 +282,11 @@ test('league creation, authority repair, scoring, Draft readiness, and projectio
   assert.match(lifecycle, /const scoringRules = scoringRulesForVersion\(scoringRulesVersion\)/);
   assert.match(automation, /scoringRulesForVersion\(version\)/);
   assert.match(automation, /V3 leagues remain V3 until the guarded preseason V4 migration/);
-  assert.match(draftAuthority, /expectedScoringRulesVersion/);
+  assert.match(draftAuthority, /loadPreparedProjectionSnapshotForScheduledDraft/);
+  assert.match(
+    draftAutomation,
+    /const expectedScoringRulesVersion = await getLeagueScoringRulesVersion/,
+  );
   assert.match(draftAutomation, /metadata\.scoringRulesVersion === expectedScoringRulesVersion/);
   assert.match(projectionAuthority, /metadata\.scoringRulesVersion === expectedScoringRulesVersion/);
 });

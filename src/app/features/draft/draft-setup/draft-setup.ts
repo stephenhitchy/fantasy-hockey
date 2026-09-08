@@ -38,12 +38,12 @@ import {
 } from './draft-settings-confirmation.util';
 
 import {
-  createSharedProjectionGenerationRequestId,
-  isSharedProjectionSnapshotFreshForDraft,
-  loadSharedProjectionSnapshotMetadata,
-  queueSharedProjectionSnapshotGeneration,
-  SHARED_PROJECTION_VERSION,
-} from '../../../core/projection/projection-snapshot.service';
+  DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS,
+  getDraftSetupSchedulingGateState,
+  getEarliestSafeDraftStartMilliseconds,
+  hasStoredExactDraftReadinessForSchedule,
+  type DraftSetupSchedulingGateState,
+} from '../../../core/draft/draft-scheduling-gate.util';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
 
@@ -83,10 +83,9 @@ export class DraftSetup implements OnDestroy {
 
   loading = signal(true);
   saving = signal(false);
-  savePhase = signal<'idle' | 'preparing' | 'saving' | 'confirming'>('idle');
+  savePhase = signal<'idle' | 'saving' | 'confirming'>('idle');
   errorMessage = signal('');
   successMessage = signal('');
-  projectionPreparationWarning = signal('');
 
   draftStartInput = '';
   pickSecondsInput = DEFAULT_DRAFT_PICK_SECONDS;
@@ -341,10 +340,90 @@ export class DraftSetup implements OnDestroy {
     return status === 'live' || status === 'complete' || this.startTimeReached();
   }
 
+  getDraftSchedulingGateState(): DraftSetupSchedulingGateState {
+    return getDraftSetupSchedulingGateState({
+      draft: this.draft(),
+      selectedStartMilliseconds: this.getSelectedDraftStartDate()?.getTime() ?? null,
+      nowMilliseconds: this.now(),
+    });
+  }
+
+  getDraftPreparationStatusTitle(): string {
+    if (this.draftStartInput && !this.getSelectedDraftStartDate()) {
+      return 'Choose a valid start time';
+    }
+
+    switch (this.getDraftSchedulingGateState()) {
+      case 'past':
+        return 'Choose a future start time';
+      case 'unsafe-near-term':
+        return 'More preparation time is required';
+      case 'exact-ready':
+        return 'Exact Draft data is ready';
+      case 'safe-lead':
+        return 'Safe preparation window';
+      default:
+        return 'Preparation starts after scheduling';
+    }
+  }
+
+  getDraftPreparationStatusDetail(): string {
+    const selectedStartDate = this.getSelectedDraftStartDate();
+    const selectedStartMilliseconds = selectedStartDate?.getTime() ?? null;
+    const gateState = this.getDraftSchedulingGateState();
+
+    if (this.draftStartInput && !selectedStartDate) {
+      return 'Enter a complete date and time before saving Draft settings.';
+    }
+
+    if (gateState === 'past') {
+      return 'The Draft server cannot schedule a start time that has already arrived.';
+    }
+
+    if (gateState === 'unsafe-near-term') {
+      return `This start is less than ${DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS / 60_000} minutes away, but its exact injury-bound Projection V11 snapshot is not verified. Choose ${this.getEarliestSafeStartText()} or later. The server will leave the Draft stopped at zero picks if NHL data is delayed or rate-limited.`;
+    }
+
+    if (gateState === 'exact-ready') {
+      return 'The saved start time, current injury revision, Projection V11 request, snapshot, and integrity hash are bound together. The server will verify them again when you save.';
+    }
+
+    if (gateState === 'safe-lead') {
+      const draft = this.draft();
+      const savedStartMilliseconds = getScheduledStartDate(draft)?.getTime() ?? null;
+
+      if (savedStartMilliseconds === selectedStartMilliseconds) {
+        switch (draft?.serverDraftReadinessStatus) {
+          case 'waiting-injury':
+            return 'The server is waiting for a successful NHL injury update. The Draft remains scheduled, stopped, and at zero picks.';
+          case 'preparing-projection':
+            return 'The one authoritative server request is preparing the exact injury-bound Projection V11 Draft board.';
+          case 'error':
+            return 'Preparation is waiting for its bounded server retry. The Draft remains scheduled, stopped, and at zero picks.';
+          case 'ready':
+            return 'Stored readiness is being revalidated because one or more exact evidence fields do not match this selected time.';
+        }
+      }
+
+      return 'After save, the server will start one authoritative preparation inside the 20-minute readiness window. No browser-generated setup build is needed.';
+    }
+
+    return `Choose a start at least ${DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS / 60_000} minutes away. A nearer start is allowed only when that exact saved schedule is already verified.`;
+  }
+
+  getEarliestSafeStartText(): string {
+    const earliestMilliseconds = getEarliestSafeDraftStartMilliseconds(this.now());
+
+    return earliestMilliseconds === null
+      ? 'a later time'
+      : new Date(earliestMilliseconds).toLocaleString(undefined, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        });
+  }
+
   getDraftSaveStatusTitle(): string {
     switch (this.savePhase()) {
-      case 'preparing':
-        return `Starting Projection V${SHARED_PROJECTION_VERSION} preparation…`;
       case 'saving':
         return 'Sending draft settings…';
       case 'confirming':
@@ -356,10 +435,8 @@ export class DraftSetup implements OnDestroy {
 
   getDraftSaveStatusDetail(): string {
     switch (this.savePhase()) {
-      case 'preparing':
-        return 'RinkRat starts the verified draft-board build, then saves the start time without waiting for the full ranking job to finish.';
       case 'saving':
-        return 'The secure draft command is being sent. Navigation remains protected until the server or the authoritative draft document confirms the save.';
+        return 'The secure server is validating the start time and exact readiness evidence. Navigation remains protected until it responds.';
       case 'confirming':
         return 'RinkRat is checking the saved draft document directly. A slow browser response cannot keep this page pending forever.';
       default:
@@ -384,7 +461,6 @@ export class DraftSetup implements OnDestroy {
 
     this.errorMessage.set('');
     this.successMessage.set('');
-    this.projectionPreparationWarning.set('');
 
     if (this.isDraftLocked()) {
       this.errorMessage.set(
@@ -415,98 +491,19 @@ export class DraftSetup implements OnDestroy {
     const generation = ++this.draftSaveGeneration;
     const submissionId = this.createDraftSettingsSubmissionId();
     this.saving.set(true);
-    this.savePhase.set(scheduledStartDate ? 'preparing' : 'saving');
+    this.savePhase.set('saving');
     this.pendingDraftSaveAction?.finish('cancelled');
     this.pendingDraftSaveAction = this.actionMonitor.begin('draft-settings');
     let outcome: 'success' | 'error' | 'uncertain' = 'error';
 
     try {
       const existingDraft = this.draft();
-      let preparedAssetCount: number | null = null;
-      let projectionPreparationRequestId: string | null = null;
-      let projectionPreparationStatus: 'ready' | 'queued' | 'processing' | null = null;
-
-      if (scheduledStartDate) {
-        this.successMessage.set(
-          `Checking verified Projection V${SHARED_PROJECTION_VERSION} rankings before the schedule is saved…`,
-        );
-
-        try {
-          const projectionInput = {
-            leagueId: this.leagueId,
-            teamCount: Math.max(this.teams().length, 2),
-            requiredGamesPerCycle: this.league()?.scoringRules?.requiredGamesPerCycle ?? 6,
-            generationReason: 'draft-setup' as const,
-            targetCycleNumber: 1,
-          };
-          const metadataResult = await settleOperationWithin(
-            loadSharedProjectionSnapshotMetadata(this.leagueId),
-            7_000,
-          );
-          const existingMetadata = metadataResult.status === 'fulfilled'
-            ? metadataResult.value
-            : null;
-
-          if (
-            isSharedProjectionSnapshotFreshForDraft(existingMetadata, {
-              teamCount: projectionInput.teamCount,
-              requiredGamesPerCycle: projectionInput.requiredGamesPerCycle,
-              scoringRulesVersion: this.league()?.scoringRulesVersion,
-              now: new Date(),
-            })
-          ) {
-            preparedAssetCount = existingMetadata?.assetCount ?? null;
-            projectionPreparationStatus = 'ready';
-            this.successMessage.set(
-              `Using the existing verified Projection V${SHARED_PROJECTION_VERSION} draft board…`,
-            );
-          } else {
-            projectionPreparationRequestId = createSharedProjectionGenerationRequestId();
-            this.successMessage.set(
-              `Starting the verified Projection V${SHARED_PROJECTION_VERSION} draft board in the background…`,
-            );
-            const queueResult = await settleOperationWithin(
-              queueSharedProjectionSnapshotGeneration({
-                ...projectionInput,
-                requestId: projectionPreparationRequestId,
-              }),
-              12_000,
-            );
-
-            if (generation !== this.draftSaveGeneration) {
-              return;
-            }
-
-            if (queueResult.status === 'rejected') {
-              throw queueResult.error;
-            }
-
-            if (queueResult.status === 'fulfilled') {
-              projectionPreparationRequestId = queueResult.value.requestId;
-              projectionPreparationStatus = queueResult.value.status;
-              this.projectionPreparationWarning.set(
-                queueResult.value.status === 'ready'
-                  ? ''
-                  : `The verified Projection V${SHARED_PROJECTION_VERSION} board is building in the background. The server will keep the draft scheduled and open it only after the board is ready.`,
-              );
-            } else {
-              projectionPreparationStatus = 'queued';
-              this.projectionPreparationWarning.set(
-                `RinkRat is still confirming the Projection V${SHARED_PROJECTION_VERSION} preparation request. The draft time can still be saved because the server independently verifies that request before accepting the schedule.`,
-              );
-              await waitForOperationDelay(600);
-            }
-          }
-        } catch (projectionError: unknown) {
-          const detail = projectionError instanceof Error
-            ? projectionError.message
-            : 'The projection preparation request could not be started.';
-
-          throw new Error(
-            `The draft was not scheduled because RinkRat could not start verified Projection V${SHARED_PROJECTION_VERSION} preparation. ${detail} Your previous saved draft settings were left unchanged.`,
-          );
-        }
-      }
+      const preserveExactReadiness = scheduledStartDate
+        ? hasStoredExactDraftReadinessForSchedule(
+            existingDraft,
+            scheduledStartDate.getTime(),
+          )
+        : false;
 
       const draftToSave: FantasyDraft = {
         ...(existingDraft ?? createDefaultFantasyDraft(order)),
@@ -528,21 +525,45 @@ export class DraftSetup implements OnDestroy {
         clockUpdatedBy: null,
         lastPickId: existingDraft?.lastPickId ?? null,
         lastSettingsSubmissionId: submissionId,
-        projectionPreparationRequestId,
-        projectionPreparationStatus,
-        serverDraftReadinessStatus: null,
-        serverDraftReadinessScheduledStartAt: null,
-        serverDraftReadinessAvailabilityRevision: null,
-        serverDraftReadinessProjectionRequestId: null,
-        serverDraftReadinessProjectionSnapshotId: null,
-        serverDraftReadinessProjectionSnapshotHash: null,
-        serverDraftReadinessAttemptCount: 0,
+        projectionPreparationRequestId: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
+          : null,
+        projectionPreparationStatus: preserveExactReadiness ? 'ready' : null,
+        serverDraftReadinessStatus: preserveExactReadiness ? 'ready' : null,
+        serverDraftReadinessScheduledStartAt: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessScheduledStartAt ?? null
+          : null,
+        serverDraftReadinessAvailabilityRevision: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessAvailabilityRevision ?? null
+          : null,
+        serverDraftReadinessProjectionRequestId: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
+          : null,
+        serverDraftReadinessProjectionSnapshotId: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessProjectionSnapshotId ?? null
+          : null,
+        serverDraftReadinessProjectionSnapshotHash: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessProjectionSnapshotHash ?? null
+          : null,
+        serverDraftReadinessAttemptCount: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessAttemptCount ?? 0
+          : 0,
         serverDraftReadinessRetryAfterAt: null,
-        serverDraftReadinessMessage: null,
-        serverDraftProjectionSnapshotId: null,
-        serverDraftProjectionSnapshotHash: null,
-        serverDraftProjectionAuthorityVersion: null,
-        serverDraftProjectionCatalogHash: null,
+        serverDraftReadinessMessage: preserveExactReadiness
+          ? existingDraft?.serverDraftReadinessMessage ?? null
+          : null,
+        serverDraftProjectionSnapshotId: preserveExactReadiness
+          ? existingDraft?.serverDraftProjectionSnapshotId ?? null
+          : null,
+        serverDraftProjectionSnapshotHash: preserveExactReadiness
+          ? existingDraft?.serverDraftProjectionSnapshotHash ?? null
+          : null,
+        serverDraftProjectionAuthorityVersion: preserveExactReadiness
+          ? existingDraft?.serverDraftProjectionAuthorityVersion ?? null
+          : null,
+        serverDraftProjectionCatalogHash: preserveExactReadiness
+          ? existingDraft?.serverDraftProjectionCatalogHash ?? null
+          : null,
       };
       const expectation: DraftSettingsExpectation = {
         submissionId,
@@ -557,7 +578,6 @@ export class DraftSetup implements OnDestroy {
         this.leagueId,
         draftToSave,
         submissionId,
-        projectionPreparationRequestId,
       );
       this.savePhase.set('confirming');
       const observedDraft = await this.awaitDraftSettingsConfirmation(
@@ -574,9 +594,9 @@ export class DraftSetup implements OnDestroy {
 
       if (scheduledStartDate) {
         this.successMessage.set(
-          projectionPreparationStatus === 'ready'
-            ? `Draft settings saved with ${preparedAssetCount ?? 'the existing'} verified shared projections. The server can open and complete the draft even when every browser is closed.`
-            : `Draft time saved. The verified Projection V${SHARED_PROJECTION_VERSION} board is building in the background, and the server will open the draft only after it is ready. You may leave this page.`,
+          preserveExactReadiness
+            ? 'Draft settings saved with the exact verified injury-bound Projection V11 snapshot. The server will revalidate it before opening the Draft.'
+            : 'Draft time saved. One authoritative server preparation will begin inside the 20-minute readiness window. You may leave this page.',
         );
       } else {
         this.successMessage.set('Draft order saved. No start time is scheduled yet.');

@@ -488,6 +488,24 @@
   line-height: 1.45;
 }
 
+.preparation-gate {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 680px;
+  margin: 14px 0 0;
+}
+
+.preparation-gate strong,
+.preparation-gate span {
+  color: inherit;
+}
+
+.preparation-gate span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .clear-schedule-button {
   margin-top: 13px;
   padding: 8px 10px;
@@ -546,13 +564,6 @@
     grid-template-columns: 1fr;
   }
 }
-
-.projection-warning-message {
-  border: 1px solid var(--rr-draft-setup-migration-color-07);
-  background: var(--rr-draft-setup-migration-color-08);
-  color: var(--rr-draft-setup-migration-color-09);
-}
-
 
 /* Pixel Theme Expansion V3: draft setup dark-panel pass */
 .draft-setup-page {

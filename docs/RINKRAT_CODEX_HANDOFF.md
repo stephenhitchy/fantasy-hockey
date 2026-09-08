@@ -230,12 +230,20 @@ that browser path and added a deterministic exact-start task. Its first
 zero, zero picks, two-tab convergence, and Cloud Tasks dispatch within a
 fraction of a second of schedule. It also exposed a cold `processDraftClockDeadline`
 instance: the authoritative start completed about 6.1 seconds late and failed
-the five-second gate. FF1.25 is the narrow source candidate that dispatches the
-same task ten seconds early, waits server-side until zero, rereads the Draft,
-and then uses the unchanged readiness transaction. No scoring/projection
-formula, Draft transaction, queue rate, minimum instance, concurrency, or
-worker limit changed. Exact staging timing and duplicate/reconnect evidence
-must be repeated.
+the five-second gate. FF1.25 now dispatches the same task ten seconds early,
+waits server-side until zero, rereads the Draft, and then uses the unchanged
+readiness transaction. Production Hosting identifies exact source `7956b376`,
+but a two-minute Production rehearsal subsequently exposed a different gate:
+the schedule was accepted before exact readiness existed, a redundant browser
+Projection build competed with server preparation, NHL requests received 429
+responses, and the Draft correctly remained stopped after zero. FF1.26 is the
+narrow source candidate that requires 25 minutes for a new/changed schedule,
+allows a nearer unchanged time only with exact current availability-bound
+Projection V11 evidence, removes the browser build, and preserves one
+authoritative server request. No scoring/projection formula, queue rate,
+minimum instance, concurrency, or worker limit changed. Exact staging
+rejection, reuse, timing, duplicate, reconnect, and physical-device evidence
+must pass before Draft GO.
 
 ## Release and deployment rules
 
@@ -251,8 +259,8 @@ must be repeated.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.25 Draft
-  start repair is `npm run verify:batchff1-9`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.26 Draft
+  scheduling gate is `npm run verify:batchff1-10`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -282,12 +290,16 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review FF1.25, then deploy only its three exact staging
-   Functions and staging Hosting from a clean merged commit; repeat the
-   25-minute cold-worker rehearsal and prove ready-before-zero, no-browser
-   start within five seconds, stale-reschedule no-op, duplicate convergence,
-   and first-deadline scheduling.
-2. Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and
+1. Independently review FF1.26, then deploy only
+   `functions:executeDraftCommand` and the site-pinned staging Hosting target
+   from a clean merged commit. Prove a new two-minute schedule is rejected
+   without mutation, a 25-minute schedule is accepted, exact-ready near-term
+   reuse succeeds, changed readiness fails closed, and no browser
+   `draft-setup` Projection request exists.
+2. Repeat the 25-minute cold-worker rehearsal and prove ready-before-zero,
+   no-browser start within five seconds, stale-reschedule no-op, duplicate
+   convergence, and first-deadline scheduling. Complete controlled reconnect,
+   duplicate-tab, physical iPhone/Android, and
    rollback Draft evidence on the exact repaired staging build.
 3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.

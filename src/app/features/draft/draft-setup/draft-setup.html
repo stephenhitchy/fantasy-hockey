@@ -120,6 +120,19 @@
 
       <p class="schedule-help">Shown to each manager in their local timezone.</p>
 
+      <aside
+        class="preparation-gate rr-notice"
+        [class.rr-notice--danger]="getDraftSchedulingGateState() === 'past' || getDraftSchedulingGateState() === 'unsafe-near-term'"
+        [class.rr-notice--success]="getDraftSchedulingGateState() === 'exact-ready'"
+        [class.rr-notice--info]="getDraftSchedulingGateState() === 'not-scheduled' || getDraftSchedulingGateState() === 'safe-lead'"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <strong>{{ getDraftPreparationStatusTitle() }}</strong>
+        <span>{{ getDraftPreparationStatusDetail() }}</span>
+      </aside>
+
       <label class="schedule-input-group pick-clock-input-group rr-field-group">
         <span>Time allowed per pick</span>
 
@@ -166,12 +179,6 @@
     @if (successMessage()) {
       <p class="form-message success-message rr-notice rr-notice--success">
         {{ successMessage() }}
-      </p>
-    }
-
-    @if (projectionPreparationWarning()) {
-      <p class="form-message projection-warning-message rr-notice rr-notice--warning">
-        {{ projectionPreparationWarning() }}
       </p>
     }
 
@@ -261,7 +268,7 @@
       >
         {{
           saving()
-            ? 'Saving & Preparing Projections...'
+            ? 'Saving Draft Settings...'
             : 'Save Draft Settings'
         }}
       </button>

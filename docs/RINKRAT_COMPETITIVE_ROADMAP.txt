@@ -1124,6 +1124,8 @@ Future entries:
 
 # [x] LOG.117 2026-09-04 — Ran the FF1.24 disposable 25-minute staging rehearsal: readiness reached ready more than seventeen minutes early, Cloud Tasks dispatched promptly, two tabs converged after a final-minute reconnect, and no pick existed before zero, but a cold exact-start worker completed the authoritative transition about 6.1 seconds late. Prepared FF1.25 to dispatch that same deterministic task ten seconds early, wait and reread at zero, and retain the existing transaction, retry, queue/concurrency limits, and fallback without adding minimum instances.
 
+# [x] LOG.118 2026-09-08 — Prepared the FF1.26 near-term Draft scheduling gate after a two-minute Production rehearsal correctly failed closed but exposed redundant browser/server Projection work and NHL 429 delay: require 25 minutes for a new or changed schedule unless the exact saved timestamp already has current availability-bound Projection V11 request/snapshot/hash evidence; show safe-lead, injury-wait, preparation, retry, and ready state before save; remove the browser `draft-setup` build so one deterministic server `pre-draft` request owns each schedule/availability revision; preserve exact readiness only for an unchanged schedule; keep timeout/error/retry state scheduled, stopped, and at zero picks; and change no scoring, projection formula/hash, Rule, index, TTL, App Check, queue mode, concurrency, worker limit, or other competitive authority.
+
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 
 END OF ROADMAP

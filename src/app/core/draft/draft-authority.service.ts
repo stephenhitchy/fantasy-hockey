@@ -14,7 +14,6 @@ export interface DraftCommandRequest {
   leagueId: string;
   action: DraftCommandAction;
   submissionId?: string;
-  projectionPreparationRequestId?: string | null;
   roundOneOrder?: string[];
   scheduledStartAt?: string | null;
   pickSeconds?: number;
