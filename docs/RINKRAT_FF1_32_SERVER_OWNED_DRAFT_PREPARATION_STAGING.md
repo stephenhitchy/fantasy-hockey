@@ -14,11 +14,10 @@ convergence, a bounded Cloud Tasks retry, and single refresh authority without
 manufacturing NHL/ESPN traffic, adding a Production test hook, or weakening
 the strict source contract. After a successful task is removed, the available
 platform evidence can correlate its retry through the singleton queue,
-deployed revision/hash, bounded request-log sequence, and completion log; it
-cannot directly prove the deleted task's identity without an explicit
-privacy-safe runtime identity log. Real upstream timeout, 429, and malformed
-response handling remains hermetically covered by the FF1.31 local/emulator
-suite.
+deployed revision/hash, exact request-log sequence, and exact completion marker;
+it cannot directly inspect the deleted task after success. Real upstream
+timeout, 429, and malformed response handling remains hermetically covered by
+the FF1.31 local/emulator suite.
 
 Because `appData/playerAvailability` and its task queue are staging-wide shared
 resources, this runner is a controlled maintenance operation, not an ordinary
@@ -29,10 +28,19 @@ Draft traffic for the duration of the run.
 Natural Scheduler evidence and manual duplicate probes are distinct. Natural
 T-25/T-20 observations must correlate to the minute job inside a window shorter
 than 60 seconds. Any later manual probes run serially, and each probe must be
-correlated to its own Scheduler attempt and request log before the next probe
-begins; concurrent manual invocations would make attribution ambiguous.
+accepted only after its full `appData/draftAutomation` success marker advances.
+The exact HTTP 200 request logs may arrive later; the runner then maps exactly
+two logs to the two disjoint trigger-to-completion windows. Concurrent manual
+invocations would make attribution ambiguous.
 
 ## Implemented tooling behavior
+
+FF1.32.1 tightens only the staging runner and its tests/documentation. It
+corrects the retry proof for Cloud Tasks control-plane lag, the successful task
+HTTP status, Cloud Logging's two supported completion-marker encodings,
+pre-extraction ZIP validation, duplicate-scan result validation, and Draft-start
+safety deadlines. It does not change any deployed Function or Firebase
+configuration.
 
 - A guarded runner is hard-coded to the billed
   `rinkrat-staging-d1nc-2026` project and refuses Production and every Emulator
@@ -55,9 +63,12 @@ begins; concurrent manual invocations would make attribution ambiguous.
   parses and bounds its central directory before extraction, and rejects
   multi-disk, ZIP64, encrypted, unsupported-compression, duplicate, traversal,
   symlink, special-file, malformed UTF-8, or mismatched local-header entries,
-  plus entries whose data falls outside the archive. Fixed bounds on the
-  archive, entry count, paths, files, and cumulative expanded bytes must pass
-  before `/usr/bin/unzip` runs. It then compares the exact
+  plus entries whose data falls outside the archive. Before `/usr/bin/unzip`
+  runs, every stored entry must have equal compressed/expanded sizes and every
+  deflated entry is expanded in memory with an output cap one byte above its
+  clean-Git expected length; the resulting exact length and SHA-256 hash must
+  match clean Git. This prevents forged ZIP size metadata or a compressed bomb
+  from crossing the reviewed extraction envelope. It then compares the exact
   relative paths, byte lengths, and SHA-256 content hashes against a clean
   Functions build made from a Git archive of the declared deployed commit
   after an exact `functions/package-lock.json` install.
@@ -98,23 +109,47 @@ begins; concurrent manual invocations would make attribution ambiguous.
   ESPN/identity defects, and remain fresh through the planned start.
 - The retry phase changes availability control metadata only. It never changes
   the `records` array. A temporary active lease makes the first T-25 task
-  delivery return `lease-active`; duplicate scheduler delivery must still
-  leave one deterministic queue task.
-- After that first delivery, a compare-and-set restores the exact strict
-  baseline. The deterministic singleton must then produce one failed request
-  followed by one successful request within the bounded revision/hash-scoped
-  backoff, log one `already-current` completion, drain, and leave the baseline
-  attempt and success time unchanged. This is deliberately reported as
-  `singleton-revision-correlated`, not as exact post-success task-identity
-  proof. No second upstream fetch is authorized by this exercise.
+  delivery return `lease-active` and leaves one deterministic queue task.
+- The first failed delivery is bound to that task's exact name and `createTime`
+  plus its first observed `dispatchCount`, which may be zero or one while the
+  queue description catches up. The authoritative delivery proof is one HTTP
+  500 request log with the exact verified service, revision, source hash, task
+  user agent, method, and strict latency, together with the Firestore
+  `lease-active` timestamp falling inside that request. The runner intentionally
+  does not require `firstAttempt`, `lastAttempt`, `responseCount`, or
+  `scheduleTime` from the eventually consistent task description.
+- After the task handler persists the `lease-active` marker, two duplicate
+  Scheduler probes run serially inside a strict deadline that ends 15 seconds
+  before the minimum retry interval. Each must complete a schema-1 `success`
+  scan of the one isolated active Draft with zero failed Drafts, zero picks, an
+  empty failure list, a bounded duration, and a monotonic in-window completion
+  timestamp. Their exact two HTTP 200 logs are subsequently mapped to their
+  disjoint trigger-to-completion windows. The queue must still contain the one
+  original deterministic task; this is the live duplicate-enqueue convergence
+  proof.
+- Before any inventory or log wait, one transaction moves the Draft to a
+  runner-owned seven-day safety schedule, clears schedule-bound readiness, and
+  compare-and-set restores the exact strict availability baseline. Both the
+  initial and parked schedule identities are registered conservatively before
+  that transaction so an ambiguous commit remains cleanable. The deterministic
+  singleton must then produce an exact `[500, 204]` Cloud Run request sequence
+  for the same verified provenance. Retry delay is measured from the HTTP 500
+  response end to the HTTP 204 request start and must be between 25 seconds and
+  five minutes. Its completion marker must be exactly `already-current`,
+  accepted only from the expected structured status field or the equivalent
+  exact console-text encoding. The task must drain and leave the baseline
+  attempt and success time unchanged. This is reported as
+  `singleton-revision-correlated`; the runner does not claim that a deleted
+  successful task remains directly inspectable. No second upstream fetch is
+  authorized by this exercise.
 - The runner observes the natural minute scheduler rather than manually
   triggering the first T-25 or T-20 boundary. It rejects an early refresh or
   early Projection request and correlates each natural Scheduler attempt and
   exact-revision request log in less than 60 seconds. Later explicit Scheduler
-  runs are duplicate-delivery probes only. They run serially in a window that
-  ends before the next natural minute, and each probe must produce its own new
-  Scheduler attempt, exact-revision HTTP 200 request log, and post-trigger
-  automation timestamp before the next probe begins.
+  runs are duplicate-delivery probes only. Each accepted probe must produce a
+  full successful zero-pick automation marker; probes run serially in a window
+  that ends before the next natural minute, and their later exact-revision HTTP
+  200 logs must map one-to-one into the disjoint accepted probe windows.
 - At T-20 it requires one schedule- and availability-bound `pre-draft`
   request, a server-authoritative Projection V11 snapshot, complete team
   schedule input, verified snapshot integrity, and exact request/snapshot/hash
@@ -137,6 +172,13 @@ begins; concurrent manual invocations would make attribution ambiguous.
   stored identifiers.
 - Duplicate scheduler delivery after readiness must preserve request,
   snapshot, hash, attempt count, stopped clock, and zero-pick state.
+- Every T-20-through-readiness polling budget and manual command is clamped to
+  an absolute deadline ten minutes before zero. The runner rechecks that deadline
+  immediately after the final reschedule/read and before restoring shared
+  availability. Success parks the Draft again
+  before any later maintenance read; the failure path attempts the same park
+  before ownership reconciliation. A normally running process therefore never
+  leaves the fixture close enough to open while evidence or cleanup waits.
 - A bounded near-zero phase makes the same fixture's input temporarily
   unusable, proves the Draft remains scheduled and stopped with next pick one
   and zero picks at zero, then reschedules it and requires exact readiness for
@@ -150,8 +192,9 @@ begins; concurrent manual invocations would make attribution ambiguous.
   runner-owned availability metadata fields through compare-and-set; drain the
   availability queue; reverify the bounded Draft inventory; and only then
   release the evidence lock. Draft-deadline cleanup begins only after the safe
-  reset, removes only allowlisted deterministic tasks for the initial, near-
-  zero, and recovered schedules, and never performs a broad queue purge.
+  reset, removes only allowlisted deterministic tasks for the initial, parked,
+  near-zero, and recovered schedules (at most four exact IDs), and never
+  performs a broad queue purge.
 - The deadline-task allowlist is recomputed for each runner-owned schedule as
   the first 40 hexadecimal characters of the SHA-256 hash of
   `scheduled-draft-start:<leagueId>:<scheduledStartMilliseconds>`. Every queue
@@ -174,8 +217,10 @@ begins; concurrent manual invocations would make attribution ambiguous.
   unresolved commit state retains the `cleanup-required` lock.
 - Terminal output contains aggregate booleans, counts, timings, safe cleanup
   state, and Git revisions only. All failures cross a fixed public error
-  boundary; raw errors and account, league, team, player, task, request,
-  snapshot, hash, or record identities are not printed.
+  boundary with one source-controlled, allowlisted `failureDetail` code.
+  Unknown or untrusted failures map to `unclassified`; raw errors and account,
+  league, team, player, task, request, snapshot, hash, or record identities are
+  not printed and never populate that field.
 
 ## Acceptance criteria
 
@@ -188,9 +233,11 @@ begins; concurrent manual invocations would make attribution ambiguous.
   `us-central1` on Node 22; their generation-pinned source archives match the
   clean deployed Git build by path, byte length, and SHA-256 hash; and each
   active Cloud Run service/revision/image matches its Function provenance.
-- Every source ZIP passes the bounded central-directory and local-header
-  validation before extraction; unsupported formats, entry types, paths,
-  compression, encryption, or expanded sizes fail closed.
+- Every source ZIP passes bounded central-directory/local-header validation and
+  pre-extraction content proof; stored/deflated bytes must expand to the exact
+  clean-Git length and SHA-256 within the hard output cap. Unsupported formats,
+  forged sizes, compressed bombs, entry types, paths, compression, encryption,
+  or content fail closed.
 - The exact minute Scheduler target, URI, OIDC identity, deadline, retry
   policy, and health match the reviewed configuration. The automatic
   availability queue remains RUNNING with one concurrent dispatch and the
@@ -213,14 +260,25 @@ begins; concurrent manual invocations would make attribution ambiguous.
 - No availability attempt or Projection request occurs before its T-25 or
   T-20 boundary, allowing only a small documented clock-skew tolerance. Each
   natural Scheduler attempt and exact-revision request log correlates in less
-  than 60 seconds; manual duplicate probes are serialized and individually
-  correlated before the next natural minute.
+  than 60 seconds. Manual duplicate probes are serialized by a full successful
+  zero-pick automation marker; the exact two request logs subsequently map to
+  the two disjoint accepted probe windows before the next natural minute.
 - The first automatic availability task is observed as `lease-active`, two
-  scheduler deliveries converge on one deterministic daily/bucket task, and a
-  revision/hash-correlated 500-to-200 request sequence between 25 seconds and
-  five minutes drains without a changed source attempt or successful-sync
-  timestamp. The report must label this retry scope honestly; exact identity
-  after Cloud Tasks deletes the success would require a later runtime log.
+  scheduler deliveries converge on one deterministic daily/bucket task, and
+  the first queue observation proves its exact name and `createTime` with
+  `dispatchCount` zero or one. The verified Function revision must emit exactly
+  one provenance-bound HTTP 500 with strict latency, and the Firestore
+  `lease-active` timestamp must fall inside that request within the documented
+  two-second clock-skew tolerance. Before the retry and any unbounded read,
+  two sub-retry duplicate probes must leave the same singleton, then the Draft
+  must atomically park seven days ahead while availability returns to the exact
+  baseline. The same provenance must show exact `[500, 204]`
+  request logs with 25 seconds to five minutes from the first response end to
+  the retry request start, plus one exact `already-current` completion marker
+  before the task drains. `firstAttempt`, `lastAttempt`, `responseCount`, and
+  `scheduleTime` are not required. The source attempt and successful-sync
+  timestamp remain unchanged, and the report labels the proof
+  `singleton-revision-correlated` rather than claiming deleted task identity.
 - Strict source completeness proves schema 2, attempt binding, 32 NHL teams, a
   privacy-safe roster hash, and zero blocking malformed, duplicate, ambiguous,
   or missing-alias counts. A valid zero-injury result remains allowed.
@@ -237,7 +295,9 @@ begins; concurrent manual invocations would make attribution ambiguous.
   the ceiling of asset count divided by 25, and request/snapshot chunk counts
   and hash arrays converge exactly.
 - Readiness occurs before zero. Duplicate delivery and rescheduling cannot
-  duplicate authority or retain a stale schedule binding.
+  duplicate authority or retain a stale schedule binding. The final phase
+  stops no later than ten minutes before zero and parks the Draft before later
+  maintenance work on both its success and ordinary failure paths.
 - During unavailable input at zero, status is still `scheduled`, the clock is
   `stopped`, next pick is one, and pick count is zero.
 - Cleanup completes in the documented stages, retains all valid Projection
@@ -246,9 +306,15 @@ begins; concurrent manual invocations would make attribution ambiguous.
   The final inventory passes before lock release, and no late task can
   overwrite the nanosecond-exact restored metadata. Otherwise the evidence
   lock remains `cleanup-required`.
+- Deadline-task reconciliation permits only the four deterministic identities
+  for the initial, intermediate parked, near-zero, and recovered schedules;
+  any fifth or unrelated task blocks deletion and success.
 - Every ambiguous transaction or task-deletion result is reconciled against
   exact remote state. An outcome that cannot be reconciled retains the
   `cleanup-required` lock and cannot be reported as a successful run.
+- A failure report contains only the fixed error code, checkpoint, cleanup
+  state, and an allowlisted non-identifying `failureDetail`. Dynamic error text
+  or identifiers cannot enter the public record.
 
 ## Edge cases and stop conditions
 
@@ -268,6 +334,16 @@ begins; concurrent manual invocations would make attribution ambiguous.
 - Stop if the expected task is not the only pending availability task, if it
   does not retry and drain, or if the availability attempt/success identity
   changes during the no-upstream retry proof.
+- Stop if either sub-retry duplicate scan reports anything other than one
+  active fixture, schema 1, `success`, zero failed Drafts, zero picks, an empty
+  failure list, and a bounded monotonic completion marker. Park and restore
+  atomically before any later read even when a probe fails.
+- Do not require `firstAttempt`, `lastAttempt`, `responseCount`, or
+  `scheduleTime` from the task description. Do fail if its exact name,
+  `createTime`, or first-observed zero/one `dispatchCount` is invalid, or if the
+  provenance-bound HTTP 500, strict latency, in-request `lease-active`
+  timestamp, response-end-based retry interval, exact `[500, 204]` sequence,
+  or exact `already-current` completion evidence is absent.
 - Stop before writes if the Draft-deadline queue is not initially empty. During
   cleanup, refuse to delete any deadline task whose complete resource identity
   is not one of the deterministic runner-owned schedule IDs.
@@ -276,6 +352,9 @@ begins; concurrent manual invocations would make attribution ambiguous.
 - Stop if the Projection request was created outside the natural T-20 window,
   if any request timestamp falls outside the bounded run/observation interval,
   or if duration exceeds 30 minutes or conflicts with those timestamps.
+- Stop and enter cleanup at least ten minutes before the recovered start if
+  Projection or duplicate evidence has not completed. The failure path must
+  attempt the registered safe park before ownership reconciliation.
 - Treat every ambiguous transaction commit or task deletion as unknown until
   exact remote reconciliation succeeds. Retain the evidence lock whenever the
   run's ownership or final state remains uncertain.
@@ -290,12 +369,17 @@ The focused FF1.32 suite covers project and maintenance acknowledgements,
 emulator, revision, fresh remote-main proof, tooling delta, UTC window,
 adversarially bounded Function ZIP validation, exact Cloud Run/Scheduler/queue
 provenance, fixture and bounded Draft inventory safety, strict attestation,
-sub-60-second natural Scheduler correlation, serialized manual probes,
-deterministic task identities, correlated retry logs, exact Projection request
-identity/timestamps/count bounds, nanosecond-preserving compare-and-set,
+pre-extraction stored/deflated content verification and a forged-size
+compressed-bomb fixture, sub-60-second natural Scheduler correlation,
+serialized manual probes with full success-marker and disjoint-log checks,
+deterministic task name/create-time with zero/one first-observed dispatch,
+provenance-bound strict-latency HTTP 500, response-end-based exact `[500, 204]`
+retry logs, structured/console `already-current` markers, exact Projection
+request identity/timestamps/count bounds, nanosecond-preserving compare-and-set,
 retained Projection audit state, allowlisted deadline-task cleanup, ambiguous
-commit reconciliation, privacy-safe failures, staged cleanup/
-`cleanup-required` locking, and no-deployment/no-Production-source guards.
+commit reconciliation, allowlisted privacy-safe failure details, staged
+cleanup/`cleanup-required` locking, absolute pre-open deadline/fallback parking,
+and no-deployment/no-Production-source guards.
 
 The focused tests run through `npm run test:batchff1-16:run`. The current
 composite gate is `npm run verify:batchff1-16`, which inherits
@@ -350,6 +434,24 @@ records only boundary latencies, retry delay, bounded counts, source/snapshot
 contract versions, convergence booleans, provenance booleans, and cleanup
 outcome.
 
+The initial and recovered Draft schedules are temporary staging evidence. The
+runner registers one reusable seven-day parked schedule and four maximum
+deterministic Draft-start task identities (initial, parked, near-zero, and
+recovered). A graceful failure begins parking at least ten minutes before zero,
+leaving more than the Firestore transaction retry ceiling before exact-start
+work. As with
+any local staging mutator, an abrupt host/process termination can bypass local
+`finally`; in that case the evidence lock and registered ownership require
+immediate read-only diagnosis and reset-first cleanup before waiting for the
+scheduled time or rerunning the tool.
+
+The initial guarded live staging runs failed closed at the
+`availability-boundary` checkpoint and reported `cleanupState: complete`.
+FF1.32.1 represents that bounded failure class with the fixed allowlisted
+`failureDetail: availability-failure-log`. Those runs demonstrate containment
+and completed cleanup only. They are not passing T-25/T-20 evidence and do not
+authorize a Draft release.
+
 Do not publish raw records, errors, account IDs, league IDs, player or team
 identities, availability attempts, task IDs, request IDs, snapshot IDs, or
 hashes.
@@ -363,7 +465,8 @@ If an evidence run stops unexpectedly, do not start another run blindly.
 Inspect the exact fixture, evidence lock, availability marker, task queues, and
 retained Projection request/snapshot/pointer/control state read-only. Reset the
 synthetic Draft seven days ahead first, then reconcile, delete, drain, and
-verify only its allowlisted Draft-deadline tasks. After that, await any owned
+verify only its at-most-four allowlisted Draft-deadline tasks for the initial,
+parked, near-zero, and recovered schedules. After that, await any owned
 Projection request's terminal state and drain Projection work; use the runner's
 nanosecond-preserving compare-and-set ownership rules to restore only the two
 availability metadata fields still owned by that run, then drain availability

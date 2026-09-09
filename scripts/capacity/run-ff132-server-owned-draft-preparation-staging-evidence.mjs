@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
 
 import { D1N_FIXTURE_LEAGUE_ID } from './seed-d1n-route-fixture.mjs';
 import { D1N_STAGING_PROJECT_ID } from './prepare-d1n-staging-hosting.mjs';
@@ -38,6 +39,14 @@ const TASK_BUCKET_MILLISECONDS = 5 * 60 * 1000;
 const TASK_BUCKET_DUPLICATE_SAFETY_MARGIN_MILLISECONDS = 60_000;
 const MINIMUM_TASK_RETRY_DELAY_MILLISECONDS = 25_000;
 const MAXIMUM_TASK_RETRY_DELAY_MILLISECONDS = 5 * 60 * 1000;
+const DUPLICATE_PROBE_RETRY_SAFETY_MARGIN_MILLISECONDS = 15_000;
+const DUPLICATE_PROBE_COMMAND_TIMEOUT_MILLISECONDS = 3_000;
+const MAXIMUM_AVAILABILITY_TASK_REQUEST_MILLISECONDS = 540_000;
+const REQUEST_LOG_CLOCK_SKEW_MILLISECONDS = 2_000;
+// Begin the final safety park no later than T-10. Firestore transactions can
+// consume close to five minutes under retries, so T-5 is not enough reserve
+// to guarantee that the parked schedule commits well before exact-start work.
+const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 10 * 60 * 1000;
 const EVIDENCE_UTC_HORIZON_MILLISECONDS = 40 * 60 * 1000;
 const LOCK_CLEANUP_RESERVE_MILLISECONDS = 10 * 60 * 1000;
 const SAFE_RESET_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
@@ -67,6 +76,26 @@ const PUBLIC_CHECKPOINTS = Object.freeze([
   'projection-boundary',
   'duplicate-convergence',
   'cleanup',
+]);
+const PUBLIC_FAILURE_DETAILS = Object.freeze([
+  'unclassified',
+  'fixture-ownership',
+  'availability-boundary-state',
+  'availability-scheduler-proof',
+  'availability-task-visible',
+  'availability-lease-marker',
+  'availability-failure-log',
+  'availability-restored',
+  'availability-draft-parked',
+  'availability-duplicate-probe-1',
+  'availability-duplicate-probe-2',
+  'availability-retry-correlation',
+  'near-zero-fail-closed',
+  'projection-scheduler-proof',
+  'projection-request-validation',
+  'projection-snapshot-validation',
+  'duplicate-convergence',
+  'cleanup-reconciliation',
 ]);
 export const FF132_REQUIRED_STAGING_FUNCTIONS = Object.freeze([
   'continueServerDraftAutomation',
@@ -127,7 +156,11 @@ const DRAFT_READINESS_FIELDS = Object.freeze([
 ]);
 
 export class Ff132PublicEvidenceError extends Error {
-  constructor(checkpoint = 'preflight', cleanupState = 'not-required') {
+  constructor(
+    checkpoint = 'preflight',
+    cleanupState = 'not-required',
+    failureDetail = 'unclassified',
+  ) {
     const safeCheckpoint = PUBLIC_CHECKPOINTS.includes(checkpoint)
       ? checkpoint
       : 'preflight';
@@ -136,12 +169,18 @@ export class Ff132PublicEvidenceError extends Error {
       : cleanupState === 'cleanup-required'
         ? 'cleanup-required'
         : 'not-required';
+    const safeFailureDetail = PUBLIC_FAILURE_DETAILS.includes(failureDetail)
+      ? failureDetail
+      : 'unclassified';
 
-    super(`${PUBLIC_FAILURE_CODE}:${safeCheckpoint}:${safeCleanupState}`);
+    super(
+      `${PUBLIC_FAILURE_CODE}:${safeCheckpoint}:${safeCleanupState}:${safeFailureDetail}`,
+    );
     this.name = 'Ff132PublicEvidenceError';
     this.code = PUBLIC_FAILURE_CODE;
     this.checkpoint = safeCheckpoint;
     this.cleanupState = safeCleanupState;
+    this.failureDetail = safeFailureDetail;
   }
 
   toJSON() {
@@ -149,8 +188,14 @@ export class Ff132PublicEvidenceError extends Error {
       errorCode: this.code,
       checkpoint: this.checkpoint,
       cleanupState: this.cleanupState,
+      failureDetail: this.failureDetail,
     };
   }
+}
+
+function assertFailureDetail(failureDetail) {
+  assert.equal(PUBLIC_FAILURE_DETAILS.includes(failureDetail), true);
+  return failureDetail;
 }
 
 function assertCheckpoint(checkpoint) {
@@ -176,6 +221,25 @@ function runCommand(command, args, options = {}) {
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export function boundFf132TimeoutBeforeDeadline(
+  maximumMilliseconds,
+  deadlineMilliseconds,
+  nowMilliseconds = Date.now(),
+) {
+  assert.ok(Number.isFinite(maximumMilliseconds) && maximumMilliseconds > 0);
+  assert.ok(Number.isFinite(deadlineMilliseconds));
+  assert.ok(Number.isFinite(nowMilliseconds));
+  const remainingMilliseconds = Math.min(
+    maximumMilliseconds,
+    deadlineMilliseconds - nowMilliseconds,
+  );
+  assert.ok(
+    remainingMilliseconds > 0,
+    'FF1.32 reached its absolute Draft-open safety deadline.',
+  );
+  return remainingMilliseconds;
 }
 
 function timestampMilliseconds(value) {
@@ -260,8 +324,8 @@ function omitKeys(value, keys) {
   );
 }
 
-function parseJsonCommand(command, args) {
-  const output = runCommand(command, args);
+function parseJsonCommand(command, args, options = {}) {
+  const output = runCommand(command, args, options);
   return output ? JSON.parse(output) : [];
 }
 
@@ -870,6 +934,7 @@ export function assertFf132SourceArchiveBuffer(archive, expectedManifest) {
       flags,
       method,
       compressedBytes: entryCompressedBytes,
+      expandedBytes: entryExpandedBytes,
       localHeaderOffset,
       isDirectory,
     });
@@ -898,6 +963,8 @@ export function assertFf132SourceArchiveBuffer(archive, expectedManifest) {
     assert.equal(archive.readUInt32LE(offset), 0x04034b50, 'A local ZIP header is malformed.');
     const localFlags = archive.readUInt16LE(offset + 6);
     const localMethod = archive.readUInt16LE(offset + 8);
+    const localCompressedBytes = archive.readUInt32LE(offset + 18);
+    const localExpandedBytes = archive.readUInt32LE(offset + 22);
     const localNameLength = archive.readUInt16LE(offset + 26);
     const localExtraLength = archive.readUInt16LE(offset + 28);
     const localNameStart = offset + 30;
@@ -912,12 +979,56 @@ export function assertFf132SourceArchiveBuffer(archive, expectedManifest) {
       'Encrypted local ZIP entries are forbidden.',
     );
     assert.equal(localMethod, entry.method, 'A local ZIP header changed compression method.');
+    if ((localFlags & 0x8) === 0) {
+      assert.equal(
+        localCompressedBytes,
+        entry.compressedBytes,
+        'A local ZIP header changed compressed size.',
+      );
+      assert.equal(
+        localExpandedBytes,
+        entry.expandedBytes,
+        'A local ZIP header changed expanded size.',
+      );
+    }
     assert.ok(dataEnd <= centralDirectoryOffset, 'Compressed source bytes escape their envelope.');
     assert.deepEqual(
       archive.subarray(localNameStart, localNameEnd),
       entry.nameBytes,
       'A local ZIP path differs from its central entry.',
     );
+    const compressedData = archive.subarray(dataStart, dataEnd);
+    let expandedData;
+
+    if (entry.method === 0) {
+      assert.equal(
+        entry.compressedBytes,
+        entry.expandedBytes,
+        'A stored ZIP entry changed size.',
+      );
+      expandedData = compressedData;
+    } else {
+      expandedData = inflateRawSync(compressedData, {
+        maxOutputLength: entry.expandedBytes + 1,
+      });
+    }
+
+    assert.equal(
+      expandedData.byteLength,
+      entry.expandedBytes,
+      'A source archive entry expanded beyond its declared envelope.',
+    );
+    if (entry.isDirectory) {
+      assert.equal(expandedData.byteLength, 0);
+    } else {
+      const expected = expectedManifest.get(entry.entryPath);
+      assert.ok(expected);
+      assert.equal(
+        createHash('sha256').update(expandedData).digest('hex'),
+        expected.sha256,
+        'A deployed file hash changed before extraction.',
+      );
+    }
     localRanges.push([offset, dataEnd]);
   }
 
@@ -1160,7 +1271,7 @@ export function inspectFf132DraftClockTaskQueue() {
   );
 }
 
-export function listFf132QueueTasks(queueName) {
+export function listFf132QueueTasks(queueName, options = {}) {
   const tasks = parseJsonCommand('gcloud', [
     'tasks',
     'list',
@@ -1171,14 +1282,36 @@ export function listFf132QueueTasks(queueName) {
     '--queue',
     queueName,
     '--format=json',
-  ]);
+  ], options);
 
   assert.equal(Array.isArray(tasks), true, 'Cloud Tasks did not return a bounded task list.');
+  for (const task of tasks) {
+    queueTaskId(task, queueName);
+  }
   return tasks;
 }
 
-function queueTaskId(task) {
-  return String(task?.name ?? '').split('/').at(-1) ?? '';
+function queueTaskId(task, queueName) {
+  assert.ok(
+    [
+      FF132_AVAILABILITY_TASK_QUEUE,
+      FF132_PROJECTION_TASK_QUEUE,
+      FF132_DRAFT_CLOCK_TASK_QUEUE,
+    ].includes(queueName),
+    'The Cloud Tasks queue identity is not allowlisted.',
+  );
+  const prefix =
+    `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/queues/` +
+    `${queueName}/tasks/`;
+  const name = String(task?.name ?? '');
+  assert.equal(
+    name.startsWith(prefix),
+    true,
+    'The Cloud Task full resource identity changed.',
+  );
+  const taskId = name.slice(prefix.length);
+  assert.equal(taskId.includes('/'), false, 'The Cloud Task identity is malformed.');
+  return taskId;
 }
 
 export function buildFf132ScheduledDraftStartTaskId(scheduledStartMilliseconds) {
@@ -1197,8 +1330,8 @@ export function assertFf132OwnedClockQueueTasks(tasks, expectedTaskIds) {
   const allowed = expectedTaskIds instanceof Set
     ? expectedTaskIds
     : new Set(expectedTaskIds ?? []);
-  assert.ok(allowed.size > 0 && allowed.size <= 3);
-  const observed = tasks.map(queueTaskId);
+  assert.ok(allowed.size > 0 && allowed.size <= 4);
+  const observed = tasks.map((task) => queueTaskId(task, FF132_DRAFT_CLOCK_TASK_QUEUE));
   assert.equal(new Set(observed).size, observed.length, 'The Draft-clock queue has duplicate IDs.');
 
   for (const taskId of observed) {
@@ -1241,7 +1374,7 @@ async function drainFf132OwnedClockQueueTasks(expectedTaskIds, timeoutMillisecon
     }
 
     for (const task of tasks) {
-      const taskId = queueTaskId(task);
+      const taskId = queueTaskId(task, FF132_DRAFT_CLOCK_TASK_QUEUE);
       const dispatchCount = Number(task?.dispatchCount ?? 0);
       const responseCount = Number(task?.responseCount ?? 0);
       assert.ok(Number.isSafeInteger(dispatchCount) && dispatchCount >= 0);
@@ -1260,7 +1393,11 @@ async function drainFf132OwnedClockQueueTasks(expectedTaskIds, timeoutMillisecon
         const remaining = listFf132QueueTasks(FF132_DRAFT_CLOCK_TASK_QUEUE);
         assertFf132OwnedClockQueueTasks(remaining, expectedTaskIds);
 
-        if (remaining.some((entry) => queueTaskId(entry) === taskId)) {
+        if (
+          remaining.some(
+            (entry) => queueTaskId(entry, FF132_DRAFT_CLOCK_TASK_QUEUE) === taskId,
+          )
+        ) {
           throw error;
         }
       }
@@ -1277,63 +1414,99 @@ async function drainFf132OwnedClockQueueTasks(expectedTaskIds, timeoutMillisecon
 export function assertFf132SingleQueueTask(tasks, expectedTaskId) {
   assert.equal(tasks.length, 1, 'The availability queue must contain one bounded task.');
   assert.equal(
-    queueTaskId(tasks[0]),
+    queueTaskId(tasks[0], FF132_AVAILABILITY_TASK_QUEUE),
     expectedTaskId,
     'The availability queue contains an unexpected task identity.',
   );
   return tasks[0];
 }
 
-export function describeFf132QueueTask(queueName, taskId) {
-  assert.match(taskId, SHA1_PATTERN, 'The expected Cloud Task identity is malformed.');
-  return parseJsonCommand('gcloud', [
-    'tasks',
-    'describe',
-    taskId,
-    '--project',
-    D1N_STAGING_PROJECT_ID,
-    '--location',
-    FF132_REGION,
-    '--queue',
-    queueName,
-    '--format=json',
-  ]);
+function parseFf132RequestLatencyMilliseconds(value) {
+  assert.equal(typeof value, 'string', 'The request latency is missing.');
+  const match = /^(0|[1-9]\d*)(?:\.(\d{1,9}))?s$/.exec(value);
+  assert.ok(match, 'The request latency is malformed.');
+  const seconds = Number(match[1]);
+  const nanoseconds = Number((match[2] ?? '').padEnd(9, '0'));
+  const milliseconds = seconds * 1_000 + nanoseconds / 1_000_000;
+
+  assert.ok(
+    Number.isFinite(milliseconds) &&
+      milliseconds >= 0 &&
+      milliseconds <= MAXIMUM_AVAILABILITY_TASK_REQUEST_MILLISECONDS,
+    'The request latency is outside the bounded Function timeout.',
+  );
+  return milliseconds;
 }
 
-export function assertFf132FirstFailedTaskAttempt(task, expectedTaskId, runStartedAt) {
+export function assertFf132FirstFailedTaskAttempt({
+  task,
+  expectedTaskId,
+  runStartedAt,
+  leaseEventMilliseconds,
+  requestLogs,
+  deployedFunction,
+  minimumTimestamp,
+  maximumTimestamp,
+}) {
   assert.equal(
     task?.name,
     `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/queues/${FF132_AVAILABILITY_TASK_QUEUE}/tasks/${expectedTaskId}`,
     'The Cloud Task resource identity changed.',
   );
-  assert.equal(queueTaskId(task), expectedTaskId, 'The Cloud Task identity changed.');
-  assert.equal(task?.dispatchCount, 1, 'The retry budget advanced before baseline restoration.');
-  assert.equal(task?.responseCount, 1, 'The first failed response was not isolated.');
-  const createMilliseconds = timestampMilliseconds(task?.createTime);
-  const scheduleMilliseconds = timestampMilliseconds(task?.scheduleTime);
-  const firstDispatchMilliseconds = timestampMilliseconds(task?.firstAttempt?.dispatchTime);
-  const lastDispatchMilliseconds = timestampMilliseconds(task?.lastAttempt?.dispatchTime);
-  const lastResponseMilliseconds = timestampMilliseconds(task?.lastAttempt?.responseTime);
-  const lastStatusCode = Number(task?.lastAttempt?.responseStatus?.code);
-
-  assert.ok(createMilliseconds !== null && createMilliseconds >= runStartedAt - 5_000);
-  assert.ok(scheduleMilliseconds !== null);
-  assert.ok(firstDispatchMilliseconds !== null && lastDispatchMilliseconds !== null);
-  assert.ok(lastResponseMilliseconds !== null);
-  assert.ok(Number.isSafeInteger(lastStatusCode) && lastStatusCode !== 0);
-  assert.equal(lastDispatchMilliseconds, firstDispatchMilliseconds);
-  assert.ok(lastResponseMilliseconds >= lastDispatchMilliseconds);
+  assert.equal(
+    queueTaskId(task, FF132_AVAILABILITY_TASK_QUEUE),
+    expectedTaskId,
+    'The Cloud Task identity changed.',
+  );
+  const dispatchCount = task?.dispatchCount ?? 0;
   assert.ok(
-    scheduleMilliseconds - lastResponseMilliseconds >= MINIMUM_TASK_RETRY_DELAY_MILLISECONDS &&
-      scheduleMilliseconds - lastResponseMilliseconds <= MAXIMUM_TASK_RETRY_DELAY_MILLISECONDS,
-    'The exact task retry schedule is outside the bounded queue policy.',
+    Number.isSafeInteger(dispatchCount) && dispatchCount >= 0 && dispatchCount <= 1,
+    'The retry budget advanced before baseline restoration.',
+  );
+  if (task?.responseCount !== undefined) {
+    assert.ok(
+      Number.isSafeInteger(task.responseCount) &&
+        task.responseCount >= 0 &&
+        task.responseCount <= 1,
+      'The first observed task response count is inconsistent.',
+    );
+  }
+  const createMilliseconds = timestampMilliseconds(task?.createTime);
+  assert.ok(createMilliseconds !== null && createMilliseconds >= runStartedAt - 5_000);
+  assert.ok(Number.isSafeInteger(leaseEventMilliseconds));
+
+  const relevant = relevantFf132RequestLogs(requestLogs, {
+    deployedFunction,
+    userAgent: 'Google-Cloud-Tasks',
+    minimumTimestamp,
+    maximumTimestamp,
+  });
+  assert.deepEqual(
+    relevant.map((entry) => Number(entry.httpRequest.status)),
+    [500],
+    'The verified revision did not produce one isolated first failure.',
+  );
+  const failedRequestStartedMilliseconds = requestLogTimestamp(relevant[0]);
+  assert.ok(failedRequestStartedMilliseconds !== null);
+  const failedRequestLatencyMilliseconds = parseFf132RequestLatencyMilliseconds(
+    relevant[0]?.httpRequest?.latency,
+  );
+  const failedResponseMilliseconds =
+    failedRequestStartedMilliseconds + failedRequestLatencyMilliseconds;
+
+  assert.ok(createMilliseconds <= failedRequestStartedMilliseconds + 5_000);
+  assert.ok(
+    leaseEventMilliseconds >=
+      failedRequestStartedMilliseconds - REQUEST_LOG_CLOCK_SKEW_MILLISECONDS &&
+      leaseEventMilliseconds <=
+        failedResponseMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+    'The active-lease marker did not occur inside the exact failed request.',
   );
 
   return {
     createMilliseconds,
-    scheduleMilliseconds,
-    firstDispatchMilliseconds,
-    lastResponseMilliseconds,
+    failedRequestStartedMilliseconds,
+    failedResponseMilliseconds,
   };
 }
 
@@ -1341,12 +1514,12 @@ function requestLogTimestamp(entry) {
   return timestampMilliseconds(entry?.timestamp);
 }
 
-export function assertFf132RequestLogs(
+function relevantFf132RequestLogs(
   entries,
-  { deployedFunction, userAgent, minimumTimestamp, maximumTimestamp, expectedStatuses },
+  { deployedFunction, userAgent, minimumTimestamp, maximumTimestamp },
 ) {
   assert.equal(Array.isArray(entries), true, 'Cloud Run request logs are malformed.');
-  const relevant = entries.filter((entry) => {
+  return entries.filter((entry) => {
     const timestamp = requestLogTimestamp(entry);
     return (
       entry?.resource?.type === 'cloud_run_revision' &&
@@ -1362,6 +1535,18 @@ export function assertFf132RequestLogs(
       timestamp <= maximumTimestamp
     );
   });
+}
+
+export function assertFf132RequestLogs(
+  entries,
+  { deployedFunction, userAgent, minimumTimestamp, maximumTimestamp, expectedStatuses },
+) {
+  const relevant = relevantFf132RequestLogs(entries, {
+    deployedFunction,
+    userAgent,
+    minimumTimestamp,
+    maximumTimestamp,
+  });
 
   assert.deepEqual(
     relevant.map((entry) => Number(entry.httpRequest.status)),
@@ -1369,6 +1554,41 @@ export function assertFf132RequestLogs(
     'The verified revision did not produce the expected bounded request sequence.',
   );
   return relevant.map((entry) => requestLogTimestamp(entry));
+}
+
+export function assertFf132RetryRequestLogs(
+  entries,
+  {
+    deployedFunction,
+    minimumTimestamp,
+    maximumTimestamp,
+    firstRequestStartedMilliseconds,
+    firstResponseMilliseconds,
+  },
+) {
+  const requestTimes = assertFf132RequestLogs(entries, {
+    deployedFunction,
+    userAgent: 'Google-Cloud-Tasks',
+    minimumTimestamp,
+    maximumTimestamp,
+    expectedStatuses: [500, 204],
+  });
+  assert.equal(
+    requestTimes[0],
+    firstRequestStartedMilliseconds,
+    'The retry log sequence does not start with the proven failed request.',
+  );
+  assert.ok(
+    Number.isFinite(firstResponseMilliseconds) &&
+      firstResponseMilliseconds >= firstRequestStartedMilliseconds,
+  );
+  const retryDelayMilliseconds = requestTimes[1] - firstResponseMilliseconds;
+  assert.ok(
+    retryDelayMilliseconds >= MINIMUM_TASK_RETRY_DELAY_MILLISECONDS &&
+      retryDelayMilliseconds <= MAXIMUM_TASK_RETRY_DELAY_MILLISECONDS,
+    'The correlated availability retry was outside its bounded backoff interval.',
+  );
+  return retryDelayMilliseconds;
 }
 
 export function readFf132RequestLogs(
@@ -1432,13 +1652,26 @@ export function readFf132ApplicationLogs(
 
 export function assertFf132AlreadyCurrentCompletionLog(entries, deployedFunction) {
   const matched = entries.filter((entry) => {
-    const message = String(entry?.jsonPayload?.message ?? entry?.textPayload ?? '');
+    const jsonMessage = entry?.jsonPayload?.message;
+    const textMessage = entry?.textPayload;
+    const structuredMarker =
+      jsonMessage === 'Automatic Draft availability preparation completed.' &&
+      entry?.jsonPayload?.status === 'already-current';
+    const consoleStatusMatches = typeof textMessage === 'string'
+      ? textMessage.match(/(?:^|[\s,{])status:\s*'already-current'(?=[\s,}])/g) ?? []
+      : [];
+    const consoleMarker =
+      typeof textMessage === 'string' &&
+      textMessage.length <= 4_000 &&
+      /^Automatic Draft availability preparation completed\.\s*\{[\s\S]*\}\s*$/.test(
+        textMessage,
+      ) &&
+      consoleStatusMatches.length === 1;
     return (
       entry?.resource?.labels?.service_name === deployedFunction.serviceName &&
       entry?.resource?.labels?.revision_name === deployedFunction.revision &&
       entry?.labels?.['firebase-functions-hash'] === deployedFunction.sourceHash &&
-      message.includes('Automatic Draft availability preparation completed') &&
-      entry?.jsonPayload?.status === 'already-current'
+      (structuredMarker || consoleMarker)
     );
   });
 
@@ -1462,7 +1695,11 @@ export function assertFf132NaturalSchedulerAttempt(
   return after.lastAttemptMilliseconds - expectedSchedulerMilliseconds;
 }
 
-export function triggerFf132DraftScheduler() {
+export function triggerFf132DraftScheduler(timeoutMilliseconds = 60_000) {
+  assert.ok(
+    Number.isSafeInteger(timeoutMilliseconds) && timeoutMilliseconds > 0,
+    'The Scheduler trigger timeout is invalid.',
+  );
   runCommand('gcloud', [
     'scheduler',
     'jobs',
@@ -1473,20 +1710,28 @@ export function triggerFf132DraftScheduler() {
     '--project',
     D1N_STAGING_PROJECT_ID,
     '--quiet',
-  ]);
+  ], { timeout: timeoutMilliseconds });
 }
 
 export function assertFf132ManualSchedulerCompletion({
   beforeScheduler,
   afterScheduler,
   beforeAutomationMilliseconds,
-  afterAutomationMilliseconds,
+  afterAutomationMarker,
   triggerStartedMilliseconds,
   maximumCompletionMilliseconds,
   requestLogs,
   deployedFunction,
   minimumRequestTimestamp,
 }) {
+  const afterAutomationMilliseconds = assertFf132DraftAutomationSuccessMarker(
+    afterAutomationMarker,
+    {
+      priorLastRunMilliseconds: beforeAutomationMilliseconds,
+      triggerStartedMilliseconds,
+      maximumCompletionMilliseconds,
+    },
+  );
   assert.ok(afterScheduler.lastAttemptMilliseconds > beforeScheduler.lastAttemptMilliseconds);
   assert.ok(
     afterScheduler.lastAttemptMilliseconds >= triggerStartedMilliseconds - 2_000 &&
@@ -1514,9 +1759,170 @@ export function assertFf132ManualSchedulerCompletion({
   return Math.max(0, afterAutomationMilliseconds - triggerStartedMilliseconds);
 }
 
-async function readDraftAutomationMilliseconds(draftAutomationRef) {
+async function readDraftAutomationState(draftAutomationRef) {
   const snapshot = await draftAutomationRef.get();
-  return timestampMilliseconds(snapshot.get('lastRunAt')) ?? 0;
+  const marker = snapshot.data() ?? {};
+  return {
+    marker,
+    lastRunMilliseconds: timestampMilliseconds(marker.lastRunAt) ?? 0,
+  };
+}
+
+export function assertFf132DraftAutomationSuccessMarker(
+  marker,
+  {
+    priorLastRunMilliseconds,
+    triggerStartedMilliseconds,
+    maximumCompletionMilliseconds,
+  },
+) {
+  assert.equal(marker?.schemaVersion, 1);
+  assert.equal(marker?.status, 'success');
+  assert.equal(marker?.activeDraftCount, 1);
+  assert.equal(marker?.picksMade, 0);
+  assert.equal(marker?.failedDraftCount, 0);
+  assert.deepEqual(marker?.failures ?? [], []);
+  assert.ok(
+    Number.isSafeInteger(marker?.durationMilliseconds) &&
+      marker.durationMilliseconds >= 0 &&
+      marker.durationMilliseconds <= MAXIMUM_AVAILABILITY_TASK_REQUEST_MILLISECONDS,
+    'The Draft automation completion duration is invalid.',
+  );
+  const lastRunMilliseconds = timestampMilliseconds(marker?.lastRunAt);
+  assert.ok(lastRunMilliseconds !== null);
+  assert.ok(lastRunMilliseconds > priorLastRunMilliseconds);
+  assert.ok(
+    lastRunMilliseconds >=
+      triggerStartedMilliseconds - REQUEST_LOG_CLOCK_SKEW_MILLISECONDS &&
+      lastRunMilliseconds <= maximumCompletionMilliseconds,
+    'The successful Draft automation marker is outside the probe window.',
+  );
+  return lastRunMilliseconds;
+}
+
+async function waitForFf132BeforeDeadline(
+  label,
+  readValue,
+  predicate,
+  deadlineMilliseconds,
+) {
+  while (Date.now() < deadlineMilliseconds) {
+    const remainingMilliseconds = deadlineMilliseconds - Date.now();
+    let timeoutHandle;
+    const value = await Promise.race([
+      Promise.resolve().then(readValue),
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error(`${label} exceeded its retry-safety deadline.`)),
+          remainingMilliseconds,
+        );
+      }),
+    ]).finally(() => clearTimeout(timeoutHandle));
+
+    if (predicate(value)) {
+      return value;
+    }
+
+    await wait(Math.min(
+      POLL_INTERVAL_MILLISECONDS,
+      Math.max(0, deadlineMilliseconds - Date.now()),
+    ));
+  }
+
+  throw new Error(`${label} did not complete before the retry-safety deadline.`);
+}
+
+async function runFf132DuplicateSchedulerProbeBeforeRetry({
+  draftAutomationRef,
+  deadlineMilliseconds,
+}) {
+  const beforeAutomation = await waitForFf132BeforeDeadline(
+    'The duplicate Scheduler probe baseline',
+    () => readDraftAutomationState(draftAutomationRef),
+    () => true,
+    deadlineMilliseconds,
+  );
+  const triggerStartedMilliseconds = Date.now();
+  const commandTimeoutMilliseconds = Math.min(
+    DUPLICATE_PROBE_COMMAND_TIMEOUT_MILLISECONDS,
+    deadlineMilliseconds - triggerStartedMilliseconds,
+  );
+  assert.ok(
+    commandTimeoutMilliseconds > 0,
+    'The duplicate Scheduler probe reached its retry-safety deadline.',
+  );
+  triggerFf132DraftScheduler(commandTimeoutMilliseconds);
+  const afterAutomation = await waitForFf132BeforeDeadline(
+    'The duplicate Scheduler probe completion marker',
+    () => readDraftAutomationState(draftAutomationRef),
+    (value) => {
+      try {
+        assertFf132DraftAutomationSuccessMarker(value.marker, {
+          priorLastRunMilliseconds: beforeAutomation.lastRunMilliseconds,
+          triggerStartedMilliseconds,
+          maximumCompletionMilliseconds: deadlineMilliseconds,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    deadlineMilliseconds,
+  );
+  const afterAutomationMilliseconds = assertFf132DraftAutomationSuccessMarker(
+    afterAutomation.marker,
+    {
+      priorLastRunMilliseconds: beforeAutomation.lastRunMilliseconds,
+      triggerStartedMilliseconds,
+      maximumCompletionMilliseconds: deadlineMilliseconds,
+    },
+  );
+
+  return {
+    triggerStartedMilliseconds,
+    afterAutomationMilliseconds,
+  };
+}
+
+export function assertFf132DuplicateSchedulerRequestLogs(
+  entries,
+  { deployedFunction, minimumTimestamp, maximumTimestamp, probes },
+) {
+  assert.equal(Array.isArray(probes), true);
+  assert.equal(probes.length, 2, 'Exactly two duplicate Scheduler probes are required.');
+  const requestTimes = assertFf132RequestLogs(entries, {
+    deployedFunction,
+    userAgent: 'Google-Cloud-Scheduler',
+    minimumTimestamp,
+    maximumTimestamp,
+    expectedStatuses: [200, 200],
+  });
+
+  for (let index = 0; index < probes.length; index += 1) {
+    const probe = probes[index];
+    assert.ok(
+      Number.isSafeInteger(probe?.triggerStartedMilliseconds) &&
+        Number.isSafeInteger(probe?.afterAutomationMilliseconds) &&
+        probe.afterAutomationMilliseconds >= probe.triggerStartedMilliseconds,
+      'The duplicate Scheduler probe timestamps are malformed.',
+    );
+    assert.ok(
+      requestTimes[index] >=
+        probe.triggerStartedMilliseconds - REQUEST_LOG_CLOCK_SKEW_MILLISECONDS &&
+        requestTimes[index] <=
+          probe.afterAutomationMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+      'A duplicate Scheduler request did not match its serialized completion marker.',
+    );
+    if (index > 0) {
+      assert.ok(
+        probe.triggerStartedMilliseconds > probes[index - 1].afterAutomationMilliseconds,
+        'Duplicate Scheduler probe windows overlap.',
+      );
+    }
+  }
+
+  assert.ok(requestTimes[1] > requestTimes[0]);
+  return requestTimes;
 }
 
 async function runCorrelatedFf132DraftScheduler({
@@ -1524,27 +1930,36 @@ async function runCorrelatedFf132DraftScheduler({
   draftAutomationRef,
   timeoutMilliseconds,
   expectedAvailabilityTaskBucketMilliseconds = null,
+  absoluteDeadlineMilliseconds = null,
 }) {
+  const boundedTimeout = (maximumMilliseconds) => {
+    return absoluteDeadlineMilliseconds === null
+      ? maximumMilliseconds
+      : boundFf132TimeoutBeforeDeadline(
+        maximumMilliseconds,
+        absoluteDeadlineMilliseconds,
+      );
+  };
   const safeWindow = await waitFor(
     'A completed natural scheduler run with room before the next minute',
     async () => {
       const nowMilliseconds = Date.now();
       const scheduler = inspectFf132SchedulerJob(schedulerFunction);
-      const automationMilliseconds = await readDraftAutomationMilliseconds(draftAutomationRef);
-      return { nowMilliseconds, scheduler, automationMilliseconds };
+      const automation = await readDraftAutomationState(draftAutomationRef);
+      return { nowMilliseconds, scheduler, automation };
     },
-    ({ nowMilliseconds, scheduler, automationMilliseconds }) => {
+    ({ nowMilliseconds, scheduler, automation }) => {
       const minuteStart = Math.floor(nowMilliseconds / 60_000) * 60_000;
       const nextMinute = minuteStart + 60_000;
       return (
         nextMinute - nowMilliseconds >= MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS &&
         scheduler.lastAttemptMilliseconds >= minuteStart - 2_000 &&
         scheduler.lastAttemptMilliseconds <= nowMilliseconds + 2_000 &&
-        automationMilliseconds >= scheduler.lastAttemptMilliseconds - 2_000 &&
-        automationMilliseconds <= nowMilliseconds + 2_000
+        automation.lastRunMilliseconds >= scheduler.lastAttemptMilliseconds - 2_000 &&
+        automation.lastRunMilliseconds <= nowMilliseconds + 2_000
       );
     },
-    Math.min(timeoutMilliseconds, 3 * 60_000),
+    boundedTimeout(Math.min(timeoutMilliseconds, 3 * 60_000)),
   );
   if (expectedAvailabilityTaskBucketMilliseconds !== null) {
     assertDuplicateTaskBucketIsSafe(
@@ -1553,9 +1968,12 @@ async function runCorrelatedFf132DraftScheduler({
     );
   }
   const triggerStartedMilliseconds = Date.now();
-  const maximumCompletionMilliseconds =
+  const nextMinuteCompletionMilliseconds =
     (Math.floor(triggerStartedMilliseconds / 60_000) + 1) * 60_000 -
     MANUAL_SCHEDULER_COMPLETION_GUARD_MILLISECONDS;
+  const maximumCompletionMilliseconds = absoluteDeadlineMilliseconds === null
+    ? nextMinuteCompletionMilliseconds
+    : Math.min(nextMinuteCompletionMilliseconds, absoluteDeadlineMilliseconds);
   assert.ok(
     maximumCompletionMilliseconds - triggerStartedMilliseconds >=
       MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS -
@@ -1576,7 +1994,7 @@ async function runCorrelatedFf132DraftScheduler({
     priorRequestTimestamp + 1,
   );
 
-  triggerFf132DraftScheduler();
+  triggerFf132DraftScheduler(boundedTimeout(60_000));
   const afterScheduler = await waitFor(
     'The exact accepted manual scheduler attempt',
     () => inspectFf132SchedulerJob(schedulerFunction),
@@ -1584,16 +2002,24 @@ async function runCorrelatedFf132DraftScheduler({
       state.lastAttemptMilliseconds > safeWindow.scheduler.lastAttemptMilliseconds &&
       state.lastAttemptMilliseconds >= triggerStartedMilliseconds - 2_000 &&
       state.lastAttemptMilliseconds <= maximumCompletionMilliseconds,
-    Math.min(timeoutMilliseconds, 60_000),
+    boundedTimeout(Math.min(timeoutMilliseconds, 60_000)),
   );
-  const afterAutomationMilliseconds = await waitFor(
+  const afterAutomation = await waitFor(
     'The exact accepted manual scheduler completion marker',
-    () => readDraftAutomationMilliseconds(draftAutomationRef),
-    (value) =>
-      value > safeWindow.automationMilliseconds &&
-      value >= triggerStartedMilliseconds - 2_000 &&
-      value <= maximumCompletionMilliseconds,
-    Math.min(timeoutMilliseconds, 60_000),
+    () => readDraftAutomationState(draftAutomationRef),
+    (value) => {
+      try {
+        assertFf132DraftAutomationSuccessMarker(value.marker, {
+          priorLastRunMilliseconds: safeWindow.automation.lastRunMilliseconds,
+          triggerStartedMilliseconds,
+          maximumCompletionMilliseconds,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    boundedTimeout(Math.min(timeoutMilliseconds, 60_000)),
   );
   const requestLogs = await waitFor(
     'The exact accepted manual scheduler HTTP 200',
@@ -1605,14 +2031,14 @@ async function runCorrelatedFf132DraftScheduler({
         maximumCompletionMilliseconds,
       ),
     (entries) => entries.some((entry) => Number(entry?.httpRequest?.status) === 200),
-    Math.min(timeoutMilliseconds, 60_000),
+    boundedTimeout(Math.min(timeoutMilliseconds, 60_000)),
   );
 
   return assertFf132ManualSchedulerCompletion({
     beforeScheduler: safeWindow.scheduler,
     afterScheduler,
-    beforeAutomationMilliseconds: safeWindow.automationMilliseconds,
-    afterAutomationMilliseconds,
+    beforeAutomationMilliseconds: safeWindow.automation.lastRunMilliseconds,
+    afterAutomationMarker: afterAutomation.marker,
     triggerStartedMilliseconds,
     maximumCompletionMilliseconds,
     requestLogs,
@@ -2212,6 +2638,64 @@ async function restoreAvailabilityWithCas({
   );
 }
 
+async function parkDraftAndRestoreAvailabilityWithCas({
+  firestore,
+  FieldValue,
+  Timestamp,
+  draftRef,
+  expectedScheduledStartAt,
+  parkedStartAt,
+  availabilityRef,
+  baseline,
+  baselineAttestation,
+  overlayLeaseMilliseconds,
+}) {
+  await firestore.runTransaction(async (transaction) => {
+    const [draftSnapshot, availabilitySnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(availabilityRef),
+    ]);
+    const draft = draftSnapshot.data() ?? {};
+    const currentAvailability = availabilitySnapshot.data() ?? {};
+
+    assert.ok(draftSnapshot.exists && availabilitySnapshot.exists);
+    assertScheduledStoppedZero(draft, expectedScheduledStartAt);
+    const availabilityPatch = getFf132AvailabilityRestorePatch({
+      current: currentAvailability,
+      baseline,
+      baselineAttestation,
+      overlayLeaseMilliseconds,
+      deleteSentinel: FieldValue.delete(),
+    });
+
+    transaction.set(
+      draftRef,
+      {
+        ...deletedDraftReadinessFields(FieldValue),
+        scheduledStartAt: Timestamp.fromMillis(parkedStartAt.getTime()),
+        clockUpdatedBy: 'ff132-staging-evidence-availability-park',
+        clockUpdatedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    if (availabilityPatch) {
+      transaction.set(availabilityRef, availabilityPatch, { merge: true });
+    }
+  });
+
+  const [parkedDraftSnapshot, restoredAvailabilitySnapshot] = await Promise.all([
+    draftRef.get(),
+    availabilityRef.get(),
+  ]);
+  assertScheduledStoppedZero(parkedDraftSnapshot.data() ?? {}, parkedStartAt);
+  assert.equal(
+    contentHash(restoredAvailabilitySnapshot.data() ?? {}),
+    baselineAttestation.sourceHash,
+    'Availability was not restored while the evidence Draft was parked.',
+  );
+}
+
 async function assertMaintenanceCheckpoint({
   firestore,
   lockRef,
@@ -2697,6 +3181,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
   environment = process.env,
 ) {
   let checkpoint = assertCheckpoint('preflight');
+  let failureDetail = assertFailureDetail('unclassified');
   let app = null;
   let deleteApp = null;
   let FieldValue = null;
@@ -2718,6 +3203,8 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
   let draftBaselineHash = '';
   let draftMutated = false;
   let safeResetAt = null;
+  let safetyParkStartAt = null;
+  let finalScheduleActive = false;
   let availabilityRef = null;
   let availabilityBaseline = null;
   let availabilityAttestation = null;
@@ -2771,6 +3258,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     firestore = adminFirestore.getFirestore(app);
 
     checkpoint = assertCheckpoint('fixture-safety');
+    failureDetail = assertFailureDetail('fixture-ownership');
     const draftInventoryCount = await assertBoundedDraftInventory(firestore);
     ({ draftRef, draftBaselineHash } = await assertSyntheticFixtureSafety(firestore));
     draftAutomationRef = firestore.doc('appData/draftAutomation');
@@ -2831,6 +3319,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     });
 
     checkpoint = assertCheckpoint('availability-boundary');
+    failureDetail = assertFailureDetail('availability-boundary-state');
     overlayLeaseMilliseconds = leaseExpiresAt.toMillis();
     availabilityOverlayOwned = true;
     draftMutated = true;
@@ -2847,6 +3336,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     });
     assert.equal(overlayLeaseMilliseconds, prepared.overlayLeaseMilliseconds);
 
+    failureDetail = assertFailureDetail('availability-scheduler-proof');
     const schedulerBeforeAvailability = inspectFf132SchedulerJob(schedulerFunction);
     await waitUntilBeforeBoundary(initialStartAt, AVAILABILITY_BOUNDARY_MILLISECONDS);
     await assertMaintenanceCheckpoint({
@@ -2909,7 +3399,9 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       (entries) => entries.some((entry) => Number(entry?.httpRequest?.status) === 200),
       NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
     );
-    assertFf132RequestLogs(schedulerAvailabilityLogs, {
+    const [naturalAvailabilitySchedulerRequestMilliseconds] = assertFf132RequestLogs(
+      schedulerAvailabilityLogs,
+      {
       deployedFunction: schedulerFunction,
       userAgent: 'Google-Cloud-Scheduler',
       minimumTimestamp: initialPlan.schedulerMilliseconds - 2_000,
@@ -2917,7 +3409,9 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
         initialPlan.schedulerMilliseconds +
           FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
       expectedStatuses: [200],
-    });
+      },
+    );
+    assert.ok(Number.isSafeInteger(naturalAvailabilitySchedulerRequestMilliseconds));
 
     const initialTaskBucketMilliseconds =
       Math.floor(initialPlan.schedulerMilliseconds / TASK_BUCKET_MILLISECONDS) *
@@ -2927,13 +3421,21 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       new Date(initialPlan.schedulerMilliseconds).toISOString().slice(0, 10),
       initialTaskBucketMilliseconds,
     );
-    await waitFor(
+    failureDetail = assertFailureDetail('availability-task-visible');
+    const initialAvailabilityTasks = await waitFor(
       'The deterministic availability task',
       () => listFf132QueueTasks(FF132_AVAILABILITY_TASK_QUEUE),
-      (tasks) => tasks.length === 1 && queueTaskId(tasks[0]) === availabilityTaskId,
+      (tasks) =>
+        tasks.length === 1 &&
+        queueTaskId(tasks[0], FF132_AVAILABILITY_TASK_QUEUE) === availabilityTaskId,
       timeoutMilliseconds,
     );
+    const initialAvailabilityTask = assertFf132SingleQueueTask(
+      initialAvailabilityTasks,
+      availabilityTaskId,
+    );
 
+    failureDetail = assertFailureDetail('availability-lease-marker');
     const leaseEventSnapshot = await waitFor(
       'The active-lease availability delivery',
       () => injuryAutomationRef.get(),
@@ -2945,35 +3447,72 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       timeoutMilliseconds,
     );
     const leaseEventMilliseconds = timestampMilliseconds(leaseEventSnapshot.get('lastRunAt')) ?? 0;
-    const firstFailedTask = await waitFor(
-      'The first exact availability task failure',
-      () => describeFf132QueueTask(FF132_AVAILABILITY_TASK_QUEUE, availabilityTaskId),
-      (task) => task?.dispatchCount === 1 && task?.responseCount === 1,
-      timeoutMilliseconds,
-    );
-    const firstAttempt = assertFf132FirstFailedTaskAttempt(
-      firstFailedTask,
-      availabilityTaskId,
-      runStartedAt,
-    );
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
-      draftAutomationRef,
-      timeoutMilliseconds,
-      expectedAvailabilityTaskBucketMilliseconds: initialTaskBucketMilliseconds,
-    });
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
-      draftAutomationRef,
-      timeoutMilliseconds,
-      expectedAvailabilityTaskBucketMilliseconds: initialTaskBucketMilliseconds,
-    });
-    assertFf132SingleQueueTask(
-      listFf132QueueTasks(FF132_AVAILABILITY_TASK_QUEUE),
-      availabilityTaskId,
-    );
 
-    checkpoint = assertCheckpoint('availability-retry');
+    // The Firestore marker is written by the task handler before it throws.
+    // Exercise both duplicate Scheduler deliveries inside a strict sub-retry
+    // deadline. Then atomically park the Draft and restore availability before
+    // any unbounded inventory or Cloud Logging observation. The safe transition
+    // still runs if either bounded duplicate probe fails.
+    const duplicateProbeDeadlineMilliseconds =
+      leaseEventMilliseconds +
+      MINIMUM_TASK_RETRY_DELAY_MILLISECONDS -
+      DUPLICATE_PROBE_RETRY_SAFETY_MARGIN_MILLISECONDS;
+    const duplicateSchedulerProbes = [];
+    let duplicateProbeError = null;
+    let duplicateProbeFailureDetail = 'unclassified';
+    try {
+      failureDetail = assertFailureDetail('availability-duplicate-probe-1');
+      assertDuplicateTaskBucketIsSafe(Date.now(), initialTaskBucketMilliseconds);
+      duplicateSchedulerProbes.push(
+        await runFf132DuplicateSchedulerProbeBeforeRetry({
+          draftAutomationRef,
+          deadlineMilliseconds: duplicateProbeDeadlineMilliseconds,
+        }),
+      );
+      failureDetail = assertFailureDetail('availability-duplicate-probe-2');
+      assertDuplicateTaskBucketIsSafe(Date.now(), initialTaskBucketMilliseconds);
+      duplicateSchedulerProbes.push(
+        await runFf132DuplicateSchedulerProbeBeforeRetry({
+          draftAutomationRef,
+          deadlineMilliseconds: duplicateProbeDeadlineMilliseconds,
+        }),
+      );
+      const duplicateQueueReadTimeout = Math.min(
+        DUPLICATE_PROBE_COMMAND_TIMEOUT_MILLISECONDS,
+        duplicateProbeDeadlineMilliseconds - Date.now(),
+      );
+      assert.ok(duplicateQueueReadTimeout > 0);
+      assertFf132SingleQueueTask(
+        listFf132QueueTasks(FF132_AVAILABILITY_TASK_QUEUE, {
+          timeout: duplicateQueueReadTimeout,
+        }),
+        availabilityTaskId,
+      );
+    } catch (error) {
+      duplicateProbeError = error;
+      duplicateProbeFailureDetail = failureDetail;
+    }
+
+    failureDetail = assertFailureDetail('availability-draft-parked');
+    safetyParkStartAt = new Date(Date.now() + SAFE_RESET_MILLISECONDS);
+    plannedScheduledStartMilliseconds.add(safetyParkStartAt.getTime());
+    ownedDraftClockTaskIds.add(
+      buildFf132ScheduledDraftStartTaskId(safetyParkStartAt.getTime()),
+    );
+    await parkDraftAndRestoreAvailabilityWithCas({
+      firestore,
+      FieldValue,
+      Timestamp,
+      draftRef,
+      expectedScheduledStartAt: initialStartAt,
+      parkedStartAt: safetyParkStartAt,
+      availabilityRef,
+      baseline: availabilityBaseline,
+      baselineAttestation: availabilityAttestation,
+      overlayLeaseMilliseconds,
+    });
+    availabilityOverlayOwned = false;
+    failureDetail = assertFailureDetail('availability-restored');
     await assertMaintenanceCheckpoint({
       firestore,
       lockRef,
@@ -2982,16 +3521,113 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       timeoutMilliseconds,
       draftRef,
     });
-    await restoreAvailabilityWithCas({
-      firestore,
-      FieldValue,
-      availabilityRef,
-      baseline: availabilityBaseline,
-      baselineAttestation: availabilityAttestation,
-      overlayLeaseMilliseconds,
-    });
-    availabilityOverlayOwned = false;
+    if (duplicateProbeError) {
+      failureDetail = assertFailureDetail(duplicateProbeFailureDetail);
+      throw duplicateProbeError;
+    }
 
+    const availabilityTaskFunction = requiredFunctions.find(
+      (entry) => entry.name === FF132_AVAILABILITY_TASK_QUEUE,
+    );
+    assert.ok(availabilityTaskFunction);
+    const firstFailureLogMinimum = Math.max(
+      runStartedAt - 1_000,
+      initialPlan.schedulerMilliseconds - 2_000,
+    );
+    const firstFailureLogMaximum =
+      leaseEventMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS;
+    failureDetail = assertFailureDetail('availability-failure-log');
+    const firstFailureLogs = await waitFor(
+      'The exact first availability failure log',
+      () => {
+        try {
+          return readFf132RequestLogs(
+            availabilityTaskFunction,
+            'Google-Cloud-Tasks',
+            firstFailureLogMinimum,
+            firstFailureLogMaximum,
+          );
+        } catch {
+          return [];
+        }
+      },
+      (entries) => {
+        try {
+          assertFf132FirstFailedTaskAttempt({
+            task: initialAvailabilityTask,
+            expectedTaskId: availabilityTaskId,
+            runStartedAt,
+            leaseEventMilliseconds,
+            requestLogs: entries,
+            deployedFunction: availabilityTaskFunction,
+            minimumTimestamp: firstFailureLogMinimum,
+            maximumTimestamp: firstFailureLogMaximum,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      Math.min(timeoutMilliseconds, NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
+    );
+    const firstAttempt = assertFf132FirstFailedTaskAttempt({
+      task: initialAvailabilityTask,
+      expectedTaskId: availabilityTaskId,
+      runStartedAt,
+      leaseEventMilliseconds,
+      requestLogs: firstFailureLogs,
+      deployedFunction: availabilityTaskFunction,
+      minimumTimestamp: firstFailureLogMinimum,
+      maximumTimestamp: firstFailureLogMaximum,
+    });
+
+    failureDetail = assertFailureDetail('availability-duplicate-probe-2');
+    const duplicateSchedulerLogMinimum = Math.max(
+      naturalAvailabilitySchedulerRequestMilliseconds + 1,
+      duplicateSchedulerProbes[0].triggerStartedMilliseconds -
+        REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+    );
+    const duplicateSchedulerLogMaximum =
+      duplicateSchedulerProbes[1].afterAutomationMilliseconds +
+      REQUEST_LOG_CLOCK_SKEW_MILLISECONDS;
+    const duplicateSchedulerLogs = await waitFor(
+      'The two serialized duplicate Scheduler request logs',
+      () => {
+        try {
+          return readFf132RequestLogs(
+            schedulerFunction,
+            'Google-Cloud-Scheduler',
+            duplicateSchedulerLogMinimum,
+            duplicateSchedulerLogMaximum,
+          );
+        } catch {
+          return [];
+        }
+      },
+      (entries) => {
+        try {
+          assertFf132DuplicateSchedulerRequestLogs(entries, {
+            deployedFunction: schedulerFunction,
+            minimumTimestamp: duplicateSchedulerLogMinimum,
+            maximumTimestamp: duplicateSchedulerLogMaximum,
+            probes: duplicateSchedulerProbes,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      Math.min(timeoutMilliseconds, NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
+    );
+    assertFf132DuplicateSchedulerRequestLogs(duplicateSchedulerLogs, {
+      deployedFunction: schedulerFunction,
+      minimumTimestamp: duplicateSchedulerLogMinimum,
+      maximumTimestamp: duplicateSchedulerLogMaximum,
+      probes: duplicateSchedulerProbes,
+    });
+
+    checkpoint = assertCheckpoint('availability-retry');
+    failureDetail = assertFailureDetail('availability-retry-correlation');
     const retryEventSnapshot = await waitFor(
       'The availability retry using the restored strict baseline',
       () => injuryAutomationRef.get(),
@@ -3005,50 +3641,68 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     const retryEventMilliseconds =
       timestampMilliseconds(retryEventSnapshot.get('lastRunAt')) ?? 0;
     await waitForQueueCount(FF132_AVAILABILITY_TASK_QUEUE, 0, timeoutMilliseconds);
-    const availabilityTaskFunction = requiredFunctions.find(
-      (entry) => entry.name === FF132_AVAILABILITY_TASK_QUEUE,
-    );
-    assert.ok(availabilityTaskFunction);
     const retryLogMaximum = retryEventMilliseconds + 10_000;
     const retryRequestLogs = await waitFor(
       'The correlated availability task retry logs',
-      () =>
-        readFf132RequestLogs(
-          availabilityTaskFunction,
-          'Google-Cloud-Tasks',
-          firstAttempt.createMilliseconds - 1_000,
-          retryLogMaximum,
-        ),
-      (entries) => entries.length >= 2,
+      () => {
+        try {
+          return readFf132RequestLogs(
+            availabilityTaskFunction,
+            'Google-Cloud-Tasks',
+            firstAttempt.createMilliseconds - 1_000,
+            retryLogMaximum,
+          );
+        } catch {
+          return [];
+        }
+      },
+      (entries) => {
+        try {
+          assertFf132RetryRequestLogs(entries, {
+            deployedFunction: availabilityTaskFunction,
+            minimumTimestamp: firstAttempt.createMilliseconds - 1_000,
+            maximumTimestamp: retryLogMaximum,
+            firstRequestStartedMilliseconds: firstAttempt.failedRequestStartedMilliseconds,
+            firstResponseMilliseconds: firstAttempt.failedResponseMilliseconds,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
       NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
     );
-    const retryRequestTimes = assertFf132RequestLogs(retryRequestLogs, {
-      deployedFunction: availabilityTaskFunction,
-      userAgent: 'Google-Cloud-Tasks',
-      minimumTimestamp: firstAttempt.createMilliseconds - 1_000,
-      maximumTimestamp: retryLogMaximum,
-      expectedStatuses: [500, 200],
-    });
-    const availabilityRetryDelayMilliseconds = retryRequestTimes[1] - retryRequestTimes[0];
-    assert.ok(
-      availabilityRetryDelayMilliseconds >= MINIMUM_TASK_RETRY_DELAY_MILLISECONDS &&
-        availabilityRetryDelayMilliseconds <= MAXIMUM_TASK_RETRY_DELAY_MILLISECONDS,
-      'The correlated availability retry was outside its bounded backoff interval.',
+    const availabilityRetryDelayMilliseconds = assertFf132RetryRequestLogs(
+      retryRequestLogs,
+      {
+        deployedFunction: availabilityTaskFunction,
+        minimumTimestamp: firstAttempt.createMilliseconds - 1_000,
+        maximumTimestamp: retryLogMaximum,
+        firstRequestStartedMilliseconds: firstAttempt.failedRequestStartedMilliseconds,
+        firstResponseMilliseconds: firstAttempt.failedResponseMilliseconds,
+      },
     );
     const retryApplicationLogs = await waitFor(
       'The already-current availability completion log',
-      () =>
-        readFf132ApplicationLogs(
-          availabilityTaskFunction,
-          firstAttempt.createMilliseconds - 1_000,
-          retryLogMaximum,
-        ),
-      (entries) =>
-        entries.some((entry) =>
-          String(entry?.jsonPayload?.message ?? entry?.textPayload ?? '').includes(
-            'Automatic Draft availability preparation completed',
-          ),
-        ),
+      () => {
+        try {
+          return readFf132ApplicationLogs(
+            availabilityTaskFunction,
+            firstAttempt.createMilliseconds - 1_000,
+            retryLogMaximum,
+          );
+        } catch {
+          return [];
+        }
+      },
+      (entries) => {
+        try {
+          assertFf132AlreadyCurrentCompletionLog(entries, availabilityTaskFunction);
+          return true;
+        } catch {
+          return false;
+        }
+      },
       NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
     );
     assertFf132AlreadyCurrentCompletionLog(retryApplicationLogs, availabilityTaskFunction);
@@ -3057,6 +3711,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     assert.equal(contentHash(unchangedAvailability.records), availabilityAttestation.recordsHash);
 
     checkpoint = assertCheckpoint('near-zero');
+    failureDetail = assertFailureDetail('near-zero-fail-closed');
     await assertMaintenanceCheckpoint({
       firestore,
       lockRef,
@@ -3124,8 +3779,20 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       availabilityBaseline,
       rescheduledStartAt.getTime(),
     );
+    const finalEvidenceSafetyDeadlineMilliseconds =
+      rescheduledStartAt.getTime() - FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS;
+    const finalEvidenceTimeout = (maximumMilliseconds) =>
+      boundFf132TimeoutBeforeDeadline(
+        maximumMilliseconds,
+        finalEvidenceSafetyDeadlineMilliseconds,
+      );
+    finalScheduleActive = true;
     await rescheduleDraft(draftRef, FieldValue, Timestamp, rescheduledStartAt);
     assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, rescheduledStartAt);
+    // Rescheduling and its authoritative read can be delayed independently of
+    // the bounded observation phase below. Recheck the absolute T-10 boundary
+    // before valid shared availability can make this schedule eligible to open.
+    boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds);
     await restoreAvailabilityWithCas({
       firestore,
       FieldValue,
@@ -3167,6 +3834,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     assert.equal(beforeProjectionBoundary.serverDraftReadinessProjectionRequestId ?? null, null);
 
     checkpoint = assertCheckpoint('projection-boundary');
+    failureDetail = assertFailureDetail('projection-scheduler-proof');
     const schedulerBeforeProjection = inspectFf132SchedulerJob(schedulerFunction);
     await waitUntilBeforeBoundary(rescheduledStartAt, PROJECTION_BOUNDARY_MILLISECONDS);
     await assertMaintenanceCheckpoint({
@@ -3190,12 +3858,15 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       'The T-20 Projection boundary',
     );
 
+    failureDetail = assertFailureDetail('projection-request-validation');
     const preparingDraft = await waitForDraftState(
       draftRef,
       (draft) =>
         typeof draft.serverDraftReadinessProjectionRequestId === 'string' ||
         draft.serverDraftReadinessStatus === 'error',
-      Math.min(timeoutMilliseconds, NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
+      finalEvidenceTimeout(
+        Math.min(timeoutMilliseconds, NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
+      ),
       'The server-owned Projection V11 request',
     );
     assert.notEqual(preparingDraft.serverDraftReadinessStatus, 'error');
@@ -3237,7 +3908,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
             FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
         ),
       (entries) => entries.some((entry) => Number(entry?.httpRequest?.status) === 200),
-      NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+      finalEvidenceTimeout(NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
     );
     assertFf132RequestLogs(schedulerProjectionLogs, {
       deployedFunction: schedulerFunction,
@@ -3254,19 +3925,21 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     await runCorrelatedFf132DraftScheduler({
       schedulerFunction,
       draftAutomationRef,
-      timeoutMilliseconds,
+      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
+      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
     await runCorrelatedFf132DraftScheduler({
       schedulerFunction,
       draftAutomationRef,
-      timeoutMilliseconds,
+      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
+      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
     const requestRef = firestore.doc(`projectionGenerationRequests/${requestId}`);
     const terminalRequestSnapshot = await waitFor(
       'The authoritative Projection V11 request',
       () => requestRef.get(),
       (snapshot) => ['ready', 'error'].includes(snapshot.get('status')),
-      timeoutMilliseconds,
+      finalEvidenceTimeout(timeoutMilliseconds),
     );
     const request = terminalRequestSnapshot.data() ?? {};
     assertFf132ProjectionRequest(
@@ -3279,20 +3952,32 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
         observedAtMilliseconds: Date.now(),
       },
     );
-    const metadata = await assertProjectionSnapshot(firestore, request, availabilityAttestation);
-    const requestCount = await assertOneOwnedProjectionRequest(firestore, requestId, runStartedAt);
+    failureDetail = assertFailureDetail('projection-snapshot-validation');
+    const metadata = await waitForFf132BeforeDeadline(
+      'The authoritative Projection V11 snapshot validation',
+      () => assertProjectionSnapshot(firestore, request, availabilityAttestation),
+      () => true,
+      finalEvidenceSafetyDeadlineMilliseconds,
+    );
+    const requestCount = await waitForFf132BeforeDeadline(
+      'The single authoritative Projection V11 request validation',
+      () => assertOneOwnedProjectionRequest(firestore, requestId, runStartedAt),
+      () => true,
+      finalEvidenceSafetyDeadlineMilliseconds,
+    );
 
     await runCorrelatedFf132DraftScheduler({
       schedulerFunction,
       draftAutomationRef,
-      timeoutMilliseconds,
+      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
+      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
     const readyDraft = await waitForDraftState(
       draftRef,
       (draft) =>
         draft.serverDraftReadinessStatus === 'ready' &&
         draft.serverDraftReadinessProjectionRequestId === requestId,
-      timeoutMilliseconds,
+      finalEvidenceTimeout(timeoutMilliseconds),
       'The exact schedule-bound ready state',
     );
     assertScheduledStoppedZero(readyDraft, rescheduledStartAt);
@@ -3319,14 +4004,22 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     await runCorrelatedFf132DraftScheduler({
       schedulerFunction,
       draftAutomationRef,
-      timeoutMilliseconds,
+      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
+      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
     await runCorrelatedFf132DraftScheduler({
       schedulerFunction,
       draftAutomationRef,
-      timeoutMilliseconds,
+      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
+      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
-    const duplicateDraft = (await draftRef.get()).data() ?? {};
+    const duplicateDraftSnapshot = await waitForFf132BeforeDeadline(
+      'The duplicate-ready Draft snapshot',
+      () => draftRef.get(),
+      () => true,
+      finalEvidenceSafetyDeadlineMilliseconds,
+    );
+    const duplicateDraft = duplicateDraftSnapshot.data() ?? {};
     assertScheduledStoppedZero(duplicateDraft, rescheduledStartAt);
     assert.equal(
       contentHash({
@@ -3339,8 +4032,18 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       }),
       stableIdentity,
     );
-    const pickCount = await assertNoDraftPicks(draftRef);
+    const pickCount = await waitForFf132BeforeDeadline(
+      'The zero-pick duplicate convergence proof',
+      () => assertNoDraftPicks(draftRef),
+      () => true,
+      finalEvidenceSafetyDeadlineMilliseconds,
+    );
     checkpoint = assertCheckpoint('duplicate-convergence');
+    failureDetail = assertFailureDetail('duplicate-convergence');
+    assert.ok(safetyParkStartAt instanceof Date);
+    await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt);
+    assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, safetyParkStartAt);
+    finalScheduleActive = false;
     await assertMaintenanceCheckpoint({
       firestore,
       lockRef,
@@ -3394,9 +4097,29 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
   } catch (error) {
     primaryError = error;
   } finally {
+    if (
+      finalScheduleActive &&
+      lockOwned &&
+      draftRef &&
+      FieldValue &&
+      Timestamp &&
+      safetyParkStartAt instanceof Date
+    ) {
+      try {
+        await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt);
+        assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, safetyParkStartAt);
+        finalScheduleActive = false;
+      } catch {
+        primaryError ??= new Error(
+          'The final evidence schedule could not be parked before cleanup.',
+        );
+      }
+    }
+
     if (app && firestore && lockOwned) {
       if (!primaryError) {
         checkpoint = assertCheckpoint('cleanup');
+        failureDetail = assertFailureDetail('cleanup-reconciliation');
       }
 
       let ownershipReconciled = false;
@@ -3567,6 +4290,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
           : cleanupOutcome.cleanupComplete
             ? 'complete'
             : 'cleanup-required',
+      failureDetail,
     );
   }
 

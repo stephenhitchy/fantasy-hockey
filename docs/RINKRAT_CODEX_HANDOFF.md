@@ -362,6 +362,8 @@ pushed tooling delta, and an existing strict baseline; it never changes injury
 records. Before writes, it applies bounded adversarial ZIP validation and
 compares all nine generation-pinned Function sources against a clean build of
 the declared deployed Git commit by exact path, byte length, and SHA-256 hash.
+Stored and deflated ZIP entries are expanded and hashed inside a hard
+pre-extraction output cap, so forged size metadata cannot bypass that envelope.
 It then proves the matching active Cloud Run revisions/images, exact Scheduler,
 exact availability, Projection, and `processDraftClockDeadline` queue
 configurations. The availability, Projection, and Draft-deadline queues must
@@ -369,11 +371,29 @@ all be initially empty, and no non-fixture staging Draft may be `scheduled` or
 `live`. That exclusion is required because manual Scheduler scans can touch
 automation leases for every scheduled Draft. It uses an
 active metadata lease to observe one deterministic singleton Cloud Task failure
-and a revision/hash/request-log-correlated retry without manufacturing upstream
-failure. That is not claimed as exact post-success task identity because Cloud
-Tasks deletes a successful task and the runtime emits no privacy-safe identity
-log. Natural T-25/T-20 Scheduler evidence must correlate in less than 60
-seconds; manual duplicate probes are serialized and correlated one at a time.
+without manufacturing upstream failure. FF1.32.1 binds that first failure to
+the exact task name and `createTime` with a first-observed `dispatchCount` of
+zero or one, then requires one exact verified-revision/hash/user-agent/method
+HTTP 500 with strict latency and the Firestore `lease-active` timestamp inside
+that request. It intentionally does not depend on the eventually consistent
+`firstAttempt`, `lastAttempt`, `responseCount`, or `scheduleTime` description
+fields. After the `lease-active` marker, two serialized Scheduler probes run
+inside a strict sub-retry deadline and must each persist a full schema-1
+`success` marker for exactly one active Draft, zero failed Drafts, zero picks,
+an empty failure list, and bounded duration. They must leave the same one
+deterministic task; their exact two HTTP 200 logs are then mapped to their
+disjoint accepted probe windows. Then one transaction moves the already
+registered Draft
+to a seven-day parked schedule while compare-and-set restoring availability
+before any unbounded read. The retry must then produce exact `[500, 204]`
+request logs, with 25 seconds to five
+minutes measured from the first response end to the retry request start, plus
+one exact `already-current` marker in either expected structured status or
+exact console text. This remains `singleton-revision-correlated`, not exact
+post-success task identity, because Cloud Tasks deletes a successful task.
+Natural T-25/T-20 Scheduler evidence must correlate in less than 60 seconds;
+manual duplicate probes are serialized by their full success markers and later
+correlated one-to-one with their request logs.
 The runner verifies exact Projection V11/schedule-input attestation, exact
 attempt-one request identity, creation inside the natural T-20 window,
 monotonic run/observation-bounded timestamps, a maximum 30-minute duration,
@@ -385,11 +405,22 @@ resets that Draft, drains and verifies only allowlisted clock work, then handles
 Projection before using a nanosecond-preserving compare-and-set to restore and
 drain runner-owned availability state; it never rewinds valid
 generated Projection requests, snapshots, pointers, control, or counters.
+The recovered T-20 phase has an absolute deadline ten minutes before zero,
+rechecks it after the final reschedule/read and before restoring availability, and
+parks on success or ordinary failure before later maintenance. Clock-task
+cleanup recognizes at most the four exact identities for the initial, parked,
+near-zero, and recovered schedules.
 Ambiguous commits/deletions are reconciled against remote state, and any
 uncertain cleanup retains a `cleanup-required` evidence lock. Terminal failures
-expose only privacy-safe checkpoint/cleanup state. This tooling slice changes
-no application or Functions runtime and no Firebase resource configuration; it
-must not be deployed.
+expose only the fixed error code, allowlisted checkpoint and cleanup state, and
+one source-controlled, non-identifying `failureDetail`; unknown values become
+`unclassified`, and raw error text or identifiers are never emitted. The first
+guarded live staging runs failed closed at the `availability-boundary` and
+completed cleanup; FF1.32.1 maps that bounded failure class to the fixed
+allowlisted `failureDetail: availability-failure-log`. That proves containment
+only, not passing T-25/T-20 evidence. This tooling slice changes no application
+or Functions runtime and no Firebase resource configuration; it must not be
+deployed.
 
 ## Release and deployment rules
 

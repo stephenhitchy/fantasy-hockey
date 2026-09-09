@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { deflateRawSync } from 'node:zlib';
 
 import {
   assertExactFunctionSourceManifest,
@@ -13,7 +15,9 @@ import {
   assertFf132AvailabilityTaskQueue,
   assertFf132CloudRunDeployment,
   assertFf132DraftClockTaskQueue,
+  assertFf132DraftAutomationSuccessMarker,
   assertFf132DraftInventory,
+  assertFf132DuplicateSchedulerRequestLogs,
   assertFf132FirstFailedTaskAttempt,
   assertFf132ManualSchedulerCompletion,
   assertFf132NaturalSchedulerAttempt,
@@ -21,6 +25,7 @@ import {
   assertFf132ProjectionTaskQueue,
   assertFf132ProjectionRequest,
   assertFf132RequestLogs,
+  assertFf132RetryRequestLogs,
   assertFf132SchedulerJob,
   assertFf132SingleQueueTask,
   assertFf132SourceArchiveBuffer,
@@ -31,6 +36,7 @@ import {
   assertSafeArchiveEntries,
   assertStrictSchema2AvailabilityBaseline,
   buildPublicFf132Evidence,
+  boundFf132TimeoutBeforeDeadline,
   buildFf132ProjectionRequestId,
   FF132_AVAILABILITY_TASK_QUEUE,
   FF132_DRAFT_CLOCK_TASK_QUEUE,
@@ -98,6 +104,9 @@ function buildSourceZip(entryInputs, endOverrides = {}) {
     const contents = Buffer.isBuffer(input.contents)
       ? input.contents
       : Buffer.from(input.contents ?? '');
+    const compressedContents = input.compressedContents ?? (
+      method === 8 ? deflateRawSync(contents) : contents
+    );
     const nameBytes = Buffer.from(name, flags & 0x800 ? 'utf8' : 'ascii');
     const localNameBytes = Buffer.from(
       localName,
@@ -109,11 +118,17 @@ function buildSourceZip(entryInputs, endOverrides = {}) {
     localHeader.writeUInt16LE(localFlags, 6);
     localHeader.writeUInt16LE(localMethod, 8);
     localHeader.writeUInt32LE(0, 14);
-    localHeader.writeUInt32LE(contents.byteLength, 18);
-    localHeader.writeUInt32LE(contents.byteLength, 22);
+    localHeader.writeUInt32LE(
+      input.localCompressedBytes ?? compressedContents.byteLength,
+      18,
+    );
+    localHeader.writeUInt32LE(
+      input.localExpandedBytes ?? contents.byteLength,
+      22,
+    );
     localHeader.writeUInt16LE(localNameBytes.byteLength, 26);
     localHeader.writeUInt16LE(0, 28);
-    const local = Buffer.concat([localHeader, localNameBytes, contents]);
+    const local = Buffer.concat([localHeader, localNameBytes, compressedContents]);
     localParts.push(local);
     entries.push({
       ...input,
@@ -121,6 +136,7 @@ function buildSourceZip(entryInputs, endOverrides = {}) {
       flags,
       method,
       contents,
+      compressedContents,
       localOffset: input.localOffset ?? localOffset,
     });
     localOffset += local.byteLength;
@@ -139,7 +155,7 @@ function buildSourceZip(entryInputs, endOverrides = {}) {
     central.writeUInt16LE(entry.method, 10);
     central.writeUInt32LE(0, 16);
     central.writeUInt32LE(
-      entry.centralCompressedBytes ?? entry.contents.byteLength,
+      entry.centralCompressedBytes ?? entry.compressedContents.byteLength,
       20,
     );
     central.writeUInt32LE(
@@ -174,7 +190,7 @@ function sourceManifest(files) {
     const bytes = Buffer.from(contents);
     return [relativePath, {
       byteLength: bytes.byteLength,
-      sha256: '0'.repeat(64),
+      sha256: createHash('sha256').update(bytes).digest('hex'),
     }];
   }));
 }
@@ -443,7 +459,22 @@ function cloudRunRequestLog(deployedFunction, status, timestamp) {
       requestMethod: 'POST',
       userAgent: 'Google-Cloud-Tasks; (+https://cloud.google.com/tasks)',
       status,
+      latency: '0.500s',
     },
+  };
+}
+
+function draftAutomationMarker(timestamp, overrides = {}) {
+  return {
+    schemaVersion: 1,
+    status: 'success',
+    activeDraftCount: 1,
+    picksMade: 0,
+    failedDraftCount: 0,
+    failures: [],
+    durationMilliseconds: 750,
+    lastRunAt: new Date(timestamp).toISOString(),
+    ...overrides,
   };
 }
 
@@ -802,6 +833,9 @@ test('source ZIP metadata rejects unsafe paths, types, encryption, and size/head
   const entries = Object.entries(files).map(([name, contents]) => ({ name, contents }));
 
   assert.equal(assertFf132SourceArchiveBuffer(buildSourceZip(entries), manifest), 2);
+  assert.equal(assertFf132SourceArchiveBuffer(buildSourceZip(
+    entries.map((entry) => ({ ...entry, method: 8 })),
+  ), manifest), 2);
   assert.equal(assertFf132SourceArchiveBuffer(buildSourceZip([
     { name: 'src/', contents: '' },
     ...entries,
@@ -863,6 +897,33 @@ test('source ZIP metadata rejects unsafe paths, types, encryption, and size/head
 
   assert.throws(() => assertFf132SourceArchiveBuffer(Buffer.from('not-a-zip'), manifest));
   assert.throws(() => assertFf132SourceArchiveBuffer(buildSourceZip(entries), new Map()));
+
+  const bombContents = Buffer.alloc(5 * 1024 * 1024, 0x61);
+  const forgedBomb = buildSourceZip([{
+    name: 'package.json',
+    contents: bombContents,
+    method: 8,
+    localExpandedBytes: 1,
+    centralExpandedBytes: 1,
+  }]);
+  assert.ok(forgedBomb.byteLength < 10_000, 'The regression fixture must remain compact.');
+  assert.throws(
+    () => assertFf132SourceArchiveBuffer(
+      forgedBomb,
+      sourceManifest({ 'package.json': 'x' }),
+    ),
+    /output length|expanded|larger/i,
+  );
+
+  const sameLengthWrongHash = new Map(manifest);
+  sameLengthWrongHash.set('package.json', {
+    byteLength: Buffer.byteLength(files['package.json']),
+    sha256: '0'.repeat(64),
+  });
+  assert.throws(
+    () => assertFf132SourceArchiveBuffer(buildSourceZip(entries), sameLengthWrongHash),
+    /hash changed/,
+  );
 });
 
 test('source-archive orchestration installs the clean Git tree before exact byte comparison', async () => {
@@ -1014,7 +1075,7 @@ test('manual scheduler evidence correlates one accepted completion before the ne
       lastAttemptMilliseconds: triggerStartedMilliseconds + 750,
     },
     beforeAutomationMilliseconds: triggerStartedMilliseconds - 30_000,
-    afterAutomationMilliseconds: triggerStartedMilliseconds + 1_500,
+    afterAutomationMarker: draftAutomationMarker(triggerStartedMilliseconds + 1_500),
     triggerStartedMilliseconds,
     maximumCompletionMilliseconds,
     requestLogs: [requestLog],
@@ -1037,18 +1098,18 @@ test('manual scheduler evidence correlates one accepted completion before the ne
     },
     {
       ...input,
-      afterAutomationMilliseconds: input.beforeAutomationMilliseconds,
+      afterAutomationMarker: draftAutomationMarker(input.beforeAutomationMilliseconds),
     },
     {
       ...input,
-      afterAutomationMilliseconds: maximumCompletionMilliseconds + 1,
+      afterAutomationMarker: draftAutomationMarker(maximumCompletionMilliseconds + 1),
     },
     {
       ...input,
       afterScheduler: {
         lastAttemptMilliseconds: triggerStartedMilliseconds + 10_000,
       },
-      afterAutomationMilliseconds: triggerStartedMilliseconds + 1_500,
+      afterAutomationMarker: draftAutomationMarker(triggerStartedMilliseconds + 1_500),
     },
     {
       ...input,
@@ -1068,11 +1129,130 @@ test('manual scheduler evidence correlates one accepted completion before the ne
         labels: { 'firebase-functions-hash': '0'.repeat(40) },
       }],
     },
+    {
+      ...input,
+      afterAutomationMarker: draftAutomationMarker(
+        triggerStartedMilliseconds + 1_500,
+        { status: 'partial-error', failedDraftCount: 1 },
+      ),
+    },
+    {
+      ...input,
+      afterAutomationMarker: draftAutomationMarker(
+        triggerStartedMilliseconds + 1_500,
+        { picksMade: 1 },
+      ),
+    },
   ];
 
   for (const invalid of invalidCases) {
     assert.throws(() => assertFf132ManualSchedulerCompletion(invalid));
   }
+});
+
+test('Draft automation markers require one successful zero-pick fixture scan', () => {
+  const triggerStartedMilliseconds = Date.UTC(2026, 8, 9, 20, 0, 10);
+  const markerAt = triggerStartedMilliseconds + 1_500;
+  const window = {
+    priorLastRunMilliseconds: triggerStartedMilliseconds - 30_000,
+    triggerStartedMilliseconds,
+    maximumCompletionMilliseconds: triggerStartedMilliseconds + 40_000,
+  };
+  assert.equal(
+    assertFf132DraftAutomationSuccessMarker(draftAutomationMarker(markerAt), window),
+    markerAt,
+  );
+
+  for (const overrides of [
+    { schemaVersion: 2 },
+    { status: 'partial-error', failedDraftCount: 1 },
+    { activeDraftCount: 0 },
+    { activeDraftCount: 2 },
+    { picksMade: 1 },
+    { failedDraftCount: 1 },
+    { failures: [{ message: 'private' }] },
+    { durationMilliseconds: -1 },
+    { durationMilliseconds: 540_001 },
+    { durationMilliseconds: 1.5 },
+    { lastRunAt: new Date(window.priorLastRunMilliseconds).toISOString() },
+    { lastRunAt: new Date(window.maximumCompletionMilliseconds + 1).toISOString() },
+  ]) {
+    assert.throws(() => assertFf132DraftAutomationSuccessMarker(
+      draftAutomationMarker(markerAt, overrides),
+      window,
+    ));
+  }
+});
+
+test('serialized duplicate Scheduler logs map exactly to disjoint successful probe windows', () => {
+  const deployedFunction = assertFf132StagingFunctionInventory(
+    deployedFunctionInventory(),
+  ).find(({ name }) => name === 'runScheduledDraftAutomation');
+  const firstTrigger = Date.UTC(2026, 8, 9, 20, 0, 10);
+  const probes = [
+    {
+      triggerStartedMilliseconds: firstTrigger,
+      afterAutomationMilliseconds: firstTrigger + 2_000,
+    },
+    {
+      triggerStartedMilliseconds: firstTrigger + 3_000,
+      afterAutomationMilliseconds: firstTrigger + 5_000,
+    },
+  ];
+  const schedulerLog = (timestamp, overrides = {}) => {
+    const entry = cloudRunRequestLog(deployedFunction, 200, timestamp);
+    entry.httpRequest.userAgent =
+      'Google-Cloud-Scheduler; (+https://cloud.google.com/scheduler)';
+    return Object.assign(entry, overrides);
+  };
+  const entries = [
+    schedulerLog(firstTrigger + 1_000),
+    schedulerLog(firstTrigger + 4_000),
+  ];
+  const options = {
+    deployedFunction,
+    minimumTimestamp: firstTrigger - 2_000,
+    maximumTimestamp: firstTrigger + 7_000,
+    probes,
+  };
+
+  assert.deepEqual(assertFf132DuplicateSchedulerRequestLogs(entries, options), [
+    firstTrigger + 1_000,
+    firstTrigger + 4_000,
+  ]);
+  assert.throws(() => assertFf132DuplicateSchedulerRequestLogs(
+    [entries[0]],
+    options,
+  ));
+  assert.throws(() => assertFf132DuplicateSchedulerRequestLogs(
+    [entries[0], schedulerLog(firstTrigger + 4_000, {
+      labels: { 'firebase-functions-hash': '0'.repeat(40) },
+    })],
+    options,
+  ));
+  const wrongStatus = structuredClone(entries);
+  wrongStatus[1].httpRequest.status = 500;
+  assert.throws(() => assertFf132DuplicateSchedulerRequestLogs(wrongStatus, options));
+  const outsideWindow = structuredClone(entries);
+  outsideWindow[1].timestamp = new Date(firstTrigger + 7_001).toISOString();
+  assert.throws(() => assertFf132DuplicateSchedulerRequestLogs(outsideWindow, {
+    ...options,
+    maximumTimestamp: firstTrigger + 8_000,
+  }));
+  assert.throws(() => assertFf132DuplicateSchedulerRequestLogs(entries, {
+    ...options,
+    probes: [probes[0], {
+      triggerStartedMilliseconds: firstTrigger + 1_500,
+      afterAutomationMilliseconds: firstTrigger + 5_000,
+    }],
+  }));
+});
+
+test('absolute Draft-open safety timeouts cannot extend through the deadline', () => {
+  assert.equal(boundFf132TimeoutBeforeDeadline(60_000, 150_000, 100_000), 50_000);
+  assert.equal(boundFf132TimeoutBeforeDeadline(10_000, 150_000, 100_000), 10_000);
+  assert.throws(() => boundFf132TimeoutBeforeDeadline(60_000, 100_000, 100_000));
+  assert.throws(() => boundFf132TimeoutBeforeDeadline(0, 150_000, 100_000));
 });
 
 test('the scheduler configuration must target the exact verified Function identity and path', () => {
@@ -1208,9 +1388,11 @@ test('scheduled-start task identities are deterministic and cleanup accepts only
   const firstStart = 1_789_000_000_000;
   const secondStart = firstStart + 60_000;
   const thirdStart = secondStart + 60_000;
+  const fourthStart = thirdStart + 60_000;
   const firstId = buildFf132ScheduledDraftStartTaskId(firstStart);
   const secondId = buildFf132ScheduledDraftStartTaskId(secondStart);
   const thirdId = buildFf132ScheduledDraftStartTaskId(thirdStart);
+  const fourthId = buildFf132ScheduledDraftStartTaskId(fourthStart);
   const task = (taskId) => ({
     name:
       `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/queues/` +
@@ -1224,7 +1406,7 @@ test('scheduled-start task identities are deterministic and cleanup accepts only
   assert.throws(() => buildFf132ScheduledDraftStartTaskId(1.5));
   assert.throws(() => buildFf132ScheduledDraftStartTaskId(Number.MAX_SAFE_INTEGER + 1));
 
-  const allowed = new Set([firstId, secondId, thirdId]);
+  const allowed = new Set([firstId, secondId, thirdId, fourthId]);
   assert.deepEqual(assertFf132OwnedClockQueueTasks([], allowed), []);
   assert.throws(() => assertFf132OwnedClockQueueTasks([], new Set()));
   assert.deepEqual(
@@ -1244,12 +1426,19 @@ test('scheduled-start task identities are deterministic and cleanup accepts only
     allowed,
   ), /identity is malformed/);
   assert.throws(() => assertFf132OwnedClockQueueTasks(
+    [{ ...task(firstId), name: task(firstId).name.replace(
+      FF132_DRAFT_CLOCK_TASK_QUEUE,
+      FF132_AVAILABILITY_TASK_QUEUE,
+    ) }],
+    allowed,
+  ), /full resource identity changed/);
+  assert.throws(() => assertFf132OwnedClockQueueTasks(
     Array.from({ length: 11 }, () => task(firstId)),
     allowed,
   ), /unexpectedly large/);
   assert.throws(() => assertFf132OwnedClockQueueTasks(
     [],
-    new Set([firstId, secondId, thirdId, 'f'.repeat(40)]),
+    new Set([firstId, secondId, thirdId, fourthId, 'f'.repeat(40)]),
   ));
 });
 
@@ -1387,51 +1576,158 @@ test('one expected task identity is required before inspecting its first failed 
   assert.throws(() => assertFf132SingleQueueTask([
     { ...task, name: task.name.replace(taskId, 'e'.repeat(40)) },
   ], taskId));
+  assert.throws(() => assertFf132SingleQueueTask([
+    {
+      ...task,
+      name: task.name.replace(FF132_AVAILABILITY_TASK_QUEUE, FF132_PROJECTION_TASK_QUEUE),
+    },
+  ], taskId), /full resource identity changed/);
   assert.throws(() => assertFf132SingleQueueTask([task, task], taskId));
 });
 
-test('the exact first failed task attempt proves one response and bounded retry scheduling', () => {
+test('the exact first failed task attempt correlates its deterministic task, 500, and lease', () => {
   const taskId = 'f'.repeat(40);
   const runStartedAt = Date.UTC(2026, 8, 9, 20, 0, 0);
   const createAt = runStartedAt + 1_000;
-  const dispatchAt = createAt + 1_000;
-  const responseAt = dispatchAt + 500;
-  const scheduleAt = responseAt + 30_000;
+  const failedRequestStartedAt = runStartedAt + 3_000;
+  const failedRequestLatency = 1_250;
+  const failedResponseAt = failedRequestStartedAt + failedRequestLatency;
+  const leaseEventAt = failedRequestStartedAt + 500;
+  const deployedFunction = assertFf132StagingFunctionInventory(
+    deployedFunctionInventory(),
+  ).find(({ name }) => name === FF132_AVAILABILITY_TASK_QUEUE);
+  const failedRequestLog = cloudRunRequestLog(
+    deployedFunction,
+    500,
+    failedRequestStartedAt,
+  );
+  failedRequestLog.httpRequest.latency = '1.250s';
   const task = {
     name:
       `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/queues/` +
       `${FF132_AVAILABILITY_TASK_QUEUE}/tasks/${taskId}`,
     createTime: new Date(createAt).toISOString(),
-    scheduleTime: new Date(scheduleAt).toISOString(),
     dispatchCount: 1,
-    responseCount: 1,
-    firstAttempt: { dispatchTime: new Date(dispatchAt).toISOString() },
-    lastAttempt: {
-      dispatchTime: new Date(dispatchAt).toISOString(),
-      responseTime: new Date(responseAt).toISOString(),
-      responseStatus: { code: 13 },
-    },
+    responseCount: 0,
+  };
+  const input = {
+    task,
+    expectedTaskId: taskId,
+    runStartedAt,
+    leaseEventMilliseconds: leaseEventAt,
+    requestLogs: [failedRequestLog],
+    deployedFunction,
+    minimumTimestamp: failedRequestStartedAt - 1_000,
+    maximumTimestamp: failedResponseAt + 1_000,
   };
 
-  assert.deepEqual(assertFf132FirstFailedTaskAttempt(task, taskId, runStartedAt), {
+  assert.deepEqual(assertFf132FirstFailedTaskAttempt(input), {
     createMilliseconds: createAt,
-    scheduleMilliseconds: scheduleAt,
-    firstDispatchMilliseconds: dispatchAt,
-    lastResponseMilliseconds: responseAt,
+    failedRequestStartedMilliseconds: failedRequestStartedAt,
+    failedResponseMilliseconds: failedResponseAt,
   });
+  assert.doesNotThrow(() => assertFf132FirstFailedTaskAttempt({
+    ...input,
+    task: {
+      name: task.name,
+      createTime: task.createTime,
+    },
+  }));
+  for (const responseCount of [0, 1]) {
+    assert.doesNotThrow(() => assertFf132FirstFailedTaskAttempt({
+      ...input,
+      task: {
+        ...task,
+        dispatchCount: 0,
+        responseCount,
+        scheduleTime: 'not-required',
+        firstAttempt: null,
+        lastAttempt: null,
+      },
+    }));
+  }
+  for (const [latency, expectedLatencyMilliseconds] of [
+    ['0s', 0],
+    ['0.000000001s', 0.000001],
+    ['1.000000000s', 1_000],
+    ['540s', 540_000],
+  ]) {
+    const valid = structuredClone(failedRequestLog);
+    valid.httpRequest.latency = latency;
+    assert.equal(assertFf132FirstFailedTaskAttempt({
+      ...input,
+      leaseEventMilliseconds: failedRequestStartedAt,
+      requestLogs: [valid],
+    }).failedResponseMilliseconds, failedRequestStartedAt + expectedLatencyMilliseconds);
+  }
 
-  for (const mutate of [
+  for (const mutateTask of [
+    (copy) => { copy.dispatchCount = -1; },
     (copy) => { copy.dispatchCount = 2; },
-    (copy) => { copy.responseCount = 0; },
-    (copy) => { copy.lastAttempt.responseStatus.code = 0; },
-    (copy) => { copy.lastAttempt.dispatchTime = new Date(dispatchAt + 1).toISOString(); },
-    (copy) => { copy.scheduleTime = new Date(responseAt + 24_999).toISOString(); },
-    (copy) => { copy.scheduleTime = new Date(responseAt + 300_001).toISOString(); },
+    (copy) => { copy.dispatchCount = '1'; },
+    (copy) => { copy.responseCount = -1; },
+    (copy) => { copy.responseCount = 2; },
+    (copy) => { copy.responseCount = '1'; },
+    (copy) => { copy.createTime = new Date(runStartedAt - 5_001).toISOString(); },
+    (copy) => { copy.createTime = new Date(failedRequestStartedAt + 5_001).toISOString(); },
+    (copy) => { delete copy.createTime; },
     (copy) => { copy.name = copy.name.replace(taskId, 'e'.repeat(40)); },
   ]) {
     const invalid = structuredClone(task);
-    mutate(invalid);
-    assert.throws(() => assertFf132FirstFailedTaskAttempt(invalid, taskId, runStartedAt));
+    mutateTask(invalid);
+    assert.throws(() => assertFf132FirstFailedTaskAttempt({ ...input, task: invalid }));
+  }
+
+  for (const mutateLog of [
+    (copy) => { copy.resource.labels.revision_name = 'wrong-revision-00001-abc'; },
+    (copy) => { copy.labels['firebase-functions-hash'] = '0'.repeat(40); },
+    (copy) => { copy.httpRequest.userAgent = 'curl/8.0'; },
+    (copy) => { copy.httpRequest.requestMethod = 'GET'; },
+    (copy) => { copy.httpRequest.status = 204; },
+  ]) {
+    const invalid = structuredClone(failedRequestLog);
+    mutateLog(invalid);
+    assert.throws(() => assertFf132FirstFailedTaskAttempt({
+      ...input,
+      requestLogs: [invalid],
+    }));
+  }
+
+  assert.throws(() => assertFf132FirstFailedTaskAttempt({
+    ...input,
+    requestLogs: [failedRequestLog, structuredClone(failedRequestLog)],
+  }));
+
+  for (const latency of [
+    null,
+    1,
+    '',
+    '-1s',
+    '.5s',
+    '1.s',
+    '01s',
+    '1e3s',
+    '1.0000000000s',
+    '540.000000001s',
+    '541s',
+    ' 1s',
+  ]) {
+    const invalid = structuredClone(failedRequestLog);
+    invalid.httpRequest.latency = latency;
+    assert.throws(() => assertFf132FirstFailedTaskAttempt({
+      ...input,
+      requestLogs: [invalid],
+    }), String(latency));
+  }
+
+  for (const leaseEventMilliseconds of [
+    failedRequestStartedAt - 2_001,
+    failedResponseAt + 2_001,
+  ]) {
+    assert.throws(() => assertFf132FirstFailedTaskAttempt({
+      ...input,
+      leaseEventMilliseconds,
+    }));
   }
 });
 
@@ -1444,7 +1740,7 @@ test('request and application logs correlate only the verified revision and sour
   const entries = [
     cloudRunRequestLog(deployedFunction, 500, firstAt),
     noise,
-    cloudRunRequestLog(deployedFunction, 200, secondAt),
+    cloudRunRequestLog(deployedFunction, 204, secondAt),
   ];
 
   assert.deepEqual(assertFf132RequestLogs(entries, {
@@ -1452,7 +1748,7 @@ test('request and application logs correlate only the verified revision and sour
     userAgent: 'Google-Cloud-Tasks',
     minimumTimestamp: firstAt - 1_000,
     maximumTimestamp: secondAt + 1_000,
-    expectedStatuses: [500, 200],
+    expectedStatuses: [500, 204],
   }), [firstAt, secondAt]);
   assert.throws(() => assertFf132RequestLogs(entries, {
     deployedFunction,
@@ -1460,6 +1756,67 @@ test('request and application logs correlate only the verified revision and sour
     minimumTimestamp: firstAt - 1_000,
     maximumTimestamp: secondAt + 1_000,
     expectedStatuses: [200],
+  }));
+
+  const firstResponseAt = firstAt + 500;
+  assert.equal(assertFf132RetryRequestLogs(entries, {
+    deployedFunction,
+    minimumTimestamp: firstAt - 1_000,
+    maximumTimestamp: secondAt + 1_000,
+    firstRequestStartedMilliseconds: firstAt,
+    firstResponseMilliseconds: firstResponseAt,
+  }), secondAt - firstResponseAt);
+
+  for (const retryDelayMilliseconds of [25_000, 300_000]) {
+    const retryAt = firstResponseAt + retryDelayMilliseconds;
+    assert.equal(assertFf132RetryRequestLogs([
+      cloudRunRequestLog(deployedFunction, 500, firstAt),
+      cloudRunRequestLog(deployedFunction, 204, retryAt),
+    ], {
+      deployedFunction,
+      minimumTimestamp: firstAt - 1_000,
+      maximumTimestamp: retryAt + 1_000,
+      firstRequestStartedMilliseconds: firstAt,
+      firstResponseMilliseconds: firstResponseAt,
+    }), retryDelayMilliseconds);
+  }
+
+  for (const retryDelayMilliseconds of [24_999, 300_001]) {
+    const retryAt = firstResponseAt + retryDelayMilliseconds;
+    assert.throws(() => assertFf132RetryRequestLogs([
+      cloudRunRequestLog(deployedFunction, 500, firstAt),
+      cloudRunRequestLog(deployedFunction, 204, retryAt),
+    ], {
+      deployedFunction,
+      minimumTimestamp: firstAt - 1_000,
+      maximumTimestamp: retryAt + 1_000,
+      firstRequestStartedMilliseconds: firstAt,
+      firstResponseMilliseconds: firstResponseAt,
+    }));
+  }
+  assert.throws(() => assertFf132RetryRequestLogs(entries, {
+    deployedFunction,
+    minimumTimestamp: firstAt - 1_000,
+    maximumTimestamp: secondAt + 1_000,
+    firstRequestStartedMilliseconds: firstAt + 1,
+    firstResponseMilliseconds: firstResponseAt,
+  }));
+  assert.throws(() => assertFf132RetryRequestLogs(entries, {
+    deployedFunction,
+    minimumTimestamp: firstAt - 1_000,
+    maximumTimestamp: secondAt + 1_000,
+    firstRequestStartedMilliseconds: firstAt,
+    firstResponseMilliseconds: firstAt - 1,
+  }));
+  assert.throws(() => assertFf132RetryRequestLogs([
+    cloudRunRequestLog(deployedFunction, 500, firstAt),
+    cloudRunRequestLog(deployedFunction, 200, secondAt),
+  ], {
+    deployedFunction,
+    minimumTimestamp: firstAt - 1_000,
+    maximumTimestamp: secondAt + 1_000,
+    firstRequestStartedMilliseconds: firstAt,
+    firstResponseMilliseconds: firstResponseAt,
   }));
 
   const completion = {
@@ -1471,15 +1828,30 @@ test('request and application logs correlate only the verified revision and sour
     },
     labels: { 'firebase-functions-hash': deployedFunction.sourceHash },
     jsonPayload: {
-      message: 'Automatic Draft availability preparation completed',
+      message: 'Automatic Draft availability preparation completed.',
       status: 'already-current',
     },
   };
   const completionNoise = structuredClone(completion);
   completionNoise.labels['firebase-functions-hash'] = '0'.repeat(40);
+  const textCompletion = {
+    resource: {
+      labels: {
+        service_name: deployedFunction.serviceName,
+        revision_name: deployedFunction.revision,
+      },
+    },
+    labels: { 'firebase-functions-hash': deployedFunction.sourceHash },
+    textPayload:
+      "Automatic Draft availability preparation completed. { status: 'already-current' }",
+  };
 
   assert.equal(assertFf132AlreadyCurrentCompletionLog(
     [completionNoise, completion],
+    deployedFunction,
+  ), true);
+  assert.equal(assertFf132AlreadyCurrentCompletionLog(
+    [completionNoise, textCompletion],
     deployedFunction,
   ), true);
   assert.throws(() => assertFf132AlreadyCurrentCompletionLog([], deployedFunction));
@@ -1487,6 +1859,44 @@ test('request and application logs correlate only the verified revision and sour
     [completion, structuredClone(completion)],
     deployedFunction,
   ));
+  assert.throws(() => assertFf132AlreadyCurrentCompletionLog(
+    [completion, textCompletion],
+    deployedFunction,
+  ));
+
+  for (const invalid of [
+    {
+      ...structuredClone(completion),
+      jsonPayload: {
+        message: 'Automatic Draft availability preparation completed.',
+      },
+    },
+    {
+      ...structuredClone(textCompletion),
+      textPayload:
+        "Automatic Draft availability preparation completed. { status: 'already-currently' }",
+    },
+    {
+      ...structuredClone(textCompletion),
+      textPayload: "Unrelated operation completed { status: 'already-current' }",
+    },
+    {
+      ...structuredClone(textCompletion),
+      textPayload:
+        "prefix Automatic Draft availability preparation completed. { status: 'already-current' }",
+    },
+    {
+      ...structuredClone(textCompletion),
+      textPayload:
+        "Automatic Draft availability preparation completed. { status: 'already-current' } suffix",
+    },
+    completionNoise,
+  ]) {
+    assert.throws(() => assertFf132AlreadyCurrentCompletionLog(
+      [invalid],
+      deployedFunction,
+    ));
+  }
 });
 
 test('strict schema-2 availability permits a complete zero-or-partial ESPN feed', () => {
@@ -1943,6 +2353,22 @@ test('an ambiguous atomic Draft and availability commit is recognized for safe c
     draftMutated: true,
     availabilityOverlayOwned: true,
   });
+  const parkedStartMilliseconds = initialStartAt.getTime() + 7 * 24 * 60 * 60 * 1_000;
+  assert.deepEqual(reconcileFf132FixtureOwnership({
+    ...ownershipInput,
+    draft: {
+      ...ownershipInput.draft,
+      scheduledStartAt: Timestamp.fromMillis(parkedStartMilliseconds),
+      clockUpdatedBy: 'ff132-staging-evidence-availability-park',
+    },
+    plannedScheduledStartMilliseconds: new Set([
+      initialStartAt.getTime(),
+      parkedStartMilliseconds,
+    ]),
+  }), {
+    draftMutated: true,
+    availabilityOverlayOwned: true,
+  });
   assert.throws(() => reconcileFf132FixtureOwnership({
     ...ownershipInput,
     draft: {
@@ -2296,7 +2722,7 @@ test('public evidence rejects untrusted revisions, strings, timings, counts, and
   }
 });
 
-test('CLI failures expose only a bounded code, checkpoint, and cleanup state', async () => {
+test('CLI failures expose only bounded checkpoint, cleanup, and failure-detail enums', async () => {
   const stdout = [];
   const stderr = [];
   const rawSecret = 'private-account-task-request-hash';
@@ -2312,6 +2738,7 @@ test('CLI failures expose only a bounded code, checkpoint, and cleanup state', a
     errorCode: 'FF132_EVIDENCE_FAILED',
     checkpoint: 'preflight',
     cleanupState: 'not-required',
+    failureDetail: 'unclassified',
   }]);
   assert.equal([...stdout, ...stderr].join('\n').includes(rawSecret), false);
 
@@ -2319,7 +2746,11 @@ test('CLI failures expose only a bounded code, checkpoint, and cleanup state', a
   stderr.length = 0;
   const boundedExit = await runFf132EvidenceCli({
     runner: async () => {
-      throw new Ff132PublicEvidenceError('projection-boundary', 'cleanup-required');
+      throw new Ff132PublicEvidenceError(
+        'availability-boundary',
+        'cleanup-required',
+        'availability-failure-log',
+      );
     },
     stdout: (line) => stdout.push(line),
     stderr: (line) => stderr.push(line),
@@ -2327,15 +2758,78 @@ test('CLI failures expose only a bounded code, checkpoint, and cleanup state', a
   assert.equal(boundedExit, 1);
   assert.deepEqual(JSON.parse(stderr[0]), {
     errorCode: 'FF132_EVIDENCE_FAILED',
-    checkpoint: 'projection-boundary',
+    checkpoint: 'availability-boundary',
     cleanupState: 'cleanup-required',
+    failureDetail: 'availability-failure-log',
   });
 
-  const sanitized = new Ff132PublicEvidenceError('private-checkpoint', 'private-cleanup');
+  const allowedDetails = [
+    'unclassified',
+    'fixture-ownership',
+    'availability-boundary-state',
+    'availability-scheduler-proof',
+    'availability-task-visible',
+    'availability-lease-marker',
+    'availability-failure-log',
+    'availability-restored',
+    'availability-draft-parked',
+    'availability-duplicate-probe-1',
+    'availability-duplicate-probe-2',
+    'availability-retry-correlation',
+    'near-zero-fail-closed',
+    'projection-scheduler-proof',
+    'projection-request-validation',
+    'projection-snapshot-validation',
+    'duplicate-convergence',
+    'cleanup-reconciliation',
+  ];
+  for (const failureDetail of allowedDetails) {
+    const bounded = new Ff132PublicEvidenceError(
+      'availability-boundary',
+      'cleanup-required',
+      failureDetail,
+    );
+    assert.deepEqual(bounded.toJSON(), {
+      errorCode: 'FF132_EVIDENCE_FAILED',
+      checkpoint: 'availability-boundary',
+      cleanupState: 'cleanup-required',
+      failureDetail,
+    });
+    assert.deepEqual(Object.keys(bounded.toJSON()), [
+      'errorCode',
+      'checkpoint',
+      'cleanupState',
+      'failureDetail',
+    ]);
+  }
+
+  for (const invalidDetail of [
+    rawSecret,
+    'Availability-Failure-Log',
+    '',
+    null,
+    { rawError: rawSecret },
+  ]) {
+    const sanitizedDetail = new Ff132PublicEvidenceError(
+      'availability-boundary',
+      'cleanup-required',
+      invalidDetail,
+    );
+    assert.equal(sanitizedDetail.failureDetail, 'unclassified');
+    assert.equal(sanitizedDetail.message.includes(rawSecret), false);
+    assert.equal(JSON.stringify(sanitizedDetail).includes(rawSecret), false);
+  }
+
+  const sanitized = new Ff132PublicEvidenceError(
+    'private-checkpoint',
+    'private-cleanup',
+    rawSecret,
+  );
   assert.deepEqual(sanitized.toJSON(), {
     errorCode: 'FF132_EVIDENCE_FAILED',
     checkpoint: 'preflight',
     cleanupState: 'not-required',
+    failureDetail: 'unclassified',
   });
 });
 
@@ -2391,6 +2885,23 @@ test('runner source has no deployment command, Production target, or Projection 
     'drainFf132OwnedClockQueueTasks',
     'assertMaintenanceCheckpoint',
     'runFf132CleanupStages',
+    "failureDetail = assertFailureDetail('fixture-ownership')",
+    "failureDetail = assertFailureDetail('availability-boundary-state')",
+    "failureDetail = assertFailureDetail('availability-scheduler-proof')",
+    "failureDetail = assertFailureDetail('availability-task-visible')",
+    "failureDetail = assertFailureDetail('availability-lease-marker')",
+    "failureDetail = assertFailureDetail('availability-failure-log')",
+    "failureDetail = assertFailureDetail('availability-restored')",
+    "failureDetail = assertFailureDetail('availability-draft-parked')",
+    "failureDetail = assertFailureDetail('availability-duplicate-probe-1')",
+    "failureDetail = assertFailureDetail('availability-duplicate-probe-2')",
+    "failureDetail = assertFailureDetail('availability-retry-correlation')",
+    "failureDetail = assertFailureDetail('near-zero-fail-closed')",
+    "failureDetail = assertFailureDetail('projection-scheduler-proof')",
+    "failureDetail = assertFailureDetail('projection-request-validation')",
+    "failureDetail = assertFailureDetail('projection-snapshot-validation')",
+    "failureDetail = assertFailureDetail('duplicate-convergence')",
+    "failureDetail = assertFailureDetail('cleanup-reconciliation')",
     "['ci', '--ignore-scripts', '--no-audit', '--no-fund']",
     'cwd: cleanFunctionsRoot',
   ]) {
@@ -2426,6 +2937,55 @@ test('runner source has no deployment command, Production target, or Projection 
   assert.ok(
     initialPrepareIndex > initialDraftOwnershipIndex,
     'Cleanup ownership must be conservative before an ambiguous atomic commit response.',
+  );
+  const leaseMarkerIndex = availabilityBoundary.indexOf(
+    "failureDetail = assertFailureDetail('availability-lease-marker')",
+  );
+  const firstDuplicateProbeIndex = availabilityBoundary.indexOf(
+    "failureDetail = assertFailureDetail('availability-duplicate-probe-1')",
+    leaseMarkerIndex,
+  );
+  const secondDuplicateProbeIndex = availabilityBoundary.indexOf(
+    "failureDetail = assertFailureDetail('availability-duplicate-probe-2')",
+    firstDuplicateProbeIndex,
+  );
+  const parkOwnershipIndex = availabilityBoundary.indexOf(
+    'plannedScheduledStartMilliseconds.add(safetyParkStartAt.getTime())',
+    secondDuplicateProbeIndex,
+  );
+  const atomicParkRestoreIndex = availabilityBoundary.indexOf(
+    'await parkDraftAndRestoreAvailabilityWithCas({',
+    parkOwnershipIndex,
+  );
+  const postRestoreMaintenanceIndex = availabilityBoundary.indexOf(
+    'await assertMaintenanceCheckpoint({',
+    atomicParkRestoreIndex,
+  );
+  const failureLogIndex = availabilityBoundary.indexOf(
+    "failureDetail = assertFailureDetail('availability-failure-log')",
+  );
+  assert.ok(leaseMarkerIndex >= 0);
+  assert.ok(
+    firstDuplicateProbeIndex > leaseMarkerIndex &&
+      secondDuplicateProbeIndex > firstDuplicateProbeIndex,
+    'The two duplicate probes must be serialized after the active-lease marker.',
+  );
+  assert.ok(
+    parkOwnershipIndex > secondDuplicateProbeIndex &&
+      atomicParkRestoreIndex > parkOwnershipIndex,
+    'The safe parked schedule must be conservatively owned before the atomic transition.',
+  );
+  assert.equal(
+    availabilityBoundary
+      .slice(secondDuplicateProbeIndex, atomicParkRestoreIndex)
+      .includes('await assertMaintenanceCheckpoint({'),
+    false,
+    'No unbounded maintenance read may intervene before the atomic park-and-restore.',
+  );
+  assert.ok(
+    postRestoreMaintenanceIndex > atomicParkRestoreIndex &&
+      failureLogIndex > postRestoreMaintenanceIndex,
+    'The Draft must be parked and availability restored before maintenance or log waits.',
   );
 
   const clockDrainStart = source.indexOf('async function drainFf132OwnedClockQueueTasks(');
@@ -2464,12 +3024,75 @@ test('runner source has no deployment command, Production target, or Projection 
   const stoppedIndex = nearZero.indexOf(
     'assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, rescheduledStartAt)',
   );
+  const restoreDeadlineIndex = nearZero.indexOf(
+    'boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds)',
+  );
   const restoreIndex = nearZero.indexOf('await restoreAvailabilityWithCas({');
   assert.ok(nearZeroStart >= 0 && nearZeroEnd > nearZeroStart);
   assert.ok(leaseIndex >= 0, 'The near-zero lease must cover the run plus cleanup reserve.');
   assert.ok(rescheduleIndex > leaseIndex, 'The near-zero Draft must be rescheduled while leased.');
   assert.ok(stoppedIndex > rescheduleIndex, 'The rescheduled Draft must be proven stopped.');
-  assert.ok(restoreIndex > stoppedIndex, 'Availability may restore only after the safe schedule.');
+  assert.ok(
+    restoreDeadlineIndex > stoppedIndex,
+    'The absolute T-10 deadline must be rechecked after rescheduling and before restore.',
+  );
+  assert.ok(
+    restoreIndex > restoreDeadlineIndex,
+    'Availability may restore only after the safe schedule and deadline recheck.',
+  );
+
+  const finalPhaseStart = source.indexOf(
+    'const finalEvidenceSafetyDeadlineMilliseconds =',
+    nearZeroStart,
+  );
+  const finalPhaseEnd = source.indexOf('provisionalEvidence = {', finalPhaseStart);
+  const finalPhase = source.slice(finalPhaseStart, finalPhaseEnd);
+  const finalOwnershipIndex = finalPhase.indexOf('finalScheduleActive = true;');
+  const absoluteDeadlineIndex = finalPhase.indexOf(
+    'absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds',
+  );
+  const finalParkIndex = finalPhase.lastIndexOf(
+    'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',
+  );
+  const finalMaintenanceIndex = finalPhase.lastIndexOf(
+    'await assertMaintenanceCheckpoint({',
+  );
+  assert.ok(finalPhaseStart > nearZeroStart && finalPhaseEnd > finalPhaseStart);
+  assert.match(
+    source,
+    /const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 10 \* 60 \* 1000;/,
+    'Final evidence must reserve ten minutes for fail-closed parking.',
+  );
+  assert.ok(finalOwnershipIndex >= 0);
+  assert.ok(
+    absoluteDeadlineIndex > finalOwnershipIndex,
+    'Every final manual Scheduler probe must honor the pre-open safety deadline.',
+  );
+  assert.equal(
+    finalPhase.match(
+      /absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds/g,
+    )?.length,
+    5,
+    'All five final-phase manual Scheduler probes require the absolute deadline.',
+  );
+  assert.ok(
+    finalParkIndex > absoluteDeadlineIndex && finalMaintenanceIndex > finalParkIndex,
+    'The final schedule must be parked before post-evidence maintenance work.',
+  );
+  const cleanupFinallyIndex = source.indexOf('} finally {', finalPhaseEnd);
+  const fallbackParkIndex = source.indexOf(
+    'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',
+    cleanupFinallyIndex,
+  );
+  const ownershipReconciliationIndex = source.indexOf(
+    'let ownershipReconciled = false;',
+    cleanupFinallyIndex,
+  );
+  assert.ok(
+    fallbackParkIndex > cleanupFinallyIndex &&
+      ownershipReconciliationIndex > fallbackParkIndex,
+    'Failure cleanup must park the final schedule before ownership reconciliation.',
+  );
 
   for (const forbidden of [
     'nhl-fantasy-app-ab673',
