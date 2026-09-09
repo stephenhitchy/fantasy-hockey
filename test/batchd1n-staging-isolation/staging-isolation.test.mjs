@@ -9,6 +9,9 @@ import {
 } from '../../scripts/capacity/prepare-d1n-staging-hosting.mjs';
 import {
   assertD1nStagingSeedSafety,
+  assertD1nStagingFixtureResetScope,
+  clearBoundedD1nStagingDraftPicks,
+  D1N_STAGING_MAX_RESIDUAL_DRAFT_PICKS,
   D1N_STAGING_SEED_ACKNOWLEDGEMENT,
 } from '../../scripts/capacity/seed-d1n-staging-fixture.mjs';
 
@@ -181,4 +184,136 @@ test('staging fixture writes require exact project, acknowledgement, and secret 
     }),
     /must be an integer from 1 to 10080/,
   );
+});
+
+test('staging fixture validates and clears the exact Firestore scope before rotating Auth', async () => {
+  const seedSource = await read('scripts/capacity/seed-d1n-staging-fixture.mjs');
+  const seedImplementation = seedSource.slice(
+    seedSource.indexOf('export async function seedD1nStagingFixture'),
+  );
+  const existingUserReset = seedImplementation.indexOf(
+    'await clearBoundedD1nStagingDraftPicks(firestore, user.uid)',
+  );
+  const existingUserUpdate = seedImplementation.indexOf('await auth.updateUser');
+  const missingUserReset = seedImplementation.indexOf(
+    "await clearBoundedD1nStagingDraftPicks(firestore, '__missing-d1n-fixture-user__')",
+  );
+  const missingUserCreate = seedImplementation.indexOf('await auth.createUser');
+
+  assert.ok(existingUserReset >= 0);
+  assert.ok(existingUserReset < existingUserUpdate);
+  assert.ok(missingUserReset >= 0);
+  assert.ok(missingUserReset < missingUserCreate);
+});
+
+test('staging fixture reset is bounded to the exact synthetic league identity', () => {
+  const exactFixture = {
+    id: 'd1n-capacity-league',
+    name: 'D1N Capacity Fixture',
+    inviteCode: 'D1N100',
+    commissionerId: 'fixture-commissioner',
+    maxTeams: 10,
+    teamCount: 10,
+    scoringRulesVersion: 4,
+  };
+
+  assert.doesNotThrow(() => assertD1nStagingFixtureResetScope({
+    leagueExists: true,
+    leagueData: exactFixture,
+    commissionerId: 'fixture-commissioner',
+    residualDraftPickCount: 170,
+  }));
+  assert.doesNotThrow(() => assertD1nStagingFixtureResetScope({
+    leagueExists: false,
+    leagueData: null,
+    commissionerId: 'fixture-commissioner',
+    residualDraftPickCount: 0,
+  }));
+  assert.throws(() => assertD1nStagingFixtureResetScope({
+    leagueExists: true,
+    leagueData: { ...exactFixture, inviteCode: 'OTHER1' },
+    commissionerId: 'fixture-commissioner',
+    residualDraftPickCount: 1,
+  }), /exact synthetic fixture identity/);
+  assert.throws(() => assertD1nStagingFixtureResetScope({
+    leagueExists: false,
+    leagueData: null,
+    commissionerId: 'fixture-commissioner',
+    residualDraftPickCount: 1,
+  }), /without the exact synthetic league parent/);
+  assert.throws(() => assertD1nStagingFixtureResetScope({
+    leagueExists: true,
+    leagueData: exactFixture,
+    commissionerId: 'fixture-commissioner',
+    residualDraftPickCount: D1N_STAGING_MAX_RESIDUAL_DRAFT_PICKS + 1,
+  }), /refuses more than 250/);
+});
+
+test('staging reseed clears only bounded residual Draft picks and verifies cleanup', async () => {
+  const deletedRefs = [];
+  let pickReadCount = 0;
+  let committed = false;
+  const residualPicks = Array.from({ length: 170 }, (_, index) => ({
+    ref: { path: `leagues/d1n-capacity-league/draft/current/picks/pick-${index + 1}` },
+  }));
+  const firestore = {
+    doc(path) {
+      assert.equal(path, 'leagues/d1n-capacity-league');
+      return {
+        async get() {
+          return {
+            exists: true,
+            data: () => ({
+              id: 'd1n-capacity-league',
+              name: 'D1N Capacity Fixture',
+              inviteCode: 'D1N100',
+              commissionerId: 'fixture-commissioner',
+              maxTeams: 10,
+              teamCount: 10,
+              scoringRulesVersion: 4,
+            }),
+          };
+        },
+      };
+    },
+    collection(path) {
+      assert.equal(path, 'leagues/d1n-capacity-league/draft/current/picks');
+      return {
+        limit(limit) {
+          return {
+            async get() {
+              pickReadCount += 1;
+              if (pickReadCount === 1) {
+                assert.equal(limit, D1N_STAGING_MAX_RESIDUAL_DRAFT_PICKS + 1);
+                return { docs: residualPicks, empty: false };
+              }
+              assert.equal(limit, 1);
+              return { docs: [], empty: true };
+            },
+          };
+        },
+      };
+    },
+    batch() {
+      return {
+        delete(ref) {
+          deletedRefs.push(ref.path);
+        },
+        async commit() {
+          committed = true;
+        },
+      };
+    },
+  };
+
+  const deleted = await clearBoundedD1nStagingDraftPicks(
+    firestore,
+    'fixture-commissioner',
+  );
+
+  assert.equal(deleted, 170);
+  assert.equal(deletedRefs.length, 170);
+  assert.equal(new Set(deletedRefs).size, 170);
+  assert.equal(committed, true);
+  assert.equal(pickReadCount, 2);
 });
