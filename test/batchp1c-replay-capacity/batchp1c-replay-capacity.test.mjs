@@ -253,6 +253,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
         'src/shared/core/draft/draft-player-pool.service.ts',
         'src/shared/core/projection/team-schedule-input-completeness.util.ts',
+        // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
+        'src/shared/core/projection/team-schedule-request-pacing.util.ts',
   ]);
 
   assert.equal(
