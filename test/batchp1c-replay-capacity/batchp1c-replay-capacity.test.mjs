@@ -170,6 +170,10 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/draft-automation.ts',
     // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
     'src/draft-readiness.util.ts',
+    // FF1.31 adds isolated server-owned Draft input attestation and writes.
+    'src/shared/core/draft/draft-readiness-write.service.ts',
+    'src/shared/core/player/draft-availability-source-completeness.util.ts',
+    'src/shared/core/player/draft-availability-attestation-write.service.ts',
     'src/shared/core/draft/draft.models.ts',
     'package.json',
     'scripts/auth-security-baseline.cjs',

@@ -56,9 +56,14 @@ test('server preparation starts at the inclusive 20-minute boundary and remains 
   }), 'unavailable');
 });
 
-test('availability evidence fails closed when missing, future-dated, stale, or from another UTC day', () => {
+test('availability evidence uses bounded age across UTC midnight and rejects a mismatched source key', () => {
   const now = Date.parse('2026-10-06T23:59:00.000Z');
   const revision = 'a'.repeat(64);
+  const sourceAttempt = 'availability-attempt-1';
+  const attestation = {
+    draftReadinessSourceAttemptId: sourceAttempt,
+    refreshAttemptId: sourceAttempt,
+  };
 
   assert.equal(DRAFT_AVAILABILITY_MAX_AGE_MILLISECONDS, 24 * 60 * 60 * 1000);
   assert.equal(isDraftAvailabilityEvidenceUsable({
@@ -66,6 +71,8 @@ test('availability evidence fails closed when missing, future-dated, stale, or f
     lastSuccessfulAt: '2026-10-06T00:00:00.000Z',
     lastDailySyncKey: '2026-10-06',
     status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
     nowMilliseconds: now,
   }), true);
   assert.equal(isDraftAvailabilityEvidenceUsable({
@@ -73,6 +80,8 @@ test('availability evidence fails closed when missing, future-dated, stale, or f
     lastSuccessfulAt: new Date(now - DRAFT_AVAILABILITY_MAX_AGE_MILLISECONDS - 1).toISOString(),
     lastDailySyncKey: '2026-10-06',
     status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
     nowMilliseconds: now,
   }), false);
   assert.equal(isDraftAvailabilityEvidenceUsable({
@@ -80,6 +89,8 @@ test('availability evidence fails closed when missing, future-dated, stale, or f
     lastSuccessfulAt: new Date(now + 1).toISOString(),
     lastDailySyncKey: '2026-10-06',
     status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
     nowMilliseconds: now,
   }), false);
   assert.equal(isDraftAvailabilityEvidenceUsable({
@@ -87,21 +98,65 @@ test('availability evidence fails closed when missing, future-dated, stale, or f
     lastSuccessfulAt: new Date(now).toISOString(),
     lastDailySyncKey: '2026-10-06',
     status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
     nowMilliseconds: now,
   }), false);
   assert.equal(isDraftAvailabilityEvidenceUsable({
     revision,
-    lastSuccessfulAt: new Date(now).toISOString(),
+    lastSuccessfulAt: '2026-10-06T00:00:00.000Z',
     lastDailySyncKey: '2026-10-05',
     status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
+    nowMilliseconds: now,
+  }), false);
+  assert.equal(isDraftAvailabilityEvidenceUsable({
+    revision,
+    lastSuccessfulAt: '2026-10-06T23:59:00.000Z',
+    lastDailySyncKey: '2026-10-06',
+    status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
+    nowMilliseconds: Date.parse('2026-10-07T00:05:00.000Z'),
+  }), true);
+  assert.equal(isDraftAvailabilityEvidenceUsable({
+    revision,
+    lastSuccessfulAt: new Date(now).toISOString(),
+    lastDailySyncKey: '2026-10-06',
+    status: 'running',
+    draftReadinessSourceComplete: true,
+    ...attestation,
     nowMilliseconds: now,
   }), false);
   assert.equal(isDraftAvailabilityEvidenceUsable({
     revision,
     lastSuccessfulAt: new Date(now).toISOString(),
     lastDailySyncKey: '2026-10-06',
-    status: 'running',
+    status: 'success',
+    draftReadinessSourceComplete: false,
+    ...attestation,
     nowMilliseconds: now,
+  }), false);
+  assert.equal(isDraftAvailabilityEvidenceUsable({
+    revision,
+    lastSuccessfulAt: new Date(now).toISOString(),
+    lastDailySyncKey: '2026-10-06',
+    status: 'success',
+    draftReadinessSourceComplete: true,
+    draftReadinessSourceAttemptId: sourceAttempt,
+    refreshAttemptId: 'newer-writer-attempt',
+    nowMilliseconds: now,
+  }), false);
+  assert.equal(isDraftAvailabilityEvidenceUsable({
+    revision,
+    lastSuccessfulAt: new Date(now - 23 * 60 * 60 * 1000 - 50 * 60 * 1000).toISOString(),
+    lastDailySyncKey: '2026-10-06',
+    status: 'success',
+    draftReadinessSourceComplete: true,
+    ...attestation,
+    nowMilliseconds: now,
+    requiredThroughMilliseconds: now + 25 * 60 * 1000,
   }), false);
 });
 

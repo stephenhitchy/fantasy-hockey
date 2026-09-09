@@ -18,6 +18,7 @@ import {
   onRequest
 } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onTaskDispatched } from 'firebase-functions/v2/tasks';
 
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import {
@@ -43,9 +44,26 @@ import {
 } from './shared/security/nhl-proxy-security.util';
 import { ESPN_INJURY_PLAYER_ALIASES } from './shared/core/player/injury-player-aliases';
 import { matchInjuryEntriesToCurrentPlayers } from './shared/core/player/injury-match-quality.util';
+import {
+  DRAFT_AVAILABILITY_SOURCE_SCHEMA_VERSION,
+  createDraftNhlRosterIdentityHash,
+  evaluateDraftAvailabilityIdentityCompleteness,
+  evaluateDraftAvailabilitySourceCompleteness,
+  isDraftNhlRosterIdentityHash,
+  isDraftNhlTeamRosterComplete,
+} from './shared/core/player/draft-availability-source-completeness.util';
 import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
 import { privateSeasonManagerHash } from './shared/core/operations/private-season-health.util';
 import { pseudonymizePrivacyOperationsForDeletedAccount } from './privacy-request-authority';
+import {
+  DRAFT_AVAILABILITY_PREPARATION_WINDOW_MILLISECONDS,
+  DraftAvailabilityRefreshTaskPayload,
+  getDraftAvailabilityErrorBackoffMilliseconds,
+  getDraftAvailabilityDailyKey,
+  isDraftAvailabilityEvidenceUsable,
+  isDraftAvailabilityRefreshInErrorCooldown,
+  isDraftAvailabilityTaskRetryAfterActive,
+} from './draft-readiness.util';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -597,11 +615,19 @@ type PlayerAvailabilityRefreshTrigger =
   | 'daily-visit'
   | 'draft-start'
   | 'commissioner-browser'
+  | 'draft-readiness-server'
   | 'scheduled-server';
 
 interface GlobalInjuryRefreshOptions {
   trigger: PlayerAvailabilityRefreshTrigger;
   force?: boolean;
+  requestedAtBucketMilliseconds?: number;
+}
+
+interface NhlSkaterLoadResult {
+  skaters: NhlSkater[];
+  loadedTeamCount: number;
+  failedTeamCount: number;
 }
 
 interface DailyRefreshResult {
@@ -910,41 +936,80 @@ function addRosterSkaters(
   destination: Map<number, NhlSkater>,
   clubAbbreviation: string,
   roster: NhlCurrentRosterResponse
-): void {
-  const players = [
-    ...(roster.forwards ?? []),
-    ...(roster.defensemen ?? [])
-  ];
+): {
+  forwardsArrayPresent: boolean;
+  defensemenArrayPresent: boolean;
+  validForwardCount: number;
+  validDefensemanCount: number;
+  uniqueSkaterCount: number;
+} {
+  const forwardsArrayPresent = Array.isArray(roster.forwards);
+  const defensemenArrayPresent = Array.isArray(roster.defensemen);
+  const groups = [
+    {
+      players: forwardsArrayPresent ? roster.forwards ?? [] : [],
+      kind: 'forward',
+    },
+    {
+      players: defensemenArrayPresent ? roster.defensemen ?? [] : [],
+      kind: 'defenseman',
+    },
+  ] as const;
+  const validForwardIds = new Set<number>();
+  const validDefensemanIds = new Set<number>();
+  const uniqueSkaterIds = new Set<number>();
 
-  for (const player of players) {
-    const playerId = player.id ?? player.playerId;
-    const position = getDraftPosition(player.positionCode);
+  for (const group of groups) {
+    for (const player of group.players) {
+      const playerId = player.id ?? player.playerId;
+      const position = getDraftPosition(player.positionCode);
 
-    if (!playerId || !position) {
-      continue;
+      if (
+        !playerId ||
+        !position ||
+        (group.kind === 'forward' && position === 'D') ||
+        (group.kind === 'defenseman' && position !== 'D')
+      ) {
+        continue;
+      }
+
+      if (group.kind === 'forward') {
+        validForwardIds.add(playerId);
+      } else {
+        validDefensemanIds.add(playerId);
+      }
+      uniqueSkaterIds.add(playerId);
+
+      const fullName =
+        [
+          player.firstName?.default,
+          player.lastName?.default
+        ]
+          .filter(Boolean)
+          .join(' ') ||
+        player.fullName?.default ||
+        'Unknown Player';
+
+      destination.set(playerId, {
+        id: playerId,
+        fullName,
+        position,
+        nhlTeamAbbreviation:
+          player.currentTeamAbbrev ?? clubAbbreviation
+      });
     }
-
-    const fullName =
-      [
-        player.firstName?.default,
-        player.lastName?.default
-      ]
-        .filter(Boolean)
-        .join(' ') ||
-      player.fullName?.default ||
-      'Unknown Player';
-
-    destination.set(playerId, {
-      id: playerId,
-      fullName,
-      position,
-      nhlTeamAbbreviation:
-        player.currentTeamAbbrev ?? clubAbbreviation
-    });
   }
+
+  return {
+    forwardsArrayPresent,
+    defensemenArrayPresent,
+    validForwardCount: validForwardIds.size,
+    validDefensemanCount: validDefensemanIds.size,
+    uniqueSkaterCount: uniqueSkaterIds.size,
+  };
 }
 
-async function loadCurrentNhlSkaters(): Promise<NhlSkater[]> {
+async function loadCurrentNhlSkaters(): Promise<NhlSkaterLoadResult> {
   const skaters = new Map<number, NhlSkater>();
   const failures: string[] = [];
   const batchSize = 4;
@@ -970,11 +1035,20 @@ async function loadCurrentNhlSkaters(): Promise<NhlSkater[]> {
       const club = clubs[index];
 
       if (result.status === 'fulfilled') {
-        addRosterSkaters(
+        const rosterCompleteness = addRosterSkaters(
           skaters,
           result.value.club,
           result.value.roster
         );
+
+        if (!isDraftNhlTeamRosterComplete(rosterCompleteness)) {
+          failures.push(
+            `${club}: roster failed Draft completeness ` +
+            `(${rosterCompleteness.validForwardCount} forwards, ` +
+            `${rosterCompleteness.validDefensemanCount} defensemen, ` +
+            `${rosterCompleteness.uniqueSkaterCount} unique skaters)`,
+          );
+        }
       } else {
         failures.push(
           `${club}: ${
@@ -999,7 +1073,11 @@ async function loadCurrentNhlSkaters(): Promise<NhlSkater[]> {
     );
   }
 
-  return [...skaters.values()];
+  return {
+    skaters: [...skaters.values()],
+    loadedTeamCount: NHL_DRAFT_CLUBS.length - failures.length,
+    failedTeamCount: failures.length,
+  };
 }
 
 function getEspnTeamAbbreviation(teamName: string): string {
@@ -1057,16 +1135,52 @@ function normalizeEspnStatus(input: {
 function parseEspnInjuries(payload: unknown): {
   entries: EspnInjuryEntry[];
   teamEntryCount: number;
+  sourceStatus: string;
+  sourceTimestamp: string;
+  injuriesArrayPresent: boolean;
+  recognizedTeamCount: number;
+  unrecognizedTeamCount: number;
+  duplicateTeamGroupCount: number;
+  malformedTeamGroupCount: number;
+  malformedInjuryEntryCount: number;
 } {
   const topLevel = asRecord(payload);
+  const injuriesArrayPresent = Array.isArray(topLevel['injuries']);
   const teamEntries = asArray(topLevel['injuries']);
   const entries: EspnInjuryEntry[] = [];
+  const recognizedTeams = new Set<string>();
+  let unrecognizedTeamCount = 0;
+  let duplicateTeamGroupCount = 0;
+  let malformedTeamGroupCount = 0;
+  let malformedInjuryEntryCount = 0;
 
   for (const rawTeamEntry of teamEntries) {
     const teamEntry = asRecord(rawTeamEntry);
     const teamName = asString(teamEntry['displayName']);
+    const teamAbbreviation = getEspnTeamAbbreviation(teamName);
+    const teamInjuries = teamEntry['injuries'];
 
-    for (const rawInjury of asArray(teamEntry['injuries'])) {
+    if (
+      !rawTeamEntry ||
+      typeof rawTeamEntry !== 'object' ||
+      Array.isArray(rawTeamEntry) ||
+      !teamName ||
+      !Array.isArray(teamInjuries)
+    ) {
+      malformedTeamGroupCount += 1;
+    }
+
+    if (teamAbbreviation) {
+      if (recognizedTeams.has(teamAbbreviation)) {
+        duplicateTeamGroupCount += 1;
+      } else {
+        recognizedTeams.add(teamAbbreviation);
+      }
+    } else {
+      unrecognizedTeamCount += 1;
+    }
+
+    for (const rawInjury of asArray(teamInjuries)) {
       const injury = asRecord(rawInjury);
       const athlete = asRecord(injury['athlete']);
       const position = asRecord(athlete['position']);
@@ -1074,7 +1188,13 @@ function parseEspnInjuries(payload: unknown): {
       const details = asRecord(injury['details']);
       const playerName = asString(athlete['displayName']);
 
-      if (!playerName) {
+      if (
+        !rawInjury ||
+        typeof rawInjury !== 'object' ||
+        Array.isArray(rawInjury) ||
+        !playerName
+      ) {
+        malformedInjuryEntryCount += 1;
         continue;
       }
 
@@ -1101,7 +1221,15 @@ function parseEspnInjuries(payload: unknown): {
 
   return {
     entries,
-    teamEntryCount: teamEntries.length
+    teamEntryCount: teamEntries.length,
+    sourceStatus: asString(topLevel['status']),
+    sourceTimestamp: asString(topLevel['timestamp']),
+    injuriesArrayPresent,
+    recognizedTeamCount: recognizedTeams.size,
+    unrecognizedTeamCount,
+    duplicateTeamGroupCount,
+    malformedTeamGroupCount,
+    malformedInjuryEntryCount,
   };
 }
 
@@ -1781,10 +1909,14 @@ async function runGlobalInjuryRefresh(
   const nowMilliseconds = now.getTime();
   const dailyKey = getUtcDailyKey(now);
   const activeSeason = isInjurySeasonActive(now);
+  const requireStrictDraftSource =
+    options.trigger === 'draft-readiness-server';
   const claimId = randomUUID();
   const force = options.force === true;
   const updatedBy = options.trigger === 'scheduled-server'
     ? 'server:scheduled-injury-refresh'
+    : options.trigger === 'draft-readiness-server'
+      ? 'server:draft-readiness-injury-refresh'
     : `server:${options.trigger}`;
   const claim = await db.runTransaction<GlobalInjuryRefreshClaim>(async (transaction) => {
     const snapshot = await transaction.get(reference);
@@ -1793,10 +1925,53 @@ async function runGlobalInjuryRefresh(
     const lastAttempt = getTimestampDate(data?.['lastAttemptAt']);
     const leaseExpires = getTimestampDate(data?.['leaseExpiresAt']);
     const lastDailySyncKey = asString(data?.['lastDailySyncKey']);
+    const refreshAttemptId = asString(data?.['refreshAttemptId']);
+    const draftReadinessSourceAttemptId = asString(
+      data?.['draftReadinessSourceAttemptId'],
+    );
+    const draftReadinessNhlRosterIdentityHash = asString(
+      data?.['draftReadinessNhlRosterIdentityHash'],
+    );
+    const failedTaskBucketMilliseconds =
+      data?.['draftReadinessFailedTaskBucketMilliseconds'];
+    const sameTaskBucketRetry =
+      requireStrictDraftSource &&
+      Number.isSafeInteger(options.requestedAtBucketMilliseconds) &&
+      failedTaskBucketMilliseconds === options.requestedAtBucketMilliseconds;
+    const draftReadinessRetryAfter = getTimestampDate(
+      data?.['draftReadinessRetryAfterAt'],
+    );
+    const previousFailureWasStrictDraftTask =
+      data?.['trigger'] === 'draft-readiness-server';
     const dailySuccess =
       lastDailySyncKey === dailyKey ||
       isTimestampOnDailyKey(data?.['lastDailySuccessfulSyncAt'], dailyKey) ||
       isTimestampOnDailyKey(data?.['lastSuccessfulSyncAt'], dailyKey);
+    const draftReadinessDailySuccess = isDraftAvailabilityEvidenceUsable({
+      revision: data?.['draftReadinessSourceComplete'] === true
+        ? 'server-source-attested'
+        : null,
+      lastSuccessfulAt: lastSuccessful?.toISOString() ?? null,
+      lastDailySyncKey,
+      status: asString(data?.['status']) || null,
+      draftReadinessSourceComplete:
+        data?.['draftReadinessSourceSchemaVersion'] ===
+          DRAFT_AVAILABILITY_SOURCE_SCHEMA_VERSION &&
+        data?.['draftReadinessSourceComplete'] === true &&
+        isDraftNhlRosterIdentityHash(
+          draftReadinessNhlRosterIdentityHash,
+        ),
+      draftReadinessSourceAttemptId,
+      refreshAttemptId,
+      nowMilliseconds,
+      ...(requireStrictDraftSource
+        ? {
+            requiredThroughMilliseconds:
+              nowMilliseconds +
+              DRAFT_AVAILABILITY_PREPARATION_WINDOW_MILLISECONDS,
+          }
+        : {}),
+    });
     const scheduledMinimumIntervalMilliseconds = activeSeason
       ? 5 * 60 * 60 * 1000
       : 23 * 60 * 60 * 1000;
@@ -1817,8 +1992,21 @@ async function runGlobalInjuryRefresh(
 
     if (
       data?.['status'] === 'error' &&
-      lastAttempt &&
-      nowMilliseconds - lastAttempt.getTime() < 15 * 60 * 1000 &&
+      (
+        isDraftAvailabilityTaskRetryAfterActive({
+          strictDraftTask: requireStrictDraftSource,
+          previousFailureWasStrictDraftTask,
+          sameTaskBucketRetry,
+          retryAfterMilliseconds:
+            draftReadinessRetryAfter?.getTime() ?? null,
+          nowMilliseconds,
+        }) ||
+        isDraftAvailabilityRefreshInErrorCooldown({
+          lastAttemptMilliseconds: lastAttempt?.getTime() ?? null,
+          nowMilliseconds,
+          strictDraftTask: requireStrictDraftSource,
+        })
+      ) &&
       !force
     ) {
       return {
@@ -1845,7 +2033,11 @@ async function runGlobalInjuryRefresh(
     if (
       options.trigger !== 'scheduled-server' &&
       !force &&
-      dailySuccess
+      (
+        requireStrictDraftSource
+          ? draftReadinessDailySuccess
+          : dailySuccess
+      )
     ) {
       return {
         claimed: false,
@@ -1883,6 +2075,8 @@ async function runGlobalInjuryRefresh(
         updatedBy,
         message: options.trigger === 'scheduled-server'
           ? 'The server is refreshing the shared NHL injury report.'
+          : options.trigger === 'draft-readiness-server'
+            ? 'The server is refreshing the shared NHL injury report for an upcoming Draft.'
           : 'A verified server request is refreshing the shared NHL injury report.'
       },
       { merge: true }
@@ -1926,23 +2120,36 @@ async function runGlobalInjuryRefresh(
     );
   }
 
+  let draftSourceCompletenessIssues = ['source-fetch-incomplete'];
+
   try {
-    const [players, espnPayload] = await Promise.all([
+    const [nhlRosterResult, espnPayload] = await Promise.all([
       loadCurrentNhlSkaters(),
       fetchJson(ESPN_NHL_INJURIES_URL)
     ]);
     const parsed = parseEspnInjuries(espnPayload);
-
-    if (parsed.entries.length === 0) {
-      throw new Error(
-        'ESPN returned no NHL injury entries, so the previous shared report was preserved.'
-      );
-    }
-
+    const draftReadinessNhlRosterIdentityHash =
+      createDraftNhlRosterIdentityHash(nhlRosterResult.skaters);
+    const draftSourceCompleteness =
+      evaluateDraftAvailabilitySourceCompleteness({
+        expectedNhlTeamCount: NHL_DRAFT_CLUBS.length,
+        loadedNhlTeamCount: nhlRosterResult.loadedTeamCount,
+        failedNhlTeamCount: nhlRosterResult.failedTeamCount,
+        espnStatus: parsed.sourceStatus,
+        espnTimestamp: parsed.sourceTimestamp,
+        espnInjuriesArrayPresent: parsed.injuriesArrayPresent,
+        espnTeamGroupCount: parsed.teamEntryCount,
+        espnRecognizedTeamCount: parsed.recognizedTeamCount,
+        espnUnrecognizedTeamCount: parsed.unrecognizedTeamCount,
+        espnDuplicateTeamGroupCount: parsed.duplicateTeamGroupCount,
+        espnMalformedTeamGroupCount: parsed.malformedTeamGroupCount,
+        espnMalformedInjuryEntryCount: parsed.malformedInjuryEntryCount,
+        nowMilliseconds: Date.now(),
+      });
     const syncedAt = new Date().toISOString();
     const matchResult = matchInjuryEntriesToCurrentPlayers(
       parsed.entries,
-      players,
+      nhlRosterResult.skaters,
       {
         generatedAt: syncedAt,
         resolveTeamAbbreviation: getEspnTeamAbbreviation,
@@ -1950,6 +2157,27 @@ async function runGlobalInjuryRefresh(
         aliases: ESPN_INJURY_PLAYER_ALIASES,
       },
     );
+    const draftIdentityCompleteness =
+      evaluateDraftAvailabilityIdentityCompleteness({
+        nameNotFoundCount: matchResult.matchQuality.counts.nameNotFound,
+        ambiguousNameCount: matchResult.matchQuality.counts.ambiguousName,
+        aliasTargetMissingCount:
+          matchResult.matchQuality.counts.aliasTargetMissing,
+      });
+
+    const draftReadinessSourceComplete =
+      draftSourceCompleteness.complete && draftIdentityCompleteness.complete;
+    draftSourceCompletenessIssues = [
+      ...draftSourceCompleteness.issues,
+      ...draftIdentityCompleteness.issues,
+    ];
+
+    if (requireStrictDraftSource && !draftReadinessSourceComplete) {
+      throw new Error(
+        `Draft availability source input was incomplete: ${draftSourceCompletenessIssues.join(', ')}.`,
+      );
+    }
+
     const snapshot = await reference.get();
     const previousRecords = normalizeGlobalAvailabilityRecords(snapshot.data());
     const nextRecords = new Map<number, DocumentData>();
@@ -1961,8 +2189,7 @@ async function runGlobalInjuryRefresh(
       );
     }
 
-    const feedLooksCompleteEnoughToClear =
-      parsed.teamEntryCount >= 10 || parsed.entries.length >= 20;
+    const feedLooksCompleteEnoughToClear = draftSourceCompleteness.complete;
 
     if (!feedLooksCompleteEnoughToClear) {
       for (const [playerId, record] of previousRecords) {
@@ -2035,6 +2262,37 @@ async function runGlobalInjuryRefresh(
           lastDailySuccessfulSyncAt: FieldValue.serverTimestamp(),
           leaseExpiresAt: null,
           updatedBy,
+          draftReadinessSourceSchemaVersion:
+            DRAFT_AVAILABILITY_SOURCE_SCHEMA_VERSION,
+          draftReadinessSourceComplete,
+          draftReadinessSourceAttemptId: claimId,
+          draftReadinessSourceIssues: draftSourceCompletenessIssues,
+          draftReadinessSourceObservedAt: syncedAt,
+          draftReadinessNhlRosterIdentityHash,
+          draftReadinessNhlTeamCount: nhlRosterResult.loadedTeamCount,
+          draftReadinessEspnTeamCount: parsed.recognizedTeamCount,
+          draftReadinessEspnTeamGroupCount: parsed.teamEntryCount,
+          draftReadinessEspnInjuryEntryCount: parsed.entries.length,
+          draftReadinessEspnMalformedTeamGroupCount:
+            parsed.malformedTeamGroupCount,
+          draftReadinessEspnMalformedInjuryEntryCount:
+            parsed.malformedInjuryEntryCount,
+          draftReadinessEspnDuplicateTeamGroupCount:
+            parsed.duplicateTeamGroupCount,
+          draftReadinessNameNotFoundAdvisoryCount:
+            draftIdentityCompleteness.nameNotFoundAdvisoryCount,
+          draftReadinessAmbiguousIdentityCount:
+            matchResult.matchQuality.counts.ambiguousName,
+          draftReadinessMissingAliasTargetCount:
+            matchResult.matchQuality.counts.aliasTargetMissing,
+          ...(draftReadinessSourceComplete
+            ? {
+                draftReadinessConsecutiveFailureCount: 0,
+                draftReadinessFailedTaskBucketMilliseconds:
+                  FieldValue.delete(),
+                draftReadinessRetryAfterAt: null,
+              }
+            : {}),
           fetchedCount: parsed.entries.length,
           matchedCount: matchResult.matches.length,
           unmatchedCount,
@@ -2093,6 +2351,17 @@ async function runGlobalInjuryRefresh(
         ? error.message
         : 'Scheduled NHL injury refresh failed.'
     ).slice(0, 500);
+    const previousDraftFailureCount = Math.max(
+      0,
+      Math.floor(getCount(claim.data, 'draftReadinessConsecutiveFailureCount')),
+    );
+    const draftFailureCount = requireStrictDraftSource
+      ? previousDraftFailureCount + 1
+      : previousDraftFailureCount;
+    const failureObservedMilliseconds = Date.now();
+    const draftRetryAfterMilliseconds =
+      failureObservedMilliseconds +
+      getDraftAvailabilityErrorBackoffMilliseconds(draftFailureCount);
 
     await Promise.all([
       reference.set(
@@ -2106,6 +2375,21 @@ async function runGlobalInjuryRefresh(
           lastAttemptAt: FieldValue.serverTimestamp(),
           leaseExpiresAt: null,
           updatedBy,
+          draftReadinessSourceSchemaVersion:
+            DRAFT_AVAILABILITY_SOURCE_SCHEMA_VERSION,
+          draftReadinessSourceComplete: false,
+          draftReadinessSourceAttemptId: claimId,
+          draftReadinessSourceIssues: draftSourceCompletenessIssues,
+          draftReadinessNhlRosterIdentityHash: FieldValue.delete(),
+          ...(requireStrictDraftSource
+            ? {
+                draftReadinessConsecutiveFailureCount: draftFailureCount,
+                draftReadinessFailedTaskBucketMilliseconds:
+                  options.requestedAtBucketMilliseconds ?? null,
+                draftReadinessRetryAfterAt:
+                  Timestamp.fromMillis(draftRetryAfterMilliseconds),
+              }
+            : {}),
           message
         },
         { merge: true }
@@ -2128,6 +2412,71 @@ async function runGlobalInjuryRefresh(
     throw error;
   }
 }
+
+export const refreshDraftPlayerAvailabilityTask =
+  onTaskDispatched<DraftAvailabilityRefreshTaskPayload>(
+    {
+      region: FUNCTION_REGION,
+      timeoutSeconds: 540,
+      memory: '1GiB',
+      retryConfig: {
+        maxAttempts: 3,
+        minBackoffSeconds: 30,
+        maxBackoffSeconds: 120,
+        maxDoublings: 2,
+      },
+      rateLimits: {
+        maxConcurrentDispatches: 1,
+      },
+    },
+    async (request) => {
+      const payload = request.data;
+      const nowMilliseconds = Date.now();
+      const currentDailyKey = getDraftAvailabilityDailyKey(nowMilliseconds);
+      const expectedDailyKey = typeof payload?.expectedDailyKey === 'string'
+        ? payload.expectedDailyKey
+        : '';
+      const requestedAtBucketMilliseconds =
+        payload?.requestedAtBucketMilliseconds;
+
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(expectedDailyKey) ||
+        !Number.isSafeInteger(requestedAtBucketMilliseconds)
+      ) {
+        console.warn('Ignored malformed automatic Draft availability task.');
+        return;
+      }
+
+      if (expectedDailyKey !== currentDailyKey) {
+        console.info('Ignored stale automatic Draft availability task.', {
+          expectedDailyKey,
+          currentDailyKey,
+        });
+        return;
+      }
+
+      const result = await runGlobalInjuryRefresh({
+        trigger: 'draft-readiness-server',
+        requestedAtBucketMilliseconds,
+      });
+
+      if (result.status === 'in-progress' || result.status === 'cooldown') {
+        throw new Error(
+          result.status === 'in-progress'
+            ? 'Automatic Draft availability preparation is waiting for the active server refresh.'
+            : 'Automatic Draft availability preparation is waiting for its guarded retry time.',
+        );
+      }
+
+      console.info('Automatic Draft availability preparation completed.', {
+        status: result.status,
+        skipped: result.skipped,
+        dailyKey: result.dailyKey,
+        fetchedCount: result.fetchedCount,
+        matchedCount: result.matchedCount,
+      });
+    },
+  );
 
 export const refreshGlobalPlayerAvailabilityScheduled = onSchedule(
   {

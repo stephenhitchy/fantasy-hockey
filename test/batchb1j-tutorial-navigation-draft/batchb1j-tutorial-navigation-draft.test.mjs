@@ -196,8 +196,8 @@ test('B1J changes no protected scoring, projection formula, Rules, or Function a
   assert.equal(
     await sha256FunctionsIndexBeforeD1M(),
     // D1M adds only the reviewed getFinalScoreReconciliationPage export; the
-    // complete post-L1A Functions index remains byte-for-byte pinned here.
-    '5f22b04ebdb3cbb34c95d7cc60c1f3a84cbc6efdf5f90781037160f6fdd46b1d',
+    // complete post-FF1.31 Functions index remains byte-for-byte pinned here.
+    '447079dbdf40ca5854d8c6c7f00b9ec00f0244026a40b78a75411defbae98307',
   );
 });
 

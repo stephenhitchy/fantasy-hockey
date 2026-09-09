@@ -31,10 +31,15 @@ import {
 } from './shared/core/projection/projection-snapshot.service';
 import { queueServerDraftProjectionSnapshotRefresh } from './projection-authority';
 import {
+  buildDraftAvailabilityRefreshTaskId,
   buildScheduledDraftStartTaskId,
   buildDraftReadinessRequestKey,
+  DraftAvailabilityRefreshTaskPayload,
+  DRAFT_AVAILABILITY_REFRESH_BUCKET_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
   draftReadinessMatchesSchedule,
+  getDraftAvailabilityDailyKey,
+  getDraftAvailabilityPreparationState,
   getDraftReadinessWindowState,
   getScheduledDraftStartTaskDispatchMilliseconds,
   getScheduledDraftStartTaskState,
@@ -50,6 +55,9 @@ import {
 import {
   hasCompleteTeamScheduleInputAttestation,
 } from './shared/core/projection/team-schedule-input-completeness.util';
+import {
+  updateScheduledDraftReadinessDocument,
+} from './shared/core/draft/draft-readiness-write.service';
 import {
   CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
@@ -74,6 +82,7 @@ const SERVER_DRAFT_ACTOR = 'server:draft-automation';
 const DRAFT_AUTOMATION_SCAN_LIMIT = 250;
 const AUTO_DRAFT_STEP_DELAY_MILLISECONDS = 1_500;
 const DRAFT_TASK_DISPATCH_DEADLINE_SECONDS = 60;
+const DRAFT_AVAILABILITY_TASK_DISPATCH_DEADLINE_SECONDS = 540;
 const MAX_CLOCK_SECONDS = 10 * 60;
 const DEFAULT_PICK_SECONDS = 60;
 const DRAFT_AUTOMATION_LEASE_MILLISECONDS = 90_000;
@@ -703,6 +712,181 @@ function getDraftClockTaskQueue() {
   );
 }
 
+function getDraftAvailabilityRefreshTaskQueue() {
+  return getFunctions().taskQueue<DraftAvailabilityRefreshTaskPayload>(
+    'refreshDraftPlayerAvailabilityTask',
+  );
+}
+
+async function scheduleDraftAvailabilityRefreshIfNeeded(
+  leagueId: string,
+  draft: FantasyDraft,
+  now = new Date(),
+): Promise<
+  'not-due' | 'current' | 'scheduled' | 'error' | 'recovery-expired'
+> {
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+  const nowMilliseconds = now.getTime();
+  const preparationState = getDraftAvailabilityPreparationState({
+    draftStatus: draft.status,
+    scheduledStartMilliseconds,
+    nowMilliseconds,
+  });
+
+  if (scheduledStartMilliseconds === null) {
+    return 'not-due';
+  }
+
+  if (preparationState === 'recovery-expired') {
+    const recoveryExpiredMessage =
+      'Automatic Draft preparation could not recover within one hour of the scheduled start. The clock remains stopped at zero picks; the commissioner must choose a new start time.';
+
+    if (
+      draft.serverDraftReadinessStatus !== 'error' ||
+      draft.serverDraftReadinessMessage !== recoveryExpiredMessage ||
+      !draftReadinessMatchesSchedule({
+        readinessScheduledStartMilliseconds:
+          getReadinessScheduledStartMilliseconds(draft),
+        scheduledStartMilliseconds,
+      })
+    ) {
+      await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+        serverDraftReadinessStatus: 'error',
+        serverDraftReadinessProjectionRequestId: null,
+        serverDraftReadinessProjectionSnapshotId: null,
+        serverDraftReadinessProjectionSnapshotHash: null,
+        serverDraftReadinessRetryAfterAt: null,
+        serverDraftReadinessMessage: recoveryExpiredMessage,
+        projectionPreparationRequestId: null,
+        projectionPreparationStatus: 'error',
+        serverAutomationStatus: 'error',
+        serverAutomationMessage:
+          'Automatic Draft input recovery expired; rescheduling is required.',
+        serverAutomationLastErrorAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    return 'recovery-expired';
+  }
+
+  if (preparationState !== 'prepare') {
+    return 'not-due';
+  }
+
+  const availability = await loadProjectionAvailabilityEvidence(leagueId);
+
+  if (isDraftAvailabilityEvidenceUsable({
+    revision: availability.revision,
+    lastSuccessfulAt: availability.lastSuccessfulAt,
+    lastDailySyncKey: availability.lastDailySyncKey,
+    status: availability.status,
+    draftReadinessSourceComplete:
+      availability.draftReadinessSourceComplete,
+    draftReadinessSourceAttemptId:
+      availability.draftReadinessSourceAttemptId,
+    refreshAttemptId: availability.refreshAttemptId,
+    nowMilliseconds,
+    requiredThroughMilliseconds: scheduledStartMilliseconds,
+  })) {
+    return 'current';
+  }
+
+  if (
+    draft.serverDraftReadinessStatus !== 'waiting-injury' ||
+    !draftReadinessMatchesSchedule({
+      readinessScheduledStartMilliseconds:
+        getReadinessScheduledStartMilliseconds(draft),
+      scheduledStartMilliseconds,
+    })
+  ) {
+    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      serverDraftReadinessStatus: 'waiting-injury',
+      serverDraftReadinessAvailabilityRevision: availability.revision,
+      serverDraftReadinessProjectionRequestId: null,
+      serverDraftReadinessProjectionSnapshotId: null,
+      serverDraftReadinessProjectionSnapshotHash: null,
+      serverDraftReadinessAttemptCount: 0,
+      serverDraftReadinessRetryAfterAt: null,
+      serverDraftReadinessMessage:
+        'The server is refreshing the daily injury report before it automatically prepares Projection V11. No commissioner action is required.',
+      projectionPreparationRequestId: null,
+      projectionPreparationStatus: null,
+      serverAutomationStatus: 'waiting-injury',
+      serverAutomationMessage:
+        'Server-owned Draft input preparation is in progress.',
+    });
+  }
+
+  const expectedDailyKey = getDraftAvailabilityDailyKey(nowMilliseconds);
+
+  if (!expectedDailyKey) {
+    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      serverDraftReadinessStatus: 'error',
+      serverDraftReadinessAvailabilityRevision: availability.revision,
+      serverDraftReadinessProjectionRequestId: null,
+      serverDraftReadinessProjectionSnapshotId: null,
+      serverDraftReadinessProjectionSnapshotHash: null,
+      serverDraftReadinessRetryAfterAt:
+        Timestamp.fromMillis(nowMilliseconds + 60_000),
+      serverDraftReadinessMessage:
+        'The server could not determine the current injury-report day. The clock remains locked and preparation will retry automatically.',
+      projectionPreparationRequestId: null,
+      projectionPreparationStatus: 'error',
+      serverAutomationStatus: 'error',
+      serverAutomationMessage:
+        'Automatic Draft availability preparation could not determine its daily key.',
+      serverAutomationLastErrorAt: FieldValue.serverTimestamp(),
+    });
+    return 'error';
+  }
+
+  const requestedAtBucketMilliseconds = Math.floor(
+    nowMilliseconds / DRAFT_AVAILABILITY_REFRESH_BUCKET_MILLISECONDS,
+  ) * DRAFT_AVAILABILITY_REFRESH_BUCKET_MILLISECONDS;
+  const payload: DraftAvailabilityRefreshTaskPayload = {
+    expectedDailyKey,
+    requestedAtBucketMilliseconds,
+  };
+
+  try {
+    await getDraftAvailabilityRefreshTaskQueue().enqueue(payload, {
+      id: buildDraftAvailabilityRefreshTaskId({
+        dailyKey: expectedDailyKey,
+        nowMilliseconds,
+      }),
+      dispatchDeadlineSeconds:
+        DRAFT_AVAILABILITY_TASK_DISPATCH_DEADLINE_SECONDS,
+    });
+  } catch (error: unknown) {
+    if (!isTaskAlreadyExistsError(error)) {
+      console.error('Unable to queue automatic Draft availability preparation.', {
+        scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+        error,
+      });
+      await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+        serverDraftReadinessStatus: 'error',
+        serverDraftReadinessAvailabilityRevision: availability.revision,
+        serverDraftReadinessProjectionRequestId: null,
+        serverDraftReadinessProjectionSnapshotId: null,
+        serverDraftReadinessProjectionSnapshotHash: null,
+        serverDraftReadinessRetryAfterAt:
+          Timestamp.fromMillis(nowMilliseconds + 60_000),
+        serverDraftReadinessMessage:
+          'The server could not queue the automatic injury refresh. The clock remains locked and preparation will retry automatically.',
+        projectionPreparationRequestId: null,
+        projectionPreparationStatus: 'error',
+        serverAutomationStatus: 'error',
+        serverAutomationMessage:
+          'Automatic Draft availability preparation could not be queued.',
+        serverAutomationLastErrorAt: FieldValue.serverTimestamp(),
+      });
+      return 'error';
+    }
+  }
+
+  return 'scheduled';
+}
+
 function buildDraftClockTaskId(payload: DraftPickDeadlineTaskPayload): string {
   return createHash('sha256')
     .update(
@@ -1254,36 +1438,11 @@ async function updateScheduledDraftReadiness(
 ): Promise<boolean> {
   const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
 
-  return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(draftRef);
-
-    if (!snapshot.exists) {
-      return false;
-    }
-
-    const current = normalizeDraft(snapshot.data() as Partial<FantasyDraft>);
-
-    if (
-      current.status !== 'scheduled' ||
-      getScheduledStartMilliseconds(current) !== scheduledStartMilliseconds
-    ) {
-      return false;
-    }
-
-    transaction.set(
-      draftRef,
-      {
-        ...payload,
-        serverDraftReadinessScheduledStartAt:
-          Timestamp.fromMillis(scheduledStartMilliseconds),
-        serverDraftReadinessUpdatedAt: FieldValue.serverTimestamp(),
-        serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-    return true;
-  });
+  return updateScheduledDraftReadinessDocument(
+    draftRef,
+    scheduledStartMilliseconds,
+    payload,
+  );
 }
 
 function getDraftReadinessRetryDelayMilliseconds(attemptCount: number): number {
@@ -1298,6 +1457,7 @@ async function loadPreparedProjectionFromDraftEvidence(
   const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
 
   if (
+    scheduledStartMilliseconds === null ||
     draft.status !== 'scheduled' ||
     draft.serverDraftReadinessStatus !== 'ready' ||
     !draftReadinessMatchesSchedule({
@@ -1334,7 +1494,13 @@ async function loadPreparedProjectionFromDraftEvidence(
         lastSuccessfulAt: currentAvailability.lastSuccessfulAt,
         lastDailySyncKey: currentAvailability.lastDailySyncKey,
         status: currentAvailability.status,
+        draftReadinessSourceComplete:
+          currentAvailability.draftReadinessSourceComplete,
+        draftReadinessSourceAttemptId:
+          currentAvailability.draftReadinessSourceAttemptId,
+        refreshAttemptId: currentAvailability.refreshAttemptId,
         nowMilliseconds: Date.now(),
+        requiredThroughMilliseconds: scheduledStartMilliseconds,
       }) ||
       currentAvailability.revision !== availabilityRevision
     ) {
@@ -1395,7 +1561,13 @@ async function prepareScheduledDraftReadiness(
     lastSuccessfulAt: availability.lastSuccessfulAt,
     lastDailySyncKey: availability.lastDailySyncKey,
     status: availability.status,
+    draftReadinessSourceComplete:
+      availability.draftReadinessSourceComplete,
+    draftReadinessSourceAttemptId:
+      availability.draftReadinessSourceAttemptId,
+    refreshAttemptId: availability.refreshAttemptId,
     nowMilliseconds: now.getTime(),
+    requiredThroughMilliseconds: scheduledStartMilliseconds,
   })) {
     await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
       serverDraftReadinessStatus: 'waiting-injury',
@@ -2043,6 +2215,25 @@ async function processLeagueDraftAutomation(
     let opened = false;
 
     if (draft.status === 'scheduled') {
+      const availabilityRefreshStatus =
+        await scheduleDraftAvailabilityRefreshIfNeeded(leagueId, draft);
+
+      if (availabilityRefreshStatus === 'error') {
+        throw new Error(
+          'The server could not queue automatic Draft availability preparation.',
+        );
+      }
+
+      if (availabilityRefreshStatus === 'recovery-expired') {
+        return {
+          leagueId,
+          status: 'waiting',
+          picksMade: 0,
+          message:
+            'Automatic Draft input recovery expired; the Draft remains scheduled and must be rescheduled.',
+        };
+      }
+
       const exactStartTaskStatus = await scheduleScheduledDraftStartTask(
         leagueId,
         draft,

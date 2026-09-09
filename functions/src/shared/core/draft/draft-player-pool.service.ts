@@ -1,4 +1,5 @@
 import {
+  clearCurrentNhlDraftSkaterCache,
   clearNhlProjectionApiCache,
   getCurrentNhlDraftSkaters,
   getGoalieGameSummaryStats,
@@ -12,6 +13,10 @@ import {
   NhlStatsRecord,
   NhlTeamSeasonGame
 } from '../nhl/nhl-api.service';
+import {
+  createDraftNhlRosterIdentityHash,
+  isDraftNhlRosterIdentityHash,
+} from '../player/draft-availability-source-completeness.util';
 
 import {
   DiminishingReturnValues,
@@ -87,6 +92,17 @@ export interface DraftPlayerPoolProjectionOptions {
   ignoreAvailability?: boolean;
   /** Draft-opening snapshots fail closed rather than substituting neutral schedules. */
   requireCompleteTeamScheduleInput?: boolean;
+  /** Exact privacy-safe NHL identity set attested by the injury-source refresh. */
+  expectedNhlRosterIdentityHash?: string;
+}
+
+export class DraftNhlRosterIdentityMismatchError extends Error {
+  constructor() {
+    super(
+      'The NHL roster identity set changed after the Draft injury input was verified. The server will refresh both inputs before retrying.',
+    );
+    this.name = 'DraftNhlRosterIdentityMismatchError';
+  }
 }
 
 
@@ -376,7 +392,8 @@ function normalizeProjectionOptions(
       projectionAsOfDate: undefined,
       historicalReplayAlignment: false,
       ignoreAvailability: false,
-      requireCompleteTeamScheduleInput: false
+      requireCompleteTeamScheduleInput: false,
+      expectedNhlRosterIdentityHash: undefined,
     };
   }
 
@@ -405,7 +422,11 @@ function normalizeProjectionOptions(
     historicalReplayAlignment: input.historicalReplayAlignment === true,
     ignoreAvailability: input.ignoreAvailability === true,
     requireCompleteTeamScheduleInput:
-      input.requireCompleteTeamScheduleInput === true
+      input.requireCompleteTeamScheduleInput === true,
+    expectedNhlRosterIdentityHash:
+      isDraftNhlRosterIdentityHash(input.expectedNhlRosterIdentityHash)
+        ? input.expectedNhlRosterIdentityHash
+        : undefined,
   };
 }
 
@@ -4501,7 +4522,8 @@ export async function loadDraftPlayerPool(
     options.projectionAsOfDate ||
     options.historicalReplayAlignment ||
     options.ignoreAvailability ||
-    options.requireCompleteTeamScheduleInput
+    options.requireCompleteTeamScheduleInput ||
+    options.expectedNhlRosterIdentityHash
   );
 
   if (
@@ -4526,7 +4548,19 @@ export async function loadDraftPlayerPool(
     clearNhlProjectionApiCache();
   }
 
+  if (options.expectedNhlRosterIdentityHash) {
+    clearCurrentNhlDraftSkaterCache();
+  }
+
   const skaters = await getCurrentNhlDraftSkaters();
+
+  if (
+    options.expectedNhlRosterIdentityHash &&
+    createDraftNhlRosterIdentityHash(skaters) !==
+      options.expectedNhlRosterIdentityHash
+  ) {
+    throw new DraftNhlRosterIdentityMismatchError();
+  }
 
   /*
    * Load projection seasons in controlled waves. The NHL stats service can

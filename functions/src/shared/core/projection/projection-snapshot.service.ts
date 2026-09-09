@@ -18,12 +18,22 @@ import {
   FIRESTORE_SNAPSHOT_ID_OPTIONS,
 } from '../../security/firestore-document-id-policies';
 import { DraftableAsset, DraftPosition, SharedProjectionAvailabilityStatus } from '../draft/draft.models';
-import { loadDraftPlayerPool } from '../draft/draft-player-pool.service';
+import {
+  DraftNhlRosterIdentityMismatchError,
+  loadDraftPlayerPool,
+} from '../draft/draft-player-pool.service';
 import { getCurrentNhlDraftSkaters, NHL_DRAFT_CLUBS } from '../nhl/nhl-api.service';
 import {
   PlayerAvailabilityDatabaseRecord,
   PlayerAvailabilityStatus,
 } from '../player/player-availability.models';
+import {
+  DRAFT_AVAILABILITY_SOURCE_SCHEMA_VERSION,
+  isDraftNhlRosterIdentityHash,
+} from '../player/draft-availability-source-completeness.util';
+import {
+  invalidateDraftAvailabilityAttestationForRosterMismatch,
+} from '../player/draft-availability-attestation-write.service';
 import {
   assertSharedProjectionPoolHealthy,
   rankSharedProjectionAssets,
@@ -49,6 +59,7 @@ import {
   TEAM_SCHEDULE_INPUT_CONTRACT_VERSION,
   requiresCompleteTeamScheduleInputForGeneration,
 } from './team-schedule-input-completeness.util';
+import { isDraftAvailabilityEvidenceUsable } from '../../../draft-readiness.util';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -86,6 +97,8 @@ export interface SharedProjectionSnapshotMetadata {
   projectionSeason?: string;
   /** Exact global-plus-commissioner availability input used for this snapshot. */
   availabilityRevision?: string;
+  /** Privacy-safe identity set used by both injury matching and this Draft pool. */
+  availabilityRosterIdentityHash?: string;
   teamScheduleInputContractVersion?: number;
   teamScheduleInputCompleteness?: 'complete' | 'not-required';
   authoritySchemaVersion?: number;
@@ -231,6 +244,10 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     availabilityRevision:
       typeof value.availabilityRevision === 'string'
         ? value.availabilityRevision
+        : undefined,
+    availabilityRosterIdentityHash:
+      isDraftNhlRosterIdentityHash(value.availabilityRosterIdentityHash)
+        ? value.availabilityRosterIdentityHash
         : undefined,
     teamScheduleInputContractVersion:
       typeof value.teamScheduleInputContractVersion === 'number'
@@ -802,6 +819,13 @@ interface ProjectionGenerationContext {
   ignoreAvailability: boolean;
   availabilityByPlayerId: ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>;
   availabilityRevision: string;
+  availabilityLastSuccessfulAt: string | null;
+  availabilityLastDailySyncKey: string | null;
+  availabilityStatus: string | null;
+  draftReadinessSourceComplete: boolean;
+  draftReadinessSourceAttemptId: string | null;
+  availabilityRefreshAttemptId: string | null;
+  draftReadinessNhlRosterIdentityHash: string | null;
 }
 
 export interface ProjectionAvailabilityEvidence {
@@ -809,6 +833,10 @@ export interface ProjectionAvailabilityEvidence {
   lastSuccessfulAt: string | null;
   lastDailySyncKey: string | null;
   status: string | null;
+  draftReadinessSourceComplete: boolean;
+  draftReadinessSourceAttemptId: string | null;
+  refreshAttemptId: string | null;
+  draftReadinessNhlRosterIdentityHash: string | null;
 }
 
 interface ProjectionAvailabilityContext extends ProjectionAvailabilityEvidence {
@@ -985,6 +1013,25 @@ async function loadAvailabilityContext(
   const lastDailySyncKey = typeof globalData?.['lastDailySyncKey'] === 'string'
     ? globalData['lastDailySyncKey']
     : null;
+  const draftReadinessNhlRosterIdentityHash =
+    isDraftNhlRosterIdentityHash(
+      globalData?.['draftReadinessNhlRosterIdentityHash'],
+    )
+      ? globalData?.['draftReadinessNhlRosterIdentityHash'] as string
+      : null;
+  const draftReadinessSourceComplete =
+    globalData?.['draftReadinessSourceSchemaVersion'] ===
+      DRAFT_AVAILABILITY_SOURCE_SCHEMA_VERSION &&
+    globalData?.['draftReadinessSourceComplete'] === true &&
+    draftReadinessNhlRosterIdentityHash !== null;
+  const draftReadinessSourceAttemptId =
+    typeof globalData?.['draftReadinessSourceAttemptId'] === 'string'
+      ? globalData['draftReadinessSourceAttemptId']
+      : null;
+  const refreshAttemptId =
+    typeof globalData?.['refreshAttemptId'] === 'string'
+      ? globalData['refreshAttemptId']
+      : null;
   // A failed commissioner-override read is not equivalent to an empty
   // override collection. Draft readiness must fail closed in that case.
   const availabilityInputsComplete = globalSnapshot?.exists() && manualSnapshot !== null;
@@ -993,6 +1040,8 @@ async function loadAvailabilityContext(
         .update(JSON.stringify({
           lastSuccessfulAt,
           lastDailySyncKey: lastDailySyncKey ?? '',
+          draftReadinessNhlRosterIdentityHash:
+            draftReadinessNhlRosterIdentityHash ?? '',
           records: orderedRecords,
         }))
         .digest('hex')
@@ -1004,6 +1053,10 @@ async function loadAvailabilityContext(
     lastSuccessfulAt,
     lastDailySyncKey,
     status: globalStatus,
+    draftReadinessSourceComplete,
+    draftReadinessSourceAttemptId,
+    refreshAttemptId,
+    draftReadinessNhlRosterIdentityHash,
   };
 }
 
@@ -1017,6 +1070,11 @@ export async function loadProjectionAvailabilityEvidence(
     lastSuccessfulAt: context.lastSuccessfulAt,
     lastDailySyncKey: context.lastDailySyncKey,
     status: context.status,
+    draftReadinessSourceComplete: context.draftReadinessSourceComplete,
+    draftReadinessSourceAttemptId: context.draftReadinessSourceAttemptId,
+    refreshAttemptId: context.refreshAttemptId,
+    draftReadinessNhlRosterIdentityHash:
+      context.draftReadinessNhlRosterIdentityHash,
   };
 }
 
@@ -1116,6 +1174,13 @@ async function getProjectionGenerationContext(
       ignoreAvailability: true,
       availabilityByPlayerId: new Map(),
       availabilityRevision: 'historical-replay:none',
+      availabilityLastSuccessfulAt: null,
+      availabilityLastDailySyncKey: null,
+      availabilityStatus: null,
+      draftReadinessSourceComplete: false,
+      draftReadinessSourceAttemptId: null,
+      availabilityRefreshAttemptId: null,
+      draftReadinessNhlRosterIdentityHash: null,
     };
   }
 
@@ -1131,6 +1196,15 @@ async function getProjectionGenerationContext(
     ignoreAvailability: false,
     availabilityByPlayerId: availability.records,
     availabilityRevision: availability.revision ?? 'missing',
+    availabilityLastSuccessfulAt: availability.lastSuccessfulAt,
+    availabilityLastDailySyncKey: availability.lastDailySyncKey,
+    availabilityStatus: availability.status,
+    draftReadinessSourceComplete: availability.draftReadinessSourceComplete,
+    draftReadinessSourceAttemptId:
+      availability.draftReadinessSourceAttemptId,
+    availabilityRefreshAttemptId: availability.refreshAttemptId,
+    draftReadinessNhlRosterIdentityHash:
+      availability.draftReadinessNhlRosterIdentityHash,
   };
 }
 
@@ -1188,6 +1262,33 @@ async function generateSnapshotInternal(
       'The player-availability input changed after Draft preparation was queued. The server will retry with the newest saved report.',
     );
   }
+
+  if (
+    requireCompleteTeamScheduleInput &&
+    context.projectionContext === 'live' &&
+    !isDraftAvailabilityEvidenceUsable({
+      revision:
+        context.availabilityRevision === 'missing'
+          ? null
+          : context.availabilityRevision,
+      lastSuccessfulAt: context.availabilityLastSuccessfulAt,
+      lastDailySyncKey: context.availabilityLastDailySyncKey,
+      status: context.availabilityStatus,
+      draftReadinessSourceComplete: context.draftReadinessSourceComplete,
+      draftReadinessSourceAttemptId:
+        context.draftReadinessSourceAttemptId,
+      refreshAttemptId: context.availabilityRefreshAttemptId,
+      nowMilliseconds: Date.parse(generatedAt),
+    })
+  ) {
+    throw new Error(
+      'The Draft availability source is incomplete or no longer current. The server will refresh it before retrying Projection V11 preparation.',
+    );
+  }
+  const enforcedAvailabilityRosterIdentityHash =
+    requireCompleteTeamScheduleInput && context.projectionContext === 'live'
+      ? context.draftReadinessNhlRosterIdentityHash
+      : null;
   const buildingMetadata = {
     snapshotId,
     activeSnapshotId: snapshotId,
@@ -1213,6 +1314,11 @@ async function generateSnapshotInternal(
     projectionContext: context.projectionContext,
     projectionSeason: context.projectionSeason,
     availabilityRevision: context.availabilityRevision,
+    ...(enforcedAvailabilityRosterIdentityHash
+      ? {
+          availabilityRosterIdentityHash: enforcedAvailabilityRosterIdentityHash,
+        }
+      : {}),
   };
 
   const buildingBatch = writeBatch(db);
@@ -1233,6 +1339,8 @@ async function generateSnapshotInternal(
       historicalReplayAlignment: context.historicalReplayAlignment,
       ignoreAvailability: context.ignoreAvailability,
       requireCompleteTeamScheduleInput,
+      expectedNhlRosterIdentityHash:
+        enforcedAvailabilityRosterIdentityHash ?? undefined,
     });
 
     assertSharedProjectionPoolHealthy(localAssets);
@@ -1331,6 +1439,11 @@ async function generateSnapshotInternal(
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
       availabilityRevision: context.availabilityRevision,
+      ...(enforcedAvailabilityRosterIdentityHash
+        ? {
+            availabilityRosterIdentityHash: enforcedAvailabilityRosterIdentityHash,
+          }
+        : {}),
       teamScheduleInputContractVersion:
         TEAM_SCHEDULE_INPUT_CONTRACT_VERSION,
       teamScheduleInputCompleteness:
@@ -1385,6 +1498,19 @@ async function generateSnapshotInternal(
       assets: rankedAssets,
     };
   } catch (error: unknown) {
+    if (
+      error instanceof DraftNhlRosterIdentityMismatchError &&
+      context.projectionContext === 'live' &&
+      context.draftReadinessSourceAttemptId &&
+      enforcedAvailabilityRosterIdentityHash
+    ) {
+      await invalidateDraftAvailabilityAttestationForRosterMismatch({
+        reference: doc(db, 'appData', 'playerAvailability'),
+        expectedSourceAttemptId: context.draftReadinessSourceAttemptId,
+        expectedRosterIdentityHash: enforcedAvailabilityRosterIdentityHash,
+      }).catch(() => false);
+    }
+
     const message = error instanceof Error
       ? error.message
       : 'Unable to generate server-authoritative projections.';

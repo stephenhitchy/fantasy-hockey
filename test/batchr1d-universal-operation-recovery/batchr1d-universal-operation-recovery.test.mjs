@@ -380,6 +380,10 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'draft-automation.ts',
     // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
     'draft-readiness.util.ts',
+    // FF1.31 adds isolated server-owned Draft input attestation and writes.
+    'shared/core/draft/draft-readiness-write.service.ts',
+    'shared/core/player/draft-availability-source-completeness.util.ts',
+    'shared/core/player/draft-availability-attestation-write.service.ts',
     'shared/core/draft/draft.models.ts',
     'projection-authority.ts',
     'shared/core/projection/projection-asset-catalog.service.ts',

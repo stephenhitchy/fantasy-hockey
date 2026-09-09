@@ -30,6 +30,7 @@ export const criticalDraftFunctions = Object.freeze([
   'processProjectionGenerationTask',
   'publishLeagueDraftControlActivity',
   'publishLeagueDraftPickActivity',
+  'refreshDraftPlayerAvailabilityTask',
   'reconcileDraftTurnAfterCommittedPick',
   'recoverStaleProjectionGenerationRequests',
   'repairDraftTurnHandoff',

@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Repository
 
@@ -119,7 +119,8 @@ must not automatically rewrite production scores.
 - Production Hosting manifest: exact source
   `6fb443c5dac882f001a81adb93adf2fd205844f4`, Release Candidate 65,
   Production Scoring V4, Projection V11.
-- Deployed Function inventory: 107 expected, 107 matched, with no missing,
+- Deployed Production Function inventory: 107 expected by the currently live
+  source and 107 matched, with no missing,
   unexpected, duplicate, or region-mismatched exports after the D1M release.
   The Draft/Projection-critical set and D1M detector are ACTIVE; repeat this
   read-only evidence in the exact FF1 freeze record.
@@ -306,10 +307,42 @@ commissioner action. The existing Draft listener now reloads an already-open
 lobby when that exact snapshot/hash becomes ready, refuses an unrelated current
 pointer while a scheduled Draft lacks exact readiness, and replaces the stale
 manual-refresh instruction with an accessible automatic-preparation state. It
-adds no listener or competitive write. A separately reviewed server slice must
-measure preparation p95/p99, define a pre-lobby buffer, begin before the T-60
-lobby, and ensure fresh injury evidence before claiming that a brand-new league
-always has rankings for the full early-lobby hour.
+adds no listener or competitive write.
+
+FF1.31 is the server-owned input-preparation candidate layered after FF1.30.
+It closes the no-browser gap where T-20 readiness previously waited for stale,
+missing, running, or failed daily injury evidence. Beginning at the existing
+25-minute minimum safe lead, the Draft worker queues one globally deduplicated
+server injury-refresh task per five-minute bucket. The new task retries three
+dispatches with one concurrent dispatch; its private 25-second error guard lets
+the 30-second-or-longer task backoff make real upstream retry attempts, while
+persisted exponential backoff limits subsequent buckets and a one-hour overdue
+horizon prevents an abandoned scheduled Draft from polling indefinitely.
+Normal refresh callers preserve the existing 15-minute cooldown. Current
+successful daily evidence is reused, while a same-day error is retried under
+those bounded rules. Draft authorization additionally
+requires a strict source attestation: every NHL roster request must succeed,
+each team roster must include both position arrays and the documented
+conservative skater floor, and
+the ESPN injury response must be fresh, successful, structurally valid,
+and free of malformed, unrecognized, or duplicate team groups. Valid low/zero
+injury populations are not rejected merely for being small; ambiguous current-
+roster identities or missing alias targets remain blocking, while source names
+absent from the same NHL roster input retain the existing D1B advisory policy.
+The attestation includes a privacy-safe hash of player ID, normalized name,
+position, and NHL team. Strict Projection generation clears its roster cache,
+requires that exact identity-set hash, and compare-and-set invalidates only the
+matching old source attempt if the NHL roster changed. The Projection worker
+revalidates that attestation, its exact refresh-attempt
+binding, its 24-hour lifetime through the scheduled start, and the daily key
+belonging to its own success timestamp before generating the exact T-20,
+schedule- and availability-bound Projection V11 snapshot. Crossing UTC
+midnight alone does not invalidate fresh evidence. Any incomplete input leaves
+the Draft scheduled, stopped, and empty. This candidate adds one Function export,
+so source expects 108 Functions while the currently deployed Production inventory
+remains 107 until a targeted release. It does not guarantee a populated board for
+the complete T-60 lobby; moving preparation earlier remains dependent on measured
+p95/p99 and clustered-start capacity evidence.
 
 ## Release and deployment rules
 
@@ -326,7 +359,7 @@ always has rankings for the full early-lobby hour.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
 - FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
-  exact-source command is `npm run verify:batchff1-14`, followed by `npm run build:all`,
+  exact-source command is `npm run verify:batchff1-15`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -356,20 +389,22 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Complete the owner's two-manager supported-UI Draft rehearsal and record
+1. Independently review FF1.30/FF1.31, then prove the no-browser T-25 injury
+   refresh and exact T-20 Projection preparation against isolated staging.
+2. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-2. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
+3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
-3. Complete the Historical Replay lifecycle evidence separately; the automated
+4. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.
-4. Record the no-post-Draft-replacement or account-transfer decision.
-5. Generate and independently review the D1J season-freeze kit, exact tag,
+5. Record the no-post-Draft-replacement or account-transfer decision.
+6. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-7. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

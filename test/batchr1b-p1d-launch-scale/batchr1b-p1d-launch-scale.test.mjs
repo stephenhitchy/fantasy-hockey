@@ -366,6 +366,10 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/draft-automation.ts',
         // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
         'src/draft-readiness.util.ts',
+        // FF1.31 adds isolated server-owned Draft input attestation and writes.
+        'src/shared/core/draft/draft-readiness-write.service.ts',
+        'src/shared/core/player/draft-availability-source-completeness.util.ts',
+        'src/shared/core/player/draft-availability-attestation-write.service.ts',
         'src/shared/core/draft/draft.models.ts',
         'src/projection-authority.ts',
         'src/shared/core/projection/projection-asset-catalog.service.ts',

@@ -30,7 +30,7 @@ console. Stop on the first P0/P1 result and preserve the affected state.
 From a clean, synchronized `main` using Node 22.23.1 and npm 11.17.0:
 
 ```bash
-npm run verify:batchff1-14
+npm run verify:batchff1-15
 npm run build:all
 git diff --check
 npm run release:verify-clean-deploy-source
@@ -132,6 +132,23 @@ post-Draft member-removal rejection. All six synthetic accounts were disabled;
 the marker-bound disposable league was retained for audit. The first attempt
 reached verified readiness just after the former fifteen-minute collector
 limit and failed closed; no Draft activity was manufactured from that attempt.
+
+FF1.30 and FF1.31 remove the commissioner/browser prerequisite from scheduled
+preparation. The client observes and loads the exact server readiness binding
+without a click. Beginning at T-25, the server queues a globally deduplicated
+daily availability refresh when current evidence is not usable; the existing
+T-20 worker then creates the exact Projection V11 request. Pre-Draft evidence
+is reusable only when a strict source attestation proves complete NHL roster
+coverage and a fresh, structurally valid ESPN response; the
+Projection worker revalidates that evidence, its exact refresh-attempt binding,
+the privacy-safe hash of the roster identity set used for injury matching,
+its bounded 24-hour lifetime, and the daily key belonging to its own success
+timestamp. A UTC-midnight crossing alone does not invalidate fresh evidence.
+Before relying on this path for a real Draft, staging must prove that it works
+with Projection Lab untouched and all browsers closed before T-25, and that an
+NHL failure keeps the Draft scheduled, stopped, and at zero picks until a
+bounded server retry succeeds. Retry backoff persists across task buckets; a
+Draft still blocked one hour after zero stops polling and must be rescheduled.
 
 ## Evidence record
 
