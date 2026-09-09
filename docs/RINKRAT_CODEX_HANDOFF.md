@@ -344,6 +344,53 @@ remains 107 until a targeted release. It does not guarantee a populated board fo
 the complete T-60 lobby; moving preparation earlier remains dependent on measured
 p95/p99 and clustered-start capacity evidence.
 
+FF1.30/FF1.31 are merged at source `e5e133fb`. Isolated staging Hosting
+identifies that exact source and all nine targeted Draft/availability/
+Projection Functions are ACTIVE on Node 22. A guarded no-browser T-19 smoke
+run automatically replaced legacy input with strict schema-2 availability,
+proved a complete 32-team NHL source and bound refresh/source attempts,
+prepared one exact Projection V11 request/snapshot, converged across duplicate
+scheduler delivery, reached ready before zero, and kept the Draft stopped at
+zero picks before resetting it seven days ahead. That useful smoke does not
+separately certify the T-25 and T-20 boundaries or the availability-task retry
+path.
+
+FF1.32 is the tooling-only candidate for that remaining staging proof. Its
+guarded runner requires both exact-run and exclusive shared-availability
+maintenance acknowledgements, a freshly resolved remote `origin/main`, a clean
+pushed tooling delta, and an existing strict baseline; it never changes injury
+records. Before writes, it applies bounded adversarial ZIP validation and
+compares all nine generation-pinned Function sources against a clean build of
+the declared deployed Git commit by exact path, byte length, and SHA-256 hash.
+It then proves the matching active Cloud Run revisions/images, exact Scheduler,
+exact availability, Projection, and `processDraftClockDeadline` queue
+configurations. The availability, Projection, and Draft-deadline queues must
+all be initially empty, and no non-fixture staging Draft may be `scheduled` or
+`live`. That exclusion is required because manual Scheduler scans can touch
+automation leases for every scheduled Draft. It uses an
+active metadata lease to observe one deterministic singleton Cloud Task failure
+and a revision/hash/request-log-correlated retry without manufacturing upstream
+failure. That is not claimed as exact post-success task identity because Cloud
+Tasks deletes a successful task and the runtime emits no privacy-safe identity
+log. Natural T-25/T-20 Scheduler evidence must correlate in less than 60
+seconds; manual duplicate probes are serialized and correlated one at a time.
+The runner verifies exact Projection V11/schedule-input attestation, exact
+attempt-one request identity, creation inside the natural T-20 window,
+monotonic run/observation-bounded timestamps, a maximum 30-minute duration,
+and evidence count bounds. Fixture ownership requires a scheduled, stopped,
+empty Draft with null `startedAt`, `completedAt`, and `pickStartedAt` whose
+existing start remains at least two minutes away, both before the lock and
+inside the atomic ownership transaction. Cleanup
+resets that Draft, drains and verifies only allowlisted clock work, then handles
+Projection before using a nanosecond-preserving compare-and-set to restore and
+drain runner-owned availability state; it never rewinds valid
+generated Projection requests, snapshots, pointers, control, or counters.
+Ambiguous commits/deletions are reconciled against remote state, and any
+uncertain cleanup retains a `cleanup-required` evidence lock. Terminal failures
+expose only privacy-safe checkpoint/cleanup state. This tooling slice changes
+no application or Functions runtime and no Firebase resource configuration; it
+must not be deployed.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -359,7 +406,7 @@ p95/p99 and clustered-start capacity evidence.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
 - FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
-  exact-source command is `npm run verify:batchff1-15`, followed by `npm run build:all`,
+  exact-source command is `npm run verify:batchff1-16`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -389,8 +436,9 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review FF1.30/FF1.31, then prove the no-browser T-25 injury
-   refresh and exact T-20 Projection preparation against isolated staging.
+1. Independently review and merge FF1.32, then run its guarded no-browser T-25
+   availability-task and exact T-20 Projection evidence against isolated
+   staging source `e5e133fb`.
 2. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
