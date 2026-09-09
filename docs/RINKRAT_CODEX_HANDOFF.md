@@ -263,14 +263,30 @@ attempts each failed visibly at 24/32 schedules, preserved the prior
 stopped, at next pick one, and zero picks.
 
 Those two attempts also proved the existing eight-request burst can repeat the
-same upstream limit instead of recovering. FF1.28 is the current narrow P1
-source candidate: only strict Draft-opening schedule input is loaded one team
-at a time with a three-second interval and stops after two terminal club
-failures. FF1.27's request error and readiness backoff remain the only recovery
-owner. Tolerant non-Draft generation,
+same upstream limit instead of recovering. FF1.28 is merged and staging
+Hosting identifies exact source `23dbf10a`. Only strict Draft-opening schedule
+input is loaded one team at a time with a three-second interval and stops after
+two terminal club failures. FF1.27's request error and readiness backoff remain
+the only recovery owner. Guarded staging evidence loaded all 32 schedules,
+recovered a bounded retry, reached readiness about fifteen minutes before zero,
+and opened the Draft and first clock in 2.848 seconds with zero picks. Tolerant non-Draft generation,
 Projection V11 formulas/hashes/rankings, queue concurrency, worker limits, and
 the Draft-opening transaction are unchanged. High-scale shared NHL schedule
 reuse remains a later independently reviewed D1N/canonical-fanout concern.
+
+FF1.29 adds a local, guarded six-client staging rehearsal for the case where
+six human inboxes are unavailable. It provisions six fixed synthetic Auth
+identities, authenticates six independent Firebase clients, and uses the
+ordinary `executeDraftCommand`, `makeSecureDraftPick`, Rules-protected private
+queue, and `removeLeagueMemberSecure` paths. The Admin SDK is restricted to
+exact marker-bound fixture provisioning/reset, binding an already verified
+server Projection V11 snapshot to the accelerated disposable Draft, read-only
+assertions, and disabling the accounts. The rehearsal covers idempotent and
+competing submissions, one queue timeout, empty-queue Auto-Draft, pause/resume
+past an obsolete deadline, reconnect, snake reversal, 102 unique picks, six
+complete rosters, and post-Draft removal rejection. It does not replace the
+separate exact-start test or physical browser, focus, zoom, and mobile
+evidence. No Firebase deployment is required for this tooling-only slice.
 
 ## Release and deployment rules
 
@@ -286,8 +302,8 @@ reuse remains a later independently reviewed D1N/canonical-fanout concern.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.28 Draft
-  schedule-recovery gate is `npm run verify:batchff1-12`, followed by `npm run build:all`,
+- FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
+  exact-source command is `npm run verify:batchff1-13`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -317,21 +333,16 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review FF1.28, then deploy only
-   `functions:processProjectionGenerationTask`, followed by the site-pinned
-   staging Hosting target. Prove strict pacing recovers all 32 team schedules,
-   publishes one exact complete snapshot, converges duplicate delivery, and
-   keeps the Draft scheduled, stopped, and at zero picks before start. Retain
-   the two natural FF1.27 24/32 errors, pointer-preservation evidence, and logs.
-2. Repeat the 25-minute cold-worker rehearsal on the exact FF1.28 build and
-   prove ready-before-zero, no-browser start within five seconds,
-   stale-reschedule no-op, duplicate convergence, and first-deadline scheduling.
-   Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and
-   rollback Draft evidence.
+1. Run the FF1.29 guarded six-client rehearsal against exact staging source
+   `23dbf10a`; preserve the aggregate output and retained disposable fixture.
+2. Complete the owner's two-manager supported-UI Draft rehearsal and record
+   desktop/iPhone evidence plus the explicitly accepted missing Android risk,
+   if Android remains unavailable.
 3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
-4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal
-   on desktop and physical phones, including reconnect and stale multi-tab.
+4. Complete the Historical Replay lifecycle evidence separately; the automated
+   six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
+   six-game ownership, Game 7, standings, or playoffs.
 5. Record the no-post-Draft-replacement or account-transfer decision.
 6. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
