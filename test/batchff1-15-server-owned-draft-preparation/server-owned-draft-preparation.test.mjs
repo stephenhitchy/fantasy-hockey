@@ -827,7 +827,8 @@ test('FF1.31 records narrow deployment, rollback, and protected contracts', asyn
   assert.match(documentation, /functions:processDraftClockDeadline/);
   assert.match(documentation, /functions:processAutoDraftQueueChange/);
   assert.match(documentation, /hosting:app/);
-  assert.doesNotMatch(documentation, /firebase deploy(?!ment)|--only functions\b|--only firestore/);
+  assert.doesNotMatch(documentation, /firebase deploy\s*(?:\n|$)(?![\s\S]{0,180}--project)/);
+  assert.doesNotMatch(documentation, /--only functions(?:\s|$)|--only firestore/);
   const deploymentSection = documentation.slice(
     documentation.indexOf('## Deployment resources'),
     documentation.indexOf('## Observability'),
@@ -848,6 +849,48 @@ test('FF1.31 records narrow deployment, rollback, and protected contracts', asyn
   assert.deepEqual(deploymentOrder, [...deploymentOrder].sort((a, b) => a - b));
   assert.match(deploymentSection, /not.*Draft is live|Draft is live.*not/is);
   assert.match(deploymentSection, /scheduled to start within\s+30 minutes/i);
+  assert.match(deploymentSection, /### Isolated staging gate/);
+  assert.match(deploymentSection, /--project rinkrat-staging-d1nc-2026/);
+  assert.match(deploymentSection, /--config \.d1n-staging\.firebase\.json/);
+  assert.match(deploymentSection, /--only hosting(?:\s|$)/m);
+  assert.match(deploymentSection, /### Production gate/);
+  assert.match(deploymentSection, /--project nhl-fantasy-app-ab673/);
+  assert.match(deploymentSection, /--only hosting:app/);
+  assert.ok(
+    deploymentSection.indexOf('### Isolated staging gate') <
+      deploymentSection.indexOf('### Production gate'),
+  );
+  assert.match(deploymentSection, /clean deployment by itself\s+does not authorize Production/i);
+  assert.match(deploymentSection, /producer-capable\s+Functions 6-9/i);
+
+  const rollbackSection = documentation.slice(
+    documentation.indexOf('## Rollback'),
+    documentation.indexOf('## Protected contracts'),
+  );
+  const producerRollbackOrder = [
+    'runScheduledDraftAutomation',
+    'continueServerDraftAutomation',
+    'processAutoDraftQueueChange',
+    'processDraftClockDeadline',
+  ].map((resource) => rollbackSection.indexOf(resource));
+  assert.ok(producerRollbackOrder.every((index) => index >= 0));
+  assert.deepEqual(
+    producerRollbackOrder,
+    [...producerRollbackOrder].sort((a, b) => a - b),
+  );
+  assert.match(rollbackSection, /Only after all four.*stopped/is);
+  assert.match(rollbackSection, /108-Function.*107-Function/is);
+  assert.match(rollbackSection, /clean checkout or reviewed revert[\s\S]*107-Function source/i);
+  assert.match(
+    rollbackSection,
+    /firebase functions:delete refreshDraftPlayerAvailabilityTask[\s\S]*--region us-central1[\s\S]*--project rinkrat-staging-d1nc-2026/,
+  );
+  assert.match(
+    rollbackSection,
+    /firebase functions:delete refreshDraftPlayerAvailabilityTask[\s\S]*--region us-central1[\s\S]*--project nhl-fantasy-app-ab673/,
+  );
+  assert.match(rollbackSection, /queue has drained/i);
+  assert.match(rollbackSection, /inventory parity from that same preceding 107-Function source/i);
   assert.match(handoff, /FF1\.31/);
   assert.equal(
     packageJson.scripts['verify:batchff1-15:core'],

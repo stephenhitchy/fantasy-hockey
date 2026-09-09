@@ -158,27 +158,71 @@ physical iPhone/Android checks.
 
 ## Deployment resources
 
-Do not begin this rollout while a Draft is live. Confirm that no Draft will
+Do not begin either rollout while a Draft is live. Confirm that no Draft will
 enter T-25 before the entire Function rollout can finish; operationally,
-require no Draft scheduled to start within 30 minutes after the estimated rollout
-completion. Recheck immediately before activating producer Functions 7-9.
-Deploy Functions before Hosting in this exact narrow order so consumers
-understand the new evidence before either automation producer can enqueue it:
+require no Draft scheduled to start within 30 minutes after the estimated
+rollout completion. Recheck immediately before activating producer-capable
+Functions 6-9. Deploy Functions one at a time before Hosting in the exact
+narrow order below so consumers understand the new evidence before any
+automation producer can enqueue it.
 
-1. `functions:refreshDraftPlayerAvailabilityTask`
-2. `functions:refreshGlobalPlayerAvailabilityScheduled`
-3. `functions:refreshDailyPlayerAvailability`
-4. `functions:processProjectionGenerationTask`
-5. `functions:executeDraftCommand`
-6. `functions:processDraftClockDeadline`
-7. `functions:processAutoDraftQueueChange`
-8. `functions:continueServerDraftAutomation`
-9. `functions:runScheduledDraftAutomation`
-10. `hosting:app`
+### Isolated staging gate
 
-The Hosting target is required because this branch includes the separately
-reviewable FF1.30 client change. No Rules, indexes, TTL, App Check, scoring
-queue, existing worker-limit, or Firebase configuration deployment is needed.
+The first rollout is only to `rinkrat-staging-d1nc-2026`. It is not Production
+approval. From the clean reviewed commit, run these exact targeted commands:
+
+```bash
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:refreshDraftPlayerAvailabilityTask
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:refreshGlobalPlayerAvailabilityScheduled
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:refreshDailyPlayerAvailability
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:processProjectionGenerationTask
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:executeDraftCommand
+
+# Reconfirm that no Draft is live or will start within 30 minutes before continuing.
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:processDraftClockDeadline
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:processAutoDraftQueueChange
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:continueServerDraftAutomation
+firebase deploy --project rinkrat-staging-d1nc-2026 --only functions:runScheduledDraftAutomation
+
+npm run staging:d1n:prepare-hosting
+firebase deploy \
+  --project rinkrat-staging-d1nc-2026 \
+  --config .d1n-staging.firebase.json \
+  --only hosting
+```
+
+Verify that staging Hosting reports the exact reviewed commit. Then complete
+the mandatory no-browser T-25/T-20, failure/retry, reschedule, duplicate,
+reconnect, two-tab, and physical-device evidence. A clean deployment by itself
+does not authorize Production.
+
+### Production gate
+
+Production remains `nhl-fantasy-app-ab673`. Continue only after the staging
+evidence passes on the exact same commit, a separate Production go/no-go is
+recorded, the clean-source gate passes again, and the no-live/no-nearby-Draft
+condition is reconfirmed. Stephen runs these exact targeted commands:
+
+```bash
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:refreshDraftPlayerAvailabilityTask
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:refreshGlobalPlayerAvailabilityScheduled
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:refreshDailyPlayerAvailability
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:processProjectionGenerationTask
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:executeDraftCommand
+
+# Reconfirm that no Draft is live or will start within 30 minutes before continuing.
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:processDraftClockDeadline
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:processAutoDraftQueueChange
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:continueServerDraftAutomation
+firebase deploy --project nhl-fantasy-app-ab673 --only functions:runScheduledDraftAutomation
+firebase deploy --project nhl-fantasy-app-ab673 --only hosting:app
+```
+
+Verify the Production Function revisions and the public Hosting manifest
+independently. The Hosting target is required because this branch includes the
+separately reviewable FF1.30 client change. No Rules, indexes, TTL, App Check,
+scoring queue, existing worker-limit, or Firebase configuration deployment is
+needed.
 
 ## Observability
 
@@ -199,20 +243,49 @@ identifiers in a public evidence report.
 
 ## Rollback
 
-Stop new production first by restoring the preceding verified revision of
-`runScheduledDraftAutomation`, followed by `continueServerDraftAutomation`.
-Then restore `processAutoDraftQueueChange`, `processDraftClockDeadline`,
+For a complete rollback, first use a clean checkout or reviewed revert of the
+preceding verified 107-Function source. From that exact source, restore all
+four producer-capable Functions in this order:
+
+1. `runScheduledDraftAutomation`
+2. `continueServerDraftAutomation`
+3. `processAutoDraftQueueChange`
+4. `processDraftClockDeadline`
+
+Only after all four are restored may the operator declare that new FF1.31
+Draft-driven availability tasks have stopped. Then restore
 `executeDraftCommand`, `processProjectionGenerationTask`,
 `refreshDailyPlayerAvailability`, and
-`refreshGlobalPlayerAvailabilityScheduled`, in that order, followed by the
-preceding Hosting release. The new task Function may remain
-dormant after its enqueuers are restored; allow already accepted idempotent
-refresh tasks to drain. Deleting that Function is a separate destructive
-operation and is not required to restore prior behavior.
+`refreshGlobalPlayerAvailabilityScheduled`, in that order. Allow already
+accepted idempotent refresh tasks to drain while
+`refreshDraftPlayerAvailabilityTask` remains available.
 
-If merged source must be reverted, revert the FF1.31 server commit followed by
-the FF1.30 client commit. Preserve Draft readiness, Projection request, and
-availability evidence for audit.
+A full source rollback from the 108-Function FF1.31 inventory to the preceding
+107-Function source is not complete while the new task Function remains
+deployed. After proving that its queue has drained, Stephen must delete only
+that exact Function from the affected project and region:
+
+```bash
+# Isolated staging, when rolling staging back to 107 Functions.
+firebase functions:delete refreshDraftPlayerAvailabilityTask \
+  --region us-central1 \
+  --project rinkrat-staging-d1nc-2026
+
+# Production, only when rolling Production back to 107 Functions.
+firebase functions:delete refreshDraftPlayerAvailabilityTask \
+  --region us-central1 \
+  --project nhl-fantasy-app-ab673
+```
+
+Run only the command for the environment being rolled back. Re-run Function
+inventory parity from that same preceding 107-Function source, restore Hosting
+from that source, and verify its manifest before declaring the rollback
+complete. If merged source is being reverted rather than checked out at its
+preceding commit, revert the FF1.31 server commit followed by the FF1.30 client
+commit before running parity. Deletion before the queue drains can strand
+accepted work; deleting any other Function or queue is outside this rollback.
+Preserve Draft readiness, Projection request, and availability evidence for
+audit.
 
 ## Protected contracts
 
