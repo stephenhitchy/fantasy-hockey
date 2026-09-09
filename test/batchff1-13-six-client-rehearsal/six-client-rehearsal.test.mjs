@@ -148,6 +148,8 @@ test('the rehearsal uses six authenticated clients and ordinary Draft authoritie
   assert.match(source, /timer-expired/);
   assert.match(source, /manager-auto-mode/);
   assert.match(source, /status, 'complete'/);
+  assert.match(source, /disabledUsers\.every\(\(user\) => user\.disabled === true\)/);
+  assert.doesNotMatch(source, /updateUser\([^\n]+disabled: true[^\n]+\.catch/);
   assert.doesNotMatch(source, /firebase deploy|nhl-fantasy-app-ab673/);
 });
 

@@ -275,8 +275,16 @@ async function createOrRefreshFixtureUsers(auth, identities, password) {
 
 async function disableFixtureUsers(auth, identities) {
   await Promise.all(
-    identities.map((identity) =>
-      auth.updateUser(identity.uid, { disabled: true }).catch(() => undefined)),
+    identities.map((identity) => auth.updateUser(identity.uid, { disabled: true })),
+  );
+  const disabledUsers = await Promise.all(
+    identities.map((identity) => auth.getUser(identity.uid)),
+  );
+
+  assert.equal(
+    disabledUsers.every((user) => user.disabled === true),
+    true,
+    'Every synthetic rehearsal account must be verified disabled before evidence can pass.',
   );
 }
 
@@ -885,8 +893,11 @@ export async function runFf1SixClientDraftRehearsal(environment = process.env) {
       await closeClients([duplicateTab]);
     }
     await closeClients(clients);
-    await disableFixtureUsers(getAdminAuth(adminApp), identities);
-    await deleteAdminApp(adminApp);
+    try {
+      await disableFixtureUsers(getAdminAuth(adminApp), identities);
+    } finally {
+      await deleteAdminApp(adminApp);
+    }
 
     if (!completed) {
       console.error(
