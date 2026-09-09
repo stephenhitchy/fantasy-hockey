@@ -2,7 +2,7 @@
 
 **Season candidate:** Release Candidate 65
 
-**Current verified Production Hosting source:** `01e93ac522f99a090489fc3e7da1d6602937ffee`
+**Current verified Production Hosting source:** `6fb443c5dac882f001a81adb93adf2fd205844f4`
 
 **Protected contracts:** Production Scoring V4 / Projection V11 / six-game ownership / Game 7 rollover
 
@@ -30,7 +30,7 @@ console. Stop on the first P0/P1 result and preserve the affected state.
 From a clean, synchronized `main` using Node 22.23.1 and npm 11.17.0:
 
 ```bash
-npm run verify:batchff1-13
+npm run verify:batchff1-14
 npm run build:all
 git diff --check
 npm run release:verify-clean-deploy-source

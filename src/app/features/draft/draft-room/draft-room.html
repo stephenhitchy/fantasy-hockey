@@ -583,19 +583,33 @@
 
               @if (projectionLoadSlow()) {
                 <p class="pool-loading-detail">
-                  You can follow the Draft board, clock, teams, and queue now. Retry only the rankings if this connection is taking too long.
+                  You can follow the Draft board, clock, teams, and queue now. RinkRat's server owns generation; this control only reloads the verified rankings on this device.
                 </p>
                 <button
                   type="button"
                   class="retry-pool-button rr-button rr-button--secondary"
                   (click)="retryPlayerPool()"
                 >
-                  Retry Rankings
+                  Reload Rankings
                 </button>
               }
             </div>
+          } @else if (playerPoolWaitingForServer()) {
+            <div class="pool-loading-block rr-notice rr-notice--info" role="status" aria-live="polite">
+              <p class="pool-loading">
+                RinkRat's server prepares and verifies the exact Projection V11 Draft rankings automatically.
+              </p>
+              <p class="pool-loading-detail">
+                You can stay in the lobby. Rankings will appear here when they are verified; no commissioner action or open browser is required.
+              </p>
+            </div>
           } @else if (playerPoolError()) {
-            <div class="pool-error-block rr-notice rr-notice--danger">
+            <div
+              class="pool-error-block rr-notice rr-notice--danger"
+              role="alert"
+              aria-live="assertive"
+              aria-atomic="true"
+            >
               <p class="pool-error">{{ playerPoolError() }}</p>
 
               <button
@@ -604,7 +618,7 @@
                 (click)="retryPlayerPool()"
                 [disabled]="playerPoolLoading()"
               >
-                Retry Rankings
+                Reload Rankings
               </button>
             </div>
           } @else if (availableAssets().length === 0) {

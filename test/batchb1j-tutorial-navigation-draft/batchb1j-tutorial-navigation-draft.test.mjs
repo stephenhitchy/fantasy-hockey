@@ -185,7 +185,7 @@ test('Draft projections load independently and can be retried without reloading 
   assert.match(source, /isPlayerPoolRequestActive\(requestId\)/);
   assert.match(source, /retryPlayerPool\(\): void/);
   assert.match(template, /The Draft Room is ready\. Rankings are still loading\./);
-  assert.match(template, /Retry Rankings/);
+  assert.match(template, /Reload Rankings/);
 });
 
 test('B1J changes no protected scoring, projection formula, Rules, or Function authority', async () => {

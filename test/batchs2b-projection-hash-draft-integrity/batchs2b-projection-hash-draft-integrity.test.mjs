@@ -278,7 +278,7 @@ test('Draft authority pins and verifies the exact snapshot root hash for manual 
     /loadSharedProjectionSnapshotMetadata|queueSharedProjectionSnapshotGeneration/,
   );
   assert.match(draftAuthoritySource, /serverDraftProjectionSnapshotHash: null/);
-  assert.match(draftRoomSource, /The Draft pool did not match its verified server content hash/);
+  assert.match(draftRoomSource, /The Draft pool did not match the server's verified content hash/);
 });
 
 test('platform administrators can verify or restore a prior snapshot only before Draft picks exist', () => {

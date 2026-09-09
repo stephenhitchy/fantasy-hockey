@@ -122,6 +122,11 @@ import {
   getDraftPlayerAvailabilityDisplay,
 } from './draft-player-availability.util';
 import { matchesDraftPlayerSearch } from './draft-player-search.util';
+import {
+  getDraftProjectionPoolBindingKey,
+  getDraftProjectionPoolSource,
+  shouldReloadDraftProjectionPool,
+} from './draft-projection-pool-binding.util';
 
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
 const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
@@ -193,6 +198,7 @@ export class DraftRoom implements OnDestroy {
   loading = signal(true);
   draftLoadRecoveryVisible = signal(false);
   playerPoolLoading = signal(false);
+  playerPoolWaitingForServer = signal(false);
   projectionLoadSlow = signal(false);
   makingPickAssetKey = signal<string | null>(null);
   isCommissioner = signal(false);
@@ -518,6 +524,8 @@ export class DraftRoom implements OnDestroy {
   private activationFailureCount = 0;
   private activationRetryNotBefore = 0;
   private lastObservedDraftStatus: FantasyDraft['status'] | null = null;
+  private lastObservedProjectionPoolBindingKey: string | null = null;
+  private hasObservedDraftSnapshot = false;
 
   private readonly clockTimer = setInterval(() => {
     if (this.destroyed) {
@@ -1085,19 +1093,30 @@ export class DraftRoom implements OnDestroy {
           return;
         }
 
+        const hadObservedDraftSnapshot = this.hasObservedDraftSnapshot;
         const previousStatus = this.lastObservedDraftStatus;
+        const previousBindingKey = this.lastObservedProjectionPoolBindingKey;
+        const nextBindingKey = getDraftProjectionPoolBindingKey(draft);
+        this.hasObservedDraftSnapshot = true;
         this.lastObservedDraftStatus = draft?.status ?? null;
+        this.lastObservedProjectionPoolBindingKey = nextBindingKey;
         this.draft.set(draft);
         this.scheduleDraftTurnHandoffCheck();
         this.confirmPendingPickIfObserved();
         this.clearSelectedAssetIfUnavailable();
         this.scheduleDraftTimelineScroll();
 
-        if (draft?.status === 'live' && previousStatus !== null && previousStatus !== 'live') {
-          // The commissioner creates the final frozen snapshot immediately
-          // before activating the draft. Reload once on the scheduled-to-live
-          // transition so managers who entered early do not keep an older
-          // pre-draft snapshot.
+        if (shouldReloadDraftProjectionPool({
+          hadObservedDraftSnapshot,
+          previousStatus,
+          nextStatus: draft?.status ?? null,
+          previousBindingKey,
+          nextBindingKey,
+        })) {
+          // The existing Draft listener also carries the server's exact
+          // readiness binding. Reload on that transition so an early or stale
+          // tab receives the verified board without commissioner action or a
+          // second listener.
           void this.loadPlayerPool();
         }
 
@@ -1958,6 +1977,14 @@ export class DraftRoom implements OnDestroy {
   }
 
   async loadPlayerPool(): Promise<void> {
+    if (!this.hasObservedDraftSnapshot) {
+      // The initial Draft listener resolves which exact snapshot is valid.
+      // Keep the panel in a loading state instead of briefly showing a stale
+      // league-wide pointer before the Draft document arrives.
+      this.playerPoolLoading.set(true);
+      return;
+    }
+
     const requestId = ++this.playerPoolRequestId;
 
     if (this.projectionLoadSlowTimer) {
@@ -1966,6 +1993,7 @@ export class DraftRoom implements OnDestroy {
     }
 
     this.playerPoolLoading.set(true);
+    this.playerPoolWaitingForServer.set(false);
     this.projectionLoadSlow.set(false);
     this.playerPoolError.set('');
 
@@ -1978,9 +2006,29 @@ export class DraftRoom implements OnDestroy {
     }, DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS);
 
     try {
-      const pinnedSnapshotId = this.draft()?.serverDraftProjectionSnapshotId;
-      const snapshot = pinnedSnapshotId
-        ? await loadSharedProjectionSnapshotById(this.leagueId, pinnedSnapshotId)
+      const draft = this.draft();
+      const projectionSource = getDraftProjectionPoolSource(draft);
+
+      if (projectionSource.kind === 'waiting-for-readiness') {
+        this.playerPool.set([]);
+        this.playerPoolWaitingForServer.set(true);
+        return;
+      }
+
+      if (projectionSource.kind === 'invalid-frozen-binding') {
+        this.playerPool.set([]);
+        throw new Error(
+          "This Draft's exact verified ranking binding is unavailable. Reload rankings; RinkRat will not substitute another projection board.",
+        );
+      }
+
+      const projectionBinding =
+        projectionSource.kind === 'exact' ? projectionSource.binding : null;
+      const snapshot = projectionBinding
+        ? await loadSharedProjectionSnapshotById(
+            this.leagueId,
+            projectionBinding.snapshotId,
+          )
         : await loadSharedProjectionSnapshot(this.leagueId);
 
       if (!this.isPlayerPoolRequestActive(requestId)) {
@@ -1990,19 +2038,18 @@ export class DraftRoom implements OnDestroy {
       if (!snapshot) {
         this.playerPool.set([]);
         throw new Error(
-          'Shared projections are not ready. The commissioner must refresh them before the draft can use rankings or auto-draft.',
+          `Verified Projection V${SHARED_PROJECTION_VERSION} rankings are not available yet. RinkRat prepares them automatically after the Draft is scheduled; no commissioner refresh is required.`,
         );
       }
 
       if (snapshot.metadata.generationReason === 'server-emergency') {
         this.playerPool.set([]);
         throw new Error(
-          `The saved player pool contains temporary emergency rankings and cannot be used for this draft. The commissioner must return to Draft Setup and save the schedule again to build verified Projection V${SHARED_PROJECTION_VERSION} rankings.`,
+          `The saved player pool contains temporary emergency rankings and cannot be used for this Draft. RinkRat's server will keep the Draft stopped until verified Projection V${SHARED_PROJECTION_VERSION} rankings are ready.`,
         );
       }
 
-      const draft = this.draft();
-      const expectedSnapshotHash = draft?.serverDraftProjectionSnapshotHash;
+      const expectedSnapshotHash = projectionBinding?.snapshotHash;
       const verifiedAuthority =
         snapshot.metadata.generatedByAuthority === 'server' &&
         snapshot.metadata.authoritySchemaVersion ===
@@ -2015,16 +2062,18 @@ export class DraftRoom implements OnDestroy {
 
       if (
         !verifiedAuthority ||
-        (pinnedSnapshotId && snapshot.metadata.activeSnapshotId !== pinnedSnapshotId) ||
+        (projectionBinding &&
+          snapshot.metadata.activeSnapshotId !== projectionBinding.snapshotId) ||
         (expectedSnapshotHash && snapshot.metadata.snapshotContentHash !== expectedSnapshotHash)
       ) {
         this.playerPool.set([]);
         throw new Error(
-          'The Draft pool did not match its verified server content hash. Refresh the Draft Room or ask the commissioner to verify the projection snapshot.',
+          "The Draft pool did not match the server's verified content hash. Reload rankings while RinkRat safely keeps the Draft stopped.",
         );
       }
 
       this.playerPool.set(snapshot.assets);
+      this.playerPoolWaitingForServer.set(false);
     } catch (error: unknown) {
       if (this.isPlayerPoolRequestActive(requestId)) {
         this.playerPoolError.set(

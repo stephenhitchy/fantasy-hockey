@@ -117,7 +117,7 @@ must not automatically rewrite production scores.
 ## Current verified release posture
 
 - Production Hosting manifest: exact source
-  `7956b37643606dc8db4dbffb4320a73e4b326485`, Release Candidate 65,
+  `6fb443c5dac882f001a81adb93adf2fd205844f4`, Release Candidate 65,
   Production Scoring V4, Projection V11.
 - Deployed Function inventory: 107 expected, 107 matched, with no missing,
   unexpected, duplicate, or region-mismatched exports after the D1M release.
@@ -300,6 +300,17 @@ twenty-minute bounded rerun passed without bypassing Projection V11 readiness.
 The evidence-tool default is therefore twenty minutes. This is a collector
 timing correction only, not a Draft readiness or runtime change.
 
+FF1.30 is the client-only automatic-readiness UX candidate. The server already
+prepares the exact Projection V11 board inside T-20 without a browser or
+commissioner action. The existing Draft listener now reloads an already-open
+lobby when that exact snapshot/hash becomes ready, refuses an unrelated current
+pointer while a scheduled Draft lacks exact readiness, and replaces the stale
+manual-refresh instruction with an accessible automatic-preparation state. It
+adds no listener or competitive write. A separately reviewed server slice must
+measure preparation p95/p99, define a pre-lobby buffer, begin before the T-60
+lobby, and ensure fresh injury evidence before claiming that a brand-new league
+always has rankings for the full early-lobby hour.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -315,7 +326,7 @@ timing correction only, not a Draft readiness or runtime change.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
 - FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
-  exact-source command is `npm run verify:batchff1-13`, followed by `npm run build:all`,
+  exact-source command is `npm run verify:batchff1-14`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
