@@ -255,11 +255,22 @@ days ahead, stopped and empty.
 
 That evidence also observed natural NHL 429 responses. The shared Projection
 loader omitted the rejected team schedules, used its neutral schedule fallback,
-and still published `ready`. FF1.27 is therefore the current narrow P1 source
-candidate: only `pre-draft` and `draft-start-fallback` generation require every
-team-schedule response before ready snapshot/pointer publication. Existing
-request-error and readiness-backoff paths own retry. Projection V11 formulas,
-hashes, rankings, queue limits, and the Draft-opening transaction are unchanged.
+and still published `ready`. FF1.27 now requires every team-schedule response
+for only `pre-draft` and `draft-start-fallback` generation before ready
+snapshot/pointer publication. On exact staging source `2ada57ef`, two natural
+attempts each failed visibly at 24/32 schedules, preserved the prior
+`fixture-v11` pointer, restored availability, and left the Draft scheduled,
+stopped, at next pick one, and zero picks.
+
+Those two attempts also proved the existing eight-request burst can repeat the
+same upstream limit instead of recovering. FF1.28 is the current narrow P1
+source candidate: only strict Draft-opening schedule input is loaded one team
+at a time with a three-second interval and stops after two terminal club
+failures. FF1.27's request error and readiness backoff remain the only recovery
+owner. Tolerant non-Draft generation,
+Projection V11 formulas/hashes/rankings, queue concurrency, worker limits, and
+the Draft-opening transaction are unchanged. High-scale shared NHL schedule
+reuse remains a later independently reviewed D1N/canonical-fanout concern.
 
 ## Release and deployment rules
 
@@ -275,8 +286,8 @@ hashes, rankings, queue limits, and the Draft-opening transaction are unchanged.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.27 Draft
-  source-completeness gate is `npm run verify:batchff1-11`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.28 Draft
+  schedule-recovery gate is `npm run verify:batchff1-12`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -306,16 +317,13 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review FF1.27, then deploy only
-   `functions:executeDraftCommand`, `functions:processDraftClockDeadline`,
-   `functions:runScheduledDraftAutomation`,
-   `functions:continueServerDraftAutomation`, and
-   `functions:processProjectionGenerationTask` in consumer-before-producer
-   order, followed by the site-pinned staging Hosting target. Prove an
-   incomplete team-schedule source leaves the request/snapshot in error,
-   preserves the preceding pointer, rejects older unattested readiness, and
-   keeps the Draft scheduled, stopped, and at zero picks until recovery.
-2. Repeat the 25-minute cold-worker rehearsal on the exact FF1.27 build and
+1. Independently review FF1.28, then deploy only
+   `functions:processProjectionGenerationTask`, followed by the site-pinned
+   staging Hosting target. Prove strict pacing recovers all 32 team schedules,
+   publishes one exact complete snapshot, converges duplicate delivery, and
+   keeps the Draft scheduled, stopped, and at zero picks before start. Retain
+   the two natural FF1.27 24/32 errors, pointer-preservation evidence, and logs.
+2. Repeat the 25-minute cold-worker rehearsal on the exact FF1.28 build and
    prove ready-before-zero, no-browser start within five seconds,
    stale-reschedule no-op, duplicate convergence, and first-deadline scheduling.
    Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and

@@ -347,6 +347,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
         'src/shared/core/draft/draft-player-pool.service.ts',
         'src/shared/core/projection/team-schedule-input-completeness.util.ts',
+        // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
+        'src/shared/core/projection/team-schedule-request-pacing.util.ts',
       ]),
     }),
     '1e53a846c14fb3d00c4ad601b18d8265d3137003676618cb25e87399d087738b',

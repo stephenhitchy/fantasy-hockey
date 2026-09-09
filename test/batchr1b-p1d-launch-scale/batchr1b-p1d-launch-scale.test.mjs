@@ -454,6 +454,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
         'src/shared/core/draft/draft-player-pool.service.ts',
         'src/shared/core/projection/team-schedule-input-completeness.util.ts',
+        // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
+        'src/shared/core/projection/team-schedule-request-pacing.util.ts',
       ]),
     }),
     '958f23683430f1a892ad73dd21b894580934aa62f0f2a9659747999798d80355',

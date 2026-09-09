@@ -58,6 +58,10 @@ import {
 } from '../projection/team-schedule-input-completeness.util';
 
 import {
+  loadStrictTeamScheduleRequestsWithPacing
+} from '../projection/team-schedule-request-pacing.util';
+
+import {
   alignHistoricalReplaySkaterData,
   alignHistoricalReplayTeamData,
 } from './historical-replay-player-data.util';
@@ -537,51 +541,64 @@ async function loadTeamProjectionSchedules(
   const schedules = new Map<string, NhlTeamSeasonGame[]>();
   let failedTeamCount = 0;
 
-  for (
-    let index = 0;
-    index < NHL_DRAFT_CLUBS.length;
-    index += TEAM_SCHEDULE_BATCH_SIZE
-  ) {
-    const batch = NHL_DRAFT_CLUBS.slice(
-      index,
-      index + TEAM_SCHEDULE_BATCH_SIZE
-    );
+  const loadTeamSchedule = async (
+    club: (typeof NHL_DRAFT_CLUBS)[number]
+  ) => ({
+    teamAbbreviation: club.abbreviation,
+    schedule: (await getNhlTeamSeasonSchedule(
+      club.abbreviation,
+      season
+    ))
+      .filter((game) =>
+        typeof game.gameType !== 'number' ||
+        game.gameType === 2
+      )
+      .sort((first, second) =>
+        first.gameDate.localeCompare(second.gameDate) ||
+        first.id - second.id
+      )
+  });
 
-    const results = await Promise.allSettled(
-      batch.map(async (club) => ({
-        teamAbbreviation: club.abbreviation,
-        schedule: (await getNhlTeamSeasonSchedule(
-          club.abbreviation,
-          season
-        ))
-          .filter((game) =>
-            typeof game.gameType !== 'number' ||
-            game.gameType === 2
-          )
-          .sort((first, second) =>
-            first.gameDate.localeCompare(second.gameDate) ||
-            first.id - second.id
-          )
-      }))
-    );
+  const results: Array<PromiseSettledResult<Awaited<ReturnType<typeof loadTeamSchedule>>>> = [];
 
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        schedules.set(
-          result.value.teamAbbreviation,
-          result.value.schedule
-        );
-      } else {
-        failedTeamCount += 1;
-        console.warn(
-          `Skipping ${season} team schedule projection data.`,
-          result.reason
-        );
+  if (requireCompleteInput) {
+    results.push(...await loadStrictTeamScheduleRequestsWithPacing(
+      NHL_DRAFT_CLUBS,
+      loadTeamSchedule
+    ));
+  } else {
+    for (
+      let index = 0;
+      index < NHL_DRAFT_CLUBS.length;
+      index += TEAM_SCHEDULE_BATCH_SIZE
+    ) {
+      const batch = NHL_DRAFT_CLUBS.slice(
+        index,
+        index + TEAM_SCHEDULE_BATCH_SIZE
+      );
+
+      results.push(...await Promise.allSettled(
+        batch.map(loadTeamSchedule)
+      ));
+
+      if (index + TEAM_SCHEDULE_BATCH_SIZE < NHL_DRAFT_CLUBS.length) {
+        await wait(TEAM_SCHEDULE_BATCH_DELAY_MS);
       }
     }
+  }
 
-    if (index + TEAM_SCHEDULE_BATCH_SIZE < NHL_DRAFT_CLUBS.length) {
-      await wait(TEAM_SCHEDULE_BATCH_DELAY_MS);
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      schedules.set(
+        result.value.teamAbbreviation,
+        result.value.schedule
+      );
+    } else {
+      failedTeamCount += 1;
+      console.warn(
+        `Skipping ${season} team schedule projection data.`,
+        result.reason
+      );
     }
   }
 

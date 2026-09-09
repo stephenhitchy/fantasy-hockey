@@ -462,6 +462,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
     'shared/core/draft/draft-player-pool.service.ts',
     'shared/core/projection/team-schedule-input-completeness.util.ts',
+    // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
+    'shared/core/projection/team-schedule-request-pacing.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
     count: 28,
