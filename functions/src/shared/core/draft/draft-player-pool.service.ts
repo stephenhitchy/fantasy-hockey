@@ -54,6 +54,10 @@ import {
 } from '../projection/projection-v11.util';
 
 import {
+  assertCompleteTeamScheduleInput
+} from '../projection/team-schedule-input-completeness.util';
+
+import {
   alignHistoricalReplaySkaterData,
   alignHistoricalReplayTeamData,
 } from './historical-replay-player-data.util';
@@ -77,6 +81,8 @@ export interface DraftPlayerPoolProjectionOptions {
   projectionAsOfDate?: Date;
   historicalReplayAlignment?: boolean;
   ignoreAvailability?: boolean;
+  /** Draft-opening snapshots fail closed rather than substituting neutral schedules. */
+  requireCompleteTeamScheduleInput?: boolean;
 }
 
 
@@ -340,11 +346,17 @@ function normalizeProjectionOptions(
 ): Required<
   Pick<
     DraftPlayerPoolProjectionOptions,
-    'forceRefresh' | 'requiredGamesPerCycle' | 'ignoreAvailability'
+    | 'forceRefresh'
+    | 'requiredGamesPerCycle'
+    | 'ignoreAvailability'
+    | 'requireCompleteTeamScheduleInput'
   >
 > & Omit<
   DraftPlayerPoolProjectionOptions,
-  'forceRefresh' | 'requiredGamesPerCycle' | 'ignoreAvailability'
+  | 'forceRefresh'
+  | 'requiredGamesPerCycle'
+  | 'ignoreAvailability'
+  | 'requireCompleteTeamScheduleInput'
 > {
   if (typeof input === 'boolean') {
     return {
@@ -359,7 +371,8 @@ function normalizeProjectionOptions(
       scheduleSeasonOverride: undefined,
       projectionAsOfDate: undefined,
       historicalReplayAlignment: false,
-      ignoreAvailability: false
+      ignoreAvailability: false,
+      requireCompleteTeamScheduleInput: false
     };
   }
 
@@ -386,7 +399,9 @@ function normalizeProjectionOptions(
     scheduleSeasonOverride: normalizeSeasonOverride(input.scheduleSeasonOverride),
     projectionAsOfDate,
     historicalReplayAlignment: input.historicalReplayAlignment === true,
-    ignoreAvailability: input.ignoreAvailability === true
+    ignoreAvailability: input.ignoreAvailability === true,
+    requireCompleteTeamScheduleInput:
+      input.requireCompleteTeamScheduleInput === true
   };
 }
 
@@ -516,9 +531,11 @@ function getAvailabilityProbabilityForGame(
 }
 
 async function loadTeamProjectionSchedules(
-  season: string
+  season: string,
+  requireCompleteInput: boolean
 ): Promise<Map<string, NhlTeamSeasonGame[]>> {
   const schedules = new Map<string, NhlTeamSeasonGame[]>();
+  let failedTeamCount = 0;
 
   for (
     let index = 0;
@@ -555,6 +572,7 @@ async function loadTeamProjectionSchedules(
           result.value.schedule
         );
       } else {
+        failedTeamCount += 1;
         console.warn(
           `Skipping ${season} team schedule projection data.`,
           result.reason
@@ -566,6 +584,14 @@ async function loadTeamProjectionSchedules(
       await wait(TEAM_SCHEDULE_BATCH_DELAY_MS);
     }
   }
+
+  assertCompleteTeamScheduleInput({
+    season,
+    expectedTeamCount: NHL_DRAFT_CLUBS.length,
+    loadedTeamCount: schedules.size,
+    failedTeamCount,
+    requireCompleteInput
+  });
 
   return schedules;
 }
@@ -4457,7 +4483,8 @@ export async function loadDraftPlayerPool(
     options.scheduleSeasonOverride ||
     options.projectionAsOfDate ||
     options.historicalReplayAlignment ||
-    options.ignoreAvailability
+    options.ignoreAvailability ||
+    options.requireCompleteTeamScheduleInput
   );
 
   if (
@@ -4557,18 +4584,27 @@ export async function loadDraftPlayerPool(
   );
 
   let currentTeamSchedules = shouldLoadSchedules
-    ? await loadTeamProjectionSchedules(scheduleSeason)
+    ? await loadTeamProjectionSchedules(
+        scheduleSeason,
+        options.requireCompleteTeamScheduleInput
+      )
     : new Map<string, NhlTeamSeasonGame[]>();
   const sourceTeamSchedules =
     options.historicalReplayAlignment && scheduleSeason !== currentSeason
-      ? await loadTeamProjectionSchedules(currentSeason)
+      ? await loadTeamProjectionSchedules(
+          currentSeason,
+          options.requireCompleteTeamScheduleInput
+        )
       : currentTeamSchedules;
 
   // Previous-season team strength remains useful early in a new season,
   // even when current player game logs already exist. Current results take
   // progressively more weight as the sample grows.
   const previousTeamSchedules = shouldLoadSchedules
-    ? await loadTeamProjectionSchedules(previousSeason)
+    ? await loadTeamProjectionSchedules(
+        previousSeason,
+        options.requireCompleteTeamScheduleInput
+      )
     : new Map<string, NhlTeamSeasonGame[]>();
   const replaySkaterSchedulesByPlayerId =
     new Map<number, NhlTeamSeasonGame[]>();

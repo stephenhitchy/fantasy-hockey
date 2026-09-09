@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-04
+Last updated: 2026-09-08
 
 ## Repository
 
@@ -117,7 +117,7 @@ must not automatically rewrite production scores.
 ## Current verified release posture
 
 - Production Hosting manifest: exact source
-  `01e93ac522f99a090489fc3e7da1d6602937ffee`, Release Candidate 65,
+  `7956b37643606dc8db4dbffb4320a73e4b326485`, Release Candidate 65,
   Production Scoring V4, Projection V11.
 - Deployed Function inventory: 107 expected, 107 matched, with no missing,
   unexpected, duplicate, or region-mismatched exports after the D1M release.
@@ -245,6 +245,22 @@ minimum instance, concurrency, or worker limit changed. Exact staging
 rejection, reuse, timing, duplicate, reconnect, and physical-device evidence
 must pass before Draft GO.
 
+FF1.26 is merged and staging Hosting identifies exact source `631d0310`.
+Automated isolated evidence rejected an unprepared two-minute schedule without
+mutation, accepted 25 minutes, reused one exact request/snapshot, rejected a
+changed time and availability revision, recovered an injected failure after a
+59-second backoff, became ready 1,051.129 seconds before zero, and opened the
+Draft/first clock 3.218 seconds after zero with no pick. The fixture reset seven
+days ahead, stopped and empty.
+
+That evidence also observed natural NHL 429 responses. The shared Projection
+loader omitted the rejected team schedules, used its neutral schedule fallback,
+and still published `ready`. FF1.27 is therefore the current narrow P1 source
+candidate: only `pre-draft` and `draft-start-fallback` generation require every
+team-schedule response before ready snapshot/pointer publication. Existing
+request-error and readiness-backoff paths own retry. Projection V11 formulas,
+hashes, rankings, queue limits, and the Draft-opening transaction are unchanged.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -259,8 +275,8 @@ must pass before Draft GO.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- The inherited exact-source verification command through the FF1.26 Draft
-  scheduling gate is `npm run verify:batchff1-10`, followed by `npm run build:all`,
+- The inherited exact-source verification command through the FF1.27 Draft
+  source-completeness gate is `npm run verify:batchff1-11`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -290,17 +306,20 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review FF1.26, then deploy only
-   `functions:executeDraftCommand` and the site-pinned staging Hosting target
-   from a clean merged commit. Prove a new two-minute schedule is rejected
-   without mutation, a 25-minute schedule is accepted, exact-ready near-term
-   reuse succeeds, changed readiness fails closed, and no browser
-   `draft-setup` Projection request exists.
-2. Repeat the 25-minute cold-worker rehearsal and prove ready-before-zero,
-   no-browser start within five seconds, stale-reschedule no-op, duplicate
-   convergence, and first-deadline scheduling. Complete controlled reconnect,
-   duplicate-tab, physical iPhone/Android, and
-   rollback Draft evidence on the exact repaired staging build.
+1. Independently review FF1.27, then deploy only
+   `functions:executeDraftCommand`, `functions:processDraftClockDeadline`,
+   `functions:runScheduledDraftAutomation`,
+   `functions:continueServerDraftAutomation`, and
+   `functions:processProjectionGenerationTask` in consumer-before-producer
+   order, followed by the site-pinned staging Hosting target. Prove an
+   incomplete team-schedule source leaves the request/snapshot in error,
+   preserves the preceding pointer, rejects older unattested readiness, and
+   keeps the Draft scheduled, stopped, and at zero picks until recovery.
+2. Repeat the 25-minute cold-worker rehearsal on the exact FF1.27 build and
+   prove ready-before-zero, no-browser start within five seconds,
+   stale-reschedule no-op, duplicate convergence, and first-deadline scheduling.
+   Complete controlled reconnect, duplicate-tab, physical iPhone/Android, and
+   rollback Draft evidence.
 3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
 4. Repeat the exact-build six-team lifecycle and Projection V11 Draft rehearsal

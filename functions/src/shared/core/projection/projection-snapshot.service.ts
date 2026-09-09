@@ -45,6 +45,10 @@ import {
   verifyProjectionSnapshotHashChain,
   type StoredProjectionSnapshotChunk,
 } from './projection-snapshot-hash.util';
+import {
+  TEAM_SCHEDULE_INPUT_CONTRACT_VERSION,
+  requiresCompleteTeamScheduleInputForGeneration,
+} from './team-schedule-input-completeness.util';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -82,6 +86,8 @@ export interface SharedProjectionSnapshotMetadata {
   projectionSeason?: string;
   /** Exact global-plus-commissioner availability input used for this snapshot. */
   availabilityRevision?: string;
+  teamScheduleInputContractVersion?: number;
+  teamScheduleInputCompleteness?: 'complete' | 'not-required';
   authoritySchemaVersion?: number;
   generatedByAuthority?: 'server';
   catalogSnapshotId?: string;
@@ -225,6 +231,15 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     availabilityRevision:
       typeof value.availabilityRevision === 'string'
         ? value.availabilityRevision
+        : undefined,
+    teamScheduleInputContractVersion:
+      typeof value.teamScheduleInputContractVersion === 'number'
+        ? value.teamScheduleInputContractVersion
+        : undefined,
+    teamScheduleInputCompleteness:
+      value.teamScheduleInputCompleteness === 'complete' ||
+      value.teamScheduleInputCompleteness === 'not-required'
+        ? value.teamScheduleInputCompleteness
         : undefined,
     authoritySchemaVersion:
       typeof value.authoritySchemaVersion === 'number'
@@ -1149,6 +1164,8 @@ async function generateSnapshotInternal(
     Math.floor(input.targetCycleNumber ?? 1),
   );
   const generationReason = input.generationReason ?? 'window-boundary';
+  const requireCompleteTeamScheduleInput =
+    requiresCompleteTeamScheduleInputForGeneration(generationReason);
   const generatedAt = new Date().toISOString();
   const snapshotId = `server-v${SHARED_PROJECTION_VERSION}-${Date.now()}-${targetCycleNumber}`;
   const draftReadyUntil = new Date(
@@ -1215,6 +1232,7 @@ async function generateSnapshotInternal(
       projectionAsOfDate: context.projectionDate,
       historicalReplayAlignment: context.historicalReplayAlignment,
       ignoreAvailability: context.ignoreAvailability,
+      requireCompleteTeamScheduleInput,
     });
 
     assertSharedProjectionPoolHealthy(localAssets);
@@ -1313,6 +1331,10 @@ async function generateSnapshotInternal(
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
       availabilityRevision: context.availabilityRevision,
+      teamScheduleInputContractVersion:
+        TEAM_SCHEDULE_INPUT_CONTRACT_VERSION,
+      teamScheduleInputCompleteness:
+        requireCompleteTeamScheduleInput ? 'complete' : 'not-required',
       authoritySchemaVersion: PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
       generatedByAuthority: 'server',
       catalogSnapshotId: catalogValidation.catalogId,

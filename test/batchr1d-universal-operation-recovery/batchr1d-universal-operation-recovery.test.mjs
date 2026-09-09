@@ -459,9 +459,12 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/playoffs/playoff-window-bank.service.ts',
     // D1M adds an isolated, detect-only final-score reconciliation classifier.
     'shared/core/nhl/final-score-reconciliation.util.ts',
+    // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
+    'shared/core/draft/draft-player-pool.service.ts',
+    'shared/core/projection/team-schedule-input-completeness.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 29,
-    digest: '5bc563f62b14fe35a5c7abed155a3536d4a36e42050a6f4442fbbbcff9d7b9cd',
+    count: 28,
+    digest: '35988ef958838b9b8d0cc1c8b5a1bb2b82fee4010a3391c7995759410e15aff7',
   });
 });

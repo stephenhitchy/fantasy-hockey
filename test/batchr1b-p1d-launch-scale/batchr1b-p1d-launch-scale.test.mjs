@@ -451,8 +451,11 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/playoffs/playoff-window-bank.service.ts',
         // D1M adds an isolated, detect-only final-score reconciliation classifier.
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
+        // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
+        'src/shared/core/draft/draft-player-pool.service.ts',
+        'src/shared/core/projection/team-schedule-input-completeness.util.ts',
       ]),
     }),
-    '5494f2b953dafe66e3341e282f821af8b87b8e8aa776cf917cbc7d9f1c5641a5',
+    '958f23683430f1a892ad73dd21b894580934aa62f0f2a9659747999798d80355',
   );
 });

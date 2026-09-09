@@ -407,7 +407,7 @@ test('M3-M4 foundations still preserve scoring, Projection V11, Firestore rules,
     ['functions/src/shared/core/scoring/scoring-rules.ts', '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da'],
     ['functions/src/shared/core/scoring/scoring-engine.ts', '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3'],
     ['functions/src/shared/core/projection/projection-v11.util.ts', 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a'],
-    ['functions/src/shared/core/draft/draft-player-pool.service.ts', '2b34a70e868faa8b61b16ca0a908c6b18222d896d9bfd2e862b323a268c463e9'],
+    ['functions/src/shared/core/draft/draft-player-pool.service.ts', 'c2ea93f13725b2c353b4e8855706608b019498c3e601968f80d0e84c5c63f3d2'],
     ['firestore.rules', PROTECTED_SOURCE_HASHES.firestoreRules],
     ['firestore.indexes.json', '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13'],
   ]);

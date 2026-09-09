@@ -48,6 +48,9 @@ import {
   PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
 import {
+  hasCompleteTeamScheduleInputAttestation,
+} from './shared/core/projection/team-schedule-input-completeness.util';
+import {
   CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
 } from './shared/core/scoring/scoring-rules';
@@ -1350,7 +1353,8 @@ async function loadPreparedProjectionFromDraftEvidence(
     !snapshot ||
     snapshot.metadata.generationRequestId !== requestId ||
     snapshot.metadata.availabilityRevision !== availabilityRevision ||
-    snapshot.metadata.snapshotContentHash !== snapshotHash
+    snapshot.metadata.snapshotContentHash !== snapshotHash ||
+    !hasCompleteTeamScheduleInputAttestation(snapshot.metadata)
   ) {
     return null;
   }
@@ -1476,7 +1480,8 @@ async function prepareScheduledDraftReadiness(
         isProjectionSha256(snapshotHash) &&
         snapshot.metadata.generationRequestId === existingRequestId &&
         snapshot.metadata.availabilityRevision === availabilityRevision &&
-        snapshot.metadata.snapshotContentHash === snapshotHash
+        snapshot.metadata.snapshotContentHash === snapshotHash &&
+        hasCompleteTeamScheduleInputAttestation(snapshot.metadata)
       ) {
         await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
           serverDraftReadinessStatus: 'ready',
