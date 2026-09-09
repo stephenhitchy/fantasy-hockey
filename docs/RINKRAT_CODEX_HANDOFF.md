@@ -288,6 +288,18 @@ complete rosters, and post-Draft removal rejection. It does not replace the
 separate exact-start test or physical browser, focus, zoom, and mobile
 evidence. No Firebase deployment is required for this tooling-only slice.
 
+FF1.29 staging evidence passed on 2026-09-09 UTC against deployed source
+`23dbf10a06315c696f9e00229dc361abb66f54e6` using clean tooling source
+`5d870b9405bc7b67a6fb02df244c0bc6cec139d7`. Six authenticated clients and
+listeners converged through 102 unique picks, six complete rosters, snake
+reversal, idempotent replay, stale competing submissions, pause/resume,
+reconnect, queued timeout, empty-queue Auto-Draft, and post-Draft removal
+rejection. The first attempt failed closed at the former fifteen-minute
+collector boundary and reached verified readiness immediately afterward; a
+twenty-minute bounded rerun passed without bypassing Projection V11 readiness.
+The evidence-tool default is therefore twenty minutes. This is a collector
+timing correction only, not a Draft readiness or runtime change.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -333,22 +345,20 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Run the FF1.29 guarded six-client rehearsal against exact staging source
-   `23dbf10a`; preserve the aggregate output and retained disposable fixture.
-2. Complete the owner's two-manager supported-UI Draft rehearsal and record
+1. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
+2. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
-4. Complete the Historical Replay lifecycle evidence separately; the automated
+3. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.
-5. Record the no-post-Draft-replacement or account-transfer decision.
-6. Generate and independently review the D1J season-freeze kit, exact tag,
+4. Record the no-post-Draft-replacement or account-transfer decision.
+5. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+6. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+7. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

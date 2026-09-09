@@ -113,6 +113,26 @@ retains the disposable league for audit and disables all six synthetic
 accounts. A later run deletes only the exact marker-bound prior fixture after
 proving that its pick count is within one six-manager Draft.
 
+The default readiness wait is twenty minutes. A thirty-minute-ahead rehearsal
+does not enter the server's preparation window until T-20, so a shorter
+collector timeout can expire while the real Projection V11 task is still
+making valid progress. This timeout changes only how long evidence collection
+waits; it does not relax the exact-snapshot readiness requirement or permit the
+Draft to start without verified input.
+
+Recorded FF1.29 staging evidence, 2026-09-09 UTC: exact deployed application
+source `23dbf10a06315c696f9e00229dc361abb66f54e6` was exercised by clean tooling
+source `5d870b9405bc7b67a6fb02df244c0bc6cec139d7`. Six authenticated clients and
+six independent listeners completed 102 unique picks and six 17-player
+rosters. The run passed verified server Projection V11/Scoring V4 metadata,
+snake reversal, same-submission replay, competing stale submission rejection,
+pause/resume past the obsolete deadline, reconnect convergence, one queued
+timer expiration, one empty-queue Auto-Draft, exact-once outcome, and
+post-Draft member-removal rejection. All six synthetic accounts were disabled;
+the marker-bound disposable league was retained for audit. The first attempt
+reached verified readiness just after the former fifteen-minute collector
+limit and failed closed; no Draft activity was manufactured from that attempt.
+
 ## Evidence record
 
 | Field | Required value |

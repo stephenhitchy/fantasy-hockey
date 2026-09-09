@@ -31,7 +31,7 @@ test('the six-client runner is hard-locked to the isolated billed staging projec
   const safety = assertFf1SixClientStagingSafety(validEnvironment());
 
   assert.equal(safety.deployedReleaseRevision, RELEASE_REVISION);
-  assert.equal(safety.readinessTimeoutMilliseconds, 900_000);
+  assert.equal(safety.readinessTimeoutMilliseconds, 1_200_000);
   assert.throws(
     () => assertFf1SixClientStagingSafety(validEnvironment({
       FF1_SIX_CLIENT_STAGING_PROJECT_ID: 'nhl-fantasy-app-ab673',
