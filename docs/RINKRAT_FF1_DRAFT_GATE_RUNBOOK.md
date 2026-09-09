@@ -30,7 +30,7 @@ console. Stop on the first P0/P1 result and preserve the affected state.
 From a clean, synchronized `main` using Node 22.23.1 and npm 11.17.0:
 
 ```bash
-npm run verify:batchff1
+npm run verify:batchff1-13
 npm run build:all
 git diff --check
 npm run release:verify-clean-deploy-source
@@ -72,6 +72,66 @@ Do not describe local source as Production when those hashes differ.
   standing, playoff advancement, or Game 7 assignment.
 - D1M remains detect-only: it may report evidence and must never correct a
   completed result automatically.
+
+### Guarded six-client staging alternative
+
+When six independent inboxes or six human testers are unavailable, the
+source-controlled guarded six-client staging rehearsal may provide the
+server/data evidence for DRF-01, DRF-02, DRF-04 through DRF-07, and DRF-09.
+It creates six stable synthetic Auth identities in only
+`rinkrat-staging-d1nc-2026`, authenticates six independent Firebase clients,
+and exercises the ordinary Draft callable and Rules-protected queue paths.
+
+The Admin SDK is limited to fixture provisioning, binding the already
+server-verified Projection V11 snapshot to the accelerated disposable Draft,
+read-only assertions, bounded prior-fixture reset, and disabling the synthetic
+accounts. Admin must never make a pick, update a queue, pause/resume the clock,
+repair a failed outcome, or manufacture a pass. The exact-start rehearsal
+remains the authority for DRF-03 because accelerated fixture activation is not
+evidence of scheduled-start timing.
+
+This alternative does not replace physical-device, visual, focus, zoom, or
+supported-UI evidence. Stephen's two-manager supported-UI rehearsal must still
+cover the actual browser flow, and DRF-08 remains open for any device/browser
+not physically exercised. An explicit owner acceptance may carry an absent
+Android visual sample only for the bounded friends-and-family pilot; it remains
+an open risk and cannot support a public-scale Draft claim.
+
+Run only from a clean tooling commit, naming the distinct deployed staging
+release that it is allowed to test:
+
+```bash
+FF1_SIX_CLIENT_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
+FF1_SIX_CLIENT_STAGING_ACK=exercise-ff1-six-client-draft-in-rinkrat-staging-d1nc-2026 \
+FF1_SIX_CLIENT_DEPLOYED_RELEASE_REVISION=<full-staging-manifest-revision> \
+npm run staging:ff1:exercise-six-client
+```
+
+The runner refuses Production, emulators, dirty source, non-ancestor release
+revisions, and runtime/deployment-input changes after the named release. It
+retains the disposable league for audit and disables all six synthetic
+accounts. A later run deletes only the exact marker-bound prior fixture after
+proving that its pick count is within one six-manager Draft.
+
+The default readiness wait is twenty minutes. A thirty-minute-ahead rehearsal
+does not enter the server's preparation window until T-20, so a shorter
+collector timeout can expire while the real Projection V11 task is still
+making valid progress. This timeout changes only how long evidence collection
+waits; it does not relax the exact-snapshot readiness requirement or permit the
+Draft to start without verified input.
+
+Recorded FF1.29 staging evidence, 2026-09-09 UTC: exact deployed application
+source `23dbf10a06315c696f9e00229dc361abb66f54e6` was exercised by clean tooling
+source `5d870b9405bc7b67a6fb02df244c0bc6cec139d7`. Six authenticated clients and
+six independent listeners completed 102 unique picks and six 17-player
+rosters. The run passed verified server Projection V11/Scoring V4 metadata,
+snake reversal, same-submission replay, competing stale submission rejection,
+pause/resume past the obsolete deadline, reconnect convergence, one queued
+timer expiration, one empty-queue Auto-Draft, exact-once outcome, and
+post-Draft member-removal rejection. All six synthetic accounts were disabled;
+the marker-bound disposable league was retained for audit. The first attempt
+reached verified readiness just after the former fifteen-minute collector
+limit and failed closed; no Draft activity was manufactured from that attempt.
 
 ## Evidence record
 
