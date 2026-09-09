@@ -173,9 +173,12 @@ configuration.
 - Duplicate scheduler delivery after readiness must preserve request,
   snapshot, hash, attempt count, stopped clock, and zero-pick state.
 - Every T-20-through-readiness polling budget and manual command is clamped to
-  an absolute deadline ten minutes before zero. The runner rechecks that deadline
-  immediately after the final reschedule/read and before restoring shared
-  availability. Success parks the Draft again
+  an absolute deadline fifteen minutes before zero. The runner completes its
+  lock/inventory check while invalid availability still keeps the Draft closed,
+  rechecks the deadline, and gives the post-restore read the same hard deadline.
+  Later pre-T-20 Draft reads use that deadline without another maintenance
+  transaction after valid availability is restored.
+  Success parks the Draft again
   before any later maintenance read; the failure path attempts the same park
   before ownership reconciliation. A normally running process therefore never
   leaves the fixture close enough to open while evidence or cleanup waits.
@@ -296,7 +299,7 @@ configuration.
   and hash arrays converge exactly.
 - Readiness occurs before zero. Duplicate delivery and rescheduling cannot
   duplicate authority or retain a stale schedule binding. The final phase
-  stops no later than ten minutes before zero and parks the Draft before later
+  stops no later than fifteen minutes before zero and parks the Draft before later
   maintenance work on both its success and ordinary failure paths.
 - During unavailable input at zero, status is still `scheduled`, the clock is
   `stopped`, next pick is one, and pick count is zero.
@@ -352,7 +355,7 @@ configuration.
 - Stop if the Projection request was created outside the natural T-20 window,
   if any request timestamp falls outside the bounded run/observation interval,
   or if duration exceeds 30 minutes or conflicts with those timestamps.
-- Stop and enter cleanup at least ten minutes before the recovered start if
+- Stop and enter cleanup at least fifteen minutes before the recovered start if
   Projection or duplicate evidence has not completed. The failure path must
   attempt the registered safe park before ownership reconciliation.
 - Treat every ambiguous transaction commit or task deletion as unknown until
@@ -437,9 +440,10 @@ outcome.
 The initial and recovered Draft schedules are temporary staging evidence. The
 runner registers one reusable seven-day parked schedule and four maximum
 deterministic Draft-start task identities (initial, parked, near-zero, and
-recovered). A graceful failure begins parking at least ten minutes before zero,
-leaving more than the Firestore transaction retry ceiling before exact-start
-work. As with
+recovered). A graceful failure begins parking at least fifteen minutes before
+zero. Maintenance runs under the invalid availability lease; after restoration,
+only the bounded restore and safety-park transactions can remain, leaving more
+than their combined Firestore retry ceilings before exact-start work. As with
 any local staging mutator, an abrupt host/process termination can bypass local
 `finally`; in that case the evidence lock and registered ownership require
 immediate read-only diagnosis and reset-first cleanup before waiting for the

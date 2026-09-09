@@ -3027,6 +3027,14 @@ test('runner source has no deployment command, Production target, or Projection 
   const restoreDeadlineIndex = nearZero.indexOf(
     'boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds)',
   );
+  const preRestoreMaintenanceIndex = nearZero.indexOf(
+    'await assertMaintenanceCheckpoint({',
+    restoreDeadlineIndex,
+  );
+  const secondRestoreDeadlineIndex = nearZero.indexOf(
+    'boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds)',
+    restoreDeadlineIndex + 1,
+  );
   const restoreIndex = nearZero.indexOf('await restoreAvailabilityWithCas({');
   assert.ok(nearZeroStart >= 0 && nearZeroEnd > nearZeroStart);
   assert.ok(leaseIndex >= 0, 'The near-zero lease must cover the run plus cleanup reserve.');
@@ -3034,11 +3042,21 @@ test('runner source has no deployment command, Production target, or Projection 
   assert.ok(stoppedIndex > rescheduleIndex, 'The rescheduled Draft must be proven stopped.');
   assert.ok(
     restoreDeadlineIndex > stoppedIndex,
-    'The absolute T-10 deadline must be rechecked after rescheduling and before restore.',
+    'The absolute T-15 deadline must be rechecked after rescheduling.',
   );
   assert.ok(
-    restoreIndex > restoreDeadlineIndex,
-    'Availability may restore only after the safe schedule and deadline recheck.',
+    preRestoreMaintenanceIndex > restoreDeadlineIndex &&
+      secondRestoreDeadlineIndex > preRestoreMaintenanceIndex,
+    'Maintenance must finish under the invalid lease before the restore deadline is rechecked.',
+  );
+  assert.ok(
+    restoreIndex > secondRestoreDeadlineIndex,
+    'Availability may restore only after safe maintenance and the second deadline recheck.',
+  );
+  assert.match(
+    nearZero,
+    /verificationDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds/,
+    'The post-restore read must use the absolute pre-open deadline.',
   );
 
   const finalPhaseStart = source.indexOf(
@@ -3054,14 +3072,15 @@ test('runner source has no deployment command, Production target, or Projection 
   const finalParkIndex = finalPhase.lastIndexOf(
     'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',
   );
+  const finalRestoreIndex = finalPhase.indexOf('await restoreAvailabilityWithCas({');
   const finalMaintenanceIndex = finalPhase.lastIndexOf(
     'await assertMaintenanceCheckpoint({',
   );
   assert.ok(finalPhaseStart > nearZeroStart && finalPhaseEnd > finalPhaseStart);
   assert.match(
     source,
-    /const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 10 \* 60 \* 1000;/,
-    'Final evidence must reserve ten minutes for fail-closed parking.',
+    /const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 15 \* 60 \* 1000;/,
+    'Final evidence must reserve fifteen minutes for fail-closed parking.',
   );
   assert.ok(finalOwnershipIndex >= 0);
   assert.ok(
@@ -3079,6 +3098,30 @@ test('runner source has no deployment command, Production target, or Projection 
     finalParkIndex > absoluteDeadlineIndex && finalMaintenanceIndex > finalParkIndex,
     'The final schedule must be parked before post-evidence maintenance work.',
   );
+  assert.equal(
+    finalPhase
+      .slice(finalRestoreIndex, finalParkIndex)
+      .includes('await assertMaintenanceCheckpoint({'),
+    false,
+    'No retrying maintenance transaction may run after availability restore and before parking.',
+  );
+  assert.match(
+    finalPhase,
+    /The pre-projection-boundary Draft snapshot[\s\S]+The immediately pre-T-20 Draft snapshot/,
+    'Both pre-T-20 Draft reads must use the absolute deadline helper.',
+  );
+  for (const label of [
+    'The server-owned Projection V11 request',
+    'The authoritative Projection V11 request',
+    'The exact schedule-bound ready state',
+  ]) {
+    const labelIndex = finalPhase.indexOf(label);
+    assert.ok(labelIndex >= 0);
+    assert.ok(
+      finalPhase.lastIndexOf('waitForFf132BeforeDeadline(', labelIndex) >= 0,
+      `${label} must use the absolute deadline helper.`,
+    );
+  }
   const cleanupFinallyIndex = source.indexOf('} finally {', finalPhaseEnd);
   const fallbackParkIndex = source.indexOf(
     'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',

@@ -43,10 +43,10 @@ const DUPLICATE_PROBE_RETRY_SAFETY_MARGIN_MILLISECONDS = 15_000;
 const DUPLICATE_PROBE_COMMAND_TIMEOUT_MILLISECONDS = 3_000;
 const MAXIMUM_AVAILABILITY_TASK_REQUEST_MILLISECONDS = 540_000;
 const REQUEST_LOG_CLOCK_SKEW_MILLISECONDS = 2_000;
-// Begin the final safety park no later than T-10. Firestore transactions can
-// consume close to five minutes under retries, so T-5 is not enough reserve
-// to guarantee that the parked schedule commits well before exact-start work.
-const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 10 * 60 * 1000;
+// Begin the final safety park no later than T-15. Firestore transactions can
+// consume close to five minutes under retries; after valid availability is
+// restored, this leaves room for both that transaction and one safety park.
+const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 15 * 60 * 1000;
 const EVIDENCE_UTC_HORIZON_MILLISECONDS = 40 * 60 * 1000;
 const LOCK_CLEANUP_RESERVE_MILLISECONDS = 10 * 60 * 1000;
 const SAFE_RESET_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
@@ -2613,6 +2613,7 @@ async function restoreAvailabilityWithCas({
   baseline,
   baselineAttestation,
   overlayLeaseMilliseconds,
+  verificationDeadlineMilliseconds = null,
 }) {
   await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(availabilityRef);
@@ -2630,7 +2631,15 @@ async function restoreAvailabilityWithCas({
     }
   });
 
-  const restored = (await availabilityRef.get()).data() ?? {};
+  const restoredSnapshot = verificationDeadlineMilliseconds === null
+    ? await availabilityRef.get()
+    : await waitForFf132BeforeDeadline(
+      'The restored availability verification',
+      () => availabilityRef.get(),
+      () => true,
+      verificationDeadlineMilliseconds,
+    );
+  const restored = restoredSnapshot.data() ?? {};
   assert.equal(
     contentHash(restored),
     baselineAttestation.sourceHash,
@@ -3790,18 +3799,10 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     await rescheduleDraft(draftRef, FieldValue, Timestamp, rescheduledStartAt);
     assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, rescheduledStartAt);
     // Rescheduling and its authoritative read can be delayed independently of
-    // the bounded observation phase below. Recheck the absolute T-10 boundary
-    // before valid shared availability can make this schedule eligible to open.
+    // the bounded observation phase below. Complete all maintenance checks
+    // while the runner-owned availability lease still keeps the Draft closed,
+    // then recheck the absolute T-15 boundary before restoring valid input.
     boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds);
-    await restoreAvailabilityWithCas({
-      firestore,
-      FieldValue,
-      availabilityRef,
-      baseline: availabilityBaseline,
-      baselineAttestation: availabilityAttestation,
-      overlayLeaseMilliseconds,
-    });
-    availabilityOverlayOwned = false;
     await assertMaintenanceCheckpoint({
       firestore,
       lockRef,
@@ -3810,6 +3811,18 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       timeoutMilliseconds,
       draftRef,
     });
+    boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds);
+    await restoreAvailabilityWithCas({
+      firestore,
+      FieldValue,
+      availabilityRef,
+      baseline: availabilityBaseline,
+      baselineAttestation: availabilityAttestation,
+      overlayLeaseMilliseconds,
+      verificationDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
+    });
+    availabilityOverlayOwned = false;
+    boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds);
 
     const schedulerBeforeCurrentAvailability = inspectFf132SchedulerJob(schedulerFunction);
     await waitUntilBoundary(
@@ -3829,7 +3842,13 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       reschedulePlan.schedulerMilliseconds,
     );
     assert.equal(listFf132QueueTasks(FF132_AVAILABILITY_TASK_QUEUE).length, 0);
-    const beforeProjectionBoundary = (await draftRef.get()).data() ?? {};
+    const beforeProjectionBoundarySnapshot = await waitForFf132BeforeDeadline(
+      'The pre-projection-boundary Draft snapshot',
+      () => draftRef.get(),
+      () => true,
+      finalEvidenceSafetyDeadlineMilliseconds,
+    );
+    const beforeProjectionBoundary = beforeProjectionBoundarySnapshot.data() ?? {};
     assertScheduledStoppedZero(beforeProjectionBoundary, rescheduledStartAt);
     assert.equal(beforeProjectionBoundary.serverDraftReadinessProjectionRequestId ?? null, null);
 
@@ -3837,15 +3856,15 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     failureDetail = assertFailureDetail('projection-scheduler-proof');
     const schedulerBeforeProjection = inspectFf132SchedulerJob(schedulerFunction);
     await waitUntilBeforeBoundary(rescheduledStartAt, PROJECTION_BOUNDARY_MILLISECONDS);
-    await assertMaintenanceCheckpoint({
-      firestore,
-      lockRef,
-      Timestamp,
-      runId,
-      timeoutMilliseconds,
-      draftRef,
-    });
-    const immediatelyBeforeProjectionBoundary = (await draftRef.get()).data() ?? {};
+    const immediatelyBeforeProjectionBoundarySnapshot =
+      await waitForFf132BeforeDeadline(
+        'The immediately pre-T-20 Draft snapshot',
+        () => draftRef.get(),
+        () => true,
+        finalEvidenceSafetyDeadlineMilliseconds,
+      );
+    const immediatelyBeforeProjectionBoundary =
+      immediatelyBeforeProjectionBoundarySnapshot.data() ?? {};
     assertScheduledStoppedZero(immediatelyBeforeProjectionBoundary, rescheduledStartAt);
     assert.equal(
       immediatelyBeforeProjectionBoundary.serverDraftReadinessProjectionRequestId ?? null,
@@ -3859,16 +3878,19 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     );
 
     failureDetail = assertFailureDetail('projection-request-validation');
-    const preparingDraft = await waitForDraftState(
-      draftRef,
-      (draft) =>
-        typeof draft.serverDraftReadinessProjectionRequestId === 'string' ||
-        draft.serverDraftReadinessStatus === 'error',
-      finalEvidenceTimeout(
-        Math.min(timeoutMilliseconds, NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
-      ),
+    const preparingDraftSnapshot = await waitForFf132BeforeDeadline(
       'The server-owned Projection V11 request',
+      () => draftRef.get(),
+      (snapshot) => {
+        const draft = snapshot.data() ?? {};
+        return (
+          typeof draft.serverDraftReadinessProjectionRequestId === 'string' ||
+          draft.serverDraftReadinessStatus === 'error'
+        );
+      },
+      finalEvidenceSafetyDeadlineMilliseconds,
     );
+    const preparingDraft = preparingDraftSnapshot.data() ?? {};
     assert.notEqual(preparingDraft.serverDraftReadinessStatus, 'error');
     assertScheduledStoppedZero(preparingDraft, rescheduledStartAt);
     assert.match(preparingDraft.serverDraftReadinessAvailabilityRevision, SHA256_PATTERN);
@@ -3935,11 +3957,11 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
     const requestRef = firestore.doc(`projectionGenerationRequests/${requestId}`);
-    const terminalRequestSnapshot = await waitFor(
+    const terminalRequestSnapshot = await waitForFf132BeforeDeadline(
       'The authoritative Projection V11 request',
       () => requestRef.get(),
       (snapshot) => ['ready', 'error'].includes(snapshot.get('status')),
-      finalEvidenceTimeout(timeoutMilliseconds),
+      finalEvidenceSafetyDeadlineMilliseconds,
     );
     const request = terminalRequestSnapshot.data() ?? {};
     assertFf132ProjectionRequest(
@@ -3972,14 +3994,19 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
       absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
-    const readyDraft = await waitForDraftState(
-      draftRef,
-      (draft) =>
-        draft.serverDraftReadinessStatus === 'ready' &&
-        draft.serverDraftReadinessProjectionRequestId === requestId,
-      finalEvidenceTimeout(timeoutMilliseconds),
+    const readyDraftSnapshot = await waitForFf132BeforeDeadline(
       'The exact schedule-bound ready state',
+      () => draftRef.get(),
+      (snapshot) => {
+        const draft = snapshot.data() ?? {};
+        return (
+          draft.serverDraftReadinessStatus === 'ready' &&
+          draft.serverDraftReadinessProjectionRequestId === requestId
+        );
+      },
+      finalEvidenceSafetyDeadlineMilliseconds,
     );
+    const readyDraft = readyDraftSnapshot.data() ?? {};
     assertScheduledStoppedZero(readyDraft, rescheduledStartAt);
     assert.equal(
       timestampMilliseconds(readyDraft.serverDraftReadinessScheduledStartAt),

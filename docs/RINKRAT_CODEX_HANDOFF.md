@@ -405,9 +405,11 @@ resets that Draft, drains and verifies only allowlisted clock work, then handles
 Projection before using a nanosecond-preserving compare-and-set to restore and
 drain runner-owned availability state; it never rewinds valid
 generated Projection requests, snapshots, pointers, control, or counters.
-The recovered T-20 phase has an absolute deadline ten minutes before zero,
-rechecks it after the final reschedule/read and before restoring availability, and
-parks on success or ordinary failure before later maintenance. Clock-task
+The recovered T-20 phase has an absolute deadline fifteen minutes before zero,
+runs its final maintenance check while invalid availability keeps the Draft
+closed, then rechecks the deadline before restoring availability and
+uses deadline-bounded pre-T-20 reads without another maintenance transaction.
+It parks on success or ordinary failure before later maintenance. Clock-task
 cleanup recognizes at most the four exact identities for the initial, parked,
 near-zero, and recovered schedules.
 Ambiguous commits/deletions are reconciled against remote state, and any
