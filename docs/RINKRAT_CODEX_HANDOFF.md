@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 ## Repository
 
@@ -562,8 +562,18 @@ unchanged dispatch limits. The evidence runner now requires that observed
 value for `advanceHistoricalReplayDay`, `processAutoDraftQueueChange`,
 `processHistoricalReplayAdvance`, `processLeagueAutomationTask`, and
 `refreshDraftPlayerAvailabilityTask`. This is an evidence-only correction;
-runtime source, queues, workers, and Production were not changed. The guarded
-six-client rehearsal remains pending.
+runtime source, queues, workers, and Production were not changed.
+
+The guarded six-client rehearsal then passed against exact runtime
+`48ebbefe3d94af6b7db2be9e758ed1e396a22ac4` with clean evidence source
+`ff1095d6c0f1dcb45dc223ce89889173a31c0c6f`. Six authenticated clients
+completed 102 unique picks and six complete rosters through queue timeout,
+Auto-Draft, pause/resume, reconnect, duplicate/off-clock rejection, and snake
+reversal. Cycle 1 contained three matchups and 84 scheduled six-game windows
+with zero completed games or points. Post-Draft removal was denied, all six
+synthetic accounts were disabled, all five queues were empty, recurring
+scoring was parked under Historical Replay authority, and the shared evidence
+lock was released.
 
 ## Release and deployment rules
 
@@ -610,13 +620,12 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Merge the reviewed `48ebbefe` replay-lease runtime guard, then independently
-   review and merge its separate seven-file six-client tooling commit.
-2. Deploy only the exact 16 exercised staging Functions plus the three
-   replay/automation guard prerequisites and site-pinned Hosting from the guarded
-   runtime commit. Confirm two Scheduler jobs and five task queues match
-   protected topology, then run the hardened rehearsal against that exact
-   manifest revision.
+1. Stephen deploys the exact reviewed Production delta from clean synchronized
+   `ff1095d6`: the documented 22 targeted Functions in worker-before-producer
+   order, followed by `hosting:app`. Do not use a broad deployment.
+2. Verify every targeted Production Function revision/archive and confirm the
+   public manifest identifies exactly `ff1095d6`; rerun the read-only preflight
+   and inventory audit before making a Draft decision.
 3. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
@@ -628,8 +637,8 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 6. Record the no-post-Draft-replacement or account-transfer decision.
 7. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-8. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
-   competitive freeze.
+8. After the formal FF1.16 Draft GO, begin the observed 2–4 league, 10–30
+   manager season under the post-Draft competitive freeze.
 9. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
