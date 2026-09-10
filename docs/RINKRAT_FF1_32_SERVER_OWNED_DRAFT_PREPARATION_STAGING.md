@@ -29,9 +29,13 @@ Natural Scheduler evidence and manual duplicate probes are distinct. Natural
 T-25/T-20 observations must correlate to the minute job inside a window shorter
 than 60 seconds. Any later manual probes run serially, and each probe must be
 accepted only after its full `appData/draftAutomation` success marker advances.
-The exact HTTP 200 request logs may arrive later; the runner then maps exactly
-two logs to the two disjoint trigger-to-completion windows. Concurrent manual
-invocations would make attribution ambiguous.
+The Projection-phase exact HTTP 200 request logs may arrive later; they are
+read only after the Draft is safely parked, with the natural window capped
+before probe one and each of the two manual logs constrained to its own
+disjoint marker window. The two probe calls must also have matching immutable
+Cloud Audit `RunJob` request entries, while that audit method must be absent
+from the natural window. Concurrent manual invocations would make attribution
+ambiguous and fail closed.
 
 ## Implemented tooling behavior
 
@@ -61,9 +65,27 @@ captures the deterministic task and lease, completes both bounded duplicate
 probes, and atomically parks the Draft/restores availability before waiting for
 that immutable log. Control-plane lag therefore cannot consume the ten-second
 sub-retry safety window. At the later natural T-25 and T-20 boundaries, where
-no manual delivery can overwrite attribution first, the runner polls
-`lastAttemptTime` inside the same strict sub-minute window. Stale, late, or
-ambiguous observations still fail closed. This remains tooling only.
+no manual delivery can overwrite attribution first, FF1.32.3 polls
+`lastAttemptTime` inside the same strict sub-minute window. FF1.32.4 below
+supersedes that approach for the time-constrained T-20 endgame. Stale, late,
+or ambiguous observations still fail closed. This remains tooling only.
+
+FF1.32.4 closes the Projection endgame timing and integrity gaps found by the
+first post-FF1.32.3 guarded run. Before T-15 it performs only two serialized,
+marker-only Scheduler probes, exact schedule-bound readiness checks, stable
+duplicate identity, and zero-pick proof. It then immediately uses the existing
+single-attempt compare-and-set park, which must still be proven by T-5. Only
+after that authoritative park may the runner wait for Cloud Logging, scan
+request history, or read and verify Projection chunks. The deferred audit
+requires one natural T-20 request and one request for each manual probe in
+three disjoint exact-revision/source-hash windows. It uses the authoritative
+source TypeScript verifier—not generated `functions/lib`—to recompute every
+ordered chunk hash and the schema-2 root hash. Manual-probe attribution also
+requires exactly two matching Cloud Audit `RunJob` request entries and none in
+the natural window; a full clock-skew gap separates serialized probes. The
+runner additionally enforces the canonical `chunk-0001…` document IDs and
+stored IDs, contiguous zero-based indexes, and 25-asset non-final chunks
+produced by the current writer. This remains local tooling only.
 
 - A guarded runner is hard-coded to the billed
   `rinkrat-staging-d1nc-2026` project and refuses Production and every Emulator
@@ -426,7 +448,10 @@ retained Projection audit state, allowlisted deadline-task cleanup, ambiguous
 commit reconciliation, allowlisted privacy-safe failure details, staged
 cleanup/`cleanup-required` locking, full single-attempt admission reserve,
 exact-state park retry, T-15 observation/T-5 park deadlines, pending-mutation
-settlement and lock retention, and no-deployment/no-Production-source guards.
+settlement and lock retention, marker-only Projection endgame probes, disjoint
+post-park natural/manual log correlation, authoritative schema-2 chunk/root
+hash recomputation, Cloud Audit exclusion/ownership, enforced clock-skew gaps,
+canonical chunk layout, and no-deployment/no-Production-source guards.
 
 The focused tests run through `npm run test:batchff1-16:run`. The current
 composite gate is `npm run verify:batchff1-16`, which inherits
@@ -514,6 +539,19 @@ deterministic availability task, observed the intentional active-lease HTTP
 500, and completed the bounded retry with HTTP 204. The failure was the stale
 one-shot Scheduler metadata read corrected by FF1.32.3; it is containment and
 diagnostic evidence, not a passing run.
+
+The first post-FF1.32.3 guarded run failed closed at `projection-boundary`
+with `failureDetail: projection-snapshot-validation` and
+`cleanupState: complete`. Read-only evidence showed the Projection worker
+completed successfully in about 235 seconds, leaving one valid request and a
+Projection V11/Scoring V4 snapshot with 1,179 assets across 48 chunks. The
+request became ready 37 seconds before T-15; subsequent mutable Scheduler
+metadata and Cloud Logging waits exhausted that interval before the remaining
+duplicate probes could run. The Draft was restored scheduled/stopped with zero
+picks, strict availability was restored, the evidence lock was absent, and
+all three queues were empty. FF1.32.4 corrects that runner-only ordering and
+the overly broad failure classification; this diagnostic run is not passing
+evidence.
 
 Do not publish raw records, errors, account IDs, league IDs, player or team
 identities, availability attempts, task IDs, request IDs, snapshot IDs, or

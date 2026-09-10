@@ -18,6 +18,10 @@ import {
   assertFf132DraftAutomationSuccessMarker,
   assertFf132DraftInventory,
   assertFf132DuplicateSchedulerRequestLogs,
+  assertFf132MarkerOnlyProbeSequence,
+  assertFf132MarkerOnlySchedulerBaseline,
+  assertFf132MarkerOnlySchedulerRequestLog,
+  assertFf132ProjectionSnapshotIntegrity,
   assertFf132FirstFailedTaskAttempt,
   assertFf132ManualSchedulerCompletion,
   assertFf132NaturalSchedulerAttempt,
@@ -26,6 +30,7 @@ import {
   assertFf132ProjectionRequest,
   assertFf132RequestLogs,
   assertFf132RetryRequestLogs,
+  assertFf132SchedulerRunAuditProvenance,
   assertFf132SchedulerJob,
   assertFf132SingleQueueTask,
   assertFf132SourceArchiveBuffer,
@@ -37,6 +42,7 @@ import {
   assertStrictSchema2AvailabilityBaseline,
   buildPublicFf132Evidence,
   boundFf132TimeoutBeforeDeadline,
+  buildFf132MarkerOnlySchedulerProbe,
   buildFf132ProjectionRequestId,
   FF132_AVAILABILITY_TASK_QUEUE,
   FF132_DRAFT_CLOCK_TASK_QUEUE,
@@ -52,6 +58,7 @@ import {
   Ff132SafetyTransactionDeadlineError,
   canAttemptFf132CleanupRequiredMarker,
   getFf132AvailabilityRestorePatch,
+  getFf132NaturalSchedulerRequestWindow,
   getNextSafeNaturalSchedulerMinute,
   hashFf132DocumentData,
   isFf132NaturalSchedulerAttemptObserved,
@@ -67,6 +74,11 @@ import {
   verifyFf132StagingManifest,
   waitForFf132NaturalSchedulerAttempt,
 } from '../../scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs';
+import {
+  createProjectionSnapshotHashBundle,
+  PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+} from '../../functions/src/shared/core/projection/projection-snapshot-hash.util.ts';
 import { D1N_STAGING_PROJECT_ID } from '../../scripts/capacity/prepare-d1n-staging-hosting.mjs';
 import { D1N_FIXTURE_LEAGUE_ID } from '../../scripts/capacity/seed-d1n-route-fixture.mjs';
 
@@ -626,7 +638,7 @@ test('clean tooling provenance requires local main to equal its exact origin/mai
       scripts: {
         inherited: 'node --version',
         'staging:ff1:exercise-server-preparation':
-          'node scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs',
+          'node --no-warnings --experimental-strip-types scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs',
         'test:batchff1-16:run':
           'node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchff1-16-server-owned-draft-preparation-staging/*.test.mjs',
         'verify:batchff1-16:core':
@@ -1357,6 +1369,215 @@ test('serialized duplicate Scheduler logs map exactly to disjoint successful pro
   }));
 });
 
+test('marker-only Projection probes reserve the Draft-open boundary and disjoint log windows', () => {
+  const deployedFunction = assertFf132StagingFunctionInventory(
+    deployedFunctionInventory(),
+  ).find(({ name }) => name === 'runScheduledDraftAutomation');
+  const minuteStart = Date.UTC(2026, 8, 9, 20, 0, 0);
+  const deadlineMilliseconds = minuteStart + 50_000;
+  const baselineMarker = draftAutomationMarker(minuteStart + 5_000);
+  assert.deepEqual(
+    assertFf132MarkerOnlySchedulerBaseline(baselineMarker, {
+      observedAtMilliseconds: minuteStart + 10_000,
+      deadlineMilliseconds,
+    }),
+    {
+      lastRunMilliseconds: minuteStart + 5_000,
+      nextNaturalMinuteMilliseconds: minuteStart + 60_000,
+    },
+  );
+  assert.throws(() => assertFf132MarkerOnlySchedulerBaseline(baselineMarker, {
+    observedAtMilliseconds: minuteStart + 41_000,
+    deadlineMilliseconds: minuteStart + 70_000,
+  }), /next natural minute/);
+  assert.throws(() => assertFf132MarkerOnlySchedulerBaseline(baselineMarker, {
+    observedAtMilliseconds: minuteStart + 10_000,
+    deadlineMilliseconds: minuteStart + 29_999,
+  }), /Draft-open safety time/);
+  assert.throws(() => assertFf132MarkerOnlySchedulerBaseline(
+    draftAutomationMarker(minuteStart - 1),
+    {
+      observedAtMilliseconds: minuteStart + 10_000,
+      deadlineMilliseconds,
+    },
+  ), /current natural minute/);
+
+  const first = buildFf132MarkerOnlySchedulerProbe({
+    priorLastRunMilliseconds: minuteStart + 5_000,
+    triggerStartedMilliseconds: minuteStart + 10_000,
+    afterAutomationMarker: draftAutomationMarker(minuteStart + 12_000),
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds: minuteStart + 60_000,
+  });
+  const second = buildFf132MarkerOnlySchedulerProbe({
+    priorLastRunMilliseconds: minuteStart + 12_000,
+    triggerStartedMilliseconds: minuteStart + 14_001,
+    afterAutomationMarker: draftAutomationMarker(minuteStart + 16_000),
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds: minuteStart + 60_000,
+  });
+  assert.throws(() => buildFf132MarkerOnlySchedulerProbe({
+    priorLastRunMilliseconds: minuteStart + 5_000,
+    triggerStartedMilliseconds: minuteStart + 10_000,
+    afterAutomationMarker: draftAutomationMarker(minuteStart + 12_000),
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds: minuteStart + 120_000,
+  }), /natural-minute boundary/);
+  assert.throws(() => buildFf132MarkerOnlySchedulerProbe({
+    priorLastRunMilliseconds: minuteStart + 12_000,
+    triggerStartedMilliseconds: minuteStart + 14_000,
+    afterAutomationMarker: draftAutomationMarker(minuteStart + 16_000),
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds: minuteStart + 60_000,
+  }), /clock-skew gap/);
+  assert.deepEqual(buildFf132MarkerOnlySchedulerProbe({
+    priorLastRunMilliseconds: minuteStart + 5_000,
+    triggerStartedMilliseconds: minuteStart + 10_000,
+    afterAutomationMarker: draftAutomationMarker(minuteStart + 9_000),
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds: minuteStart + 60_000,
+  }), {
+    triggerStartedMilliseconds: minuteStart + 10_000,
+    afterAutomationMilliseconds: minuteStart + 9_000,
+    minimumRequestMilliseconds: minuteStart + 8_000,
+    maximumRequestMilliseconds: minuteStart + 9_000,
+  });
+  assert.deepEqual(first, {
+    triggerStartedMilliseconds: minuteStart + 10_000,
+    afterAutomationMilliseconds: minuteStart + 12_000,
+    minimumRequestMilliseconds: minuteStart + 8_000,
+    maximumRequestMilliseconds: minuteStart + 12_000,
+  });
+  assert.deepEqual(
+    assertFf132MarkerOnlyProbeSequence([first, second]),
+    [first, second],
+  );
+  assert.throws(() => assertFf132MarkerOnlyProbeSequence([first]));
+  assert.throws(() => assertFf132MarkerOnlyProbeSequence([
+    first,
+    { ...second, minimumRequestMilliseconds: first.maximumRequestMilliseconds },
+  ]), /overlap/);
+
+  const schedulerLog = (timestamp, overrides = {}) => {
+    const entry = cloudRunRequestLog(deployedFunction, 200, timestamp);
+    entry.httpRequest.userAgent =
+      'Google-Cloud-Scheduler; (+https://cloud.google.com/scheduler)';
+    return Object.assign(entry, overrides);
+  };
+  const firstLog = schedulerLog(minuteStart + 11_000);
+  assert.equal(assertFf132MarkerOnlySchedulerRequestLog([firstLog], {
+    deployedFunction,
+    probe: first,
+  }), minuteStart + 11_000);
+  assert.throws(() => assertFf132MarkerOnlySchedulerRequestLog(
+    [firstLog, schedulerLog(minuteStart + 11_500)],
+    { deployedFunction, probe: first },
+  ));
+  assert.throws(() => assertFf132MarkerOnlySchedulerRequestLog(
+    [schedulerLog(minuteStart + 11_000, {
+      labels: { 'firebase-functions-hash': '0'.repeat(40) },
+    })],
+    { deployedFunction, probe: first },
+  ));
+  const wrongStatus = schedulerLog(minuteStart + 11_000);
+  wrongStatus.httpRequest.status = 500;
+  assert.throws(() => assertFf132MarkerOnlySchedulerRequestLog(
+    [wrongStatus],
+    { deployedFunction, probe: first },
+  ));
+
+  const naturalWindow = getFf132NaturalSchedulerRequestWindow(
+    first.minimumRequestMilliseconds - 30_000,
+    first,
+  );
+  assert.deepEqual(naturalWindow, {
+    minimumRequestMilliseconds: first.minimumRequestMilliseconds - 32_000,
+    maximumRequestMilliseconds: first.minimumRequestMilliseconds - 1,
+  });
+});
+
+test('natural T-20 proof excludes manual RunJob audits and owns exactly two probe calls', () => {
+  const minuteStart = Date.UTC(2026, 8, 9, 20, 0, 0);
+  const probes = [
+    {
+      triggerStartedMilliseconds: minuteStart + 10_000,
+      afterAutomationMilliseconds: minuteStart + 12_000,
+      minimumRequestMilliseconds: minuteStart + 8_000,
+      maximumRequestMilliseconds: minuteStart + 12_000,
+    },
+    {
+      triggerStartedMilliseconds: minuteStart + 15_000,
+      afterAutomationMilliseconds: minuteStart + 17_000,
+      minimumRequestMilliseconds: minuteStart + 13_000,
+      maximumRequestMilliseconds: minuteStart + 17_000,
+    },
+  ];
+  const naturalWindow = {
+    minimumRequestMilliseconds: minuteStart - 60_000,
+    maximumRequestMilliseconds: minuteStart - 1,
+  };
+  const schedulerResource =
+    `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/jobs/` +
+    FF132_DRAFT_SCHEDULER_JOB;
+  const runAudit = (timestamp, overrides = {}) => ({
+    logName:
+      `projects/${D1N_STAGING_PROJECT_ID}/logs/` +
+      'cloudaudit.googleapis.com%2Factivity',
+    timestamp: new Date(timestamp).toISOString(),
+    protoPayload: {
+      '@type': 'type.googleapis.com/google.cloud.audit.AuditLog',
+      serviceName: 'cloudscheduler.googleapis.com',
+      methodName: 'google.cloud.scheduler.v1.CloudScheduler.RunJob',
+      resourceName: schedulerResource,
+      request: { name: schedulerResource },
+      authorizationInfo: [{
+        permission: 'cloudscheduler.jobs.run',
+        granted: true,
+      }],
+      status: {},
+      ...overrides,
+    },
+  });
+  const requests = [
+    runAudit(minuteStart + 10_500),
+    runAudit(minuteStart + 15_500),
+  ];
+  const responseDuplicates = requests.map((entry) => ({
+    ...structuredClone(entry),
+    protoPayload: {
+      ...structuredClone(entry.protoPayload),
+      response: { name: schedulerResource },
+    },
+  }));
+  const options = { naturalWindow, probes };
+
+  assert.deepEqual(
+    assertFf132SchedulerRunAuditProvenance(
+      [...requests, ...responseDuplicates],
+      options,
+    ),
+    [minuteStart + 10_500, minuteStart + 15_500],
+  );
+  assert.throws(() => assertFf132SchedulerRunAuditProvenance(
+    [runAudit(minuteStart - 30_000), ...requests],
+    options,
+  ), /claimed natural T-20/);
+  assert.throws(() => assertFf132SchedulerRunAuditProvenance(
+    [requests[0]],
+    options,
+  ), /probe 2/);
+  assert.throws(() => assertFf132SchedulerRunAuditProvenance(
+    [runAudit(minuteStart + 3_000), ...requests],
+    options,
+  ), /unowned manual RunJob/);
+  assert.throws(() => assertFf132SchedulerRunAuditProvenance([
+    requests[0],
+    runAudit(minuteStart + 15_500, {
+      resourceName: `${schedulerResource}-other`,
+    }),
+  ], options), /probe 2/);
+});
+
 test('absolute Draft-open safety timeouts cannot extend through the deadline', () => {
   assert.equal(boundFf132TimeoutBeforeDeadline(60_000, 150_000, 100_000), 50_000);
   assert.equal(boundFf132TimeoutBeforeDeadline(10_000, 150_000, 100_000), 10_000);
@@ -1810,6 +2031,134 @@ test('Projection requests use one exact availability-bound identity and bounded 
       runStartedMilliseconds: projectionBoundaryMilliseconds + 1,
     },
   ));
+});
+
+test('FF1.32 recomputes the canonical Projection V11 chunk and root hash chain', () => {
+  const snapshotId = 'ff132-projection-snapshot';
+  const assets = Array.from({ length: 26 }, (_, index) => ({
+    assetKey: `player:${index + 1}`,
+    displayName: `Fixture Player ${index + 1}`,
+    position: index % 6 === 0 ? 'G' : 'C',
+    seasonDraftRank: index + 1,
+    nested: { beta: index, alpha: true },
+  }));
+  const chunkInputs = [
+    { chunkId: 'chunk-0001', chunkIndex: 0, assets: assets.slice(0, 25) },
+    { chunkId: 'chunk-0002', chunkIndex: 1, assets: assets.slice(25) },
+  ];
+  const metadataInput = {
+    snapshotId,
+    projectionVersion: 11,
+    scoringRulesVersion: 4,
+    projectionAsOfDate: '2026-09-09',
+    projectionContext: 'live',
+    projectionSeason: '20262027',
+    teamCount: 10,
+    targetCycleNumber: 1,
+    requiredGamesPerCycle: 6,
+    assetCount: assets.length,
+    assetDocumentCount: chunkInputs.length,
+    catalogSnapshotId: 'catalog-20262027',
+    catalogHash: 'a'.repeat(64),
+  };
+  const bundle = createProjectionSnapshotHashBundle(metadataInput, chunkInputs);
+  const metadata = {
+    ...metadataInput,
+    activeSnapshotId: snapshotId,
+    generatedByAuthority: 'server',
+    authoritySchemaVersion: 2,
+    snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+    snapshotContentHash: bundle.snapshotContentHash,
+    snapshotChunkHashes: bundle.chunkHashes,
+  };
+  const documents = chunkInputs.map((chunk, index) => ({
+    id: chunk.chunkId,
+    data: {
+      schemaVersion: 3,
+      ...chunk,
+      assetCount: chunk.assets.length,
+      sharedProjectionSnapshotId: snapshotId,
+      snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+      snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+      chunkHash: bundle.chunkHashes[index],
+      snapshotContentHash: bundle.snapshotContentHash,
+    },
+  }));
+
+  const verified = assertFf132ProjectionSnapshotIntegrity(
+    metadata,
+    [...documents].reverse(),
+  );
+  assert.deepEqual(verified.assets, assets);
+  assert.deepEqual(verified.chunkHashes, bundle.chunkHashes);
+  assert.equal(verified.snapshotContentHash, bundle.snapshotContentHash);
+
+  const assetMutation = structuredClone(documents);
+  assetMutation[0].data.assets[0].displayName = 'Tampered Player';
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity(metadata, assetMutation));
+
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity({
+    ...metadata,
+    snapshotChunkHashes: [...metadata.snapshotChunkHashes].reverse(),
+  }, documents));
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity({
+    ...metadata,
+    scoringRulesVersion: 5,
+  }, documents));
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity({
+    ...metadata,
+    snapshotHashSchemaVersion: 1,
+  }, documents), /current Projection snapshot hash schema/);
+
+  const documentIdMutation = structuredClone(documents);
+  documentIdMutation[0].id = 'chunk-0099';
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity(metadata, documentIdMutation));
+  const missingStoredChunkId = structuredClone(documents);
+  delete missingStoredChunkId[0].data.chunkId;
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity(
+    metadata,
+    missingStoredChunkId,
+  ));
+  const duplicateIndex = structuredClone(documents);
+  duplicateIndex[1].data.chunkIndex = 0;
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity(metadata, duplicateIndex));
+  const gappedIndex = structuredClone(documents);
+  gappedIndex[1].data.chunkIndex = 2;
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity(metadata, gappedIndex));
+  const chunkAuthorityMutation = structuredClone(documents);
+  chunkAuthorityMutation[1].data.sharedProjectionSnapshotId = 'other-snapshot';
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity(
+    metadata,
+    chunkAuthorityMutation,
+  ));
+
+  const shortFirstChunkInputs = [
+    { chunkId: 'chunk-0001', chunkIndex: 0, assets: assets.slice(0, 24) },
+    { chunkId: 'chunk-0002', chunkIndex: 1, assets: assets.slice(24) },
+  ];
+  const shortBundle = createProjectionSnapshotHashBundle(
+    metadataInput,
+    shortFirstChunkInputs,
+  );
+  const shortDocuments = shortFirstChunkInputs.map((chunk, index) => ({
+    id: chunk.chunkId,
+    data: {
+      schemaVersion: 3,
+      ...chunk,
+      assetCount: chunk.assets.length,
+      sharedProjectionSnapshotId: snapshotId,
+      snapshotHashSchemaVersion: PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+      snapshotHashAlgorithm: PROJECTION_SNAPSHOT_HASH_ALGORITHM,
+      chunkHash: shortBundle.chunkHashes[index],
+      snapshotContentHash: shortBundle.snapshotContentHash,
+    },
+  }));
+  assert.throws(() => assertFf132ProjectionSnapshotIntegrity({
+    ...metadata,
+    snapshotContentHash: shortBundle.snapshotContentHash,
+    snapshotChunkHashes: shortBundle.chunkHashes,
+  }, shortDocuments), /non-final Projection snapshot chunk is not full/);
 });
 
 test('one expected task identity is required before inspecting its first failed delivery', () => {
@@ -3069,6 +3418,11 @@ test('CLI failures expose only bounded checkpoint, cleanup, and failure-detail e
     'near-zero-fail-closed',
     'projection-scheduler-proof',
     'projection-request-validation',
+    'projection-ready-binding',
+    'projection-post-ready-duplicate',
+    'projection-final-park',
+    'projection-log-correlation',
+    'projection-request-uniqueness',
     'projection-snapshot-validation',
     'duplicate-convergence',
     'cleanup-reconciliation',
@@ -3168,6 +3522,9 @@ test('runner source has no deployment command, Production target, or Projection 
     'inspectFf132ProjectionTaskQueue',
     'inspectFf132DraftClockTaskQueue',
     'assertFf132ManualSchedulerCompletion',
+    'assertFf132SchedulerRunAuditProvenance',
+    'verifyProjectionSnapshotHashChain',
+    '../../functions/src/shared/core/projection/projection-snapshot-hash.util.ts',
     'assertFf132SyntheticDraftSafety',
     'acquireFf132EvidenceLock',
     'prepareFf132InitialEvidenceState',
@@ -3189,8 +3546,12 @@ test('runner source has no deployment command, Production target, or Projection 
     "failureDetail = assertFailureDetail('near-zero-fail-closed')",
     "failureDetail = assertFailureDetail('projection-scheduler-proof')",
     "failureDetail = assertFailureDetail('projection-request-validation')",
+    "failureDetail = assertFailureDetail('projection-ready-binding')",
+    "failureDetail = assertFailureDetail('projection-post-ready-duplicate')",
+    "failureDetail = assertFailureDetail('projection-final-park')",
+    "failureDetail = assertFailureDetail('projection-log-correlation')",
+    "failureDetail = assertFailureDetail('projection-request-uniqueness')",
     "failureDetail = assertFailureDetail('projection-snapshot-validation')",
-    "failureDetail = assertFailureDetail('duplicate-convergence')",
     "failureDetail = assertFailureDetail('cleanup-reconciliation')",
     "['ci', '--ignore-scripts', '--no-audit', '--no-fund']",
     'cwd: cleanFunctionsRoot',
@@ -3201,6 +3562,26 @@ test('runner source has no deployment command, Production target, or Projection 
     source.match(/assertFf132SyntheticDraftSafety\(/g)?.length,
     3,
     'The shared Draft-safety validator must guard the initial read and atomic recheck.',
+  );
+
+  const markerProbeStart = source.indexOf(
+    'async function runFf132MarkerOnlySchedulerProbeBeforeDeadline({',
+  );
+  const markerProbeEnd = source.indexOf(
+    'async function runCorrelatedFf132DraftScheduler({',
+    markerProbeStart,
+  );
+  const markerProbe = source.slice(markerProbeStart, markerProbeEnd);
+  const markerBaselineReadIndex = markerProbe.indexOf(
+    'const automation = await readDraftAutomationState(draftAutomationRef);',
+  );
+  const markerObservationIndex = markerProbe.indexOf(
+    'const observedAtMilliseconds = Date.now();',
+  );
+  assert.ok(markerProbeStart >= 0 && markerProbeEnd > markerProbeStart);
+  assert.ok(
+    markerBaselineReadIndex >= 0 && markerObservationIndex > markerBaselineReadIndex,
+    'The baseline minute must be measured after the Firestore read to avoid a boundary-crossing false failure.',
   );
 
   const availabilityBoundaryStart = source.indexOf(
@@ -3387,8 +3768,32 @@ test('runner source has no deployment command, Production target, or Projection 
   const finalPhaseEnd = source.indexOf('provisionalEvidence = {', finalPhaseStart);
   const finalPhase = source.slice(finalPhaseStart, finalPhaseEnd);
   const finalOwnershipIndex = finalPhase.indexOf('finalScheduleActive = true;');
-  const absoluteDeadlineIndex = finalPhase.indexOf(
-    'absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds',
+  const terminalRequestIndex = finalPhase.indexOf(
+    "'The authoritative Projection V11 request'",
+  );
+  const readyBindingIndex = finalPhase.indexOf(
+    "failureDetail = assertFailureDetail('projection-ready-binding')",
+    terminalRequestIndex,
+  );
+  const readyStateIndex = finalPhase.indexOf(
+    "'The exact schedule-bound ready state'",
+    readyBindingIndex,
+  );
+  const postReadyDuplicateIndex = finalPhase.indexOf(
+    "failureDetail = assertFailureDetail('projection-post-ready-duplicate')",
+    readyStateIndex,
+  );
+  const duplicateStateIndex = finalPhase.indexOf(
+    "'The duplicate-ready Draft snapshot'",
+    postReadyDuplicateIndex,
+  );
+  const finalParkDetailIndex = finalPhase.indexOf(
+    "failureDetail = assertFailureDetail('projection-final-park')",
+    duplicateStateIndex,
+  );
+  const immediateDeadlineIndex = finalPhase.indexOf(
+    'boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds)',
+    finalParkDetailIndex,
   );
   const finalParkIndex = finalPhase.lastIndexOf(
     'await parkFf132FinalDraftBeforeDeadline({',
@@ -3396,6 +3801,22 @@ test('runner source has no deployment command, Production target, or Projection 
   const finalRestoreIndex = finalPhase.indexOf('await restoreAvailabilityWithCas({');
   const finalMaintenanceIndex = finalPhase.lastIndexOf(
     'await assertMaintenanceCheckpoint({',
+  );
+  const logCorrelationIndex = finalPhase.indexOf(
+    "failureDetail = assertFailureDetail('projection-log-correlation')",
+    finalParkIndex,
+  );
+  const retainedRequestIndex = finalPhase.indexOf(
+    'const retainedRequestSnapshot = await requestRef.get();',
+    logCorrelationIndex,
+  );
+  const uniquenessIndex = finalPhase.indexOf(
+    "failureDetail = assertFailureDetail('projection-request-uniqueness')",
+    retainedRequestIndex,
+  );
+  const snapshotValidationIndex = finalPhase.indexOf(
+    'const metadata = await assertProjectionSnapshot(',
+    uniquenessIndex,
   );
   assert.ok(finalPhaseStart > nearZeroStart && finalPhaseEnd > finalPhaseStart);
   assert.match(
@@ -3415,20 +3836,47 @@ test('runner source has no deployment command, Production target, or Projection 
   );
   assert.ok(finalOwnershipIndex >= 0);
   assert.ok(
-    absoluteDeadlineIndex > finalOwnershipIndex,
-    'Every final manual Scheduler probe must honor the pre-open safety deadline.',
+    terminalRequestIndex > finalOwnershipIndex &&
+      readyBindingIndex > terminalRequestIndex &&
+      readyStateIndex > readyBindingIndex &&
+      postReadyDuplicateIndex > readyStateIndex &&
+      duplicateStateIndex > postReadyDuplicateIndex &&
+      finalParkDetailIndex > duplicateStateIndex &&
+      immediateDeadlineIndex > finalParkDetailIndex &&
+      finalParkIndex > immediateDeadlineIndex,
+    'The Projection endgame must prove ready/duplicate state and immediately park.',
   );
   assert.equal(
-    finalPhase.match(
-      /absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds/g,
-    )?.length,
-    5,
-    'All five final-phase manual Scheduler probes require the absolute deadline.',
+    finalPhase
+      .slice(terminalRequestIndex, finalParkIndex)
+      .match(/runFf132MarkerOnlySchedulerProbeBeforeDeadline\(\{/g)?.length,
+    2,
+    'The Projection endgame requires one ready-binding and one duplicate probe.',
   );
   assert.ok(
-    finalParkIndex > absoluteDeadlineIndex && finalMaintenanceIndex > finalParkIndex,
-    'The final schedule must be parked before post-evidence maintenance work.',
+    finalMaintenanceIndex > finalParkIndex &&
+      logCorrelationIndex > finalMaintenanceIndex &&
+      retainedRequestIndex > logCorrelationIndex &&
+      uniquenessIndex > retainedRequestIndex &&
+      snapshotValidationIndex > uniquenessIndex,
+    'Slow logs, request history, and hash-chain validation must follow the final park.',
   );
+  const preParkProjectionEndgame = finalPhase.slice(terminalRequestIndex, finalParkIndex);
+  for (const forbiddenBeforePark of [
+    'inspectFf132SchedulerJob(',
+    'waitForFf132NaturalSchedulerAttempt(',
+    'runCorrelatedFf132DraftScheduler(',
+    'readFf132RequestLogs(',
+    'readFf132SchedulerRunAuditLogs(',
+    'assertOneOwnedProjectionRequest(',
+    'assertProjectionSnapshot(',
+  ]) {
+    assert.equal(
+      preParkProjectionEndgame.includes(forbiddenBeforePark),
+      false,
+      `${forbiddenBeforePark} must not run before the final park.`,
+    );
+  }
   assert.equal(
     finalPhase
       .slice(finalRestoreIndex, finalParkIndex)

@@ -646,7 +646,7 @@
     "test:batchff1-15": "firebase emulators:exec --project demo-rinkrat-ff1-15 --only firestore \"npm run test:batchff1-15:run\"",
     "verify:batchff1-15:core": "npm run verify:batchff1-14:core && npm run test:batchff1-15 && npm run validate:release-manifest",
     "verify:batchff1-15": "npm run toolchain:verify && npm run verify:batchff1-15:core && npm run security:dependency-audit",
-    "staging:ff1:exercise-server-preparation": "node scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs",
+    "staging:ff1:exercise-server-preparation": "node --no-warnings --experimental-strip-types scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs",
     "test:batchff1-16:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchff1-16-server-owned-draft-preparation-staging/*.test.mjs",
     "verify:batchff1-16:core": "npm run verify:batchff1-15:core && npm run test:batchff1-16:run && npm run validate:release-manifest",
     "verify:batchff1-16": "npm run toolchain:verify && npm run verify:batchff1-16:core && npm run security:dependency-audit",

@@ -10,6 +10,10 @@ import { inflateRawSync } from 'node:zlib';
 
 import { D1N_FIXTURE_LEAGUE_ID } from './seed-d1n-route-fixture.mjs';
 import { D1N_STAGING_PROJECT_ID } from './prepare-d1n-staging-hosting.mjs';
+import {
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  verifyProjectionSnapshotHashChain,
+} from '../../functions/src/shared/core/projection/projection-snapshot-hash.util.ts';
 
 export const FF132_STAGING_ACKNOWLEDGEMENT =
   `exercise-ff132-server-preparation-in-${D1N_STAGING_PROJECT_ID}`;
@@ -21,6 +25,9 @@ export const FF132_AVAILABILITY_TASK_QUEUE = 'refreshDraftPlayerAvailabilityTask
 export const FF132_PROJECTION_TASK_QUEUE = 'processProjectionGenerationTask';
 export const FF132_DRAFT_CLOCK_TASK_QUEUE = 'processDraftClockDeadline';
 export const FF132_REGION = 'us-central1';
+const FF132_DRAFT_SCHEDULER_RESOURCE =
+  `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/jobs/` +
+  FF132_DRAFT_SCHEDULER_JOB;
 export const FF132_EVIDENCE_LOCK_PATH =
   'appData/ff132ServerOwnedDraftPreparationEvidenceLock';
 
@@ -97,6 +104,11 @@ const PUBLIC_FAILURE_DETAILS = Object.freeze([
   'near-zero-fail-closed',
   'projection-scheduler-proof',
   'projection-request-validation',
+  'projection-ready-binding',
+  'projection-post-ready-duplicate',
+  'projection-final-park',
+  'projection-log-correlation',
+  'projection-request-uniqueness',
   'projection-snapshot-validation',
   'duplicate-convergence',
   'cleanup-reconciliation',
@@ -121,7 +133,7 @@ const ALLOWED_TOOLING_DELTA = Object.freeze([
 ]);
 const EXPECTED_FF132_PACKAGE_SCRIPTS = Object.freeze({
   'staging:ff1:exercise-server-preparation':
-    'node scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs',
+    'node --no-warnings --experimental-strip-types scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs',
   'test:batchff1-16:run':
     'node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchff1-16-server-owned-draft-preparation-staging/*.test.mjs',
   'verify:batchff1-16:core':
@@ -1741,6 +1753,122 @@ export function readFf132ApplicationLogs(
   ]);
 }
 
+export function readFf132SchedulerRunAuditLogs(
+  minimumTimestamp,
+  maximumTimestamp,
+) {
+  const start = new Date(minimumTimestamp).toISOString();
+  const end = new Date(maximumTimestamp).toISOString();
+  const filter = [
+    `logName="projects/${D1N_STAGING_PROJECT_ID}/logs/` +
+      'cloudaudit.googleapis.com%2Factivity"',
+    'protoPayload.serviceName="cloudscheduler.googleapis.com"',
+    'protoPayload.methodName="google.cloud.scheduler.v1.CloudScheduler.RunJob"',
+    `protoPayload.resourceName="${FF132_DRAFT_SCHEDULER_RESOURCE}"`,
+    `timestamp>="${start}"`,
+    `timestamp<="${end}"`,
+  ].join(' AND ');
+
+  return parseJsonCommand('gcloud', [
+    'logging',
+    'read',
+    filter,
+    `--project=${D1N_STAGING_PROJECT_ID}`,
+    '--order=asc',
+    '--limit=20',
+    '--format=json',
+  ]);
+}
+
+function relevantFf132SchedulerRunAuditLogs(
+  entries,
+  minimumTimestamp,
+  maximumTimestamp,
+) {
+  assert.equal(Array.isArray(entries), true, 'Scheduler audit logs are malformed.');
+  return entries.filter((entry) => {
+    const payload = entry?.protoPayload;
+    const timestamp = timestampMilliseconds(entry?.timestamp);
+    const authorization = Array.isArray(payload?.authorizationInfo)
+      ? payload.authorizationInfo
+      : [];
+    return (
+      entry?.logName ===
+        `projects/${D1N_STAGING_PROJECT_ID}/logs/` +
+          'cloudaudit.googleapis.com%2Factivity' &&
+      payload?.['@type'] === 'type.googleapis.com/google.cloud.audit.AuditLog' &&
+      payload?.serviceName === 'cloudscheduler.googleapis.com' &&
+      payload?.methodName === 'google.cloud.scheduler.v1.CloudScheduler.RunJob' &&
+      payload?.resourceName === FF132_DRAFT_SCHEDULER_RESOURCE &&
+      payload?.request?.name === FF132_DRAFT_SCHEDULER_RESOURCE &&
+      !Object.hasOwn(payload, 'response') &&
+      authorization.some(
+        (entry) => entry?.permission === 'cloudscheduler.jobs.run' && entry?.granted === true,
+      ) &&
+      Number(payload?.status?.code ?? 0) === 0 &&
+      timestamp !== null &&
+      timestamp >= minimumTimestamp &&
+      timestamp <= maximumTimestamp
+    );
+  });
+}
+
+export function assertFf132SchedulerRunAuditProvenance(
+  entries,
+  { naturalWindow, probes },
+) {
+  assertFf132MarkerOnlyProbeSequence(probes);
+  const minimumTimestamp = naturalWindow?.minimumRequestMilliseconds;
+  const maximumTimestamp = probes[1].maximumRequestMilliseconds;
+  assert.ok(Number.isSafeInteger(minimumTimestamp));
+  assert.ok(Number.isSafeInteger(naturalWindow?.maximumRequestMilliseconds));
+  assert.ok(naturalWindow.maximumRequestMilliseconds < probes[0].minimumRequestMilliseconds);
+  const relevant = relevantFf132SchedulerRunAuditLogs(
+    entries,
+    minimumTimestamp,
+    maximumTimestamp,
+  );
+  const naturalRuns = relevant.filter((entry) => {
+    const timestamp = timestampMilliseconds(entry.timestamp);
+    return (
+      timestamp >= naturalWindow.minimumRequestMilliseconds &&
+      timestamp <= naturalWindow.maximumRequestMilliseconds
+    );
+  });
+  assert.equal(
+    naturalRuns.length,
+    0,
+    'A manual RunJob audit event overlaps the claimed natural T-20 Scheduler window.',
+  );
+
+  const matched = new Set();
+  const timestamps = probes.map((probe, probeIndex) => {
+    const matches = relevant.filter((entry, entryIndex) => {
+      const timestamp = timestampMilliseconds(entry.timestamp);
+      if (
+        timestamp >= probe.minimumRequestMilliseconds &&
+        timestamp <= probe.maximumRequestMilliseconds
+      ) {
+        matched.add(entryIndex);
+        return true;
+      }
+      return false;
+    });
+    assert.equal(
+      matches.length,
+      1,
+      `Marker-only Scheduler probe ${probeIndex + 1} is missing its exact RunJob audit event.`,
+    );
+    return timestampMilliseconds(matches[0].timestamp);
+  });
+  assert.equal(
+    matched.size,
+    relevant.length,
+    'An unowned manual RunJob audit event exists between the natural and probe windows.',
+  );
+  return timestamps;
+}
+
 export function assertFf132AlreadyCurrentCompletionLog(entries, deployedFunction) {
   const matched = entries.filter((entry) => {
     const jsonMessage = entry?.jsonPayload?.message;
@@ -2058,6 +2186,255 @@ export function assertFf132DuplicateSchedulerRequestLogs(
 
   assert.ok(requestTimes[1] > requestTimes[0]);
   return requestTimes;
+}
+
+export function assertFf132MarkerOnlySchedulerBaseline(
+  marker,
+  { observedAtMilliseconds, deadlineMilliseconds },
+) {
+  assert.ok(Number.isSafeInteger(observedAtMilliseconds));
+  assert.ok(Number.isSafeInteger(deadlineMilliseconds));
+  const minuteStartMilliseconds =
+    Math.floor(observedAtMilliseconds / 60_000) * 60_000;
+  const nextNaturalMinuteMilliseconds = minuteStartMilliseconds + 60_000;
+  assert.ok(
+    deadlineMilliseconds - observedAtMilliseconds >=
+      MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS,
+    'The marker-only Scheduler probe has insufficient Draft-open safety time.',
+  );
+  assert.ok(
+    nextNaturalMinuteMilliseconds - observedAtMilliseconds >=
+      MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS,
+    'The marker-only Scheduler probe is too close to the next natural minute.',
+  );
+  const lastRunMilliseconds = timestampMilliseconds(marker?.lastRunAt);
+  assert.ok(lastRunMilliseconds !== null);
+  assertFf132DraftAutomationSuccessMarker(marker, {
+    priorLastRunMilliseconds: lastRunMilliseconds - 1,
+    triggerStartedMilliseconds: minuteStartMilliseconds,
+    maximumCompletionMilliseconds:
+      observedAtMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+  });
+  assert.ok(
+    lastRunMilliseconds >= minuteStartMilliseconds &&
+      lastRunMilliseconds <= observedAtMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+    'The marker-only Scheduler baseline is not the current natural minute.',
+  );
+
+  return {
+    lastRunMilliseconds,
+    nextNaturalMinuteMilliseconds,
+  };
+}
+
+export function buildFf132MarkerOnlySchedulerProbe({
+  priorLastRunMilliseconds,
+  triggerStartedMilliseconds,
+  afterAutomationMarker,
+  deadlineMilliseconds,
+  nextNaturalMinuteMilliseconds,
+}) {
+  assert.ok(Number.isSafeInteger(priorLastRunMilliseconds));
+  assert.ok(Number.isSafeInteger(triggerStartedMilliseconds));
+  assert.ok(Number.isSafeInteger(deadlineMilliseconds));
+  assert.ok(Number.isSafeInteger(nextNaturalMinuteMilliseconds));
+  assert.equal(
+    nextNaturalMinuteMilliseconds,
+    (Math.floor(triggerStartedMilliseconds / 60_000) + 1) * 60_000,
+    'The marker-only Scheduler probe crossed its natural-minute boundary.',
+  );
+  assert.ok(
+    triggerStartedMilliseconds >
+      priorLastRunMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+    'The marker-only Scheduler probe did not reserve its clock-skew gap.',
+  );
+  const maximumCompletionMilliseconds = Math.min(
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds - MANUAL_SCHEDULER_COMPLETION_GUARD_MILLISECONDS,
+  );
+  const afterAutomationMilliseconds = assertFf132DraftAutomationSuccessMarker(
+    afterAutomationMarker,
+    {
+      priorLastRunMilliseconds,
+      triggerStartedMilliseconds,
+      maximumCompletionMilliseconds,
+    },
+  );
+  const minimumRequestMilliseconds = Math.max(
+    triggerStartedMilliseconds - REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+    priorLastRunMilliseconds + 1,
+  );
+  const maximumRequestMilliseconds = afterAutomationMilliseconds;
+  assert.ok(
+    minimumRequestMilliseconds <= maximumRequestMilliseconds,
+    'The marker-only Scheduler request window is empty.',
+  );
+
+  return {
+    triggerStartedMilliseconds,
+    afterAutomationMilliseconds,
+    minimumRequestMilliseconds,
+    maximumRequestMilliseconds,
+  };
+}
+
+export function assertFf132MarkerOnlyProbeSequence(probes) {
+  assert.equal(Array.isArray(probes), true);
+  assert.equal(probes.length, 2, 'Exactly two marker-only Scheduler probes are required.');
+
+  probes.forEach((probe) => {
+    for (const field of [
+      'triggerStartedMilliseconds',
+      'afterAutomationMilliseconds',
+      'minimumRequestMilliseconds',
+      'maximumRequestMilliseconds',
+    ]) {
+      assert.ok(Number.isSafeInteger(probe?.[field]), `The Scheduler probe ${field} is invalid.`);
+    }
+    assert.ok(
+      probe.afterAutomationMilliseconds >=
+        probe.triggerStartedMilliseconds - REQUEST_LOG_CLOCK_SKEW_MILLISECONDS,
+    );
+    assert.ok(probe.minimumRequestMilliseconds <= probe.triggerStartedMilliseconds);
+    assert.ok(probe.minimumRequestMilliseconds <= probe.maximumRequestMilliseconds);
+  });
+  assert.ok(
+    probes[1].triggerStartedMilliseconds > probes[0].afterAutomationMilliseconds,
+    'Marker-only Scheduler probes were not serialized.',
+  );
+  assert.ok(
+    probes[1].minimumRequestMilliseconds > probes[0].maximumRequestMilliseconds,
+    'Marker-only Scheduler request windows overlap.',
+  );
+  return probes;
+}
+
+export function assertFf132MarkerOnlySchedulerRequestLog(
+  entries,
+  { deployedFunction, probe },
+) {
+  const requestTimes = assertFf132RequestLogs(entries, {
+    deployedFunction,
+    userAgent: 'Google-Cloud-Scheduler',
+    minimumTimestamp: probe.minimumRequestMilliseconds,
+    maximumTimestamp: probe.maximumRequestMilliseconds,
+    expectedStatuses: [200],
+  });
+  assert.equal(requestTimes.length, 1);
+  return requestTimes[0];
+}
+
+export function getFf132NaturalSchedulerRequestWindow(
+  expectedSchedulerMilliseconds,
+  firstProbe,
+) {
+  assert.ok(Number.isSafeInteger(expectedSchedulerMilliseconds));
+  assert.ok(Number.isSafeInteger(firstProbe?.minimumRequestMilliseconds));
+  const minimumRequestMilliseconds =
+    expectedSchedulerMilliseconds - REQUEST_LOG_CLOCK_SKEW_MILLISECONDS;
+  const maximumRequestMilliseconds = Math.min(
+    expectedSchedulerMilliseconds + FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
+    firstProbe.minimumRequestMilliseconds - 1,
+  );
+  assert.ok(
+    maximumRequestMilliseconds >= minimumRequestMilliseconds &&
+      maximumRequestMilliseconds < firstProbe.minimumRequestMilliseconds,
+    'The natural T-20 Scheduler log window is not disjoint from the manual probe.',
+  );
+  return { minimumRequestMilliseconds, maximumRequestMilliseconds };
+}
+
+async function runFf132MarkerOnlySchedulerProbeBeforeDeadline({
+  label,
+  draftAutomationRef,
+  deadlineMilliseconds,
+}) {
+  const beforeAutomation = await waitForFf132BeforeDeadline(
+    `${label} baseline`,
+    async () => {
+      const automation = await readDraftAutomationState(draftAutomationRef);
+      const observedAtMilliseconds = Date.now();
+      return { observedAtMilliseconds, automation };
+    },
+    ({ observedAtMilliseconds, automation }) => {
+      try {
+        assertFf132MarkerOnlySchedulerBaseline(automation.marker, {
+          observedAtMilliseconds,
+          deadlineMilliseconds,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    deadlineMilliseconds,
+  );
+  const baseline = assertFf132MarkerOnlySchedulerBaseline(
+    beforeAutomation.automation.marker,
+    {
+      observedAtMilliseconds: beforeAutomation.observedAtMilliseconds,
+      deadlineMilliseconds,
+    },
+  );
+  const earliestTriggerMilliseconds =
+    baseline.lastRunMilliseconds + REQUEST_LOG_CLOCK_SKEW_MILLISECONDS + 1;
+  const latestSafeTriggerMilliseconds =
+    Math.min(deadlineMilliseconds, baseline.nextNaturalMinuteMilliseconds) -
+    MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS;
+  assert.ok(
+    earliestTriggerMilliseconds <= latestSafeTriggerMilliseconds,
+    `${label} has no clock-skew-safe invocation window.`,
+  );
+  const clockSkewDelayMilliseconds = earliestTriggerMilliseconds - Date.now();
+  if (clockSkewDelayMilliseconds > 0) {
+    await wait(clockSkewDelayMilliseconds);
+  }
+  const triggerStartedMilliseconds = Date.now();
+  assert.ok(
+    deadlineMilliseconds - triggerStartedMilliseconds >=
+      MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS &&
+      baseline.nextNaturalMinuteMilliseconds - triggerStartedMilliseconds >=
+        MANUAL_SCHEDULER_MINIMUM_REMAINING_MILLISECONDS,
+    `${label} lost its safe invocation window.`,
+  );
+  const commandTimeoutMilliseconds = Math.min(
+    DUPLICATE_PROBE_COMMAND_TIMEOUT_MILLISECONDS,
+    deadlineMilliseconds - triggerStartedMilliseconds,
+    baseline.nextNaturalMinuteMilliseconds -
+      MANUAL_SCHEDULER_COMPLETION_GUARD_MILLISECONDS -
+      triggerStartedMilliseconds,
+  );
+  assert.ok(commandTimeoutMilliseconds > 0, `${label} has no command time remaining.`);
+  triggerFf132DraftScheduler(commandTimeoutMilliseconds);
+  const maximumCompletionMilliseconds = Math.min(
+    deadlineMilliseconds,
+    baseline.nextNaturalMinuteMilliseconds - MANUAL_SCHEDULER_COMPLETION_GUARD_MILLISECONDS,
+  );
+  const afterAutomation = await waitForFf132BeforeDeadline(
+    `${label} completion marker`,
+    () => readDraftAutomationState(draftAutomationRef),
+    (value) => {
+      try {
+        assertFf132DraftAutomationSuccessMarker(value.marker, {
+          priorLastRunMilliseconds: baseline.lastRunMilliseconds,
+          triggerStartedMilliseconds,
+          maximumCompletionMilliseconds,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    maximumCompletionMilliseconds,
+  );
+
+  return buildFf132MarkerOnlySchedulerProbe({
+    priorLastRunMilliseconds: baseline.lastRunMilliseconds,
+    triggerStartedMilliseconds,
+    afterAutomationMarker: afterAutomation.marker,
+    deadlineMilliseconds,
+    nextNaturalMinuteMilliseconds: baseline.nextNaturalMinuteMilliseconds,
+  });
 }
 
 async function runCorrelatedFf132DraftScheduler({
@@ -3163,6 +3540,63 @@ export function assertFf132ProjectionRequest(
   return true;
 }
 
+export function assertFf132ProjectionSnapshotIntegrity(metadata, chunkDocuments) {
+  assert.equal(
+    metadata.snapshotHashSchemaVersion,
+    PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+    'FF1.32 requires the current Projection snapshot hash schema.',
+  );
+  assert.equal(Array.isArray(chunkDocuments), true);
+  assert.equal(chunkDocuments.length, metadata.assetDocumentCount);
+  const storedChunks = chunkDocuments.map((document) => {
+    assert.equal(typeof document?.id, 'string');
+    assert.ok(document.id.length > 0);
+    const data = document?.data ?? {};
+    assert.equal(data.schemaVersion, 3);
+    assert.equal(
+      data.chunkId,
+      document.id,
+      'The stored Projection chunk ID diverges from its Firestore document ID.',
+    );
+    assert.equal(Array.isArray(data.assets), true);
+    assert.ok(
+      data.assets.length > 0 &&
+        data.assets.length <= PROJECTION_SNAPSHOT_ASSET_CHUNK_SIZE,
+      'A Projection snapshot chunk is outside the reviewed asset envelope.',
+    );
+    return {
+      ...data,
+      chunkId: document.id,
+    };
+  });
+  const orderedChunks = [...storedChunks].sort((first, second) => {
+    if (first.chunkIndex !== second.chunkIndex) {
+      return first.chunkIndex - second.chunkIndex;
+    }
+    return first.chunkId.localeCompare(second.chunkId);
+  });
+  orderedChunks.forEach((chunk, index) => {
+    assert.equal(
+      chunk.chunkId,
+      `chunk-${String(index + 1).padStart(4, '0')}`,
+      'The Projection snapshot chunk layout is not canonical.',
+    );
+    if (index < orderedChunks.length - 1) {
+      assert.equal(
+        chunk.assets.length,
+        PROJECTION_SNAPSHOT_ASSET_CHUNK_SIZE,
+        'A non-final Projection snapshot chunk is not full.',
+      );
+    }
+  });
+
+  const verified = verifyProjectionSnapshotHashChain(metadata, storedChunks);
+  assert.deepEqual(verified.chunkHashes, metadata.snapshotChunkHashes);
+  assert.equal(verified.snapshotContentHash, metadata.snapshotContentHash);
+  assert.equal(verified.assets.length, metadata.assetCount);
+  return verified;
+}
+
 async function assertProjectionSnapshot(firestore, request, availabilityAttestation) {
   const snapshotRef = firestore.doc(
     `leagues/${D1N_FIXTURE_LEAGUE_ID}/projectionSnapshots/${request.snapshotId}`,
@@ -3217,21 +3651,13 @@ async function assertProjectionSnapshot(firestore, request, availabilityAttestat
 
   const chunks = await snapshotRef.collection('assets').limit(metadata.assetDocumentCount + 1).get();
   assert.equal(chunks.size, metadata.assetDocumentCount);
-  let assetCount = 0;
-
-  for (const chunk of chunks.docs) {
-    const data = chunk.data() ?? {};
-    assert.equal(data.schemaVersion, 3);
-    assert.equal(data.snapshotContentHash, metadata.snapshotContentHash);
-    assert.match(data.chunkHash, SHA256_PATTERN);
-    assert.equal(metadata.snapshotChunkHashes.includes(data.chunkHash), true);
-    assert.equal(Array.isArray(data.assets), true);
-    assert.ok(data.assets.length <= PROJECTION_SNAPSHOT_ASSET_CHUNK_SIZE);
-    assert.equal(data.assetCount, data.assets.length);
-    assetCount += data.assets.length;
-  }
-
-  assert.equal(assetCount, metadata.assetCount);
+  assertFf132ProjectionSnapshotIntegrity(
+    metadata,
+    chunks.docs.map((chunk) => ({
+      id: chunk.id,
+      data: chunk.data() ?? {},
+    })),
+  );
   return metadata;
 }
 
@@ -4122,11 +4548,6 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       finalDraftParkCompletionDeadlineMilliseconds > finalEvidenceSafetyDeadlineMilliseconds,
       'The final safety-park completion deadline must follow the evidence cutoff.',
     );
-    const finalEvidenceTimeout = (maximumMilliseconds) =>
-      boundFf132TimeoutBeforeDeadline(
-        maximumMilliseconds,
-        finalEvidenceSafetyDeadlineMilliseconds,
-      );
     finalScheduleActive = true;
     await rescheduleDraft(draftRef, FieldValue, Timestamp, rescheduledStartAt);
     assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, rescheduledStartAt);
@@ -4184,7 +4605,6 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
 
     checkpoint = assertCheckpoint('projection-boundary');
     failureDetail = assertFailureDetail('projection-scheduler-proof');
-    const schedulerBeforeProjection = inspectFf132SchedulerJob(schedulerFunction);
     await waitUntilBeforeBoundary(rescheduledStartAt, PROJECTION_BOUNDARY_MILLISECONDS);
     const immediatelyBeforeProjectionBoundarySnapshot =
       await waitForFf132BeforeDeadline(
@@ -4243,52 +4663,6 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       'Automatic Projection preparation',
     );
     const expectedProjectionSchedulerMilliseconds = projectionBoundaryMilliseconds + 1_000;
-    await waitForFf132NaturalSchedulerAttempt({
-      label: 'The natural T-20 scheduler attempt metadata',
-      before: schedulerBeforeProjection,
-      expectedSchedulerMilliseconds: expectedProjectionSchedulerMilliseconds,
-      readScheduler: () => inspectFf132SchedulerJob(schedulerFunction),
-      timeoutMilliseconds: finalEvidenceTimeout(
-        NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
-      ),
-    });
-    const schedulerProjectionLogs = await waitFor(
-      'The verified natural T-20 scheduler request log',
-      () =>
-        readFf132RequestLogs(
-          schedulerFunction,
-          'Google-Cloud-Scheduler',
-          expectedProjectionSchedulerMilliseconds - 2_000,
-          expectedProjectionSchedulerMilliseconds +
-            FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
-        ),
-      (entries) => entries.some((entry) => Number(entry?.httpRequest?.status) === 200),
-      finalEvidenceTimeout(NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS),
-    );
-    assertFf132RequestLogs(schedulerProjectionLogs, {
-      deployedFunction: schedulerFunction,
-      userAgent: 'Google-Cloud-Scheduler',
-      minimumTimestamp: expectedProjectionSchedulerMilliseconds - 2_000,
-      maximumTimestamp:
-        expectedProjectionSchedulerMilliseconds +
-          FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
-      expectedStatuses: [200],
-    });
-
-    // Only after the natural request exists do explicit duplicate scheduler
-    // deliveries verify idempotent convergence.
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
-      draftAutomationRef,
-      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
-      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
-    });
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
-      draftAutomationRef,
-      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
-      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
-    });
     const requestRef = firestore.doc(`projectionGenerationRequests/${requestId}`);
     const terminalRequestSnapshot = await waitForFf132BeforeDeadline(
       'The authoritative Projection V11 request',
@@ -4296,36 +4670,27 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       (snapshot) => ['ready', 'error'].includes(snapshot.get('status')),
       finalEvidenceSafetyDeadlineMilliseconds,
     );
-    const request = terminalRequestSnapshot.data() ?? {};
-    assertFf132ProjectionRequest(
-      request,
-      requestId,
+    assert.ok(terminalRequestSnapshot.exists);
+    const terminalRequest = terminalRequestSnapshot.data() ?? {};
+    assert.equal(terminalRequest.status, 'ready');
+    assert.equal(terminalRequest.requestId, requestId);
+    assert.equal(
+      terminalRequest.availabilityRevision,
       preparingDraft.serverDraftReadinessAvailabilityRevision,
-      {
-        runStartedMilliseconds: runStartedAt,
-        projectionBoundaryMilliseconds,
-        observedAtMilliseconds: Date.now(),
-      },
     );
-    failureDetail = assertFailureDetail('projection-snapshot-validation');
-    const metadata = await waitForFf132BeforeDeadline(
-      'The authoritative Projection V11 snapshot validation',
-      () => assertProjectionSnapshot(firestore, request, availabilityAttestation),
-      () => true,
-      finalEvidenceSafetyDeadlineMilliseconds,
-    );
-    const requestCount = await waitForFf132BeforeDeadline(
-      'The single authoritative Projection V11 request validation',
-      () => assertOneOwnedProjectionRequest(firestore, requestId, runStartedAt),
-      () => true,
-      finalEvidenceSafetyDeadlineMilliseconds,
-    );
+    assert.equal(typeof terminalRequest.snapshotId, 'string');
+    assert.ok(terminalRequest.snapshotId.length > 0);
+    assert.match(terminalRequest.snapshotContentHash, SHA256_PATTERN);
 
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
+    // Cloud Scheduler metadata and Cloud Logging are eventually consistent.
+    // Before T-15, correlate only against the authoritative success marker,
+    // prove the exact ready identity and its duplicate convergence, and park.
+    // Immutable log, request-history, and hash-chain audits run after parking.
+    failureDetail = assertFailureDetail('projection-ready-binding');
+    const readyBindingProbe = await runFf132MarkerOnlySchedulerProbeBeforeDeadline({
+      label: 'The Projection ready-binding Scheduler probe',
       draftAutomationRef,
-      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
-      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
+      deadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
     const readyDraftSnapshot = await waitForFf132BeforeDeadline(
       'The exact schedule-bound ready state',
@@ -4345,12 +4710,24 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       timestampMilliseconds(readyDraft.serverDraftReadinessScheduledStartAt),
       rescheduledStartAt.getTime(),
     );
-    assert.equal(readyDraft.serverDraftReadinessAvailabilityRevision, request.availabilityRevision);
-    assert.equal(readyDraft.serverDraftReadinessProjectionSnapshotId, request.snapshotId);
-    assert.equal(readyDraft.serverDraftReadinessProjectionSnapshotHash, request.snapshotContentHash);
+    assert.equal(
+      readyDraft.serverDraftReadinessAvailabilityRevision,
+      terminalRequest.availabilityRevision,
+    );
+    assert.equal(readyDraft.serverDraftReadinessProjectionSnapshotId, terminalRequest.snapshotId);
+    assert.equal(
+      readyDraft.serverDraftReadinessProjectionSnapshotHash,
+      terminalRequest.snapshotContentHash,
+    );
     assert.equal(readyDraft.serverDraftReadinessAttemptCount, 1);
     assert.ok(
       timestampMilliseconds(readyDraft.serverDraftReadinessUpdatedAt) < rescheduledStartAt.getTime(),
+    );
+    await waitForFf132BeforeDeadline(
+      'The zero-pick ready-binding proof',
+      () => assertNoDraftPicks(draftRef),
+      () => true,
+      finalEvidenceSafetyDeadlineMilliseconds,
     );
 
     const stableIdentity = contentHash({
@@ -4361,18 +4738,17 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       scheduledStartAt: readyDraft.serverDraftReadinessScheduledStartAt,
       attemptCount: readyDraft.serverDraftReadinessAttemptCount,
     });
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
+    checkpoint = assertCheckpoint('duplicate-convergence');
+    failureDetail = assertFailureDetail('projection-post-ready-duplicate');
+    const postReadyDuplicateProbe = await runFf132MarkerOnlySchedulerProbeBeforeDeadline({
+      label: 'The post-ready duplicate Scheduler probe',
       draftAutomationRef,
-      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
-      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
+      deadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
     });
-    await runCorrelatedFf132DraftScheduler({
-      schedulerFunction,
-      draftAutomationRef,
-      timeoutMilliseconds: finalEvidenceTimeout(timeoutMilliseconds),
-      absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
-    });
+    const projectionSchedulerProbes = assertFf132MarkerOnlyProbeSequence([
+      readyBindingProbe,
+      postReadyDuplicateProbe,
+    ]);
     const duplicateDraftSnapshot = await waitForFf132BeforeDeadline(
       'The duplicate-ready Draft snapshot',
       () => draftRef.get(),
@@ -4398,9 +4774,11 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       () => true,
       finalEvidenceSafetyDeadlineMilliseconds,
     );
-    checkpoint = assertCheckpoint('duplicate-convergence');
-    failureDetail = assertFailureDetail('duplicate-convergence');
+    failureDetail = assertFailureDetail('projection-final-park');
     assert.ok(safetyParkStartAt instanceof Date);
+    // Nothing slower than this absolute-bound check may intervene between
+    // duplicate convergence and the one-attempt safety park.
+    boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds);
     finalDraftParkAttempted = true;
     try {
       await parkFf132FinalDraftBeforeDeadline({
@@ -4420,6 +4798,7 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       throw error;
     }
     finalScheduleActive = false;
+    failureDetail = assertFailureDetail('cleanup-reconciliation');
     await assertMaintenanceCheckpoint({
       firestore,
       lockRef,
@@ -4428,6 +4807,129 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       timeoutMilliseconds,
       draftRef,
     });
+
+    failureDetail = assertFailureDetail('projection-log-correlation');
+    const naturalProjectionWindow = getFf132NaturalSchedulerRequestWindow(
+      expectedProjectionSchedulerMilliseconds,
+      projectionSchedulerProbes[0],
+    );
+    const schedulerRunAuditLogs = await waitFor(
+      'The exact manual RunJob audit provenance after parking',
+      () =>
+        readFf132SchedulerRunAuditLogs(
+          naturalProjectionWindow.minimumRequestMilliseconds,
+          projectionSchedulerProbes[1].maximumRequestMilliseconds,
+        ),
+      (entries) => {
+        try {
+          assertFf132SchedulerRunAuditProvenance(entries, {
+            naturalWindow: naturalProjectionWindow,
+            probes: projectionSchedulerProbes,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+    );
+    assertFf132SchedulerRunAuditProvenance(schedulerRunAuditLogs, {
+      naturalWindow: naturalProjectionWindow,
+      probes: projectionSchedulerProbes,
+    });
+    const schedulerProjectionLogs = await waitFor(
+      'The verified natural T-20 Scheduler request log after parking',
+      () =>
+        readFf132RequestLogs(
+          schedulerFunction,
+          'Google-Cloud-Scheduler',
+          naturalProjectionWindow.minimumRequestMilliseconds,
+          naturalProjectionWindow.maximumRequestMilliseconds,
+        ),
+      (entries) => {
+        try {
+          assertFf132RequestLogs(entries, {
+            deployedFunction: schedulerFunction,
+            userAgent: 'Google-Cloud-Scheduler',
+            minimumTimestamp: naturalProjectionWindow.minimumRequestMilliseconds,
+            maximumTimestamp: naturalProjectionWindow.maximumRequestMilliseconds,
+            expectedStatuses: [200],
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+    );
+    assertFf132RequestLogs(schedulerProjectionLogs, {
+      deployedFunction: schedulerFunction,
+      userAgent: 'Google-Cloud-Scheduler',
+      minimumTimestamp: naturalProjectionWindow.minimumRequestMilliseconds,
+      maximumTimestamp: naturalProjectionWindow.maximumRequestMilliseconds,
+      expectedStatuses: [200],
+    });
+    for (const [index, probe] of projectionSchedulerProbes.entries()) {
+      const probeLogs = await waitFor(
+        `The verified marker-only Scheduler request log ${index + 1} after parking`,
+        () =>
+          readFf132RequestLogs(
+            schedulerFunction,
+            'Google-Cloud-Scheduler',
+            probe.minimumRequestMilliseconds,
+            probe.maximumRequestMilliseconds,
+          ),
+        (entries) => {
+          try {
+            assertFf132MarkerOnlySchedulerRequestLog(entries, {
+              deployedFunction: schedulerFunction,
+              probe,
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+      );
+      assertFf132MarkerOnlySchedulerRequestLog(probeLogs, {
+        deployedFunction: schedulerFunction,
+        probe,
+      });
+    }
+
+    failureDetail = assertFailureDetail('projection-request-validation');
+    const retainedRequestSnapshot = await requestRef.get();
+    assert.ok(retainedRequestSnapshot.exists);
+    const request = retainedRequestSnapshot.data() ?? {};
+    assertFf132ProjectionRequest(
+      request,
+      requestId,
+      preparingDraft.serverDraftReadinessAvailabilityRevision,
+      {
+        runStartedMilliseconds: runStartedAt,
+        projectionBoundaryMilliseconds,
+        observedAtMilliseconds: Date.now(),
+      },
+    );
+    assert.equal(readyDraft.serverDraftReadinessProjectionRequestId, request.requestId);
+    assert.equal(readyDraft.serverDraftReadinessAvailabilityRevision, request.availabilityRevision);
+    assert.equal(readyDraft.serverDraftReadinessProjectionSnapshotId, request.snapshotId);
+    assert.equal(readyDraft.serverDraftReadinessProjectionSnapshotHash, request.snapshotContentHash);
+    failureDetail = assertFailureDetail('projection-request-uniqueness');
+    const requestCount = await assertOneOwnedProjectionRequest(
+      firestore,
+      requestId,
+      runStartedAt,
+    );
+    failureDetail = assertFailureDetail('projection-snapshot-validation');
+    const metadata = await assertProjectionSnapshot(
+      firestore,
+      request,
+      availabilityAttestation,
+    );
+    assert.equal(metadata.snapshotId, readyDraft.serverDraftReadinessProjectionSnapshotId);
+    assert.equal(metadata.snapshotContentHash, readyDraft.serverDraftReadinessProjectionSnapshotHash);
 
     provisionalEvidence = {
       deployedRuntimeRevision: deployedRevision,

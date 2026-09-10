@@ -444,10 +444,33 @@ ten-second retry-critical path. On the initial T-25 path, deterministic
 task/lease capture, the two bounded duplicate probes, and atomic Draft
 park/availability restore precede log waits; exactly one natural Scheduler 200
 must fall in a disjoint verified-revision/hash window ending before probe one.
-The later natural T-25 and T-20 boundaries poll `lastAttemptTime` inside the
-existing strict sub-minute window because no manual probe can overwrite their
-attribution first. Stale, late, or ambiguous evidence still fails closed. No
-runtime deployment is required for FF1.32.3.
+FF1.32.3 polls the later natural T-25 and T-20 `lastAttemptTime` inside the
+existing strict sub-minute window before any manual probe can overwrite it.
+FF1.32.4 below supersedes that approach for the time-constrained T-20 endgame.
+Stale, late, or ambiguous evidence still fails closed. No runtime deployment
+is required for FF1.32.3.
+
+The first post-FF1.32.3 guarded run failed closed at `projection-boundary`
+with `failureDetail: projection-snapshot-validation` and completed cleanup.
+Read-only diagnosis proved the natural T-20 Scheduler HTTP 200, one exact
+Projection request, a ready Projection V11/Scoring V4 snapshot containing
+1,179 assets in 48 chunks, and a scheduled/stopped/zero-pick safety reset. The
+request needed about 235 seconds and became ready only 37 seconds before the
+T-15 evidence cutoff. The runner then spent that remaining interval waiting
+for mutable Scheduler metadata and eventually consistent request logs; the
+label therefore misclassified timing exhaustion as snapshot validation.
+FF1.32.4 keeps only two serialized success-marker probes and exact
+ready/duplicate/zero-pick assertions before the absolute cutoff, immediately
+performs the existing one-attempt T-5 safety park, and defers Scheduler logs,
+request-history uniqueness, and deep snapshot reads until after that park.
+The deferred audit correlates three disjoint immutable log windows and imports
+the two manual probes to their immutable Cloud Audit `RunJob` requests while
+requiring no such request in the claimed natural T-20 window. A full two-second
+clock-skew gap separates each prior marker from the next trigger. The runner
+also imports the authoritative Projection snapshot verifier directly from
+source to recompute every ordered chunk hash and the schema-2 root hash.
+Canonical chunk IDs, contiguous indexes, and the 25-asset writer layout are
+also required. No runtime deployment is required for FF1.32.4.
 
 ## Release and deployment rules
 
@@ -494,7 +517,7 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge FF1.32, then run its guarded no-browser T-25
+1. Independently review and merge FF1.32.4, then rerun its guarded no-browser T-25
    availability-task and exact T-20 Projection evidence against isolated
    staging source `e5e133fb`.
 2. Complete the owner's two-manager supported-UI Draft rehearsal and record
