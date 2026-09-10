@@ -1339,6 +1339,7 @@ export async function verifyFf1SixClientFirestoreRules(
   const requestOptions = {
     headers: {
       Authorization: `Bearer ${token}`,
+      'X-Goog-User-Project': D1N_STAGING_PROJECT_ID,
     },
   };
   const releaseResponse = await fetchImplementation(

@@ -944,6 +944,8 @@ test('the active staging Rules source must exactly match the deployed revision',
   assert.equal(calls.length, 2);
   assert.equal(calls.every((call) =>
     call.options.headers.Authorization === 'Bearer test-access-token'), true);
+  assert.equal(calls.every((call) =>
+    call.options.headers['X-Goog-User-Project'] === STAGING_PROJECT_ID), true);
   await assert.rejects(
     () => verifyFf1SixClientFirestoreRules(RELEASE_REVISION, {
       accessToken: 'test-access-token',
