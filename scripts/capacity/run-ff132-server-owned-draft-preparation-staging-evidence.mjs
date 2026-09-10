@@ -1786,6 +1786,50 @@ export function assertFf132NaturalSchedulerAttempt(
   return after.lastAttemptMilliseconds - expectedSchedulerMilliseconds;
 }
 
+export function isFf132NaturalSchedulerAttemptObserved(
+  before,
+  after,
+  expectedSchedulerMilliseconds,
+) {
+  return (
+    Number.isSafeInteger(before?.lastAttemptMilliseconds) &&
+    Number.isSafeInteger(after?.lastAttemptMilliseconds) &&
+    Number.isSafeInteger(expectedSchedulerMilliseconds) &&
+    after.lastAttemptMilliseconds > before.lastAttemptMilliseconds &&
+    after.lastAttemptMilliseconds >= expectedSchedulerMilliseconds - 2_000 &&
+    after.lastAttemptMilliseconds <=
+      expectedSchedulerMilliseconds +
+        FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS
+  );
+}
+
+export async function waitForFf132NaturalSchedulerAttempt({
+  label,
+  before,
+  expectedSchedulerMilliseconds,
+  readScheduler,
+  timeoutMilliseconds,
+  waitForImplementation = waitFor,
+}) {
+  assert.equal(typeof label, 'string');
+  assert.equal(typeof readScheduler, 'function');
+  assert.equal(typeof waitForImplementation, 'function');
+  assert.ok(Number.isSafeInteger(timeoutMilliseconds) && timeoutMilliseconds > 0);
+
+  const after = await waitForImplementation(
+    label,
+    readScheduler,
+    (state) => isFf132NaturalSchedulerAttemptObserved(
+      before,
+      state,
+      expectedSchedulerMilliseconds,
+    ),
+    timeoutMilliseconds,
+  );
+  assertFf132NaturalSchedulerAttempt(before, after, expectedSchedulerMilliseconds);
+  return after;
+}
+
 export function triggerFf132DraftScheduler(timeoutMilliseconds = 60_000) {
   assert.ok(
     Number.isSafeInteger(timeoutMilliseconds) && timeoutMilliseconds > 0,
@@ -3620,7 +3664,6 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     assert.equal(overlayLeaseMilliseconds, prepared.overlayLeaseMilliseconds);
 
     failureDetail = assertFailureDetail('availability-scheduler-proof');
-    const schedulerBeforeAvailability = inspectFf132SchedulerJob(schedulerFunction);
     await waitUntilBeforeBoundary(initialStartAt, AVAILABILITY_BOUNDARY_MILLISECONDS);
     await assertMaintenanceCheckpoint({
       firestore,
@@ -3663,39 +3706,6 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       availabilityBoundaryMilliseconds,
       'Automatic availability preparation',
     );
-    const schedulerAfterAvailability = inspectFf132SchedulerJob(schedulerFunction);
-    assertFf132NaturalSchedulerAttempt(
-      schedulerBeforeAvailability,
-      schedulerAfterAvailability,
-      initialPlan.schedulerMilliseconds,
-    );
-    const schedulerAvailabilityLogs = await waitFor(
-      'The verified natural T-25 scheduler request log',
-      () =>
-        readFf132RequestLogs(
-          schedulerFunction,
-          'Google-Cloud-Scheduler',
-          initialPlan.schedulerMilliseconds - 2_000,
-          initialPlan.schedulerMilliseconds +
-            FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
-        ),
-      (entries) => entries.some((entry) => Number(entry?.httpRequest?.status) === 200),
-      NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
-    );
-    const [naturalAvailabilitySchedulerRequestMilliseconds] = assertFf132RequestLogs(
-      schedulerAvailabilityLogs,
-      {
-      deployedFunction: schedulerFunction,
-      userAgent: 'Google-Cloud-Scheduler',
-      minimumTimestamp: initialPlan.schedulerMilliseconds - 2_000,
-      maximumTimestamp:
-        initialPlan.schedulerMilliseconds +
-          FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
-      expectedStatuses: [200],
-      },
-    );
-    assert.ok(Number.isSafeInteger(naturalAvailabilitySchedulerRequestMilliseconds));
-
     const initialTaskBucketMilliseconds =
       Math.floor(initialPlan.schedulerMilliseconds / TASK_BUCKET_MILLISECONDS) *
       TASK_BUCKET_MILLISECONDS;
@@ -3808,6 +3818,47 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       failureDetail = assertFailureDetail(duplicateProbeFailureDetail);
       throw duplicateProbeError;
     }
+
+    // The task identity, active-lease marker, duplicate probes, and atomic
+    // Draft park/availability restore are time-critical. The natural request
+    // log is immutable correlation evidence, so wait for its eventual
+    // visibility only after the competitive state is safely parked and the
+    // shared availability baseline is restored.
+    failureDetail = assertFailureDetail('availability-scheduler-proof');
+    const naturalSchedulerLogMaximum = Math.min(
+      initialPlan.schedulerMilliseconds +
+        FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
+      duplicateSchedulerProbes[0].triggerStartedMilliseconds -
+        REQUEST_LOG_CLOCK_SKEW_MILLISECONDS -
+        1,
+    );
+    assert.ok(
+      naturalSchedulerLogMaximum >= initialPlan.schedulerMilliseconds,
+      'The first duplicate probe did not leave a disjoint natural Scheduler log window.',
+    );
+    const schedulerAvailabilityLogs = await waitFor(
+      'The verified natural T-25 scheduler request log',
+      () =>
+        readFf132RequestLogs(
+          schedulerFunction,
+          'Google-Cloud-Scheduler',
+          initialPlan.schedulerMilliseconds - 2_000,
+          naturalSchedulerLogMaximum,
+        ),
+      (entries) => entries.some((entry) => Number(entry?.httpRequest?.status) === 200),
+      NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+    );
+    const [naturalAvailabilitySchedulerRequestMilliseconds] = assertFf132RequestLogs(
+      schedulerAvailabilityLogs,
+      {
+        deployedFunction: schedulerFunction,
+        userAgent: 'Google-Cloud-Scheduler',
+        minimumTimestamp: initialPlan.schedulerMilliseconds - 2_000,
+        maximumTimestamp: naturalSchedulerLogMaximum,
+        expectedStatuses: [200],
+      },
+    );
+    assert.ok(Number.isSafeInteger(naturalAvailabilitySchedulerRequestMilliseconds));
 
     const availabilityTaskFunction = requiredFunctions.find(
       (entry) => entry.name === FF132_AVAILABILITY_TASK_QUEUE,
@@ -4113,17 +4164,13 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       AVAILABILITY_BOUNDARY_MILLISECONDS,
       'The rescheduled T-25 availability boundary',
     );
-    const schedulerAfterCurrentAvailability = await waitFor(
-      'The natural rescheduled T-25 scheduler attempt',
-      () => inspectFf132SchedulerJob(schedulerFunction),
-      (state) => state.lastAttemptMilliseconds >= reschedulePlan.schedulerMilliseconds - 2_000,
-      NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
-    );
-    assertFf132NaturalSchedulerAttempt(
-      schedulerBeforeCurrentAvailability,
-      schedulerAfterCurrentAvailability,
-      reschedulePlan.schedulerMilliseconds,
-    );
+    await waitForFf132NaturalSchedulerAttempt({
+      label: 'The natural rescheduled T-25 scheduler attempt metadata',
+      before: schedulerBeforeCurrentAvailability,
+      expectedSchedulerMilliseconds: reschedulePlan.schedulerMilliseconds,
+      readScheduler: () => inspectFf132SchedulerJob(schedulerFunction),
+      timeoutMilliseconds: NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+    });
     assert.equal(listFf132QueueTasks(FF132_AVAILABILITY_TASK_QUEUE).length, 0);
     const beforeProjectionBoundarySnapshot = await waitForFf132BeforeDeadline(
       'The pre-projection-boundary Draft snapshot',
@@ -4196,12 +4243,15 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       'Automatic Projection preparation',
     );
     const expectedProjectionSchedulerMilliseconds = projectionBoundaryMilliseconds + 1_000;
-    const schedulerAfterProjection = inspectFf132SchedulerJob(schedulerFunction);
-    assertFf132NaturalSchedulerAttempt(
-      schedulerBeforeProjection,
-      schedulerAfterProjection,
-      expectedProjectionSchedulerMilliseconds,
-    );
+    await waitForFf132NaturalSchedulerAttempt({
+      label: 'The natural T-20 scheduler attempt metadata',
+      before: schedulerBeforeProjection,
+      expectedSchedulerMilliseconds: expectedProjectionSchedulerMilliseconds,
+      readScheduler: () => inspectFf132SchedulerJob(schedulerFunction),
+      timeoutMilliseconds: finalEvidenceTimeout(
+        NATURAL_SCHEDULER_MAX_OBSERVATION_MILLISECONDS,
+      ),
+    });
     const schedulerProjectionLogs = await waitFor(
       'The verified natural T-20 scheduler request log',
       () =>

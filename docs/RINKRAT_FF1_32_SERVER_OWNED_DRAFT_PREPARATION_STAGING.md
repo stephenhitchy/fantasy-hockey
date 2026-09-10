@@ -49,6 +49,22 @@ park, and cleanup-reset mutations now use explicit single-attempt policies,
 full-ceiling admission, exact post-error reconciliation, tracked late outcomes,
 and separate T-15 observation/T-5 park deadlines. This remains tooling only.
 
+FF1.32.3 closes a control-plane observation race found by the first guarded run
+after FF1.32.2. The verified Scheduler HTTP request, Draft readiness write, and
+deterministic availability task were visible before Cloud Scheduler's
+`lastAttemptTime` propagated to a one-shot job description. At the initial
+T-25 retry probe, later manual Scheduler runs make that rolling metadata
+ambiguous, so the runner instead requires exactly one verified-revision/hash
+HTTP 200 in a strict window ending before the first manual probe, with its
+existing timestamp, method, user-agent, status, and count assertions. It
+captures the deterministic task and lease, completes both bounded duplicate
+probes, and atomically parks the Draft/restores availability before waiting for
+that immutable log. Control-plane lag therefore cannot consume the ten-second
+sub-retry safety window. At the later natural T-25 and T-20 boundaries, where
+no manual delivery can overwrite attribution first, the runner polls
+`lastAttemptTime` inside the same strict sub-minute window. Stale, late, or
+ambiguous observations still fail closed. This remains tooling only.
+
 - A guarded runner is hard-coded to the billed
   `rinkrat-staging-d1nc-2026` project and refuses Production and every Emulator
   Suite environment.
@@ -489,6 +505,15 @@ FF1.32.1 represents that bounded failure class with the fixed allowlisted
 `failureDetail: availability-failure-log`. Those runs demonstrate containment
 and completed cleanup only. They are not passing T-25/T-20 evidence and do not
 authorize a Draft release.
+
+The first post-FF1.32.2 guarded run also failed closed at
+`availability-boundary` with `failureDetail: availability-scheduler-proof` and
+`cleanupState: complete`. Read-only correlation proved that the exact natural
+Scheduler revision returned HTTP 200, wrote the waiting state, created the
+deterministic availability task, observed the intentional active-lease HTTP
+500, and completed the bounded retry with HTTP 204. The failure was the stale
+one-shot Scheduler metadata read corrected by FF1.32.3; it is containment and
+diagnostic evidence, not a passing run.
 
 Do not publish raw records, errors, account IDs, league IDs, player or team
 identities, availability attempts, task IDs, request IDs, snapshot IDs, or

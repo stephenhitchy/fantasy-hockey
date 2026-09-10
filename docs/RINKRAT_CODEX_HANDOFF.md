@@ -435,6 +435,20 @@ full-attempt admission plus tracked late-outcome handling. This tooling slice
 changes no application or Functions runtime and no Firebase resource
 configuration; it must not be deployed.
 
+The first post-FF1.32.2 run failed closed with
+`failureDetail: availability-scheduler-proof` and completed cleanup. Read-only
+logs proved the exact natural Scheduler HTTP 200, waiting-state/task creation,
+intentional active-lease HTTP 500, and bounded HTTP 204 retry. FF1.32.3 fixes
+the runner-only race without putting eventual control-plane reads on the
+ten-second retry-critical path. On the initial T-25 path, deterministic
+task/lease capture, the two bounded duplicate probes, and atomic Draft
+park/availability restore precede log waits; exactly one natural Scheduler 200
+must fall in a disjoint verified-revision/hash window ending before probe one.
+The later natural T-25 and T-20 boundaries poll `lastAttemptTime` inside the
+existing strict sub-minute window because no manual probe can overwrite their
+attribution first. Stale, late, or ambiguous evidence still fails closed. No
+runtime deployment is required for FF1.32.3.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.

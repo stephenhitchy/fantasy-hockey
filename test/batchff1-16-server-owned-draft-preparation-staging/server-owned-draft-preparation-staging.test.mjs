@@ -54,6 +54,7 @@ import {
   getFf132AvailabilityRestorePatch,
   getNextSafeNaturalSchedulerMinute,
   hashFf132DocumentData,
+  isFf132NaturalSchedulerAttemptObserved,
   buildFf132ScheduledDraftStartTaskId,
   prepareFf132InitialEvidenceState,
   parkFf132FinalDraftBeforeDeadline,
@@ -64,6 +65,7 @@ import {
   runFf132EvidenceCli,
   verifyFf132DeployedFunctionSourceArchives,
   verifyFf132StagingManifest,
+  waitForFf132NaturalSchedulerAttempt,
 } from '../../scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs';
 import { D1N_STAGING_PROJECT_ID } from '../../scripts/capacity/prepare-d1n-staging-hosting.mjs';
 import { D1N_FIXTURE_LEAGUE_ID } from '../../scripts/capacity/seed-d1n-route-fixture.mjs';
@@ -1056,6 +1058,109 @@ test('the natural scheduler is exact and leaves retry evidence inside one five-m
     ),
     /refuses to cross a UTC daily-task boundary/,
   );
+});
+
+test('natural scheduler evidence polls through stale metadata and rejects late propagation', async () => {
+  const expectedSchedulerMilliseconds = Date.UTC(2026, 8, 9, 20, 0);
+  const before = {
+    lastAttemptMilliseconds: expectedSchedulerMilliseconds - 60_000,
+  };
+  const observed = {
+    lastAttemptMilliseconds: expectedSchedulerMilliseconds + 12_500,
+  };
+  const late = {
+    lastAttemptMilliseconds:
+      expectedSchedulerMilliseconds +
+      FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS +
+      1,
+  };
+  const states = [before, { ...before }, observed];
+  let readCount = 0;
+  const boundedPoll = async (label, readValue, predicate, timeoutMilliseconds) => {
+    assert.equal(label, 'test natural scheduler metadata');
+    assert.equal(timeoutMilliseconds, 90_000);
+
+    for (let index = 0; index < states.length; index += 1) {
+      const state = await readValue();
+      if (predicate(state)) {
+        return state;
+      }
+    }
+
+    throw new Error(`${label} did not reach the required state before the bounded timeout.`);
+  };
+
+  const result = await waitForFf132NaturalSchedulerAttempt({
+    label: 'test natural scheduler metadata',
+    before,
+    expectedSchedulerMilliseconds,
+    readScheduler: async () => states[readCount++],
+    timeoutMilliseconds: 90_000,
+    waitForImplementation: boundedPoll,
+  });
+  assert.deepEqual(result, observed);
+  assert.equal(readCount, 3);
+  assert.equal(
+    isFf132NaturalSchedulerAttemptObserved(before, before, expectedSchedulerMilliseconds),
+    false,
+  );
+  assert.equal(
+    isFf132NaturalSchedulerAttemptObserved(before, late, expectedSchedulerMilliseconds),
+    false,
+  );
+
+  await assert.rejects(
+    waitForFf132NaturalSchedulerAttempt({
+      label: 'test natural scheduler metadata',
+      before,
+      expectedSchedulerMilliseconds,
+      readScheduler: async () => late,
+      timeoutMilliseconds: 90_000,
+      waitForImplementation: boundedPoll,
+    }),
+    /did not reach the required state before the bounded timeout/,
+  );
+});
+
+test('the initial natural scheduler log window excludes later manual duplicate probes', () => {
+  const deployedFunction = assertFf132StagingFunctionInventory(
+    deployedFunctionInventory(),
+  ).find(({ name }) => name === 'runScheduledDraftAutomation');
+  const expectedSchedulerMilliseconds = Date.UTC(2026, 8, 9, 20, 0);
+  const firstProbeStartedMilliseconds = expectedSchedulerMilliseconds + 30_000;
+  const schedulerLog = (timestamp) => {
+    const entry = cloudRunRequestLog(deployedFunction, 200, timestamp);
+    entry.httpRequest.userAgent =
+      'Google-Cloud-Scheduler; (+https://cloud.google.com/scheduler)';
+    return entry;
+  };
+  const entries = [
+    schedulerLog(expectedSchedulerMilliseconds + 5_000),
+    schedulerLog(expectedSchedulerMilliseconds + 65_000),
+    schedulerLog(firstProbeStartedMilliseconds - 2_000),
+  ];
+  const naturalMaximum = Math.min(
+    expectedSchedulerMilliseconds + FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
+    firstProbeStartedMilliseconds - 2_000 - 1,
+  );
+
+  assert.deepEqual(
+    assertFf132RequestLogs(entries, {
+      deployedFunction,
+      userAgent: 'Google-Cloud-Scheduler',
+      minimumTimestamp: expectedSchedulerMilliseconds - 2_000,
+      maximumTimestamp: naturalMaximum,
+      expectedStatuses: [200],
+    }),
+    [expectedSchedulerMilliseconds + 5_000],
+  );
+  assert.throws(() => assertFf132RequestLogs(entries.slice(1), {
+    deployedFunction,
+    userAgent: 'Google-Cloud-Scheduler',
+    minimumTimestamp: expectedSchedulerMilliseconds - 2_000,
+    maximumTimestamp: naturalMaximum,
+    expectedStatuses: [200],
+  }));
 });
 
 test('manual scheduler evidence correlates one accepted completion before the next minute', () => {
@@ -3146,6 +3251,15 @@ test('runner source has no deployment command, Production target, or Projection 
     'await assertMaintenanceCheckpoint({',
     atomicParkRestoreIndex,
   );
+  const naturalSchedulerMetadataIndex = availabilityBoundary.indexOf(
+    'await waitForFf132NaturalSchedulerAttempt({',
+  );
+  const naturalSchedulerCutoffIndex = availabilityBoundary.indexOf(
+    'const naturalSchedulerLogMaximum =',
+  );
+  const naturalSchedulerLogIndex = availabilityBoundary.indexOf(
+    "'The verified natural T-25 scheduler request log'",
+  );
   const failureLogIndex = availabilityBoundary.indexOf(
     "failureDetail = assertFailureDetail('availability-failure-log')",
   );
@@ -3169,8 +3283,20 @@ test('runner source has no deployment command, Production target, or Projection 
   );
   assert.ok(
     postRestoreMaintenanceIndex > atomicParkRestoreIndex &&
+      naturalSchedulerCutoffIndex > postRestoreMaintenanceIndex &&
+      naturalSchedulerLogIndex > naturalSchedulerCutoffIndex &&
       failureLogIndex > postRestoreMaintenanceIndex,
-    'The Draft must be parked and availability restored before maintenance or log waits.',
+    'The Draft must be parked and availability restored before metadata or log waits.',
+  );
+  assert.equal(
+    naturalSchedulerMetadataIndex,
+    -1,
+    'Post-probe Scheduler metadata cannot be attributed to the initial natural delivery.',
+  );
+  assert.equal(
+    availabilityBoundary.match(/naturalSchedulerLogMaximum/g)?.length,
+    4,
+    'The initial natural log proof must use one disjoint pre-probe cutoff throughout.',
   );
 
   const clockDrainStart = source.indexOf('async function drainFf132OwnedClockQueueTasks(');
