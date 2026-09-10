@@ -43,10 +43,14 @@ const DUPLICATE_PROBE_RETRY_SAFETY_MARGIN_MILLISECONDS = 15_000;
 const DUPLICATE_PROBE_COMMAND_TIMEOUT_MILLISECONDS = 3_000;
 const MAXIMUM_AVAILABILITY_TASK_REQUEST_MILLISECONDS = 540_000;
 const REQUEST_LOG_CLOCK_SKEW_MILLISECONDS = 2_000;
-// Begin the final safety park no later than T-15. Firestore transactions can
-// consume close to five minutes under retries; after valid availability is
-// restored, this leaves room for both that transaction and one safety park.
+// Stop evidence at T-15 and require the final safety park to be proven by
+// T-5. The safety-critical mutations use one Firestore attempt apiece, and a
+// new attempt may start only while its documented 270-second ceiling fits.
 const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 15 * 60 * 1000;
+const FINAL_DRAFT_PARK_COMPLETION_MARGIN_MILLISECONDS = 5 * 60 * 1000;
+const FINAL_DRAFT_PARK_RECONCILIATION_MARGIN_MILLISECONDS = 4 * 60 * 1000;
+const FIRESTORE_SINGLE_ATTEMPT_MAX_MILLISECONDS = 270 * 1000;
+const PENDING_SAFETY_SETTLEMENT_TIMEOUT_MILLISECONDS = 300 * 1000;
 const EVIDENCE_UTC_HORIZON_MILLISECONDS = 40 * 60 * 1000;
 const LOCK_CLEANUP_RESERVE_MILLISECONDS = 10 * 60 * 1000;
 const SAFE_RESET_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
@@ -193,6 +197,13 @@ export class Ff132PublicEvidenceError extends Error {
   }
 }
 
+export class Ff132SafetyTransactionDeadlineError extends Error {
+  constructor() {
+    super('The FF1.32 safety transaction exceeded its hard deadline.');
+    this.name = 'Ff132SafetyTransactionDeadlineError';
+  }
+}
+
 function assertFailureDetail(failureDetail) {
   assert.equal(PUBLIC_FAILURE_DETAILS.includes(failureDetail), true);
   return failureDetail;
@@ -240,6 +251,86 @@ export function boundFf132TimeoutBeforeDeadline(
     'FF1.32 reached its absolute Draft-open safety deadline.',
   );
   return remainingMilliseconds;
+}
+
+export async function runFf132SingleAttemptTransactionBeforeDeadline({
+  firestore,
+  updateFunction,
+  deadlineMilliseconds,
+  pendingTransactions,
+  scheduleDeadline = setTimeout,
+  cancelDeadline = clearTimeout,
+}) {
+  assert.equal(typeof firestore?.runTransaction, 'function');
+  assert.equal(typeof updateFunction, 'function');
+  assert.equal(pendingTransactions instanceof Set, true);
+  assert.equal(typeof scheduleDeadline, 'function');
+  assert.equal(typeof cancelDeadline, 'function');
+  const nowMilliseconds = Date.now();
+  const remainingMilliseconds = boundFf132TimeoutBeforeDeadline(
+    deadlineMilliseconds - nowMilliseconds,
+    deadlineMilliseconds,
+    nowMilliseconds,
+  );
+
+  if (remainingMilliseconds < FIRESTORE_SINGLE_ATTEMPT_MAX_MILLISECONDS) {
+    throw new Ff132SafetyTransactionDeadlineError();
+  }
+
+  const transactionOutcome = Promise.resolve()
+    .then(() => firestore.runTransaction(updateFunction, { maxAttempts: 1 }))
+    .then(
+      (value) => ({ status: 'fulfilled', value }),
+      (error) => ({ status: 'rejected', error }),
+    );
+  pendingTransactions.add(transactionOutcome);
+  void transactionOutcome.then(() => pendingTransactions.delete(transactionOutcome));
+
+  let deadlineTimer;
+  const deadlineOutcome = new Promise((resolve) => {
+    deadlineTimer = scheduleDeadline(
+      () => resolve({ status: 'deadline' }),
+      remainingMilliseconds,
+    );
+  });
+  let outcome;
+
+  try {
+    outcome = await Promise.race([transactionOutcome, deadlineOutcome]);
+  } finally {
+    cancelDeadline(deadlineTimer);
+  }
+
+  if (outcome.status === 'deadline') {
+    throw new Ff132SafetyTransactionDeadlineError();
+  }
+
+  if (outcome.status === 'rejected') {
+    throw outcome.error;
+  }
+
+  return outcome.value;
+}
+
+async function waitForFf132PendingSafetyTransactions(pendingTransactionSets) {
+  const pendingTransactions = pendingTransactionSets.flatMap((set) => [...set]);
+
+  if (pendingTransactions.length === 0) {
+    return true;
+  }
+
+  let timeoutHandle;
+  const settled = await Promise.race([
+    Promise.all(pendingTransactions).then(() => true),
+    new Promise((resolve) => {
+      timeoutHandle = setTimeout(
+        () => resolve(false),
+        PENDING_SAFETY_SETTLEMENT_TIMEOUT_MILLISECONDS,
+      );
+    }),
+  ]).finally(() => clearTimeout(timeoutHandle));
+
+  return settled && pendingTransactionSets.every((set) => set.size === 0);
 }
 
 function timestampMilliseconds(value) {
@@ -2441,6 +2532,15 @@ async function markEvidenceLockCleanupRequired(firestore, lockRef, Timestamp, ru
   });
 }
 
+export function canAttemptFf132CleanupRequiredMarker({
+  finalScheduleActive,
+  finalDraftParkUnproven,
+}) {
+  assert.equal(typeof finalScheduleActive, 'boolean');
+  assert.equal(typeof finalDraftParkUnproven, 'boolean');
+  return !(finalScheduleActive && finalDraftParkUnproven);
+}
+
 async function releaseEvidenceLock(firestore, lockRef, runId) {
   await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(lockRef);
@@ -2613,9 +2713,11 @@ async function restoreAvailabilityWithCas({
   baseline,
   baselineAttestation,
   overlayLeaseMilliseconds,
+  transactionDeadlineMilliseconds = null,
   verificationDeadlineMilliseconds = null,
+  pendingTransactions = null,
 }) {
-  await firestore.runTransaction(async (transaction) => {
+  const updateAvailability = async (transaction) => {
     const snapshot = await transaction.get(availabilityRef);
     const current = snapshot.data() ?? {};
     const patch = getFf132AvailabilityRestorePatch({
@@ -2629,7 +2731,23 @@ async function restoreAvailabilityWithCas({
     if (patch) {
       transaction.set(availabilityRef, patch, { merge: true });
     }
-  });
+  };
+  let transactionError = null;
+
+  try {
+    if (transactionDeadlineMilliseconds === null) {
+      await firestore.runTransaction(updateAvailability, { maxAttempts: 1 });
+    } else {
+      await runFf132SingleAttemptTransactionBeforeDeadline({
+        firestore,
+        updateFunction: updateAvailability,
+        deadlineMilliseconds: transactionDeadlineMilliseconds,
+        pendingTransactions,
+      });
+    }
+  } catch (error) {
+    transactionError = error;
+  }
 
   const restoredSnapshot = verificationDeadlineMilliseconds === null
     ? await availabilityRef.get()
@@ -2640,6 +2758,21 @@ async function restoreAvailabilityWithCas({
       verificationDeadlineMilliseconds,
     );
   const restored = restoredSnapshot.data() ?? {};
+
+  if (transactionError && contentHash(restored) !== baselineAttestation.sourceHash) {
+    // Reconcile a commit-response error before any later restore. This call
+    // also proves that an unchanged value is still the exact runner-owned
+    // overlay; a third-party state fails the compare-and-set assertion.
+    getFf132AvailabilityRestorePatch({
+      current: restored,
+      baseline,
+      baselineAttestation,
+      overlayLeaseMilliseconds,
+      deleteSentinel: FieldValue.delete(),
+    });
+    throw transactionError;
+  }
+
   assert.equal(
     contentHash(restored),
     baselineAttestation.sourceHash,
@@ -2748,6 +2881,134 @@ async function rescheduleDraft(draftRef, FieldValue, Timestamp, scheduledStartAt
       { merge: true },
     );
   });
+}
+
+async function readFf132FinalDraftParkStateBeforeDeadline({
+  draftRef,
+  expectedScheduledStartAt,
+  parkedStartAt,
+  deadlineMilliseconds,
+}) {
+  const [draftSnapshot, pickCount] = await Promise.all([
+    waitForFf132BeforeDeadline(
+      'The final safety-park Draft read',
+      () => draftRef.get(),
+      () => true,
+      deadlineMilliseconds,
+    ),
+    waitForFf132BeforeDeadline(
+      'The final safety-park zero-pick check',
+      () => assertNoDraftPicks(draftRef),
+      (count) => count === 0,
+      deadlineMilliseconds,
+    ),
+  ]);
+  assert.equal(pickCount, 0);
+  const draft = draftSnapshot.data() ?? {};
+  const currentStartMilliseconds = timestampMilliseconds(draft.scheduledStartAt);
+
+  if (currentStartMilliseconds === parkedStartAt.getTime()) {
+    assertScheduledStoppedZero(draft, parkedStartAt);
+    return 'parked';
+  }
+
+  if (currentStartMilliseconds === expectedScheduledStartAt.getTime()) {
+    assertScheduledStoppedZero(draft, expectedScheduledStartAt);
+    return 'expected';
+  }
+
+  throw new Error('The final safety-park Draft changed outside runner ownership.');
+}
+
+export async function parkFf132FinalDraftBeforeDeadline({
+  draftRef,
+  FieldValue,
+  Timestamp,
+  expectedScheduledStartAt,
+  parkedStartAt,
+  completionDeadlineMilliseconds,
+  pendingTransactions,
+}) {
+  assert.ok(expectedScheduledStartAt instanceof Date);
+  assert.ok(parkedStartAt instanceof Date);
+
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const state = await readFf132FinalDraftParkStateBeforeDeadline({
+        draftRef,
+        expectedScheduledStartAt,
+        parkedStartAt,
+        deadlineMilliseconds: completionDeadlineMilliseconds,
+      });
+
+      if (state === 'parked') {
+        return;
+      }
+
+      let transactionError = null;
+
+      try {
+        await runFf132SingleAttemptTransactionBeforeDeadline({
+          firestore: draftRef.firestore,
+          deadlineMilliseconds: completionDeadlineMilliseconds,
+          pendingTransactions,
+          updateFunction: async (transaction) => {
+            const snapshot = await transaction.get(draftRef);
+            const draft = snapshot.data() ?? {};
+            const currentStartMilliseconds = timestampMilliseconds(draft.scheduledStartAt);
+
+            assert.ok(snapshot.exists);
+            if (currentStartMilliseconds === parkedStartAt.getTime()) {
+              assertScheduledStoppedZero(draft, parkedStartAt);
+              return;
+            }
+
+            assertScheduledStoppedZero(draft, expectedScheduledStartAt);
+            transaction.set(
+              draftRef,
+              {
+                ...deletedDraftReadinessFields(FieldValue),
+                scheduledStartAt: Timestamp.fromMillis(parkedStartAt.getTime()),
+                clockUpdatedBy: 'ff132-staging-evidence-final-safety-park',
+                clockUpdatedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true },
+            );
+          },
+        });
+      } catch (error) {
+        transactionError = error;
+      }
+
+      const reconciledState = await readFf132FinalDraftParkStateBeforeDeadline({
+        draftRef,
+        expectedScheduledStartAt,
+        parkedStartAt,
+        deadlineMilliseconds: completionDeadlineMilliseconds,
+      });
+
+      if (reconciledState === 'parked') {
+        return;
+      }
+
+      if (transactionError && attempt === 0) {
+        continue;
+      }
+
+      throw transactionError ?? new Error(
+        'The final safety-park transaction returned without parking the Draft.',
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof Ff132SafetyTransactionDeadlineError ||
+      Date.now() >= completionDeadlineMilliseconds
+    ) {
+      throw new Ff132SafetyTransactionDeadlineError();
+    }
+    throw error;
+  }
 }
 
 async function waitForQueueCount(queueName, expectedCount, timeoutMilliseconds) {
@@ -2989,7 +3250,7 @@ async function resetDraftFirst(draftRef, FieldValue, Timestamp) {
       },
       { merge: true },
     );
-  });
+  }, { maxAttempts: 1 });
 
   return safeStartAt;
 }
@@ -3004,6 +3265,7 @@ export async function runFf132CleanupStages({
   verifyDraftInventory,
   markCleanupRequired,
   releaseLock,
+  retainLock = false,
 }) {
   const failures = [];
   let draftResetFailed = false;
@@ -3067,6 +3329,10 @@ export async function runFf132CleanupStages({
         failures.push(name);
       }
     }
+  }
+
+  if (retainLock) {
+    failures.push('safety-deadline');
   }
 
   if (failures.length > 0) {
@@ -3214,6 +3480,14 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
   let safeResetAt = null;
   let safetyParkStartAt = null;
   let finalScheduleActive = false;
+  let finalScheduleStartAt = null;
+  let finalDraftParkCompletionDeadlineMilliseconds = null;
+  let finalDraftParkAttempted = false;
+  let finalDraftParkUnproven = false;
+  let finalDraftParkDeadlineMissed = false;
+  let unresolvedFinalSafetyTransactions = false;
+  const pendingFinalAvailabilityTransactions = new Set();
+  const pendingFinalDraftParkTransactions = new Set();
   let availabilityRef = null;
   let availabilityBaseline = null;
   let availabilityAttestation = null;
@@ -3790,6 +4064,13 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     );
     const finalEvidenceSafetyDeadlineMilliseconds =
       rescheduledStartAt.getTime() - FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS;
+    finalScheduleStartAt = rescheduledStartAt;
+    finalDraftParkCompletionDeadlineMilliseconds =
+      rescheduledStartAt.getTime() - FINAL_DRAFT_PARK_COMPLETION_MARGIN_MILLISECONDS;
+    assert.ok(
+      finalDraftParkCompletionDeadlineMilliseconds > finalEvidenceSafetyDeadlineMilliseconds,
+      'The final safety-park completion deadline must follow the evidence cutoff.',
+    );
     const finalEvidenceTimeout = (maximumMilliseconds) =>
       boundFf132TimeoutBeforeDeadline(
         maximumMilliseconds,
@@ -3819,7 +4100,9 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       baseline: availabilityBaseline,
       baselineAttestation: availabilityAttestation,
       overlayLeaseMilliseconds,
+      transactionDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
       verificationDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds,
+      pendingTransactions: pendingFinalAvailabilityTransactions,
     });
     availabilityOverlayOwned = false;
     boundFf132TimeoutBeforeDeadline(1, finalEvidenceSafetyDeadlineMilliseconds);
@@ -4068,8 +4351,24 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
     checkpoint = assertCheckpoint('duplicate-convergence');
     failureDetail = assertFailureDetail('duplicate-convergence');
     assert.ok(safetyParkStartAt instanceof Date);
-    await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt);
-    assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, safetyParkStartAt);
+    finalDraftParkAttempted = true;
+    try {
+      await parkFf132FinalDraftBeforeDeadline({
+        draftRef,
+        FieldValue,
+        Timestamp,
+        expectedScheduledStartAt: rescheduledStartAt,
+        parkedStartAt: safetyParkStartAt,
+        completionDeadlineMilliseconds: finalDraftParkCompletionDeadlineMilliseconds,
+        pendingTransactions: pendingFinalDraftParkTransactions,
+      });
+    } catch (error) {
+      finalDraftParkUnproven = true;
+      if (error instanceof Ff132SafetyTransactionDeadlineError) {
+        finalDraftParkDeadlineMissed = true;
+      }
+      throw error;
+    }
     finalScheduleActive = false;
     await assertMaintenanceCheckpoint({
       firestore,
@@ -4130,17 +4429,88 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       draftRef &&
       FieldValue &&
       Timestamp &&
-      safetyParkStartAt instanceof Date
+      safetyParkStartAt instanceof Date &&
+      finalScheduleStartAt instanceof Date &&
+      Number.isFinite(finalDraftParkCompletionDeadlineMilliseconds) &&
+      !finalDraftParkAttempted
     ) {
+      finalDraftParkAttempted = true;
       try {
-        await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt);
-        assertScheduledStoppedZero((await draftRef.get()).data() ?? {}, safetyParkStartAt);
+        await parkFf132FinalDraftBeforeDeadline({
+          draftRef,
+          FieldValue,
+          Timestamp,
+          expectedScheduledStartAt: finalScheduleStartAt,
+          parkedStartAt: safetyParkStartAt,
+          completionDeadlineMilliseconds: finalDraftParkCompletionDeadlineMilliseconds,
+          pendingTransactions: pendingFinalDraftParkTransactions,
+        });
         finalScheduleActive = false;
-      } catch {
+      } catch (error) {
+        finalDraftParkUnproven = true;
+        if (error instanceof Ff132SafetyTransactionDeadlineError) {
+          finalDraftParkDeadlineMissed = true;
+        }
         primaryError ??= new Error(
           'The final evidence schedule could not be parked before cleanup.',
         );
       }
+    }
+
+    if (
+      finalScheduleActive &&
+      finalDraftParkUnproven &&
+      draftRef &&
+      finalScheduleStartAt instanceof Date &&
+      safetyParkStartAt instanceof Date
+    ) {
+      try {
+        const reconciliationDeadlineMilliseconds =
+          finalScheduleStartAt.getTime() -
+          FINAL_DRAFT_PARK_RECONCILIATION_MARGIN_MILLISECONDS;
+        const reconciledState = await readFf132FinalDraftParkStateBeforeDeadline({
+          draftRef,
+          expectedScheduledStartAt: finalScheduleStartAt,
+          parkedStartAt: safetyParkStartAt,
+          deadlineMilliseconds: reconciliationDeadlineMilliseconds,
+        });
+        if (reconciledState === 'parked') {
+          finalScheduleActive = false;
+          finalDraftParkUnproven = false;
+        } else if (pendingFinalDraftParkTransactions.size === 0) {
+          // The independent read proved the exact prior runner-owned state and
+          // no Draft mutation remains in flight. One bounded helper retry is
+          // therefore a reconciled retry rather than a blind duplicate.
+          await parkFf132FinalDraftBeforeDeadline({
+            draftRef,
+            FieldValue,
+            Timestamp,
+            expectedScheduledStartAt: finalScheduleStartAt,
+            parkedStartAt: safetyParkStartAt,
+            completionDeadlineMilliseconds: finalDraftParkCompletionDeadlineMilliseconds,
+            pendingTransactions: pendingFinalDraftParkTransactions,
+          });
+          finalScheduleActive = false;
+          finalDraftParkUnproven = false;
+        }
+      } catch (error) {
+        if (error instanceof Ff132SafetyTransactionDeadlineError) {
+          finalDraftParkDeadlineMissed = true;
+        }
+        // The exact state remains unproven. Keep the lock and require manual
+        // read-only diagnosis instead of starting another mutation blindly.
+      }
+    }
+
+    // Once the Draft is authoritatively parked, a bounded settlement wait can
+    // safely resolve any transaction whose client response lost the deadline
+    // race. Never block on those promises while the near-term schedule remains
+    // unproven, and never release the lock while an outcome is unresolved.
+    if (!(finalScheduleActive && finalDraftParkUnproven)) {
+      unresolvedFinalSafetyTransactions = !await waitForFf132PendingSafetyTransactions([
+        pendingFinalAvailabilityTransactions,
+        pendingFinalDraftParkTransactions,
+      ]);
     }
 
     if (app && firestore && lockOwned) {
@@ -4152,6 +4522,8 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
       let ownershipReconciled = false;
 
       if (
+        !(finalScheduleActive && finalDraftParkUnproven) &&
+        !unresolvedFinalSafetyTransactions &&
         draftRef &&
         availabilityRef &&
         draftBaselineHash &&
@@ -4195,10 +4567,17 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
 
       if (!ownershipReconciled) {
         primaryError ??= new Error('The runner could not reconcile its exact staging ownership.');
-        try {
-          await markEvidenceLockCleanupRequired(firestore, lockRef, Timestamp, runId);
-        } catch {
-          // The public boundary retains cleanup-required without exposing identifiers.
+        if (
+          canAttemptFf132CleanupRequiredMarker({
+            finalScheduleActive,
+            finalDraftParkUnproven,
+          })
+        ) {
+          try {
+            await markEvidenceLockCleanupRequired(firestore, lockRef, Timestamp, runId);
+          } catch {
+            // The public boundary retains cleanup-required without exposing identifiers.
+          }
         }
         cleanupOutcome = {
           cleanupComplete: false,
@@ -4294,6 +4673,8 @@ export async function runFf132ServerOwnedDraftPreparationStagingEvidence(
             await releaseEvidenceLock(firestore, lockRef, runId);
             lockOwned = false;
           },
+          retainLock:
+            finalDraftParkDeadlineMissed || unresolvedFinalSafetyTransactions,
         });
       }
     }

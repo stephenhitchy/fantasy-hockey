@@ -49,14 +49,18 @@ import {
   FF132_STAGING_MAINTENANCE_ACKNOWLEDGEMENT,
   FF132_NATURAL_SCHEDULER_CORRELATION_MAX_MILLISECONDS,
   Ff132PublicEvidenceError,
+  Ff132SafetyTransactionDeadlineError,
+  canAttemptFf132CleanupRequiredMarker,
   getFf132AvailabilityRestorePatch,
   getNextSafeNaturalSchedulerMinute,
   hashFf132DocumentData,
   buildFf132ScheduledDraftStartTaskId,
   prepareFf132InitialEvidenceState,
+  parkFf132FinalDraftBeforeDeadline,
   reconcileFf132FixtureOwnership,
   readCleanPushedToolingState,
   runFf132CleanupStages,
+  runFf132SingleAttemptTransactionBeforeDeadline,
   runFf132EvidenceCli,
   verifyFf132DeployedFunctionSourceArchives,
   verifyFf132StagingManifest,
@@ -1253,6 +1257,146 @@ test('absolute Draft-open safety timeouts cannot extend through the deadline', (
   assert.equal(boundFf132TimeoutBeforeDeadline(10_000, 150_000, 100_000), 10_000);
   assert.throws(() => boundFf132TimeoutBeforeDeadline(60_000, 100_000, 100_000));
   assert.throws(() => boundFf132TimeoutBeforeDeadline(0, 150_000, 100_000));
+});
+
+test('safety transactions use one attempt, reserve the full ceiling, and retain timeouts', async () => {
+  const successfulOptions = [];
+  const successfulPending = new Set();
+  const value = await runFf132SingleAttemptTransactionBeforeDeadline({
+    firestore: {
+      async runTransaction(updateFunction, options) {
+        successfulOptions.push(options);
+        return updateFunction({ marker: 'transaction' });
+      },
+    },
+    updateFunction: async (transaction) => transaction.marker,
+    deadlineMilliseconds: Date.now() + 271_000,
+    pendingTransactions: successfulPending,
+  });
+  assert.equal(value, 'transaction');
+  assert.deepEqual(successfulOptions, [{ maxAttempts: 1 }]);
+  assert.equal(successfulPending.size, 0);
+
+  let insufficientReserveCalls = 0;
+  await assert.rejects(
+    runFf132SingleAttemptTransactionBeforeDeadline({
+      firestore: {
+        async runTransaction() {
+          insufficientReserveCalls += 1;
+        },
+      },
+      updateFunction: async () => {},
+      deadlineMilliseconds: Date.now() + 269_000,
+      pendingTransactions: new Set(),
+    }),
+    Ff132SafetyTransactionDeadlineError,
+  );
+  assert.equal(insufficientReserveCalls, 0);
+
+  let settleTransaction;
+  let timeoutCalls = 0;
+  const timeoutPending = new Set();
+  const transaction = new Promise((resolve) => { settleTransaction = resolve; });
+  await assert.rejects(
+    runFf132SingleAttemptTransactionBeforeDeadline({
+      firestore: {
+        runTransaction(_updateFunction, options) {
+          timeoutCalls += 1;
+          assert.deepEqual(options, { maxAttempts: 1 });
+          return transaction;
+        },
+      },
+      updateFunction: async () => {},
+      deadlineMilliseconds: Date.now() + 271_000,
+      pendingTransactions: timeoutPending,
+      scheduleDeadline: (callback) => {
+        queueMicrotask(callback);
+        return Symbol('deadline');
+      },
+      cancelDeadline: () => {},
+    }),
+    Ff132SafetyTransactionDeadlineError,
+  );
+  assert.equal(timeoutCalls, 1);
+  assert.equal(timeoutPending.size, 1);
+  settleTransaction();
+  await Promise.all([...timeoutPending]);
+  await Promise.resolve();
+  assert.equal(timeoutPending.size, 0);
+});
+
+test('final safety parking reconciles commit-response loss and refuses an unowned schedule', async () => {
+  const now = Date.now();
+  const expectedStartAt = new Date(now + 25 * 60 * 1_000);
+  const parkedStartAt = new Date(now + 7 * 24 * 60 * 60 * 1_000);
+  const Timestamp = { fromMillis: (milliseconds) => new Date(milliseconds) };
+  const FieldValue = {
+    delete: () => Symbol('delete'),
+    serverTimestamp: () => new Date(),
+  };
+  let draft = {
+    status: 'scheduled',
+    clockStatus: 'stopped',
+    scheduledStartAt: expectedStartAt,
+    startedAt: null,
+    completedAt: null,
+    nextOverallPick: 1,
+    draftedAssetKeys: [],
+  };
+  const transactionOptions = [];
+  let loseFirstCommitResponse = true;
+  const snapshot = () => ({ exists: true, data: () => draft });
+  const firestore = {
+    async runTransaction(updateFunction, options) {
+      transactionOptions.push(options);
+      const writes = [];
+      await updateFunction({
+        get: async () => snapshot(),
+        set: (_reference, value) => writes.push(value),
+      });
+      for (const value of writes) {
+        draft = { ...draft, ...value };
+      }
+      if (loseFirstCommitResponse) {
+        loseFirstCommitResponse = false;
+        throw new Error('private-commit-response-lost');
+      }
+    },
+  };
+  const draftRef = {
+    firestore,
+    get: async () => snapshot(),
+    collection: () => ({
+      limit: () => ({ get: async () => ({ empty: true, size: 0 }) }),
+    }),
+  };
+
+  await parkFf132FinalDraftBeforeDeadline({
+    draftRef,
+    FieldValue,
+    Timestamp,
+    expectedScheduledStartAt: expectedStartAt,
+    parkedStartAt,
+    completionDeadlineMilliseconds: now + 10 * 60 * 1_000,
+    pendingTransactions: new Set(),
+  });
+  assert.equal(draft.scheduledStartAt.getTime(), parkedStartAt.getTime());
+  assert.deepEqual(transactionOptions, [{ maxAttempts: 1 }]);
+
+  draft = { ...draft, scheduledStartAt: new Date(expectedStartAt.getTime() + 60_000) };
+  await assert.rejects(
+    parkFf132FinalDraftBeforeDeadline({
+      draftRef,
+      FieldValue,
+      Timestamp,
+      expectedScheduledStartAt: expectedStartAt,
+      parkedStartAt,
+      completionDeadlineMilliseconds: now + 10 * 60 * 1_000,
+      pendingTransactions: new Set(),
+    }),
+    /changed outside runner ownership/,
+  );
+  assert.equal(transactionOptions.length, 1);
 });
 
 test('the scheduler configuration must target the exact verified Function identity and path', () => {
@@ -2505,6 +2649,47 @@ test('cleanup succeeds only after every independent stage and releases the lock 
   });
 });
 
+test('cleanup retains a cleanup-required lock after the final park deadline is missed', async () => {
+  const order = [];
+  const outcome = await runFf132CleanupStages({
+    verifyDraftInventory: async () => { order.push('verify-draft-inventory'); },
+    markCleanupRequired: async () => { order.push('mark-cleanup-required'); },
+    releaseLock: async () => { order.push('release-lock'); },
+    retainLock: true,
+  });
+
+  assert.deepEqual(order, ['verify-draft-inventory', 'mark-cleanup-required']);
+  assert.deepEqual(outcome, {
+    cleanupComplete: false,
+    lockReleased: false,
+    failedStageCount: 1,
+  });
+});
+
+test('an unproven near-term schedule returns without a cleanup-marker mutation', () => {
+  assert.equal(
+    canAttemptFf132CleanupRequiredMarker({
+      finalScheduleActive: true,
+      finalDraftParkUnproven: true,
+    }),
+    false,
+  );
+  assert.equal(
+    canAttemptFf132CleanupRequiredMarker({
+      finalScheduleActive: false,
+      finalDraftParkUnproven: true,
+    }),
+    true,
+  );
+  assert.equal(
+    canAttemptFf132CleanupRequiredMarker({
+      finalScheduleActive: true,
+      finalDraftParkUnproven: false,
+    }),
+    true,
+  );
+});
+
 test('cleanup failure injection runs later stages, retains the lock, and fails closed', async () => {
   const stages = [
     'reset-draft',
@@ -3055,8 +3240,18 @@ test('runner source has no deployment command, Production target, or Projection 
   );
   assert.match(
     nearZero,
+    /transactionDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds/,
+    'The restoring transaction itself must honor the absolute pre-open deadline.',
+  );
+  assert.match(
+    nearZero,
     /verificationDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds/,
     'The post-restore read must use the absolute pre-open deadline.',
+  );
+  assert.match(
+    nearZero,
+    /pendingTransactions: pendingFinalAvailabilityTransactions/,
+    'A late restoring transaction must remain tracked through final reconciliation.',
   );
 
   const finalPhaseStart = source.indexOf(
@@ -3070,7 +3265,7 @@ test('runner source has no deployment command, Production target, or Projection 
     'absoluteDeadlineMilliseconds: finalEvidenceSafetyDeadlineMilliseconds',
   );
   const finalParkIndex = finalPhase.lastIndexOf(
-    'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',
+    'await parkFf132FinalDraftBeforeDeadline({',
   );
   const finalRestoreIndex = finalPhase.indexOf('await restoreAvailabilityWithCas({');
   const finalMaintenanceIndex = finalPhase.lastIndexOf(
@@ -3081,6 +3276,16 @@ test('runner source has no deployment command, Production target, or Projection 
     source,
     /const FINAL_DRAFT_OPEN_SAFETY_MARGIN_MILLISECONDS = 15 \* 60 \* 1000;/,
     'Final evidence must reserve fifteen minutes for fail-closed parking.',
+  );
+  assert.match(
+    source,
+    /const FINAL_DRAFT_PARK_COMPLETION_MARGIN_MILLISECONDS = 5 \* 60 \* 1000;/,
+    'The authoritative final park must be proven by T-5.',
+  );
+  assert.match(
+    source,
+    /const FIRESTORE_SINGLE_ATTEMPT_MAX_MILLISECONDS = 270 \* 1000;/,
+    'A complete documented Firestore attempt must fit before either deadline.',
   );
   assert.ok(finalOwnershipIndex >= 0);
   assert.ok(
@@ -3124,7 +3329,11 @@ test('runner source has no deployment command, Production target, or Projection 
   }
   const cleanupFinallyIndex = source.indexOf('} finally {', finalPhaseEnd);
   const fallbackParkIndex = source.indexOf(
-    'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',
+    'await parkFf132FinalDraftBeforeDeadline({',
+    cleanupFinallyIndex,
+  );
+  const pendingSettlementIndex = source.indexOf(
+    'waitForFf132PendingSafetyTransactions([',
     cleanupFinallyIndex,
   );
   const ownershipReconciliationIndex = source.indexOf(
@@ -3133,8 +3342,73 @@ test('runner source has no deployment command, Production target, or Projection 
   );
   assert.ok(
     fallbackParkIndex > cleanupFinallyIndex &&
-      ownershipReconciliationIndex > fallbackParkIndex,
+      pendingSettlementIndex > fallbackParkIndex &&
+      ownershipReconciliationIndex > pendingSettlementIndex,
     'Failure cleanup must park the final schedule before ownership reconciliation.',
+  );
+  assert.equal(
+    source.includes(
+      'await rescheduleDraft(draftRef, FieldValue, Timestamp, safetyParkStartAt)',
+    ),
+    false,
+    'The final safety park may not use the default-retrying reschedule helper.',
+  );
+  assert.equal(
+    source.match(/await parkFf132FinalDraftBeforeDeadline\(\{/g)?.length,
+    3,
+    'Normal, failure, and exact-state reconciled retry paths must share the bounded park.',
+  );
+  assert.match(
+    source.slice(cleanupFinallyIndex),
+    /pendingFinalDraftParkTransactions\.size === 0[\s\S]+await parkFf132FinalDraftBeforeDeadline/,
+    'A failure-path retry requires an exact read and no ambiguous Draft mutation.',
+  );
+  const safetyTransactionStart = source.indexOf(
+    'export async function runFf132SingleAttemptTransactionBeforeDeadline',
+  );
+  const safetyTransactionEnd = source.indexOf(
+    'function timestampMilliseconds',
+    safetyTransactionStart,
+  );
+  const safetyTransaction = source.slice(safetyTransactionStart, safetyTransactionEnd);
+  assert.match(safetyTransaction, /\{ maxAttempts: 1 \}/);
+  assert.match(
+    safetyTransaction,
+    /remainingMilliseconds < FIRESTORE_SINGLE_ATTEMPT_MAX_MILLISECONDS/,
+  );
+  const resetStart = source.indexOf('async function resetDraftFirst(');
+  const resetEnd = source.indexOf(
+    'export async function runFf132CleanupStages',
+    resetStart,
+  );
+  assert.match(
+    source.slice(resetStart, resetEnd),
+    /\}, \{ maxAttempts: 1 \}\);/,
+    'The cleanup fallback must not multiply the final safety transaction ceiling.',
+  );
+  assert.match(
+    source.slice(cleanupFinallyIndex),
+    /finalDraftParkDeadlineMissed \|\| unresolvedFinalSafetyTransactions/,
+    'Missing the T-5 proof must retain a cleanup-required lock.',
+  );
+  assert.match(
+    source.slice(cleanupFinallyIndex),
+    /!unresolvedFinalSafetyTransactions[\s\S]+let attempt = 0;/,
+    'Unresolved mutating promises must block cleanup ownership reconciliation.',
+  );
+  const unresolvedOwnershipIndex = source.indexOf(
+    'if (!ownershipReconciled) {',
+    cleanupFinallyIndex,
+  );
+  const cleanupOutcomeIndex = source.indexOf(
+    'cleanupOutcome = {',
+    unresolvedOwnershipIndex,
+  );
+  const unresolvedOwnership = source.slice(unresolvedOwnershipIndex, cleanupOutcomeIndex);
+  assert.match(
+    unresolvedOwnership,
+    /canAttemptFf132CleanupRequiredMarker\(\{[\s\S]+finalScheduleActive,[\s\S]+finalDraftParkUnproven/,
+    'An unproven near-term schedule must skip the cleanup-marker transaction and return promptly.',
   );
 
   for (const forbidden of [

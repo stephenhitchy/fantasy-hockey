@@ -42,6 +42,13 @@ pre-extraction ZIP validation, duplicate-scan result validation, and Draft-start
 safety deadlines. It does not change any deployed Function or Firebase
 configuration.
 
+FF1.32.2 closes the remaining transaction-bound gap in that local runner. The
+Firestore SDK's 270-second limit applies per attempt, while its default
+read-write transaction policy permits five attempts. Safety-critical restore,
+park, and cleanup-reset mutations now use explicit single-attempt policies,
+full-ceiling admission, exact post-error reconciliation, tracked late outcomes,
+and separate T-15 observation/T-5 park deadlines. This remains tooling only.
+
 - A guarded runner is hard-coded to the billed
   `rinkrat-staging-d1nc-2026` project and refuses Production and every Emulator
   Suite environment.
@@ -173,15 +180,29 @@ configuration.
 - Duplicate scheduler delivery after readiness must preserve request,
   snapshot, hash, attempt count, stopped clock, and zero-pick state.
 - Every T-20-through-readiness polling budget and manual command is clamped to
-  an absolute deadline fifteen minutes before zero. The runner completes its
-  lock/inventory check while invalid availability still keeps the Draft closed,
-  rechecks the deadline, and gives the post-restore read the same hard deadline.
-  Later pre-T-20 Draft reads use that deadline without another maintenance
-  transaction after valid availability is restored.
-  Success parks the Draft again
-  before any later maintenance read; the failure path attempts the same park
-  before ownership reconciliation. A normally running process therefore never
-  leaves the fixture close enough to open while evidence or cleanup waits.
+  an absolute observation deadline fifteen minutes before zero. The runner
+  completes its lock/inventory check while invalid availability still keeps the
+  Draft closed, then permits the final availability restore only when the
+  complete documented 270-second ceiling for one Firestore attempt still fits
+  before T-15. The mutation and its authoritative read are both deadline-bound.
+  A response error is reconciled against the exact baseline or exact owned
+  overlay before another restore can occur; a promise that loses the deadline
+  race remains handled and tracked. Later pre-T-20 Draft reads use the same
+  observation deadline without another maintenance transaction after valid
+  availability is restored.
+- Success and ordinary failure use one dedicated final-park compare-and-set.
+  It accepts only the exact recovered schedule or the exact already-parked
+  schedule, requires zero picks, uses one Firestore attempt at a time, and
+  reconciles the authoritative document before any bounded retry. Evidence
+  stops at T-15; the parked state must be read back by T-5. A deadline-losing
+  park is never blindly repeated while its mutation remains in flight. If the
+  T-5 state cannot be proven, the runner skips later unbounded ownership/reset
+  work and the cleanup-marker transaction, returns `cleanup-required` to the
+  operator while leaving its existing lock untouched, and requires immediate
+  manual diagnosis.
+  Cleanup's later safe-reset fallback is also limited to one transaction
+  attempt. An unresolved safety mutation blocks both cleanup and lock release,
+  so a late outcome cannot overwrite a state that cleanup already certified.
 - A bounded near-zero phase makes the same fixture's input temporarily
   unusable, proves the Draft remains scheduled and stopped with next pick one
   and zero picks at zero, then reschedules it and requires exact readiness for
@@ -207,17 +228,19 @@ configuration.
   preserves Firestore Timestamp seconds and nanoseconds. A millisecond-equal
   but nanosecond-different value is a conflict, not a successful restoration.
 - The evidence lock is deleted only after every cleanup stage succeeds. Any
-  uncertain or failed stage leaves a `cleanup-required` lock so another run
-  cannot silently overwrite shared state. If the Draft cannot first be moved
-  safely away from its start, availability remains unavailable and therefore
-  fails closed.
+  uncertain or failed stage leaves the lock non-releasable so another run
+  cannot silently overwrite shared state. It is marked `cleanup-required`
+  whenever that marker is safe to write; an unproven near-term Draft instead
+  keeps the existing lock unchanged so the runner can return immediately. If
+  the Draft cannot first be moved safely away from its start, availability
+  remains unavailable and therefore fails closed.
 - A transaction or task-deletion error may have committed remotely even when
   the client receives an error. Before a mutation, the runner records cleanup
   intent and its known lease state. After an ambiguous result, it reconciles
   the exact lock owner, Draft schedule/state, availability compare-and-set
   state, and allowlisted task identity before deciding whether cleanup can
   continue. It does not blindly repeat an ambiguous destructive operation;
-  unresolved commit state retains the `cleanup-required` lock.
+  unresolved commit state retains a non-releasable evidence lock.
 - Terminal output contains aggregate booleans, counts, timings, safe cleanup
   state, and Git revisions only. All failures cross a fixed public error
   boundary with one source-controlled, allowlisted `failureDetail` code.
@@ -299,8 +322,10 @@ configuration.
   and hash arrays converge exactly.
 - Readiness occurs before zero. Duplicate delivery and rescheduling cannot
   duplicate authority or retain a stale schedule binding. The final phase
-  stops no later than fifteen minutes before zero and parks the Draft before later
-  maintenance work on both its success and ordinary failure paths.
+  stops evidence no later than fifteen minutes before zero, reserves a complete
+  single-attempt restore window before that cutoff, and proves the Draft parked
+  by T-5 before later unbounded maintenance work on both its success and
+  ordinary failure paths.
 - During unavailable input at zero, status is still `scheduled`, the clock is
   `stopped`, next pick is one, and pick count is zero.
 - Cleanup completes in the documented stages, retains all valid Projection
@@ -308,13 +333,13 @@ configuration.
   work, then handles Projection before restoring and draining availability.
   The final inventory passes before lock release, and no late task can
   overwrite the nanosecond-exact restored metadata. Otherwise the evidence
-  lock remains `cleanup-required`.
+  lock remains non-releasable and is marked `cleanup-required` when safe.
 - Deadline-task reconciliation permits only the four deterministic identities
   for the initial, intermediate parked, near-zero, and recovered schedules;
   any fifth or unrelated task blocks deletion and success.
 - Every ambiguous transaction or task-deletion result is reconciled against
-  exact remote state. An outcome that cannot be reconciled retains the
-  `cleanup-required` lock and cannot be reported as a successful run.
+  exact remote state. An outcome that cannot be reconciled retains a
+  non-releasable evidence lock and cannot be reported as a successful run.
 - A failure report contains only the fixed error code, checkpoint, cleanup
   state, and an allowlisted non-identifying `failureDetail`. Dynamic error text
   or identifiers cannot enter the public record.
@@ -355,9 +380,11 @@ configuration.
 - Stop if the Projection request was created outside the natural T-20 window,
   if any request timestamp falls outside the bounded run/observation interval,
   or if duration exceeds 30 minutes or conflicts with those timestamps.
-- Stop and enter cleanup at least fifteen minutes before the recovered start if
+- Stop evidence at least fifteen minutes before the recovered start if
   Projection or duplicate evidence has not completed. The failure path must
-  attempt the registered safe park before ownership reconciliation.
+  attempt and authoritatively reconcile the registered safe park by T-5 before
+  ownership reconciliation. If that proof is absent, do not begin the unbounded
+  cleanup sequence and do not release the evidence lock.
 - Treat every ambiguous transaction commit or task deletion as unknown until
   exact remote reconciliation succeeds. Retain the evidence lock whenever the
   run's ownership or final state remains uncertain.
@@ -381,8 +408,9 @@ retry logs, structured/console `already-current` markers, exact Projection
 request identity/timestamps/count bounds, nanosecond-preserving compare-and-set,
 retained Projection audit state, allowlisted deadline-task cleanup, ambiguous
 commit reconciliation, allowlisted privacy-safe failure details, staged
-cleanup/`cleanup-required` locking, absolute pre-open deadline/fallback parking,
-and no-deployment/no-Production-source guards.
+cleanup/`cleanup-required` locking, full single-attempt admission reserve,
+exact-state park retry, T-15 observation/T-5 park deadlines, pending-mutation
+settlement and lock retention, and no-deployment/no-Production-source guards.
 
 The focused tests run through `npm run test:batchff1-16:run`. The current
 composite gate is `npm run verify:batchff1-16`, which inherits
@@ -440,10 +468,16 @@ outcome.
 The initial and recovered Draft schedules are temporary staging evidence. The
 runner registers one reusable seven-day parked schedule and four maximum
 deterministic Draft-start task identities (initial, parked, near-zero, and
-recovered). A graceful failure begins parking at least fifteen minutes before
-zero. Maintenance runs under the invalid availability lease; after restoration,
-only the bounded restore and safety-park transactions can remain, leaving more
-than their combined Firestore retry ceilings before exact-start work. As with
+recovered). A graceful failure stops evidence at T-15 and must prove the park
+by T-5. Maintenance runs under the invalid availability lease. The final
+restore and each final-park attempt set `maxAttempts: 1`; neither may start
+unless its full 270-second attempt ceiling fits before its respective deadline.
+Commit-response errors are read back before retry, and deadline-losing promises
+remain handled. Once the Draft is proven parked, unresolved promises receive a
+bounded settlement wait and prevent lock release. While the near-term schedule
+is unproven, the runner never blocks on such a promise or starts the unbounded
+cleanup-marker/cleanup sequence; it leaves the existing lock untouched and
+returns `cleanup-required` for immediate operator recovery. As with
 any local staging mutator, an abrupt host/process termination can bypass local
 `finally`; in that case the evidence lock and registered ownership require
 immediate read-only diagnosis and reset-first cleanup before waiting for the

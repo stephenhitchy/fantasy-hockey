@@ -405,24 +405,35 @@ resets that Draft, drains and verifies only allowlisted clock work, then handles
 Projection before using a nanosecond-preserving compare-and-set to restore and
 drain runner-owned availability state; it never rewinds valid
 generated Projection requests, snapshots, pointers, control, or counters.
-The recovered T-20 phase has an absolute deadline fifteen minutes before zero,
-runs its final maintenance check while invalid availability keeps the Draft
-closed, then rechecks the deadline before restoring availability and
-uses deadline-bounded pre-T-20 reads without another maintenance transaction.
-It parks on success or ordinary failure before later maintenance. Clock-task
-cleanup recognizes at most the four exact identities for the initial, parked,
-near-zero, and recovered schedules.
+The recovered T-20 phase stops evidence fifteen minutes before zero. It runs
+its final maintenance check while invalid availability keeps the Draft closed,
+then admits the one-attempt availability restore only while its complete
+270-second ceiling fits before T-15. It uses deadline-bounded pre-T-20 reads
+without another maintenance transaction. Success and ordinary failure share a
+compare-and-set final park that accepts only the exact recovered or exact
+already-parked schedule, uses `maxAttempts: 1`, reconciles before retry, and
+must be authoritatively proven by T-5. Deadline-losing mutations stay handled
+and tracked; unresolved outcomes or an unproven T-5 park return
+`cleanup-required` and block both cleanup and evidence-lock release. The
+cleanup reset is also single-attempt. While the near-term schedule remains
+unproven, the runner also skips the cleanup-marker transaction and leaves its
+existing lock untouched so it can return promptly. Clock-task cleanup recognizes
+at most the four exact identities for the initial, parked, near-zero, and
+recovered schedules.
 Ambiguous commits/deletions are reconciled against remote state, and any
-uncertain cleanup retains a `cleanup-required` evidence lock. Terminal failures
+uncertain cleanup retains a non-releasable evidence lock, marked
+`cleanup-required` whenever the marker itself is safe. Terminal failures
 expose only the fixed error code, allowlisted checkpoint and cleanup state, and
 one source-controlled, non-identifying `failureDetail`; unknown values become
 `unclassified`, and raw error text or identifiers are never emitted. The first
 guarded live staging runs failed closed at the `availability-boundary` and
 completed cleanup; FF1.32.1 maps that bounded failure class to the fixed
 allowlisted `failureDetail: availability-failure-log`. That proves containment
-only, not passing T-25/T-20 evidence. This tooling slice changes no application
-or Functions runtime and no Firebase resource configuration; it must not be
-deployed.
+only, not passing T-25/T-20 evidence. FF1.32.2 subsequently removes the final
+default-retry assumption from safety-critical Firestore transactions and adds
+full-attempt admission plus tracked late-outcome handling. This tooling slice
+changes no application or Functions runtime and no Firebase resource
+configuration; it must not be deployed.
 
 ## Release and deployment rules
 
