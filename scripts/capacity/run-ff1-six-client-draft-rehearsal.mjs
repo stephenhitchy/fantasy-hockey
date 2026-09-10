@@ -230,6 +230,7 @@ const ALLOWED_TOOLING_PATHS = Object.freeze([
   'scripts/capacity/run-ff1-six-client-draft-rehearsal.mjs',
   'scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs',
   'test/batchff1-13-six-client-rehearsal/six-client-rehearsal.test.mjs',
+  'test/batchff1-17-historical-replay-lease-guard/historical-replay-lease-guard.test.mjs',
 ]);
 const EXPECTED_PACKAGE_SCRIPTS = Object.freeze({
   'staging:ff1:exercise-server-preparation':

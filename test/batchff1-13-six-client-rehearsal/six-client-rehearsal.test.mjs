@@ -782,6 +782,7 @@ test('tooling delta allows only reviewed evidence files and package scripts', ()
     'scripts/capacity/run-ff1-six-client-draft-rehearsal.mjs',
     'scripts/capacity/run-ff132-server-owned-draft-preparation-staging-evidence.mjs',
     'test/batchff1-13-six-client-rehearsal/six-client-rehearsal.test.mjs',
+    'test/batchff1-17-historical-replay-lease-guard/historical-replay-lease-guard.test.mjs',
   ];
   for (const path of allowedPaths) {
     assert.doesNotThrow(() => assertFf1SixClientToolingPaths([path]));
