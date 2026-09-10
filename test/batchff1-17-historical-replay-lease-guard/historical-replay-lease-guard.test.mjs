@@ -1496,6 +1496,12 @@ test('FF1.33 documents acceptance, observability, targeted deployment, and rollb
     assert.ok(selectorIndex > precedingIndex, `${selector} must retain staged order`);
     precedingIndex = selectorIndex;
   }
+  precedingIndex = -1;
+  for (const selector of deploymentOrder.map((entry) => entry.replace('functions:', ''))) {
+    const selectorIndex = runbook.indexOf(`\n${selector}\n`);
+    assert.ok(selectorIndex > precedingIndex, `${selector} must retain runbook deployment order`);
+    precedingIndex = selectorIndex;
+  }
   assert.match(documentation, /no replay request is[\s\S]+queued\/processing/);
   assert.match(documentation, /Every one of those 19\s+Functions/);
   assert.match(documentation, /other eight[\s\S]+must remain absent/);
