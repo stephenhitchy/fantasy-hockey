@@ -88,11 +88,12 @@ committed-pick handoff marker. Exact source-archive equality alone is not
 sufficient: the runner must machine-check that guarded revision and correlate
 every synthetic pick to its exact event, league, and pick marker.
 
-The Admin SDK is limited to fixture provisioning, binding the already
-server-verified Projection V11 snapshot to the accelerated disposable Draft,
-read-only assertions, bounded prior-fixture reset, and disabling the synthetic
-accounts. Admin must never make a pick, update a queue, pause/resume the clock,
-repair a failed outcome, or manufacture a pass. The exact-start rehearsal
+The Admin SDK is limited to one-shot fixture provisioning, one atomic
+activation that revalidates the already server-verified Projection V11
+snapshot, read-only assertions, safe failure parking, exact owned-task cleanup,
+and disabling the synthetic accounts. Admin must never make a pick, update a
+queue, pause/resume the clock, delete or replace a prior fixture, repair a
+failed competitive outcome, or manufacture a pass. The exact-start rehearsal
 remains the authority for DRF-03 because accelerated fixture activation is not
 evidence of scheduled-start timing.
 
@@ -109,15 +110,134 @@ release that it is allowed to test:
 ```bash
 FF1_SIX_CLIENT_STAGING_PROJECT_ID=rinkrat-staging-d1nc-2026 \
 FF1_SIX_CLIENT_STAGING_ACK=exercise-ff1-six-client-draft-in-rinkrat-staging-d1nc-2026 \
+FF1_SIX_CLIENT_STAGING_MAINTENANCE_ACK=reserve-exclusive-shared-availability-window-in-rinkrat-staging-d1nc-2026 \
 FF1_SIX_CLIENT_DEPLOYED_RELEASE_REVISION=<full-staging-manifest-revision> \
 npm run staging:ff1:exercise-six-client
 ```
 
 The runner refuses Production, emulators, dirty source, non-ancestor release
-revisions, and runtime/deployment-input changes after the named release. It
-retains the disposable league for audit and disables all six synthetic
-accounts. A later run deletes only the exact marker-bound prior fixture after
-proving that its pick count is within one six-manager Draft.
+revisions, altered allowlisted package commands, and runtime/deployment-input
+changes after the named release. FF1.33 shares FF1.32's exclusive maintenance
+lock and cannot overlap it. It requires the current successful strict schema-2
+server availability source and never creates, replaces, updates, or deletes
+that shared source. Before accelerated activation, one transaction re-reads
+the run-owned Draft, zero picks, empty league overrides, current availability,
+the exact Projection request, metadata, and chunks; it recomputes the
+availability revision and authoritative schema-2 Projection hash chain before
+writing only `live/paused`. It requires the fixed v2 fixture namespace,
+including descendant and Projection-request state, to be empty before its one
+allowed seed. It retains that disposable league for audit and disables all six
+run-scoped synthetic accounts. The runner never deletes or replaces it; any
+later rerun requires an independent read-only diagnosis and separately
+reviewed manual cleanup.
+
+Because accelerated activation leaves the original future scheduled-start
+Cloud Task, cleanup accepts only that one deterministic synthetic start-task
+identity. Before deletion it requires the full exact worker URL, OIDC service
+identity, body, schedule time, and dispatch deadline, and waits for any
+in-flight delivery to return. It holds recurring scoring outside the fixture
+while waiting through the maximum server-worker lifetime, installs the
+persistent replay guard only after that quiet interval, rechecks competitive
+document hashes, and requires the availability, Projection, and Draft-clock
+queues to remain empty beyond the longest scheduled Draft-worker lifetime. A
+missing or failed Cycle 1 never causes the runner to rewrite completed Draft
+authority; uncertain fixture, account, authenticated-client, lifecycle, or
+queue cleanup keeps the shared lock as `cleanup-required`. Never remove that
+lock merely because it expired.
+
+FF1.33 validates all 16 runtime authorities it exercises plus three
+replay/automation guard prerequisites: `processLeagueAutomationTask`,
+`processHistoricalReplayAdvance`, and `advanceHistoricalReplayDay`. It verifies
+all 19 exact Cloud Run revisions and source archives, two Scheduler jobs, five
+task queues, and the active Firestore Rules source before creating an account
+or document. Each Function archive is compared independently with the declared
+deployed Git revision; a common `firebase-functions-hash` is not required
+across Functions that were deployed separately. Function kind, event path,
+retry mode, the exact reviewed runtime/build/Eventarc/OIDC service identity,
+timeout, memory, concurrency, and max-instance boundaries must still match
+exactly.
+
+Read-only prerequisite audit on 2026-09-09: the exact `e5e133fb` staging
+preparation deployment left four exercised FF1.33 lifecycle/publication
+authorities absent and three present exercised authorities on older source
+archives. All three guard prerequisites were also present on older, unguarded
+source archives, although the two task queues were empty. The callable
+`requestLeagueLiveScoringRefresh`, callable
+`queueLeagueAutomationCanaryCheck`, and scheduled
+`pollCanonicalNhlImpactFeed` were absent and must remain absent. Adversarial
+cleanup review found that a late duplicate
+`initializeSeasonAfterDraft` delivery could overwrite the retained fixture's
+replay guard because the `draft-complete` lease did not atomically respect that
+authority. The six-client run is therefore intentionally blocked before
+fixture creation until the focused replay-lease guard is reviewed and merged.
+
+After the focused replay-lease guard at `48ebbefe` is reviewed and merged,
+deploy exactly these 19 staging Functions in the displayed order, followed by site-pinned
+staging Hosting. Use sequential targeted groups rather than one concurrent
+comma-list when relying on the order. The manifest and every generation-pinned
+source archive must identify the same clean source revision:
+
+```text
+processLeagueAutomationTask
+processHistoricalReplayAdvance
+publishLeagueAuditActivity
+publishLeagueDraftPickActivity
+publishLeagueDraftControlActivity
+reconcileDraftTurnAfterCommittedPick
+initializeSeasonAfterDraft
+refreshDraftPlayerAvailabilityTask
+processProjectionGenerationTask
+processDraftClockDeadline
+continueServerDraftAutomation
+processAutoDraftQueueChange
+refreshDailyPlayerAvailability
+removeLeagueMemberSecure
+makeSecureDraftPick
+executeDraftCommand
+advanceHistoricalReplayDay
+refreshGlobalPlayerAvailabilityScheduled
+runScheduledDraftAutomation
+hosting
+```
+
+This is an isolated-staging evidence prerequisite, not a Production release.
+Do not include Rules, indexes, TTL, a scheduled league-recovery authority, or
+any unlisted Function. `processLeagueAutomationTask` is included only to
+replace its pre-existing unguarded revision; its protected queue must be empty,
+remain in Shadow mode, and retain four concurrent dispatches.
+`processHistoricalReplayAdvance` must be deployed before
+`advanceHistoricalReplayDay`; its queue must remain empty, one-attempt, and
+single-dispatch. No `historicalReplayRequests` document may remain queued or
+processing. The two listed scheduled Functions retain their already-reviewed
+topology; no additional Scheduler job is introduced. In particular, do not deploy
+`runSeasonStartAutomation`:
+the retained FF1.29 v1 audit fixture is complete without Cycle 1, and that
+minute recovery sweep would retroactively mutate its evidence boundary.
+The runner lists the full regional Function and Scheduler inventories. All
+eight behavior-affected excluded Functions must remain absent; the six
+corresponding scheduled jobs must also remain absent. It fails before writes
+if any one is present. It also hashes the complete bounded
+retained v1 fixture—including members, teams, rosters, queues, picks,
+publication collections, Projection records, profiles, and the no-Cycle-1
+authority boundary—before FF1.33 and requires the exact same boundary after
+the rehearsal and again after final cleanup. Any mismatch retains the shared
+lock as `cleanup-required`; a later run cannot normalize the changed bytes into
+a new baseline.
+Confirm no unrelated staging Draft is scheduled/live, require the existing
+shared league-automation and Historical Replay task queues to be empty, and
+preserve the Shadow queue mode. FF1.33 verifies and observes both shared
+queues; it never deletes or changes them. It rechecks those queues and the
+queued/processing Replay-request set immediately before releasing the lock.
+
+Rollback restores staging Hosting and non-guard callable/scheduled producers
+first, then non-guard consumers in reverse order. Never restore the unguarded
+`initializeSeasonAfterDraft`, `processLeagueAutomationTask`,
+`processHistoricalReplayAdvance`, or `advanceHistoricalReplayDay` revision
+while any raw Historical Replay control remains enabled. The retained D1L
+fixture already has that authority enabled before FF1.33, and a passed v2
+fixture retains it. Pre-guard revision rollback is intentionally unavailable;
+retain those guarded consumers and use a reviewed forward repair until a
+supported disable path exists.
 
 The default readiness wait is twenty minutes. A thirty-minute-ahead rehearsal
 does not enter the server's preparation window until T-20, so a shorter
@@ -138,6 +258,23 @@ post-Draft member-removal rejection. All six synthetic accounts were disabled;
 the marker-bound disposable league was retained for audit. The first attempt
 reached verified readiness just after the former fifteen-minute collector
 limit and failed closed; no Draft activity was manufactured from that attempt.
+
+FF1.33 supersedes only the local collector used for the next exact-release
+rerun. The first attempted rerun against the newer server-owned availability
+contract stopped before any pick because the old collector required exactly
+20 legacy D1N records while the legitimate strict server result contained a
+different bounded count. That is a tooling incompatibility, not passing or
+failing Draft-runtime evidence. The hardened rerun must pass before its result
+can replace the older FF1.29 record. It verifies the active Firestore Rules
+source against the declared deployed commit, the protected Shadow queue mode,
+all lifecycle writers exercised by this path, 102 exact authoritative picks, 14 starters plus three
+bench assets per team with empty IR, 84 aligned six-game windows, three
+matchups, and exact idempotent activity counts. It uses a one-shot namespace
+and waits through the server-worker lifetime, Draft-trigger lifetime, and
+scheduled-worker quiet period before releasing its maintenance lock. FF1.33
+changes no application or Functions runtime, so the tooling commit itself has
+no Firebase deployment boundary. The separately identified staging-only
+runtime prerequisite above must exist before evidence can run.
 
 FF1.30 and FF1.31 remove the commissioner/browser prerequisite from scheduled
 preparation. The client observes and loads the exact server readiness binding

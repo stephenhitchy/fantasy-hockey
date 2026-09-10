@@ -553,6 +553,22 @@ all three queues were empty. FF1.32.4 corrects that runner-only ordering and
 the overly broad failure classification; this diagnostic run is not passing
 evidence.
 
+The FF1.32.4 guarded run passed on 2026-09-09 UTC against exact staging runtime
+`e5e133fbdf761379be35f5706a885c399a809ca6` using clean pushed tooling
+`1d7dfd02caea5e88374a493cc26bc87b430c7b56`. It verified all nine exact
+Function source archives and active Cloud Run revisions, the Scheduler and all
+three protected queue configurations, a natural T-25 availability attempt,
+one bounded active-lease failure and retry, a natural T-20 Projection request,
+duplicate convergence, and the authoritative Projection V11/Scoring V4
+schema-2 chunk/root hash chain. Observed boundary latencies were 25,781 ms for
+availability and 13,783 ms for Projection; the retry completed after 30,197
+ms. The Draft remained scheduled and stopped with zero picks throughout,
+near-zero incomplete input failed closed, rescheduling recovered, and cleanup
+restored the seven-day safe fixture, emptied all three queues, and released the
+maintenance lock. This passes FF1.32's no-browser preparation evidence; it does
+not replace the supported-UI, physical-device, scheduled-start, six-client, or
+capacity gates.
+
 Do not publish raw records, errors, account IDs, league IDs, player or team
 identities, availability attempts, task IDs, request IDs, snapshot IDs, or
 hashes.

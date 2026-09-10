@@ -472,21 +472,73 @@ source to recompute every ordered chunk hash and the schema-2 root hash.
 Canonical chunk IDs, contiguous indexes, and the 25-asset writer layout are
 also required. No runtime deployment is required for FF1.32.4.
 
-FF1.33's first runtime prerequisite is implemented as a source candidate with
-staging evidence pending. The league-scoring lease transaction reads Historical Replay
+FF1.32.4 passed on 2026-09-09 UTC against exact staging runtime `e5e133fb`
+using clean pushed tooling `1d7dfd02`. The natural T-25 availability path,
+bounded task retry, natural T-20 Projection request, duplicate convergence,
+authoritative Projection hash chain, scheduled/stopped/zero-pick state, safe
+reschedule, empty queues, and lock release all passed. This closes the
+no-browser preparation proof but not the supported-UI, physical-device,
+scheduled-start, full Draft, lifecycle, capacity, or freeze gates.
+
+FF1.33's first runtime prerequisite is committed at `48ebbefe` with staging evidence
+pending. The league-scoring lease transaction reads raw Historical Replay
 authority before any write and rejects every non-replay trigger whenever the
 replay control is enabled. This closes the late duplicate `draft-complete` and
 `season-start` race that could otherwise create Cycle 1 after the six-client
-fixture was parked. A blocked queue completion preserves the replay pause, and
-replay activation plus later worker reassertions now park the recurring
-schedule in the same transaction. Outcome, canonical, enqueue, retry, stale
-recovery, bootstrap, and Canary writers also serialize behind raw replay
-authority without replacing terminal or newer task evidence. The explicit
-serialized replay worker remains eligible. Committed Draft-pick
-handoff also emits a bounded structured event plus a one-way league/pick path
-hash so staging evidence can be attributed exactly without logging raw league
-or pick identifiers. FF1.33 tooling must machine-check the guarded deployed
-revision before writes.
+fixture was parked. Replay activation and later worker reassertions park the
+recurring schedule atomically; outcome, canonical, enqueue, retry, stale
+recovery, bootstrap, Canary, and completion writers also serialize behind the
+same authority without replacing terminal or newer task evidence. The explicit
+serialized replay worker remains eligible. Committed Draft-pick handoff emits
+a bounded structured event plus a one-way league/pick path hash without raw
+league or pick identifiers.
+
+The separate FF1.33 tooling hardening is required before rerunning the
+six-client rehearsal on the current strict schema-2 source. The older collector
+stopped safely before picks because it required exactly 20 legacy D1N
+availability records; the current server-owned result legitimately uses a
+different bounded record count. The hardened runner never writes shared
+availability. It shares FF1.32's exclusive lock, requires `48ebbefe` to be an
+ancestor of the declared deployed runtime, verifies the reviewed guard-source
+hashes and every exercised Function archive/revision, and requires one exact
+structured committed-pick marker for each of the 102 expected one-way hashes.
+It recomputes the current availability revision and Projection V11 chunk/root
+hashes inside one run-owned activation transaction, strengthens off-clock,
+deadline, queue-skip, duplicate-tab, exact roster, six-game window, lifecycle,
+Rules-provenance, activity-publication, and completion checks, and permits only
+the exact seven-file tooling delta.
+
+The runner requires an empty one-shot v2 namespace, never deletes or replaces a
+prior fixture, waits through server-worker, Draft-trigger, and scheduled-worker
+quiet periods, and deletes the deterministic future start task only after
+verifying its full target, OIDC identity, payload, timing, and non-executing
+state. Any uncertain fixture, account, authenticated-client, lifecycle, or
+queue cleanup retains `cleanup-required`. Immediately before lock release the
+runner repeats the complete retained-v1 byte comparison and proves both shared
+guarded task queues and the queued/processing Historical Replay request set are
+empty. A changed boundary can therefore never become a later run's accepted
+baseline. The tooling commit changes no Firebase runtime and must not be
+deployed, but the rehearsal still requires all 16 runtime authorities it
+exercises plus three replay/automation guard prerequisites:
+`processLeagueAutomationTask`, `processHistoricalReplayAdvance`, and
+`advanceHistoricalReplayDay`. All 19 must exist in isolated staging at the same
+guarded revision and use the exact reviewed runtime, build, Eventarc, Scheduler,
+and task OIDC service identity. A read-only 2026-09-09 preflight found 12 of the
+16 exercised authorities present: four were absent and three present Functions
+had older source archives; all three guard prerequisites were present on older,
+unguarded revisions. Deploy site-pinned staging Hosting and exactly those 19
+Functions from the same clean guarded commit, with both task workers ahead of
+their producers. Do not deploy Rules, indexes, TTL, or any of the eight
+behavior-affected entry points required to remain absent. The two included
+scheduled Functions retain their reviewed topology; no Scheduler job is added.
+The excluded scheduled-worker set must remain absent because the retained
+FF1.29 v1 audit fixture has no replay control and is intentionally complete
+without Cycle 1. The runner proves that boundary remains byte-stable and that
+the pre-existing league-automation and Historical Replay task queues stay
+empty without cleaning or changing them. The retained D1L fixture already has
+raw Replay authority enabled, so guard-bearing Functions require forward repair
+rather than a pre-guard rollback. This does not replace supported-UI or
+physical-device evidence.
 
 ## Release and deployment rules
 
@@ -533,11 +585,13 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge the FF1.33 Historical Replay lease guard,
-   then bind the hardened six-client tooling to that exact guarded revision.
-2. Deploy only the exact staging Functions required by FF1.33 plus site-pinned
-   staging Hosting from one clean commit; run the guarded six-client rehearsal
-   only after its executable provenance checks pass.
+1. Merge the reviewed `48ebbefe` replay-lease runtime guard, then independently
+   review and merge its separate seven-file six-client tooling commit.
+2. Deploy only the exact 16 exercised staging Functions plus the three
+   replay/automation guard prerequisites and site-pinned Hosting from the guarded
+   runtime commit. Confirm two Scheduler jobs and five task queues match
+   protected topology, then run the hardened rehearsal against that exact
+   manifest revision.
 3. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
