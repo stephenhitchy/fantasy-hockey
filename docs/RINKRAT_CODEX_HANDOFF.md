@@ -540,6 +540,17 @@ raw Replay authority enabled, so guard-bearing Functions require forward repair
 rather than a pre-guard rollback. This does not replace supported-UI or
 physical-device evidence.
 
+The first exact-release FF1.33 attempt on 2026-09-10 stopped before creating an
+account, league, or lock because staging had no explicit
+`appData/leagueAutomationQueueConfig` document. Runtime treats that absence as
+its protected source defaults: Shadow mode, revision `0`, a `100`-item enqueue
+limit, and empty enrollment sets. The evidence runner now mirrors and
+fingerprints that exact absent state while continuing to reject an explicit
+malformed, non-Shadow, or fixture-enrolled configuration. The next pre-write
+prerequisite remains a current strict schema-2 Draft-readiness availability
+source; the scheduled-server schema-1 refresh observed after the failed run is
+not accepted as equivalent evidence.
+
 The exact 19-Function staging rollout completed on 2026-09-10. Hosting and all
 19 generation-pinned source archives independently matched guarded runtime
 commit `48ebbefe3d94af6b7db2be9e758ed1e396a22ac4`; the eight excluded Functions

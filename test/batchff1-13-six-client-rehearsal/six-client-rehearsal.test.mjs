@@ -991,9 +991,33 @@ test('the rehearsal preserves shadow queue mode and selects the deterministic em
   };
   const configEvidence = assertFf1SixClientLeagueAutomationQueueConfig(config);
 
+  assert.equal(configEvidence.exists, true);
   assert.equal(configEvidence.mode, 'shadow');
   assert.equal(configEvidence.revision, 4);
   assert.match(configEvidence.sourceHash, /^[a-f0-9]{64}$/);
+  const absentConfigEvidence = assertFf1SixClientLeagueAutomationQueueConfig(
+    {},
+    { exists: false },
+  );
+  assert.deepEqual(absentConfigEvidence, {
+    exists: false,
+    sourceHash: absentConfigEvidence.sourceHash,
+    mode: 'shadow',
+    revision: 0,
+    maxEnqueuePerRun: 100,
+  });
+  assert.match(absentConfigEvidence.sourceHash, /^[a-f0-9]{64}$/);
+  assert.throws(
+    () => assertFf1SixClientLeagueAutomationQueueConfig({}),
+    /remain shadow/,
+  );
+  assert.throws(
+    () => assertFf1SixClientLeagueAutomationQueueConfig(
+      { unexpected: true },
+      { exists: false },
+    ),
+    /source-controlled defaults/,
+  );
   assert.throws(
     () => assertFf1SixClientLeagueAutomationQueueConfig({ ...config, mode: 'canary' }),
     /remain shadow/,

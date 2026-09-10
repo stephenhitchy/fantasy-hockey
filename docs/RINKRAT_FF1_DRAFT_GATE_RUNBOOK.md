@@ -235,6 +235,11 @@ shared league-automation and Historical Replay task queues to be empty, and
 preserve the Shadow queue mode. FF1.33 verifies and observes both shared
 queues; it never deletes or changes them. It rechecks those queues and the
 queued/processing Replay-request set immediately before releasing the lock.
+An absent `appData/leagueAutomationQueueConfig` is the runtime's exact
+source-controlled Shadow default (revision `0`, batch limit `100`, and no
+enrolled leagues); the runner fingerprints that absence before and after the
+rehearsal. If the document exists, every protected field remains mandatory and
+strictly validated.
 
 Rollback restores staging Hosting and non-guard callable/scheduled producers
 first, then non-guard consumers in reverse order. Never restore the unguarded

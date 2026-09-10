@@ -159,6 +159,14 @@ This evidence correction does not deploy or change a runtime, queue, or worker
 configuration. A missing or different ceiling still fails before fixture
 creation.
 
+The protected league-automation queue configuration is also read before any
+fixture write. When `appData/leagueAutomationQueueConfig` is absent, the
+runner mirrors the runtime's source-controlled defaults exactly: Shadow mode,
+revision `0`, a `100`-item enqueue limit, and empty enrollment sets. It records
+and later rechecks that the document remained absent. An existing document is
+still validated strictly; missing fields, a non-Shadow mode, an invalid limit,
+or fixture enrollment fails closed.
+
 ## Targeted deployment boundary and rollback
 
 The exact behavior-affected Functions are:

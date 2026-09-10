@@ -1196,8 +1196,25 @@ export function assertFf1SixClientToolingPaths(changedPaths) {
   return changedPaths;
 }
 
-export function assertFf1SixClientLeagueAutomationQueueConfig(data) {
+export function assertFf1SixClientLeagueAutomationQueueConfig(
+  data,
+  { exists = true } = {},
+) {
   assert.ok(data && typeof data === 'object');
+  if (!exists) {
+    assert.deepEqual(
+      data,
+      {},
+      'An absent league-automation queue configuration must use only source-controlled defaults.',
+    );
+    return Object.freeze({
+      exists: false,
+      sourceHash: hashFf132DocumentData(data),
+      mode: 'shadow',
+      revision: 0,
+      maxEnqueuePerRun: 100,
+    });
+  }
   assert.equal(
     data.mode,
     'shadow',
@@ -1225,6 +1242,7 @@ export function assertFf1SixClientLeagueAutomationQueueConfig(data) {
   );
 
   return Object.freeze({
+    exists: true,
     sourceHash: hashFf132DocumentData(data),
     mode: data.mode,
     revision: data.revision,
@@ -1864,12 +1882,10 @@ function createPassword() {
 
 async function readFf1SixClientLeagueAutomationQueueConfig(firestore) {
   const snapshot = await firestore.doc('appData/leagueAutomationQueueConfig').get();
-
-  assert.ok(
-    snapshot.exists,
-    'The protected staging league-automation queue configuration is missing.',
+  return assertFf1SixClientLeagueAutomationQueueConfig(
+    snapshot.data() ?? {},
+    { exists: snapshot.exists },
   );
-  return assertFf1SixClientLeagueAutomationQueueConfig(snapshot.data() ?? {});
 }
 
 async function readStrictSharedAvailability(firestore, requiredThroughMilliseconds) {
