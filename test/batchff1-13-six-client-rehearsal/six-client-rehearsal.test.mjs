@@ -798,6 +798,7 @@ test('existing fixture diagnosis accepts only the exact bounded run-scoped ident
 test('tooling delta allows only reviewed evidence files and package scripts', () => {
   const allowedPaths = [
     'docs/RINKRAT_CODEX_HANDOFF.md',
+    'docs/RINKRAT_FF1_33_HISTORICAL_REPLAY_LEASE_GUARD.md',
     'docs/RINKRAT_FF1_DRAFT_GATE_RUNBOOK.md',
     'docs/RINKRAT_FF1_32_SERVER_OWNED_DRAFT_PREPARATION_STAGING.md',
     'package.json',
