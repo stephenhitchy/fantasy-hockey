@@ -472,6 +472,53 @@ source to recompute every ordered chunk hash and the schema-2 root hash.
 Canonical chunk IDs, contiguous indexes, and the 25-asset writer layout are
 also required. No runtime deployment is required for FF1.32.4.
 
+FF1.32.4 passed on 2026-09-09 UTC against exact staging runtime `e5e133fb`
+using clean pushed tooling `1d7dfd02`. The natural T-25 availability path,
+bounded task retry, natural T-20 Projection request, duplicate convergence,
+authoritative Projection hash chain, scheduled/stopped/zero-pick state, safe
+reschedule, empty queues, and lock release all passed. This closes the
+no-browser preparation proof but not the supported-UI, physical-device,
+scheduled-start, full Draft, lifecycle, capacity, or freeze gates.
+
+FF1.33 is the tooling-only hardening required before rerunning the six-client
+rehearsal on the current strict schema-2 source. The older collector stopped
+safely before picks because it required exactly 20 legacy D1N availability
+records; the current server-owned result legitimately uses a different bounded
+record count. FF1.33 never writes shared availability. It shares FF1.32's
+exclusive lock, validates exact deployed Function source/revision provenance,
+recomputes the current availability revision and Projection V11 chunk/root
+hashes inside one run-owned activation transaction, strengthens off-clock,
+deadline, queue-skip, duplicate-tab, exact roster, six-game window, lifecycle,
+Rules-provenance, activity-publication, and completion checks. It requires an
+empty one-shot v2 namespace, never deletes or replaces a prior fixture, waits
+through server-worker, Draft-trigger, and scheduled-worker quiet periods, and
+deletes the deterministic future start task only after verifying its full
+target, OIDC identity, payload, timing, and non-executing state. Any uncertain
+fixture, account, authenticated-client, lifecycle, or queue cleanup retains
+`cleanup-required`. The FF1.33 tooling commit changes no Firebase runtime and
+must not be deployed, but the rehearsal still requires every runtime authority
+it actually exercises to exist in isolated staging. A read-only 2026-09-09
+preflight found 12 of those 16 Functions present: four were absent and three
+present Functions had older source archives. Adversarial cleanup review then
+identified a late duplicate `initializeSeasonAfterDraft` delivery that could
+overwrite the retained fixture's replay guard. Before running FF1.33, merge the
+focused atomic replay-lease guard, then deploy Hosting and exactly all 16
+exercised Functions to `rinkrat-staging-d1nc-2026` from that same clean commit.
+This exact boundary is necessary because each generation-pinned archive is the
+whole Functions package and the runner binds every archive plus the Hosting
+manifest to one revision. Do not deploy Rules, indexes, TTL, the
+league-automation task worker, `runSeasonStartAutomation`, or any other
+Function. The two included scheduled Functions retain their existing reviewed
+topology; no additional Scheduler job is created. The wider scheduled-worker
+set is deliberately outside this rehearsal: a retained FF1.29 v1 audit fixture
+is complete without Cycle 1, and deploying `runSeasonStartAutomation` would
+retroactively mutate it. The runner now lists full regional Function/Scheduler
+inventory, rejects every excluded league-automation worker before writes, and
+requires the retained v1 no-Cycle-1 boundary to remain byte-stable. FF1.33 also
+requires the pre-existing shared
+league-automation task queue to remain empty but never cleans or changes it.
+It does not replace supported-UI or physical-device evidence.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -517,9 +564,12 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge FF1.32.4, then rerun its guarded no-browser T-25
-   availability-task and exact T-20 Projection evidence against isolated
-   staging source `e5e133fb`.
+1. Independently review FF1.33's tooling, land the focused replay-lease runtime
+   guard first, then rebase and merge the tooling-only commit. Deploy only the
+   exact 16 exercised staging Functions plus Hosting from the guarded runtime
+   commit, confirm two Scheduler jobs and three task queues match the protected
+   topology, then run the hardened six-client rehearsal against that exact
+   manifest revision.
 2. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.

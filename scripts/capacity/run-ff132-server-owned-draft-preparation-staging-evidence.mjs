@@ -577,12 +577,22 @@ function deployedFunctionName(entry) {
   return String(entry?.name ?? entry?.id ?? '').split('/').at(-1);
 }
 
-export function assertFf132StagingFunctionInventory(entries) {
+export function assertFf132StagingFunctionInventory(
+  entries,
+  requiredFunctionNames = FF132_REQUIRED_STAGING_FUNCTIONS,
+) {
   assert.equal(Array.isArray(entries), true, 'The staging Function inventory is malformed.');
+  assert.equal(Array.isArray(requiredFunctionNames), true);
+  assert.ok(requiredFunctionNames.length > 0);
+  assert.equal(
+    new Set(requiredFunctionNames).size,
+    requiredFunctionNames.length,
+    'The required staging Function inventory contains duplicate names.',
+  );
   const byName = new Map(entries.map((entry) => [deployedFunctionName(entry), entry]));
   const verified = [];
 
-  for (const name of FF132_REQUIRED_STAGING_FUNCTIONS) {
+  for (const name of requiredFunctionNames) {
     const entry = byName.get(name);
     assert.ok(entry, `The required staging Function ${name} is missing.`);
     assert.equal(
@@ -780,8 +790,10 @@ export function inspectFf132CloudRunDeployments(functions) {
   return functions.length;
 }
 
-export function inspectFf132StagingFunctionInventory() {
-  const entries = FF132_REQUIRED_STAGING_FUNCTIONS.map((name) =>
+export function inspectFf132StagingFunctionInventory(
+  requiredFunctionNames = FF132_REQUIRED_STAGING_FUNCTIONS,
+) {
+  const entries = requiredFunctionNames.map((name) =>
     parseJsonCommand('gcloud', [
       'functions',
       'describe',
@@ -793,7 +805,7 @@ export function inspectFf132StagingFunctionInventory() {
     ]),
   );
 
-  return assertFf132StagingFunctionInventory(entries);
+  return assertFf132StagingFunctionInventory(entries, requiredFunctionNames);
 }
 
 function isIgnoredFunctionsPath(relativePath) {
