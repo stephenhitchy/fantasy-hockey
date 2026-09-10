@@ -8,6 +8,7 @@ import {
 } from 'firebase-admin/firestore';
 import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import { getFunctions } from 'firebase-admin/functions';
+import { logger } from 'firebase-functions';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -105,6 +106,19 @@ import {
   type LeagueAutomationWatchdogStatus,
 } from './shared/core/live-scoring/league-automation-season-safety.util';
 import {
+  beginLeagueAutomationTask,
+  claimLeagueAutomationLeaseInTransaction,
+  historicalReplaySchedulePauseFields,
+  isLeagueAutomationTaskCompletionEligible,
+  parkLeagueAutomationScheduleForHistoricalReplayInTransaction,
+  preserveReplayPauseOrMarkTaskRetrying,
+  preserveReplayPauseOrRecordEnqueueFailure,
+  recoverStaleLeagueAutomationTask,
+  writeHistoricalReplayControlAndParkSchedule,
+  writeLeagueAutomationTaskCompletionInTransaction,
+  writeLeagueAutomationScheduleOutcome,
+} from './shared/core/live-scoring/historical-replay-lease-write.service';
+import {
   getNhlTeamSeasonSchedule,
   getRegularSeasonGameLog,
   NhlTeamSeasonGame,
@@ -172,6 +186,7 @@ const LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS = 12 * 60 * 1000;
 const LEAGUE_AUTOMATION_RECOVERY_STALE_MILLISECONDS = 25 * 60 * 1000;
 const LEAGUE_AUTOMATION_STALE_TASK_SWEEP_LIMIT = 100;
 const LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT = 500;
+const LEAGUE_AUTOMATION_BOOTSTRAP_TRANSACTION_LIMIT = 50;
 const LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
 const LEAGUE_AUTOMATION_TASK_HISTORY_CLEANUP_LIMIT = 500;
 const LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT = 200;
@@ -867,11 +882,16 @@ export async function requestLeagueAutomationForCanonicalChange(
       .map((value) => value.trim().slice(0, 40)),
   )].sort().slice(0, 12);
   const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
+  const replayControlRef = getHistoricalReplayControlRef(leagueId);
   const now = Date.now();
 
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(scheduleRef);
+    const [snapshot, replaySnapshot] = await Promise.all([
+      transaction.get(scheduleRef),
+      transaction.get(replayControlRef),
+    ]);
     const data = snapshot.data() ?? {};
+    const replayEnabled = replaySnapshot.data()?.['enabled'] === true;
     const currentVersion = normalizeCanonicalSourceVersion(
       data['canonicalRequestedSourceVersion'],
     );
@@ -955,6 +975,7 @@ export async function requestLeagueAutomationForCanonicalChange(
         canonicalLastRequestedAt: alreadyRequested
           ? data['canonicalLastRequestedAt'] ?? FieldValue.serverTimestamp()
           : FieldValue.serverTimestamp(),
+        ...(replayEnabled ? historicalReplaySchedulePauseFields() : {}),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -4175,29 +4196,6 @@ function getSafeAutomationErrorCode(error: unknown): string {
   return normalized || 'unknown';
 }
 
-async function recordLeagueAutomationPaused(
-  leagueId: string,
-  reason: string,
-): Promise<void> {
-  await getLeagueAutomationScheduleRef(leagueId).set(
-    {
-      schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
-      leagueId,
-      shard: getLeagueAutomationShard(leagueId),
-      scoringEnabled: false,
-      queueStatus: 'paused',
-      pausedReason: reason.slice(0, 120),
-      nextScoringAt: FieldValue.delete(),
-      activeTaskId: null,
-      activeTaskLeaseExpiresAt: FieldValue.delete(),
-      lastOutcome: 'paused',
-      lastTrigger: 'historical-replay',
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
-}
-
 async function recordLeagueAutomationSuccess(
   leagueId: string,
   trigger: LeagueAutomationTrigger,
@@ -4241,7 +4239,12 @@ async function recordLeagueAutomationSuccess(
     data['activeTaskLeaseExpiresAt'] = FieldValue.delete();
   }
 
-  await getLeagueAutomationScheduleRef(leagueId).set(data, { merge: true });
+  await writeLeagueAutomationScheduleOutcome({
+    scheduleRef: getLeagueAutomationScheduleRef(leagueId),
+    replayControlRef: getHistoricalReplayControlRef(leagueId),
+    data,
+    trigger,
+  });
 }
 
 async function recordLeagueAutomationFailure(
@@ -4276,7 +4279,12 @@ async function recordLeagueAutomationFailure(
     data['activeTaskLeaseExpiresAt'] = FieldValue.delete();
   }
 
-  await getLeagueAutomationScheduleRef(leagueId).set(data, { merge: true });
+  await writeLeagueAutomationScheduleOutcome({
+    scheduleRef: getLeagueAutomationScheduleRef(leagueId),
+    replayControlRef: getHistoricalReplayControlRef(leagueId),
+    data,
+    trigger,
+  });
 }
 
 async function recordLeagueAutomationSkip(
@@ -4304,10 +4312,12 @@ async function recordLeagueAutomationSkip(
     data['nextScoringAt'] = Timestamp.fromMillis(nextRefreshAtMilliseconds);
   }
 
-  await getLeagueAutomationScheduleRef(leagueId).set(
+  await writeLeagueAutomationScheduleOutcome({
+    scheduleRef: getLeagueAutomationScheduleRef(leagueId),
+    replayControlRef: getHistoricalReplayControlRef(leagueId),
     data,
-    { merge: true },
-  );
+    trigger,
+  });
 }
 
 async function claimLeagueAutomationLease(
@@ -4317,75 +4327,27 @@ async function claimLeagueAutomationLease(
   trigger: LeagueAutomationTrigger,
 ): Promise<LeaseClaimResult> {
   const controlRef = getControlRef(leagueId);
+  const replayControlRef = getHistoricalReplayControlRef(leagueId);
+  const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
   const now = Date.now();
 
-  return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(controlRef);
-    const data = snapshot.data() ?? {};
-    const holderClientId =
-      typeof data['holderClientId'] === 'string'
-        ? data['holderClientId']
-        : '';
-    const leaseExpiresAt = toMilliseconds(data['leaseExpiresAt']);
-    const nextRefreshAt = toMilliseconds(data['nextRefreshAt']);
-    const currentStatus =
-      typeof data['status'] === 'string'
-        ? data['status']
-        : '';
-    const anotherServerWorkerOwnsLease =
-      currentStatus === 'refreshing' &&
-      holderClientId.startsWith(SERVER_WORKER_PREFIX) &&
-      holderClientId !== workerId &&
-      leaseExpiresAt > now;
-
-    if (anotherServerWorkerOwnsLease) {
-      return {
-        claimed: false,
-        reason: 'another-server-worker',
-      };
-    }
-
-    if (!force && nextRefreshAt > now) {
-      return {
-        claimed: false,
-        reason: 'not-due',
-        nextRefreshAtMilliseconds: nextRefreshAt,
-      };
-    }
-
-    transaction.set(
+  return db.runTransaction((transaction) =>
+    claimLeagueAutomationLeaseInTransaction({
+      transaction,
       controlRef,
-      {
-        id: 'control',
-        schemaVersion: 2,
-        automationMode: 'server',
-        serverAutomationEnabled: true,
-        status: 'refreshing',
-        holderUserId: null,
-        holderClientId: workerId,
-        leaseExpiresAt: Timestamp.fromMillis(
-          now + SERVER_LEASE_MILLISECONDS,
-        ),
-        lastRefreshStartedAt: FieldValue.serverTimestamp(),
-        lastRefreshReason: trigger,
-        serverTrigger: trigger,
-        lastError: '',
-        updatedAt: FieldValue.serverTimestamp(),
-        ...(!snapshot.exists
-          ? {
-              nextRefreshAt: Timestamp.fromMillis(now),
-              lastRefreshCompletedAt: null,
-            }
-          : {}),
-      },
-      { merge: true },
-    );
-
-    return {
-      claimed: true,
-      reason: 'claimed',
-    };
-  });
+      replayControlRef,
+      scheduleRef,
+      leagueId,
+      scheduleShard: getLeagueAutomationShard(leagueId),
+      scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      workerId,
+      serverWorkerPrefix: SERVER_WORKER_PREFIX,
+      trigger,
+      force,
+      nowMilliseconds: now,
+      leaseMilliseconds: SERVER_LEASE_MILLISECONDS,
+    }),
+  );
 }
 
 async function getPreviousScoringSnapshot(
@@ -4752,49 +4714,6 @@ async function runLeagueAutomation(
   leagueId = safeLeagueId;
   const startedAt = Date.now();
   const phaseTimer = new ScoringPhaseTimer();
-  const historicalReplayControlForSkip =
-    trigger === 'scheduled' || trigger === 'queue-task'
-      ? await phaseTimer.measure(
-          'lease-and-prerequisites',
-          () => getHistoricalReplayControl(leagueId),
-        )
-      : null;
-
-  // Historical replay leagues advance only when a platform administrator
-  // releases the next simulated NHL date. The scheduled live scorer must not
-  // compete for the same league lease or process that replay date on its own.
-  if (historicalReplayControlForSkip) {
-    await recordLeagueAutomationPaused(leagueId, 'historical-replay')
-      .catch((error) => {
-        console.warn('Unable to record the historical-replay queue pause.', {
-          leagueId,
-          error,
-        });
-      });
-
-    const durationMilliseconds = Date.now() - startedAt;
-    const phaseTiming = phaseTimer.snapshot(durationMilliseconds);
-    await recordBetaServerScoringMetric(
-      leagueId,
-      trigger,
-      'skipped',
-      durationMilliseconds,
-      phaseTiming,
-    ).catch(() => undefined);
-
-    return {
-      leagueId,
-      status: 'skipped',
-      skipReason: 'historical-replay',
-      activeCycleNumbers: [],
-      publishedSnapshotCount: 0,
-      skippedSnapshotCount: 0,
-      cycleOneCreated: false,
-      durationMilliseconds,
-      phaseTiming,
-    };
-  }
-
   const workerId = `${SERVER_WORKER_PREFIX}${randomUUID()}`;
   const lease = await phaseTimer.measure(
     'lease-and-prerequisites',
@@ -4807,20 +4726,24 @@ async function runLeagueAutomation(
   );
 
   if (!lease.claimed) {
-    await recordLeagueAutomationSkip(
-      leagueId,
-      trigger,
-      lease.reason,
-      lease.nextRefreshAtMilliseconds,
-    )
-      .catch((error) => {
-        console.warn('Unable to record a skipped league-automation run.', {
-          leagueId,
-          trigger,
-          reason: lease.reason,
-          error,
+    // The lease transaction already parks the queue atomically when replay
+    // owns scoring. A generic skip write would re-enable live scoring.
+    if (lease.reason !== 'historical-replay') {
+      await recordLeagueAutomationSkip(
+        leagueId,
+        trigger,
+        lease.reason,
+        lease.nextRefreshAtMilliseconds,
+      )
+        .catch((error) => {
+          console.warn('Unable to record a skipped league-automation run.', {
+            leagueId,
+            trigger,
+            reason: lease.reason,
+            error,
+          });
         });
-      });
+    }
 
     const durationMilliseconds = Date.now() - startedAt;
     const phaseTiming = phaseTimer.snapshot(durationMilliseconds);
@@ -5594,13 +5517,28 @@ async function claimLeagueAutomationTask(
   taskId: string,
 ): Promise<boolean> {
   const scheduleRef = getLeagueAutomationScheduleRef(payload.leagueId);
+  const replayControlRef = getHistoricalReplayControlRef(payload.leagueId);
   const taskRef = getLeagueAutomationTaskRef(taskId);
   const now = Date.now();
 
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(scheduleRef);
+    const [snapshot, replaySnapshot] = await Promise.all([
+      transaction.get(scheduleRef),
+      transaction.get(replayControlRef),
+    ]);
 
     if (!snapshot.exists) {
+      return false;
+    }
+
+    if (replaySnapshot.data()?.['enabled'] === true) {
+      parkLeagueAutomationScheduleForHistoricalReplayInTransaction({
+        transaction,
+        scheduleRef,
+        leagueId: payload.leagueId,
+        scheduleShard: getLeagueAutomationShard(payload.leagueId),
+        scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      });
       return false;
     }
 
@@ -5702,35 +5640,20 @@ async function releaseFailedLeagueAutomationEnqueue(
   const message = error instanceof Error
     ? error.message
     : 'Cloud Tasks rejected the league scoring task.';
-  const retryAt = Date.now() + 60_000;
+  const now = Date.now();
 
-  await Promise.all([
-    getLeagueAutomationScheduleRef(payload.leagueId).set(
-      {
-        queueStatus: 'error',
-        activeTaskId: null,
-        activeTaskLeaseExpiresAt: FieldValue.delete(),
-        nextScoringAt: Timestamp.fromMillis(retryAt),
-        lastQueueError: message.slice(0, 500),
-        lastQueueErrorCode: getSafeAutomationErrorCode(error),
-        lastQueueErrorAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    ),
-    getLeagueAutomationTaskRef(taskId).set(
-      {
-        status: 'enqueue-error',
-        lastError: message.slice(0, 500),
-        lastErrorCode: getSafeAutomationErrorCode(error),
-        expiresAt: Timestamp.fromMillis(
-          Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
-        ),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    ),
-  ]);
+  await preserveReplayPauseOrRecordEnqueueFailure({
+    scheduleRef: getLeagueAutomationScheduleRef(payload.leagueId),
+    replayControlRef: getHistoricalReplayControlRef(payload.leagueId),
+    taskRef: getLeagueAutomationTaskRef(taskId),
+    taskId,
+    errorMessage: message,
+    errorCode: getSafeAutomationErrorCode(error),
+    nowMilliseconds: now,
+    retryAtMilliseconds: now + 60_000,
+    taskHistoryRetentionMilliseconds:
+      LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+  });
 }
 
 async function enqueueLeagueAutomationSchedule(
@@ -5775,10 +5698,20 @@ async function markLeagueAutomationTaskCompleted(
   startedAt: number,
 ): Promise<void> {
   const scheduleRef = getLeagueAutomationScheduleRef(payload.leagueId);
+  const replayControlRef = getHistoricalReplayControlRef(payload.leagueId);
   const taskRef = getLeagueAutomationTaskRef(taskId);
 
   await db.runTransaction(async (transaction) => {
-    const scheduleSnapshot = await transaction.get(scheduleRef);
+    const [scheduleSnapshot, replaySnapshot, taskSnapshot] = await Promise.all([
+      transaction.get(scheduleRef),
+      transaction.get(replayControlRef),
+      transaction.get(taskRef),
+    ]);
+
+    if (!isLeagueAutomationTaskCompletionEligible(taskSnapshot.data())) {
+      return;
+    }
+
     const scheduleData = scheduleSnapshot.data() ?? {};
     const activeTaskId =
       typeof scheduleData['activeTaskId'] === 'string'
@@ -5799,9 +5732,17 @@ async function markLeagueAutomationTaskCompleted(
     const canonicalSatisfied = canonicalCompletion.satisfied;
 
     if (activeTaskId === taskId) {
+      const historicalReplayPaused =
+        replaySnapshot.data()?.['enabled'] === true ||
+        (
+          result.status === 'skipped' &&
+          result.skipReason === 'historical-replay'
+        );
       const scheduleCompletionData: Record<string, unknown> = {
-        queueStatus: canonicalNeedsFollowUp
-          ? 'pending'
+        queueStatus: historicalReplayPaused
+          ? 'paused'
+          : canonicalNeedsFollowUp
+            ? 'pending'
           : result.status === 'success'
             ? 'idle'
             : 'skipped',
@@ -5821,7 +5762,11 @@ async function markLeagueAutomationTaskCompleted(
         updatedAt: FieldValue.serverTimestamp(),
       };
 
-      if (canonicalNeedsFollowUp) {
+      if (historicalReplayPaused) {
+        scheduleCompletionData['scoringEnabled'] = false;
+        scheduleCompletionData['pausedReason'] = 'historical-replay';
+        scheduleCompletionData['nextScoringAt'] = FieldValue.delete();
+      } else if (canonicalNeedsFollowUp) {
         scheduleCompletionData['nextScoringAt'] = Timestamp.fromMillis(Date.now());
         scheduleCompletionData['canonicalRequestStatus'] = 'pending-follow-up';
         scheduleCompletionData['canonicalFollowUpRequestedAt'] =
@@ -5860,9 +5805,11 @@ async function markLeagueAutomationTaskCompleted(
       );
     }
 
-    transaction.set(
+    writeLeagueAutomationTaskCompletionInTransaction({
+      transaction,
       taskRef,
-      {
+      currentTaskData: taskSnapshot.data(),
+      completionData: {
         status: result.status === 'success' ? 'completed' : 'skipped',
         skipReason: result.skipReason ?? '',
         durationMilliseconds: Math.max(0, Date.now() - startedAt),
@@ -5883,8 +5830,7 @@ async function markLeagueAutomationTaskCompleted(
         ),
         updatedAt: FieldValue.serverTimestamp(),
       },
-      { merge: true },
-    );
+    });
   });
 }
 
@@ -5896,33 +5842,19 @@ async function markLeagueAutomationTaskRetrying(
   const message = error instanceof Error
     ? error.message
     : 'Queued league scoring failed.';
-  const leaseExpiresAt =
-    Date.now() + LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS;
-
-  await Promise.all([
-    getLeagueAutomationScheduleRef(payload.leagueId).set(
-      {
-        queueStatus: 'processing',
-        activeTaskId: taskId,
-        activeTaskLeaseExpiresAt: Timestamp.fromMillis(leaseExpiresAt),
-        lastQueueError: message.slice(0, 500),
-        lastQueueErrorCode: getSafeAutomationErrorCode(error),
-        lastQueueErrorAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    ),
-    getLeagueAutomationTaskRef(taskId).set(
-      {
-        status: 'retrying',
-        lastError: message.slice(0, 500),
-        lastErrorCode: getSafeAutomationErrorCode(error),
-        lastAttemptAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    ),
-  ]);
+  await preserveReplayPauseOrMarkTaskRetrying({
+    scheduleRef: getLeagueAutomationScheduleRef(payload.leagueId),
+    replayControlRef: getHistoricalReplayControlRef(payload.leagueId),
+    taskRef: getLeagueAutomationTaskRef(taskId),
+    taskId,
+    errorMessage: message,
+    errorCode: getSafeAutomationErrorCode(error),
+    nowMilliseconds: Date.now(),
+    processingLeaseMilliseconds:
+      LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS,
+    taskHistoryRetentionMilliseconds:
+      LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+  });
 }
 
 async function getLegacySweepLeagueIds(
@@ -6005,67 +5937,105 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
 
   for (let offset = 0; offset < leagueIds.length; offset += LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT) {
     const batchIds = leagueIds.slice(offset, offset + LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT);
-    const refs = batchIds.map((leagueId) => getLeagueAutomationScheduleRef(leagueId));
-    const snapshots = refs.length > 0 ? await db.getAll(...refs) : [];
-    const writeBatch = db.batch();
-    let batchWriteCount = 0;
-
-    snapshots.forEach((snapshot, index) => {
-      if (snapshot.exists) {
-        const data = snapshot.data() ?? {};
-        const queueStatus =
-          typeof data['queueStatus'] === 'string'
-            ? data['queueStatus']
-            : 'idle';
-        const activeTaskHealthy =
-          (queueStatus === 'queued' || queueStatus === 'processing') &&
-          toMilliseconds(data['activeTaskLeaseExpiresAt']) > now;
-        const scheduleComplete =
-          data['scoringEnabled'] === false ||
-          toMilliseconds(data['nextScoringAt']) > 0 ||
-          activeTaskHealthy;
-
-        if (scheduleComplete) {
-          existingScheduleCount += 1;
-          return;
-        }
-      }
-
-      const leagueId = batchIds[index];
-      const repairingExistingSchedule = snapshot.exists;
-      writeBatch.set(
-        refs[index],
-        {
-          schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
-          leagueId,
-          shard: getLeagueAutomationShard(leagueId),
-          scoringEnabled: true,
-          queueStatus: 'idle',
-          activeTaskId: null,
-          activeTaskDueAt: FieldValue.delete(),
-          activeTaskLeaseExpiresAt: FieldValue.delete(),
-          nextScoringAt: Timestamp.fromMillis(now),
-          lastOutcome: repairingExistingSchedule
-            ? 'bootstrap-repair'
-            : 'bootstrap',
-          consecutiveFailureCount: 0,
-          ...(repairingExistingSchedule
-            ? { lastBootstrapRepairAt: FieldValue.serverTimestamp() }
-            : { createdAt: FieldValue.serverTimestamp() }),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
+    for (
+      let transactionOffset = 0;
+      transactionOffset < batchIds.length;
+      transactionOffset += LEAGUE_AUTOMATION_BOOTSTRAP_TRANSACTION_LIMIT
+    ) {
+      const transactionIds = batchIds.slice(
+        transactionOffset,
+        transactionOffset + LEAGUE_AUTOMATION_BOOTSTRAP_TRANSACTION_LIMIT,
       );
-      if (repairingExistingSchedule) {
-        repairedScheduleCount += 1;
-      } else {
-        createdScheduleCount += 1;
-      }
-      batchWriteCount += 1;
-    });
+      const scheduleRefs = transactionIds.map((leagueId) =>
+        getLeagueAutomationScheduleRef(leagueId)
+      );
+      const replayRefs = transactionIds.map((leagueId) =>
+        getHistoricalReplayControlRef(leagueId)
+      );
+      const counts = await db.runTransaction(async (transaction) => {
+        const [scheduleSnapshots, replaySnapshots] = await Promise.all([
+          transaction.getAll(...scheduleRefs),
+          transaction.getAll(...replayRefs),
+        ]);
+        const result = { existing: 0, created: 0, repaired: 0 };
 
-    if (batchWriteCount > 0) {
-      await writeBatch.commit();
+        scheduleSnapshots.forEach((snapshot, index) => {
+          const leagueId = transactionIds[index];
+          const replayEnabled =
+            replaySnapshots[index]?.data()?.['enabled'] === true;
+
+          if (replayEnabled) {
+            parkLeagueAutomationScheduleForHistoricalReplayInTransaction({
+              transaction,
+              scheduleRef: scheduleRefs[index],
+              leagueId,
+              scheduleShard: getLeagueAutomationShard(leagueId),
+              scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+            });
+            if (snapshot.exists) {
+              result.existing += 1;
+            } else {
+              result.created += 1;
+            }
+            return;
+          }
+
+          if (snapshot.exists) {
+            const data = snapshot.data() ?? {};
+            const queueStatus =
+              typeof data['queueStatus'] === 'string'
+                ? data['queueStatus']
+                : 'idle';
+            const activeTaskHealthy =
+              (queueStatus === 'queued' || queueStatus === 'processing') &&
+              toMilliseconds(data['activeTaskLeaseExpiresAt']) > now;
+            const scheduleComplete =
+              data['scoringEnabled'] === false ||
+              toMilliseconds(data['nextScoringAt']) > 0 ||
+              activeTaskHealthy;
+
+            if (scheduleComplete) {
+              result.existing += 1;
+              return;
+            }
+          }
+
+          const repairingExistingSchedule = snapshot.exists;
+          transaction.set(
+            scheduleRefs[index],
+            {
+              schemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+              leagueId,
+              shard: getLeagueAutomationShard(leagueId),
+              scoringEnabled: true,
+              queueStatus: 'idle',
+              activeTaskId: null,
+              activeTaskDueAt: FieldValue.delete(),
+              activeTaskLeaseExpiresAt: FieldValue.delete(),
+              nextScoringAt: Timestamp.fromMillis(now),
+              lastOutcome: repairingExistingSchedule
+                ? 'bootstrap-repair'
+                : 'bootstrap',
+              consecutiveFailureCount: 0,
+              ...(repairingExistingSchedule
+                ? { lastBootstrapRepairAt: FieldValue.serverTimestamp() }
+                : { createdAt: FieldValue.serverTimestamp() }),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+          if (repairingExistingSchedule) {
+            result.repaired += 1;
+          } else {
+            result.created += 1;
+          }
+        });
+
+        return result;
+      });
+      existingScheduleCount += counts.existing;
+      createdScheduleCount += counts.created;
+      repairedScheduleCount += counts.repaired;
     }
   }
 
@@ -7797,11 +7767,13 @@ export const queueLeagueAutomationCanaryCheck = onCall(
     await validateLeagueAutomationAdminLeagueIds([leagueId], true);
 
     const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
+    const replayControlRef = getHistoricalReplayControlRef(leagueId);
     const auditRef = getLeagueAutomationAuditRef(`canary-${requestId}`);
     const now = Date.now();
     const prepared = await db.runTransaction(async (transaction) => {
-      const [scheduleSnapshot, auditSnapshot] = await Promise.all([
+      const [scheduleSnapshot, replaySnapshot, auditSnapshot] = await Promise.all([
         transaction.get(scheduleRef),
+        transaction.get(replayControlRef),
         transaction.get(auditRef),
       ]);
 
@@ -7821,6 +7793,13 @@ export const queueLeagueAutomationCanaryCheck = onCall(
         throw new HttpsError(
           'failed-precondition',
           'The scoring schedule is missing. Wait for the hourly bootstrap or refresh the control center.',
+        );
+      }
+
+      if (replaySnapshot.data()?.['enabled'] === true) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Historical Replay owns scoring for this league. Disable replay before requesting a live scoring canary.',
         );
       }
 
@@ -8167,81 +8146,27 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
     const taskId = buildLeagueAutomationTaskId(payload);
     const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
     const taskRef = getLeagueAutomationTaskRef(taskId);
-    const scheduleSnapshot = await scheduleRef.get();
-
-    if (!scheduleSnapshot.exists) {
-      await taskRef.set(
-        {
-          status: 'skipped',
-          skipReason: 'schedule-missing',
-          completedAt: FieldValue.serverTimestamp(),
-          expiresAt: Timestamp.fromMillis(
-            Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
-          ),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      return;
-    }
-
-    const scheduleData = scheduleSnapshot.data() ?? {};
-    const activeTaskId =
-      typeof scheduleData['activeTaskId'] === 'string'
-        ? scheduleData['activeTaskId']
-        : '';
-    const expectedDueAt = toMilliseconds(scheduleData['activeTaskDueAt']);
-    const activeTaskCanonicalSourceVersion = normalizeCanonicalSourceVersion(
-      scheduleData['activeTaskCanonicalSourceVersion'],
-    );
-
-    if (
-      scheduleData['scoringEnabled'] === false ||
-      activeTaskId !== taskId ||
-      expectedDueAt !== Math.trunc(payload.expectedDueAtMilliseconds) ||
-      (payloadCanonicalSourceVersion &&
-        activeTaskCanonicalSourceVersion !== payloadCanonicalSourceVersion)
-    ) {
-      await taskRef.set(
-        {
-          status: 'skipped',
-          skipReason: scheduleData['scoringEnabled'] === false
-            ? 'scoring-disabled'
-            : 'stale-task',
-          completedAt: FieldValue.serverTimestamp(),
-          expiresAt: Timestamp.fromMillis(
-            Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
-          ),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-      return;
-    }
-
     const startedAt = Date.now();
-    await Promise.all([
-      scheduleRef.set(
-        {
-          queueStatus: 'processing',
-          activeTaskLeaseExpiresAt: Timestamp.fromMillis(
-            startedAt + LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS,
-          ),
-          lastQueueStartedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ),
-      taskRef.set(
-        {
-          status: 'processing',
-          attemptCount: FieldValue.increment(1),
-          startedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ),
-    ]);
+    const taskStart = await beginLeagueAutomationTask({
+      scheduleRef,
+      replayControlRef: getHistoricalReplayControlRef(leagueId),
+      taskRef,
+      taskId,
+      leagueId,
+      scheduleShard: getLeagueAutomationShard(leagueId),
+      scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      expectedDueAtMilliseconds: Math.trunc(payload.expectedDueAtMilliseconds),
+      expectedCanonicalSourceVersion: payloadCanonicalSourceVersion,
+      nowMilliseconds: startedAt,
+      processingLeaseMilliseconds:
+        LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS,
+      taskHistoryRetentionMilliseconds:
+        LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
+    });
+
+    if (!taskStart.started) {
+      return;
+    }
 
     try {
       const queueConfig = await getLeagueAutomationQueueConfig();
@@ -8311,7 +8236,14 @@ export const processLeagueAutomationTask = onTaskDispatched<LeagueAutomationTask
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
-      );
+      ).catch((error: unknown) => {
+        // Competitive completion is already durable. Aggregate telemetry is
+        // best-effort and must never resurrect a completed or replay-paused
+        // queue task.
+        logger.warn('Unable to record a completed queue-task metric.', {
+          errorCode: getSafeAutomationErrorCode(error),
+        });
+      });
     } catch (error: unknown) {
       await markLeagueAutomationTaskRetrying(payload, taskId, error);
       await db.doc('appData/leagueAutomation').set(
@@ -8347,62 +8279,20 @@ export const recoverStaleLeagueAutomationQueue = onSchedule(
     let recoveredCount = 0;
 
     for (const document of snapshot.docs) {
-      const recoveredTaskId = await db.runTransaction(async (transaction) => {
-        const current = await transaction.get(document.ref);
-        const data = current.data() ?? {};
-        const queueStatus =
-          typeof data['queueStatus'] === 'string'
-            ? data['queueStatus']
-            : '';
-        const leaseExpiresAt = toMilliseconds(data['activeTaskLeaseExpiresAt']);
-        const activeTaskId =
-          typeof data['activeTaskId'] === 'string'
-            ? data['activeTaskId']
-            : '';
-
-        if (
-          (queueStatus !== 'queued' && queueStatus !== 'processing') ||
-          leaseExpiresAt <= 0 ||
-          leaseExpiresAt > now
-        ) {
-          return '';
-        }
-
-        transaction.set(
-          document.ref,
-          {
-            queueStatus: 'error',
-            activeTaskId: null,
-            activeTaskLeaseExpiresAt: FieldValue.delete(),
-            nextScoringAt: Timestamp.fromMillis(now),
-            lastQueueError: 'A queued scoring worker stopped reporting progress. The league was released for a safe retry.',
-            lastQueueErrorCode: 'stale-task-recovered',
-            lastQueueErrorAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-
-        return activeTaskId;
+      const recovery = await recoverStaleLeagueAutomationTask({
+        scheduleRef: document.ref,
+        replayControlRef: getHistoricalReplayControlRef(document.id),
+        taskCollectionPath: 'leagueAutomationTasks',
+        nowMilliseconds: now,
+        taskHistoryRetentionMilliseconds:
+          LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
       });
 
-      if (!recoveredTaskId) {
+      if (!recovery.recovered) {
         continue;
       }
 
       recoveredCount += 1;
-      await getLeagueAutomationTaskRef(recoveredTaskId).set(
-        {
-          status: 'stale-recovered',
-          lastErrorCode: 'stale-task-recovered',
-          completedAt: FieldValue.serverTimestamp(),
-          expiresAt: Timestamp.fromMillis(
-            Date.now() + LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS,
-          ),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
     }
 
     await db.doc('appData/leagueAutomation').set(
@@ -8734,6 +8624,13 @@ export const requestLeagueLiveScoringRefresh = onCall(
       );
 
       if (result.status === 'skipped') {
+        if (result.skipReason === 'historical-replay') {
+          throw new HttpsError(
+            'failed-precondition',
+            'Live score refresh is disabled while historical replay is active. Use Advance One Day instead.',
+          );
+        }
+
         throw new HttpsError(
           'aborted',
           'Another server scoring update is already finishing. Wait a moment and try again.',
@@ -9052,6 +8949,7 @@ async function performHistoricalReplayAdvance(
   await requireHistoricalReplayReadyLeague(leagueId);
 
   const controlRef = getHistoricalReplayControlRef(leagueId);
+  const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
   const controlSnapshot = await controlRef.get();
   const previous = normalizeReplayControl(controlSnapshot.data());
   const retryFailedDate = Boolean(
@@ -9082,51 +8980,52 @@ async function performHistoricalReplayAdvance(
       ? previous.totalReleasedGameCount
       : (previous.enabled ? previous.totalReleasedGameCount : 0) + releasedGameCount;
 
-    await Promise.all([
-      controlRef.set(
-        {
-          schemaVersion: 2,
-          enabled: true,
-          status: 'advancing',
-          activeRequestId: requestId,
-          targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
-          sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
-          seasonStartDate,
-          simulatedDate: nextDate,
-          daysAdvanced: nextDaysAdvanced,
-          lastReleasedGameCount: releasedGameCount,
-          totalReleasedGameCount: nextTotalReleasedGameCount,
-          requestedBy: userId,
-          lastAdvanceStartedAt: FieldValue.serverTimestamp(),
-          message: retryFailedDate
-            ? `Retrying the simulated NHL date ${nextDate}.`
-            : `Processing the simulated NHL date ${nextDate}.`,
-          lastError: '',
-          lastFailedSimulatedDate: null,
-          createdAt: controlSnapshot.exists
-            ? controlSnapshot.data()?.['createdAt'] ?? FieldValue.serverTimestamp()
-            : FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ),
-      getControlRef(leagueId).set(
-        {
-          id: 'control',
-          schemaVersion: 2,
-          automationMode: 'historical-replay',
-          serverAutomationEnabled: true,
-          historicalReplayEnabled: true,
-          historicalReplayDate: nextDate,
-          nextRefreshAt: Timestamp.fromMillis(Date.now()),
-          refreshRequestedAt: FieldValue.serverTimestamp(),
-          lastRefreshReason: 'manual',
-          lastError: '',
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ),
-    ]);
+    await writeHistoricalReplayControlAndParkSchedule({
+      controlRef,
+      scheduleRef,
+      leagueId,
+      scheduleShard: getLeagueAutomationShard(leagueId),
+      scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      controlData: {
+        schemaVersion: 2,
+        status: 'advancing',
+        activeRequestId: requestId,
+        targetSeason: HISTORICAL_REPLAY_TARGET_SEASON,
+        sourceSeason: HISTORICAL_REPLAY_SOURCE_SEASON,
+        seasonStartDate,
+        simulatedDate: nextDate,
+        daysAdvanced: nextDaysAdvanced,
+        lastReleasedGameCount: releasedGameCount,
+        totalReleasedGameCount: nextTotalReleasedGameCount,
+        requestedBy: userId,
+        lastAdvanceStartedAt: FieldValue.serverTimestamp(),
+        message: retryFailedDate
+          ? `Retrying the simulated NHL date ${nextDate}.`
+          : `Processing the simulated NHL date ${nextDate}.`,
+        lastError: '',
+        lastFailedSimulatedDate: null,
+        createdAt: controlSnapshot.exists
+          ? controlSnapshot.data()?.['createdAt'] ?? FieldValue.serverTimestamp()
+          : FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    });
+    await getControlRef(leagueId).set(
+      {
+        id: 'control',
+        schemaVersion: 2,
+        automationMode: 'historical-replay',
+        serverAutomationEnabled: true,
+        historicalReplayEnabled: true,
+        historicalReplayDate: nextDate,
+        nextRefreshAt: Timestamp.fromMillis(Date.now()),
+        refreshRequestedAt: FieldValue.serverTimestamp(),
+        lastRefreshReason: 'manual',
+        lastError: '',
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
 
     const result = await runHistoricalReplayAutomationWithRetry(leagueId);
 
@@ -9202,9 +9101,13 @@ async function performHistoricalReplayAdvance(
       ? error.message
       : 'Unable to advance the historical replay.';
 
-    await controlRef.set(
-      {
-        enabled: true,
+    await writeHistoricalReplayControlAndParkSchedule({
+      controlRef,
+      scheduleRef,
+      leagueId,
+      scheduleShard: getLeagueAutomationShard(leagueId),
+      scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      controlData: {
         status: 'error',
         activeRequestId: null,
         lastFailedRequestId: requestId,
@@ -9214,8 +9117,7 @@ async function performHistoricalReplayAdvance(
         lastAdvanceFailedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
-      { merge: true },
-    ).catch(() => undefined);
+    }).catch(() => undefined);
 
     throw error instanceof HttpsError
       ? error
@@ -9262,6 +9164,7 @@ export const advanceHistoricalReplayDay = onCall(
 
     const controlRef = getHistoricalReplayControlRef(leagueId);
     const requestRef = getHistoricalReplayRequestRef(requestId);
+    const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
     const now = Date.now();
     const queueState = await db.runTransaction(async (transaction) => {
       const [controlSnapshot, requestSnapshot] = await Promise.all([
@@ -9281,6 +9184,14 @@ export const advanceHistoricalReplayDay = onCall(
             'This replay request identifier belongs to a different operation.',
           );
         }
+
+        parkLeagueAutomationScheduleForHistoricalReplayInTransaction({
+          transaction,
+          scheduleRef,
+          leagueId,
+          scheduleShard: getLeagueAutomationShard(leagueId),
+          scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+        });
 
         return {
           retrySimulatedDate:
@@ -9376,6 +9287,13 @@ export const advanceHistoricalReplayDay = onCall(
         },
         { merge: true },
       );
+      parkLeagueAutomationScheduleForHistoricalReplayInTransaction({
+        transaction,
+        scheduleRef,
+        leagueId,
+        scheduleShard: getLeagueAutomationShard(leagueId),
+        scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      });
 
       return {
         retrySimulatedDate,
@@ -9473,6 +9391,7 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
 
     const requestRef = getHistoricalReplayRequestRef(requestId);
     const controlRef = getHistoricalReplayControlRef(leagueId);
+    const scheduleRef = getLeagueAutomationScheduleRef(leagueId);
     const now = Date.now();
     const claimed = await db.runTransaction(async (transaction) => {
       const [requestSnapshot, controlSnapshot] = await Promise.all([
@@ -9490,6 +9409,15 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
         : '';
 
       if (status === 'completed' || status === 'error' || status === 'cancelled') {
+        if (controlSnapshot.data()?.['enabled'] === true) {
+          parkLeagueAutomationScheduleForHistoricalReplayInTransaction({
+            transaction,
+            scheduleRef,
+            leagueId,
+            scheduleShard: getLeagueAutomationShard(leagueId),
+            scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+          });
+        }
         return false;
       }
 
@@ -9564,6 +9492,13 @@ export const processHistoricalReplayAdvance = onTaskDispatched<HistoricalReplayA
         },
         { merge: true },
       );
+      parkLeagueAutomationScheduleForHistoricalReplayInTransaction({
+        transaction,
+        scheduleRef,
+        leagueId,
+        scheduleShard: getLeagueAutomationShard(leagueId),
+        scheduleSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+      });
 
       return true;
     });

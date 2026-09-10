@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { getFunctions } from 'firebase-admin/functions';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onTaskDispatched } from 'firebase-functions/v2/tasks';
@@ -894,6 +895,15 @@ function buildDraftClockTaskId(payload: DraftPickDeadlineTaskPayload): string {
     )
     .digest('hex')
     .slice(0, 40);
+}
+
+function buildDraftPickHandoffCorrelationHash(
+  leagueId: string,
+  pickId: string,
+): string {
+  return createHash('sha256')
+    .update(`rinkrat:draft-pick-handoff:v1:${leagueId}:${pickId}`)
+    .digest('hex');
 }
 
 async function scheduleScheduledDraftStartTask(
@@ -2748,21 +2758,38 @@ export const reconcileDraftTurnAfterCommittedPick = onDocumentWritten(
       return;
     }
 
-    const result = await repairDraftTurnFromCommittedPicks(
-      leagueId,
-      `${SERVER_DRAFT_ACTOR}:pick-handoff`,
-    );
+    const draftPickCorrelationHash =
+      buildDraftPickHandoffCorrelationHash(leagueId, pickId);
+    let failureStage: 'reconcile' | 'schedule-deadline' = 'reconcile';
 
-    if (result.status !== 'live') {
-      return;
-    }
-
-    const taskScheduled = await ensureCurrentDraftClockTask(leagueId);
-
-    if (!taskScheduled) {
-      throw new Error(
-        `Pick ${pickId} committed, but RinkRat could not schedule the next exact draft deadline.`,
+    try {
+      const result = await repairDraftTurnFromCommittedPicks(
+        leagueId,
+        `${SERVER_DRAFT_ACTOR}:pick-handoff`,
       );
+
+      failureStage = 'schedule-deadline';
+      const taskScheduled = result.status === 'live'
+        ? await ensureCurrentDraftClockTask(leagueId)
+        : false;
+
+      if (result.status === 'live' && !taskScheduled) {
+        throw new Error('next-draft-deadline-not-scheduled');
+      }
+
+      logger.info('Committed Draft pick handoff reconciled.', {
+        eventId: event.id,
+        draftPickCorrelationHash,
+        draftStatus: result.status,
+        nextDeadlineScheduled: taskScheduled,
+      });
+    } catch {
+      logger.error('Committed Draft pick handoff reconciliation failed.', {
+        eventId: event.id,
+        draftPickCorrelationHash,
+        failureStage,
+      });
+      throw new Error('Committed Draft pick handoff reconciliation failed.');
     }
   },
 );

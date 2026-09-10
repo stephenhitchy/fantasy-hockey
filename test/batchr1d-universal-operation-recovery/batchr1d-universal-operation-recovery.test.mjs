@@ -372,6 +372,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/nhl/nhl-canonical-scoring-authority.util.ts',
     // D1I adds isolated automatic fallback and measured-capacity decisions.
     'shared/core/live-scoring/league-automation-season-safety.util.ts',
+    // FF1.33 atomically fences live scoring while Historical Replay owns it.
+    'shared/core/live-scoring/historical-replay-lease-guard.util.ts',
+    'shared/core/live-scoring/historical-replay-lease-write.service.ts',
     // D1F.2 adds isolated queue-version helpers and scoring phase instrumentation.
     'shared/core/live-scoring/canonical-request-completion.util.ts',
     'shared/core/nhl/nhl-canonical-impact-routing.util.ts',

@@ -136,9 +136,10 @@ test('player game detail is redesigned around a six-game tape, score versus proj
   assert.match(styles, /\.game-film-row/);
 });
 
-test('historical replay is isolated from scheduled scoring, retries briefly, and blocks duplicate client submissions', async () => {
-  const [functionSource, clientSource, template] = await Promise.all([
+test('historical replay atomically owns scoring, retries briefly, and blocks duplicate client submissions', async () => {
+  const [functionSource, leaseWriteSource, clientSource, template] = await Promise.all([
     read('functions/src/league-automation.ts'),
+    read('functions/src/shared/core/live-scoring/historical-replay-lease-write.service.ts'),
     read('src/app/features/cycles/cycle-one/cycle-one.ts'),
     read('src/app/features/cycles/cycle-one/cycle-one.html'),
   ]);
@@ -149,7 +150,11 @@ test('historical replay is isolated from scheduled scoring, retries briefly, and
   );
   assert.match(functionSource, /runHistoricalReplayAutomationWithRetry/);
   assert.match(functionSource, /for \(const retryDelay of HISTORICAL_REPLAY_LEASE_RETRY_DELAYS_MILLISECONDS\)/);
-  assert.match(functionSource, /const historicalReplayControlForSkip =[\s\S]*trigger === 'scheduled' \|\| trigger === 'queue-task'[\s\S]*phaseTimer\.measure\([\s\S]*'lease-and-prerequisites'[\s\S]*getHistoricalReplayControl\(leagueId\)/);
+  assert.match(functionSource, /claimLeagueAutomationLeaseInTransaction/);
+  assert.match(leaseWriteSource, /transaction\.get\(input\.replayControlRef\)/);
+  assert.match(leaseWriteSource, /shouldPauseLeagueAutomationForHistoricalReplay/);
+  assert.match(leaseWriteSource, /reason: 'historical-replay'/);
+  assert.match(functionSource, /if \(lease\.reason !== 'historical-replay'\)/);
   assert.doesNotMatch(functionSource, /collectionGroup\('historicalReplay'\)/);
   assert.match(functionSource, /The simulated date was not skipped/);
   assert.match(clientSource, /historicalReplayControl\(\)\?\.status === 'advancing'/);

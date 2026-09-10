@@ -472,6 +472,22 @@ source to recompute every ordered chunk hash and the schema-2 root hash.
 Canonical chunk IDs, contiguous indexes, and the 25-asset writer layout are
 also required. No runtime deployment is required for FF1.32.4.
 
+FF1.33's first runtime prerequisite is implemented as a source candidate with
+staging evidence pending. The league-scoring lease transaction reads Historical Replay
+authority before any write and rejects every non-replay trigger whenever the
+replay control is enabled. This closes the late duplicate `draft-complete` and
+`season-start` race that could otherwise create Cycle 1 after the six-client
+fixture was parked. A blocked queue completion preserves the replay pause, and
+replay activation plus later worker reassertions now park the recurring
+schedule in the same transaction. Outcome, canonical, enqueue, retry, stale
+recovery, bootstrap, and Canary writers also serialize behind raw replay
+authority without replacing terminal or newer task evidence. The explicit
+serialized replay worker remains eligible. Committed Draft-pick
+handoff also emits a bounded structured event plus a one-way league/pick path
+hash so staging evidence can be attributed exactly without logging raw league
+or pick identifiers. FF1.33 tooling must machine-check the guarded deployed
+revision before writes.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.
@@ -487,7 +503,7 @@ also required. No runtime deployment is required for FF1.32.4.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
 - FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
-  exact-source command is `npm run verify:batchff1-16`, followed by `npm run build:all`,
+  exact-source command is `npm run verify:batchff1-17`, followed by `npm run build:all`,
   `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
   clean commit.
 
@@ -517,23 +533,25 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge FF1.32.4, then rerun its guarded no-browser T-25
-   availability-task and exact T-20 Projection evidence against isolated
-   staging source `e5e133fb`.
-2. Complete the owner's two-manager supported-UI Draft rehearsal and record
+1. Independently review and merge the FF1.33 Historical Replay lease guard,
+   then bind the hardened six-client tooling to that exact guarded revision.
+2. Deploy only the exact staging Functions required by FF1.33 plus site-pinned
+   staging Hosting from one clean commit; run the guarded six-client rehearsal
+   only after its executable provenance checks pass.
+3. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-3. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
+4. Complete aggregate physical iPhone/Android D1N evidence on the exact staging
    build, then build D1N-C-B separately and review the 100 ramp before 500.
-4. Complete the Historical Replay lifecycle evidence separately; the automated
+5. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.
-5. Record the no-post-Draft-replacement or account-transfer decision.
-6. Generate and independently review the D1J season-freeze kit, exact tag,
+6. Record the no-post-Draft-replacement or account-transfer decision.
+7. Generate and independently review the D1J season-freeze kit, exact tag,
    targeted rollback, incident plan, and formal invitation/Draft go-no-go.
-7. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
+8. Begin the observed 2–4 league, 10–30 manager season under the post-Draft
    competitive freeze.
-8. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+9. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

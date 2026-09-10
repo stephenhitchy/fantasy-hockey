@@ -30,7 +30,7 @@ console. Stop on the first P0/P1 result and preserve the affected state.
 From a clean, synchronized `main` using Node 22.23.1 and npm 11.17.0:
 
 ```bash
-npm run verify:batchff1-15
+npm run verify:batchff1-17
 npm run build:all
 git diff --check
 npm run release:verify-clean-deploy-source
@@ -81,6 +81,12 @@ server/data evidence for DRF-01, DRF-02, DRF-04 through DRF-07, and DRF-09.
 It creates six stable synthetic Auth identities in only
 `rinkrat-staging-d1nc-2026`, authenticates six independent Firebase clients,
 and exercises the ordinary Draft callable and Rules-protected queue paths.
+
+Before this alternative may write a fixture, its declared deployed revision
+must contain the FF1.33 atomic Historical Replay lease guard and bounded
+committed-pick handoff marker. Exact source-archive equality alone is not
+sufficient: the runner must machine-check that guarded revision and correlate
+every synthetic pick to its exact event, league, and pick marker.
 
 The Admin SDK is limited to fixture provisioning, binding the already
 server-verified Projection V11 snapshot to the accelerated disposable Draft,

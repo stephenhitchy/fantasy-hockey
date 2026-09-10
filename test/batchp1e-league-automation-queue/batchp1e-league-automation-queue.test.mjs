@@ -56,14 +56,22 @@ test('queue dispatch is due-time based, bounded, and defaults to non-publishing 
 });
 
 test('per-league schedules are bootstrapped and updated after success, error, pause, and retry', async () => {
-  const automation = await read('functions/src/league-automation.ts');
+  const [automation, replayLeaseWriteService] = await Promise.all([
+    read('functions/src/league-automation.ts'),
+    read(
+      'functions/src/shared/core/live-scoring/historical-replay-lease-write.service.ts',
+    ),
+  ]);
 
   assert.match(automation, /export const bootstrapLeagueAutomationSchedules = onSchedule/);
   assert.match(automation, /bootstrap-repair/);
   assert.match(automation, /queueScheduleCoverageRepairedCount/);
   assert.match(automation, /recordLeagueAutomationSuccess/);
   assert.match(automation, /recordLeagueAutomationFailure/);
-  assert.match(automation, /recordLeagueAutomationPaused/);
+  assert.match(automation, /claimLeagueAutomationLeaseInTransaction/);
+  assert.match(replayLeaseWriteService, /queueStatus: 'paused'/);
+  assert.match(replayLeaseWriteService, /pausedReason: 'historical-replay'/);
+  assert.match(replayLeaseWriteService, /nextScoringAt: FieldValue\.delete\(\)/);
   assert.match(automation, /nextScoringAt:\s*Timestamp\.fromMillis\(nextRefreshAtMilliseconds\)/);
   assert.match(automation, /consecutiveFailureCount:\s*FieldValue\.increment\(1\)/);
   assert.match(automation, /queueScheduleCoverageCount/);
@@ -71,10 +79,27 @@ test('per-league schedules are bootstrapped and updated after success, error, pa
 });
 
 test('at-least-once task delivery cannot double-publish a league run', async () => {
-  const automation = await read('functions/src/league-automation.ts');
+  const [automation, replayLeaseWriteService] = await Promise.all([
+    read('functions/src/league-automation.ts'),
+    read(
+      'functions/src/shared/core/live-scoring/historical-replay-lease-write.service.ts',
+    ),
+  ]);
 
-  assert.match(automation, /activeTaskId !== taskId/);
-  assert.match(automation, /expectedDueAt !== Math\.trunc\(payload\.expectedDueAtMilliseconds\)/);
+  assert.match(automation, /beginLeagueAutomationTask\(\{/);
+  assert.match(replayLeaseWriteService, /activeTaskId !== input\.taskId/);
+  assert.match(
+    replayLeaseWriteService,
+    /toTimestampMilliseconds\(schedule\['activeTaskDueAt'\]\) !==[\s\S]*Math\.trunc\(input\.expectedDueAtMilliseconds\)/,
+  );
+  assert.match(
+    replayLeaseWriteService,
+    /isTerminalLeagueAutomationTaskStatus\(taskStatus\)/,
+  );
+  assert.match(
+    replayLeaseWriteService,
+    /transaction\.get\(input\.scheduleRef\)[\s\S]*transaction\.get\(input\.replayControlRef\)[\s\S]*transaction\.get\(input\.taskRef\)/,
+  );
   assert.match(automation, /runLeagueAutomation\([\s\S]*payload\.leagueId,[\s\S]*payload\.reason === 'canary-manual' \|\|[\s\S]*Boolean\(payloadCanonicalSourceVersion\),[\s\S]*'queue-task'/);
   assert.match(automation, /claimLeagueAutomationLease/);
   assert.match(automation, /result\.skipReason === 'another-server-worker'/);
@@ -83,12 +108,41 @@ test('at-least-once task delivery cannot double-publish a league run', async () 
 });
 
 test('stale queue work is recovered and bounded task history is cleaned up', async () => {
-  const automation = await read('functions/src/league-automation.ts');
+  const [automation, replayLeaseWriteService] = await Promise.all([
+    read('functions/src/league-automation.ts'),
+    read(
+      'functions/src/shared/core/live-scoring/historical-replay-lease-write.service.ts',
+    ),
+  ]);
 
   assert.match(automation, /export const recoverStaleLeagueAutomationQueue = onSchedule/);
   assert.match(automation, /activeTaskLeaseExpiresAt/);
-  assert.match(automation, /stale-task-recovered/);
-  assert.match(automation, /nextScoringAt:\s*Timestamp\.fromMillis\(now\)/);
+  assert.match(automation, /recoverStaleLeagueAutomationTask\(\{/);
+  assert.match(
+    automation,
+    /replayControlRef: getHistoricalReplayControlRef\(document\.id\)/,
+  );
+  assert.match(replayLeaseWriteService, /queueStatus: 'error'/);
+  assert.match(
+    replayLeaseWriteService,
+    /nextScoringAt: Timestamp\.fromMillis\(input\.nowMilliseconds\)/,
+  );
+  assert.match(
+    replayLeaseWriteService,
+    /lastQueueErrorCode: 'stale-task-recovered'/,
+  );
+  assert.match(
+    replayLeaseWriteService,
+    /lastErrorCode: 'stale-task-recovered'/,
+  );
+  assert.match(
+    replayLeaseWriteService,
+    /!isTerminalLeagueAutomationTaskStatus\(taskStatus\)/,
+  );
+  assert.match(
+    replayLeaseWriteService,
+    /historicalReplaySchedulePauseFields\(\)/,
+  );
   assert.match(automation, /export const cleanupLeagueAutomationTaskHistory = onSchedule/);
   assert.match(automation, /LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS/);
   assert.match(automation, /collection\('leagueAutomationTasks'\)[\s\S]*where\('expiresAt', '<='/);
