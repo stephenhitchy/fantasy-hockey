@@ -540,6 +540,20 @@ raw Replay authority enabled, so guard-bearing Functions require forward repair
 rather than a pre-guard rollback. This does not replace supported-UI or
 physical-device evidence.
 
+The exact 19-Function staging rollout completed on 2026-09-10. Hosting and all
+19 generation-pinned source archives independently matched guarded runtime
+commit `48ebbefe3d94af6b7db2be9e758ed1e396a22ac4`; the eight excluded Functions
+and their scheduled jobs remained absent. The post-deploy topology audit found
+that Cloud Functions materialized a 20-instance ceiling when five previously
+uncapped staging Functions were updated. The same four existing Production
+counterparts already use 20, and the affected task queues retain tighter
+unchanged dispatch limits. The evidence runner now requires that observed
+value for `advanceHistoricalReplayDay`, `processAutoDraftQueueChange`,
+`processHistoricalReplayAdvance`, `processLeagueAutomationTask`, and
+`refreshDraftPlayerAvailabilityTask`. This is an evidence-only correction;
+runtime source, queues, workers, and Production were not changed. The guarded
+six-client rehearsal remains pending.
+
 ## Release and deployment rules
 
 - Start every implementation from a clean Git worktree.

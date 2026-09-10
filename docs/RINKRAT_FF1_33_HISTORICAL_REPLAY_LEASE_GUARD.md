@@ -145,6 +145,20 @@ Do not use Production or a family league for this proof. Do not deploy Rules,
 indexes, TTL policies, App Check, queue configuration, worker limits, scoring
 configuration, or canonical authority.
 
+The 2026-09-10 post-deployment audit confirmed that staging Hosting and all 19
+generation-pinned Function archives contain exact runtime source
+`48ebbefe3d94af6b7db2be9e758ed1e396a22ac4`. Updating five existing uncapped
+second-generation Functions materialized a 20-instance ceiling in the Cloud
+Functions control plane. The corresponding four Production Functions already
+use that ceiling, and each affected task worker remains bounded more tightly by
+its unchanged Cloud Tasks dispatch limit. FF1.33 records the observed 20 as the
+protected staging topology for `advanceHistoricalReplayDay`,
+`processAutoDraftQueueChange`, `processHistoricalReplayAdvance`,
+`processLeagueAutomationTask`, and `refreshDraftPlayerAvailabilityTask`.
+This evidence correction does not deploy or change a runtime, queue, or worker
+configuration. A missing or different ceiling still fails before fixture
+creation.
+
 ## Targeted deployment boundary and rollback
 
 The exact behavior-affected Functions are:

@@ -317,6 +317,20 @@ test('the six-client runner is hard-locked to the isolated billed staging projec
 });
 
 test('all required Functions, Scheduler jobs, and task queues have exact protected topology', () => {
+  const materializedTwentyInstanceCeilings = [
+    'advanceHistoricalReplayDay',
+    'processAutoDraftQueueChange',
+    'processHistoricalReplayAdvance',
+    'processLeagueAutomationTask',
+    'refreshDraftPlayerAvailabilityTask',
+  ];
+  assert.deepEqual(
+    materializedTwentyInstanceCeilings.filter(
+      (name) => FF1_SIX_CLIENT_FUNCTION_TOPOLOGY[name].maxInstances !== 20,
+    ),
+    [],
+    'The post-deploy 20-instance staging ceilings must remain explicit evidence.',
+  );
   const functionEntries = FF1_SIX_CLIENT_REQUIRED_STAGING_FUNCTIONS.map(
     functionTopologyEntry,
   );
@@ -351,6 +365,14 @@ test('all required Functions, Scheduler jobs, and task queues have exact protect
     .serviceConfig.maxInstanceCount = 21;
   assert.throws(
     () => assertFf1SixClientFunctionTopology(wrongWorkerLimit),
+    /protected max-instance ceiling/,
+  );
+  const missingMaterializedLimit = structuredClone(functionEntries);
+  delete missingMaterializedLimit
+    .find((entry) => entry.name.endsWith('/processLeagueAutomationTask'))
+    .serviceConfig.maxInstanceCount;
+  assert.throws(
+    () => assertFf1SixClientFunctionTopology(missingMaterializedLimit),
     /protected max-instance ceiling/,
   );
   const wrongMarker = structuredClone(functionEntries);

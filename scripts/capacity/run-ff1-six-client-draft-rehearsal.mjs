@@ -115,7 +115,7 @@ export const FF1_SIX_CLIENT_FORBIDDEN_SHARED_SCHEDULER_JOBS = Object.freeze(
 );
 export const FF1_SIX_CLIENT_FUNCTION_TOPOLOGY = Object.freeze({
   advanceHistoricalReplayDay: {
-    kind: 'callable', timeoutSeconds: 60, memoryMiB: 256, maxInstances: null,
+    kind: 'callable', timeoutSeconds: 60, memoryMiB: 256, maxInstances: 20,
   },
   continueServerDraftAutomation: {
     kind: 'firestore', event: 'written', document: 'leagues/{leagueId}/draft/current',
@@ -134,16 +134,16 @@ export const FF1_SIX_CLIENT_FUNCTION_TOPOLOGY = Object.freeze({
   processAutoDraftQueueChange: {
     kind: 'firestore', event: 'written',
     document: 'leagues/{leagueId}/draft/current/queues/{ownerId}',
-    retry: false, timeoutSeconds: 120, memoryMiB: 512, maxInstances: null,
+    retry: false, timeoutSeconds: 120, memoryMiB: 512, maxInstances: 20,
   },
   processDraftClockDeadline: {
     kind: 'task', timeoutSeconds: 120, memoryMiB: 512, maxInstances: 20,
   },
   processHistoricalReplayAdvance: {
-    kind: 'task', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: null,
+    kind: 'task', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: 20,
   },
   processLeagueAutomationTask: {
-    kind: 'task', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: null,
+    kind: 'task', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: 20,
   },
   processProjectionGenerationTask: {
     kind: 'task', timeoutSeconds: 540, memoryMiB: 2048, maxInstances: 20,
@@ -171,7 +171,7 @@ export const FF1_SIX_CLIENT_FUNCTION_TOPOLOGY = Object.freeze({
     concurrency: 4,
   },
   refreshDraftPlayerAvailabilityTask: {
-    kind: 'task', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: null,
+    kind: 'task', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: 20,
   },
   refreshGlobalPlayerAvailabilityScheduled: {
     kind: 'schedule', timeoutSeconds: 540, memoryMiB: 1024, maxInstances: 1,

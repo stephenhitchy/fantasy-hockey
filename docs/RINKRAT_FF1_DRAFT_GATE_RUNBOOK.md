@@ -157,6 +157,13 @@ retry mode, the exact reviewed runtime/build/Eventarc/OIDC service identity,
 timeout, memory, concurrency, and max-instance boundaries must still match
 exactly.
 
+The 2026-09-10 exact-release deployment materialized a 20-instance ceiling on
+five updated Functions whose prior staging revisions omitted the field. The
+runner treats 20 as their exact protected staging value and rejects absence or
+any other value before writes. All 19 deployed archives were independently
+compared with runtime commit `48ebbefe`; this topology observation does not
+weaken source-archive equality or authorize a runtime/configuration change.
+
 Read-only prerequisite audit on 2026-09-09: the exact `e5e133fb` staging
 preparation deployment left four exercised FF1.33 lifecycle/publication
 authorities absent and three present exercised authorities on older source
