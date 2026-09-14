@@ -150,6 +150,24 @@ export interface RemoveLeagueMemberSecureResponse {
   auditId: string;
 }
 
+interface UpdateLeagueCapacitySecureRequest {
+  requestId: string;
+  leagueId: string;
+  maxTeams: number;
+  expectedMaxTeams: number;
+  expectedTeamCount: number;
+}
+
+export interface UpdateLeagueCapacitySecureResponse {
+  updated: true;
+  leagueId: string;
+  maxTeams: number;
+  teamCount: number;
+  joinStatus: 'open' | 'full';
+  idempotentReplay: boolean;
+  auditId: string;
+}
+
 interface UpdateLeagueCosmeticsSecureRequest {
   requestId: string;
   leagueId: string;
@@ -200,6 +218,12 @@ interface PendingLeagueJoinRequest {
 }
 
 interface PendingLeagueMemberRemovalRequest {
+  fingerprint: string;
+  requestId: string;
+  createdAt: number;
+}
+
+interface PendingLeagueCapacityRequest {
   fingerprint: string;
   requestId: string;
   createdAt: number;
@@ -373,10 +397,12 @@ const PENDING_LEAGUE_CREATION_STORAGE_KEY = 'rinkrat:pending-league-creation:v1'
 const PENDING_LEAGUE_JOIN_STORAGE_KEY = 'rinkrat:pending-league-join:v1';
 const PENDING_LEAGUE_MEMBER_REMOVAL_STORAGE_KEY =
   'rinkrat:pending-league-member-removal:v1';
+const PENDING_LEAGUE_CAPACITY_STORAGE_KEY = 'rinkrat:pending-league-capacity:v1';
 const PENDING_LEAGUE_REQUEST_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 let inMemoryPendingLeagueCreation: PendingLeagueCreationRequest | null = null;
 let inMemoryPendingLeagueJoin: PendingLeagueJoinRequest | null = null;
 let inMemoryPendingLeagueMemberRemoval: PendingLeagueMemberRemovalRequest | null = null;
+let inMemoryPendingLeagueCapacity: PendingLeagueCapacityRequest | null = null;
 
 function createLeagueRequestId(): string {
   const randomUuid = globalThis.crypto?.randomUUID?.();
@@ -614,6 +640,38 @@ function clearPendingLeagueMemberRemoval(requestId: string): void {
 
   inMemoryPendingLeagueMemberRemoval = null;
   clearPendingRequest(PENDING_LEAGUE_MEMBER_REMOVAL_STORAGE_KEY);
+}
+
+function getOrCreatePendingLeagueCapacity(fingerprint: string): PendingLeagueCapacityRequest {
+  const valid = (candidate: Partial<PendingLeagueCapacityRequest> | null):
+    candidate is PendingLeagueCapacityRequest => Boolean(
+      candidate?.fingerprint && candidate.requestId &&
+      typeof candidate.createdAt === 'number' &&
+      Date.now() - candidate.createdAt <= PENDING_LEAGUE_REQUEST_MAX_AGE_MS,
+    );
+  const existing = readPendingRequest(
+    PENDING_LEAGUE_CAPACITY_STORAGE_KEY,
+    inMemoryPendingLeagueCapacity,
+    valid,
+  );
+
+  if (existing?.fingerprint === fingerprint) {
+    inMemoryPendingLeagueCapacity = existing;
+    return existing;
+  }
+
+  const pending = { fingerprint, requestId: createLeagueRequestId(), createdAt: Date.now() };
+  inMemoryPendingLeagueCapacity = pending;
+  writePendingRequest(PENDING_LEAGUE_CAPACITY_STORAGE_KEY, pending);
+  return pending;
+}
+
+function clearPendingLeagueCapacity(requestId: string): void {
+  const existing = inMemoryPendingLeagueCapacity;
+
+  if (existing?.requestId !== requestId) return;
+  inMemoryPendingLeagueCapacity = null;
+  clearPendingRequest(PENDING_LEAGUE_CAPACITY_STORAGE_KEY);
 }
 
 async function requireFreshVerifiedEmail(actionLabel: string): Promise<void> {
@@ -1097,6 +1155,65 @@ export async function removeLeagueMemberBeforeDraft(input: {
     return response.data;
   } catch (error: unknown) {
     throw new Error(getMemberRemovalCallableErrorMessage(error));
+  }
+}
+
+export async function updateLeagueCapacityBeforeDraft(input: {
+  leagueId: string;
+  maxTeams: number;
+  expectedMaxTeams: number;
+  expectedTeamCount: number;
+}): Promise<UpdateLeagueCapacitySecureResponse> {
+  if (!auth.currentUser) {
+    throw new Error('Sign in before changing league size.');
+  }
+
+  await requireFreshVerifiedEmail('change league size');
+
+  if (!input.leagueId.trim() ||
+      !Number.isInteger(input.maxTeams) || input.maxTeams < 2 || input.maxTeams > 12 ||
+      !Number.isInteger(input.expectedMaxTeams) || input.expectedMaxTeams < 2 ||
+      input.expectedMaxTeams > 12 ||
+      !Number.isInteger(input.expectedTeamCount) || input.expectedTeamCount < 1 ||
+      input.expectedTeamCount > 12 || input.maxTeams < input.expectedTeamCount) {
+    throw new Error('Choose a size between the current joined count and 12 teams.');
+  }
+
+  const payload = {
+    leagueId: input.leagueId.trim(),
+    maxTeams: input.maxTeams,
+    expectedMaxTeams: input.expectedMaxTeams,
+    expectedTeamCount: input.expectedTeamCount,
+  };
+  const pending = getOrCreatePendingLeagueCapacity(JSON.stringify(payload));
+  const callable = httpsCallable<UpdateLeagueCapacitySecureRequest, UpdateLeagueCapacitySecureResponse>(
+    functions, 'updateLeagueCapacitySecure', { timeout: 60_000 },
+  );
+
+  try {
+    const { data } = await callable({ requestId: pending.requestId, ...payload });
+
+    if (data.updated !== true || data.leagueId !== payload.leagueId ||
+        data.maxTeams !== payload.maxTeams ||
+        !Number.isInteger(data.teamCount) || data.teamCount < 1 ||
+        data.teamCount > data.maxTeams ||
+        data.joinStatus !== (data.teamCount === data.maxTeams ? 'full' : 'open') ||
+        typeof data.idempotentReplay !== 'boolean' ||
+        typeof data.auditId !== 'string' ||
+        !data.auditId.startsWith('league-capacity-changed-')) {
+      throw new Error('The server could not confirm the size change. Refresh League HQ.');
+    }
+
+    clearPendingLeagueCapacity(pending.requestId);
+    return data;
+  } catch (error: unknown) {
+    const record = error && typeof error === 'object'
+      ? error as { message?: unknown }
+      : {};
+    const message = typeof record.message === 'string'
+      ? record.message.replace(/^FirebaseError:\s*/i, '').replace(/^\[functions\/[^\]]+\]\s*/i, '').trim()
+      : '';
+    throw new Error(message || 'League size could not be changed. Refresh League HQ and retry.');
   }
 }
 

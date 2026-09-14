@@ -16,6 +16,7 @@ import {
   getCanonicalJoinStatus,
   getEffectiveActiveLeagueCount,
   getOccupiedLeagueOwnerIds,
+  getPreDraftLeagueCapacityBlockReason,
   getPreDraftMemberRemovalBlockReason,
   getUnexpectedDocumentKeys,
   isDraftJoinLocked,
@@ -56,6 +57,7 @@ const LEAGUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const COMMISSIONER_REASON_MAX_LENGTH = 240;
 const SECURITY_RELEASE_LABEL = 'Security Batch S1C';
 const MEMBER_REMOVAL_RELEASE_LABEL = 'League Lifecycle L1A';
+const LEAGUE_CAPACITY_RELEASE_LABEL = 'League Lifecycle L1B';
 
 const SUPPORTED_LEAGUE_LOGO_IDS = new Set([
   'crossed-sticks',
@@ -192,6 +194,24 @@ export interface RemoveLeagueMemberSecureResult {
   teamCount: number;
   maxTeams: number;
   joinStatus: 'open' | 'locked' | 'full';
+  idempotentReplay: boolean;
+  auditId: string;
+}
+
+interface NormalizedUpdateLeagueCapacityRequest {
+  requestId: string;
+  leagueId: string;
+  maxTeams: number;
+  expectedMaxTeams: number;
+  expectedTeamCount: number;
+}
+
+export interface UpdateLeagueCapacitySecureResult {
+  updated: true;
+  leagueId: string;
+  maxTeams: number;
+  teamCount: number;
+  joinStatus: 'open' | 'full';
   idempotentReplay: boolean;
   auditId: string;
 }
@@ -527,6 +547,32 @@ function normalizeRemoveLeagueMemberRequest(
       maxBytes: 128,
     }),
     confirmationTeamName,
+  };
+}
+
+function normalizeUpdateLeagueCapacityRequest(data: unknown): NormalizedUpdateLeagueCapacityRequest {
+  const input = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+  requireOnlyInputKeys(
+    input,
+    ['requestId', 'leagueId', 'maxTeams', 'expectedMaxTeams', 'expectedTeamCount'],
+    'League capacity update',
+  );
+
+  const expectedTeamCount = input['expectedTeamCount'];
+
+  if (typeof expectedTeamCount !== 'number' || !Number.isInteger(expectedTeamCount) ||
+      expectedTeamCount < 1 || expectedTeamCount > 12) {
+    throw new HttpsError('invalid-argument', 'Refresh League HQ before changing the league size.');
+  }
+
+  return {
+    requestId: requireRequestId(input['requestId'], 'league capacity update'),
+    leagueId: requireLeagueId(input['leagueId']),
+    maxTeams: requireMaxTeams(input['maxTeams']),
+    expectedMaxTeams: requireMaxTeams(input['expectedMaxTeams']),
+    expectedTeamCount,
   };
 }
 
@@ -2030,6 +2076,236 @@ export const removeLeagueMemberSecure = onCall(
     });
   },
 );
+
+export async function executePreDraftLeagueCapacityUpdate(input: {
+  commissionerId: string;
+  request: NormalizedUpdateLeagueCapacityRequest;
+  nowMilliseconds?: number;
+}): Promise<UpdateLeagueCapacitySecureResult> {
+  const commissionerId = requireFirestoreDocumentId(input.commissionerId, 'commissioner ID', {
+    minimumLength: 1,
+    maxBytes: 128,
+  });
+  const request = input.request;
+  requireMaxTeams(request.maxTeams);
+  requireMaxTeams(request.expectedMaxTeams);
+  if (!Number.isInteger(request.expectedTeamCount) || request.expectedTeamCount < 1 ||
+      request.expectedTeamCount > 12) {
+    throw new HttpsError('invalid-argument', 'Refresh League HQ before changing league size.');
+  }
+  const payloadHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
+  const auditId = `league-capacity-changed-${createHash('sha256')
+    .update(`rinkrat-league-capacity:${commissionerId}:${request.requestId}`)
+    .digest('hex').slice(0, 32)}`;
+  const leagueRef = db.doc(`leagues/${request.leagueId}`);
+  const auditRef = db.doc(`leagues/${request.leagueId}/audit/${auditId}`);
+
+  return db.runTransaction(async (transaction) => {
+    const nowMilliseconds = input.nowMilliseconds ?? Date.now();
+    const [leagueSnapshot, auditSnapshot] = await Promise.all([
+      transaction.get(leagueRef),
+      transaction.get(auditRef),
+    ]);
+    const priorAudit = auditSnapshot.data();
+
+    if (priorAudit) {
+      const values = getRecord(priorAudit['values']);
+
+      if (priorAudit['action'] !== 'league-capacity-changed' ||
+          asString(priorAudit['actorId']) !== commissionerId ||
+          values['payloadHash'] !== payloadHash) {
+        throw new HttpsError('already-exists',
+          'This capacity request was used for different information. Refresh League HQ.');
+      }
+
+      const teamCount = getNonNegativeInteger(values['teamCount'], -1);
+      const maxTeams = getNonNegativeInteger(values['maxTeams'], -1);
+      const joinStatus = values['joinStatus'];
+
+      if (teamCount < 1 || maxTeams < 2 || maxTeams > 12 ||
+          (joinStatus !== 'open' && joinStatus !== 'full')) {
+        throw new HttpsError('aborted', 'The prior capacity update is not yet verifiable. Refresh League HQ.');
+      }
+
+      return {
+        updated: true, leagueId: request.leagueId, teamCount, maxTeams,
+        joinStatus, idempotentReplay: true, auditId,
+      };
+    }
+
+    if (!leagueSnapshot.exists) {
+      throw new HttpsError('not-found', 'This league no longer exists.');
+    }
+
+    const league = leagueSnapshot.data() ?? {};
+
+    if (asString(league['commissionerId']) !== commissionerId) {
+      throw new HttpsError('permission-denied', 'Only the current commissioner can change league size.');
+    }
+
+    if (asString(league['id']) !== request.leagueId ||
+        league['deletionStatus'] !== undefined && league['deletionStatus'] !== null) {
+      throw new HttpsError('failed-precondition',
+        'League authority is not ready for a size change. Refresh League HQ.');
+    }
+
+    const inviteCode = asString(league['inviteCode']);
+    const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
+    const draftRef = db.doc(`leagues/${request.leagueId}/draft/current`);
+    const membersQuery = db.collection(`leagues/${request.leagueId}/members`).limit(13);
+    const teamsQuery = db.collection(`leagues/${request.leagueId}/teams`).limit(13);
+    const cyclesQuery = db.collection(`leagues/${request.leagueId}/cycles`).limit(1);
+    const picksQuery = db.collection(`leagues/${request.leagueId}/draft/current/picks`).limit(1);
+    const transactionsQuery = db.collection(`leagues/${request.leagueId}/transactions`).limit(1);
+    const waiversQuery = db.collection(`leagues/${request.leagueId}/waivers`).limit(1);
+    const [inviteSnapshot, draftSnapshot, membersSnapshot, teamsSnapshot, cyclesSnapshot,
+      picksSnapshot, transactionsSnapshot, waiversSnapshot] = await Promise.all([
+      inviteRef ? transaction.get(inviteRef) : Promise.resolve(null),
+      transaction.get(draftRef),
+      transaction.get(membersQuery),
+      transaction.get(teamsQuery),
+      transaction.get(cyclesQuery),
+      transaction.get(picksQuery),
+      transaction.get(transactionsQuery),
+      transaction.get(waiversQuery),
+    ]);
+
+    if (!inviteRef || !inviteSnapshot?.exists) {
+      throw new HttpsError('failed-precondition',
+        'League invite authority is incomplete. Repair it before changing league size.');
+    }
+
+    const invite = inviteSnapshot.data() ?? {};
+    const blockReason = getPreDraftLeagueCapacityBlockReason({
+      joinStatus: league['joinStatus'],
+      draftData: draftSnapshot.data(),
+      cycleDocumentCount: cyclesSnapshot.size,
+      draftPickDocumentCount: picksSnapshot.size,
+      transactionDocumentCount: transactionsSnapshot.size,
+      waiverDocumentCount: waiversSnapshot.size,
+    });
+
+    if (blockReason) {
+      throw new HttpsError('failed-precondition',
+        'League size can change only before Draft setup is saved and competition begins.',
+        { reason: blockReason });
+    }
+
+    const memberIds = membersSnapshot.docs.map((document) => document.id).sort();
+    const teamIds = teamsSnapshot.docs.map((document) => document.id).sort();
+    const memberAuthorityMatches = membersSnapshot.docs.every((document) => {
+      const data = document.data();
+      return asString(data['uid']) === document.id &&
+        asString(data['leagueId']) === request.leagueId &&
+        data['role'] === (document.id === commissionerId ? 'commissioner' : 'member');
+    });
+    const teamAuthorityMatches = teamsSnapshot.docs.every((document) => {
+      const data = document.data();
+      return asString(data['id']) === document.id && asString(data['ownerId']) === document.id;
+    });
+    const currentMaxTeams = league['maxTeams'];
+    const storedTeamCount = league['teamCount'];
+    const inviteCount = invite['joinCount'];
+    const expiryMilliseconds = timestampMilliseconds(invite['expiresAt']);
+
+    if (memberIds.length === 0 || memberIds.length > 12 ||
+        !memberAuthorityMatches || !teamAuthorityMatches ||
+        memberIds.length !== teamIds.length ||
+        memberIds.some((ownerId, index) => ownerId !== teamIds[index]) ||
+        !memberIds.includes(commissionerId) ||
+        !Number.isInteger(currentMaxTeams) || (currentMaxTeams as number) < 2 ||
+        (currentMaxTeams as number) > 12 ||
+        storedTeamCount !== memberIds.length || inviteCount !== memberIds.length ||
+        memberIds.length > (currentMaxTeams as number) ||
+        asString(invite['leagueId']) !== request.leagueId ||
+        asString(invite['inviteCode']) !== inviteCode ||
+        expiryMilliseconds === null ||
+        (league['joinStatus'] === 'full') !== (memberIds.length === currentMaxTeams) ||
+        (league['joinStatus'] === 'full' && invite['active'] !== false) ||
+        (league['joinStatus'] === 'open' && expiryMilliseconds > nowMilliseconds &&
+          invite['active'] !== true)) {
+      throw new HttpsError('failed-precondition',
+        'League membership or invite state is inconsistent. Refresh or repair League HQ first.',
+        { reason: 'membership-authority-mismatch' });
+    }
+
+    if (request.expectedMaxTeams !== currentMaxTeams ||
+        request.expectedTeamCount !== memberIds.length) {
+      throw new HttpsError('aborted',
+        'League membership or size changed in another tab. Refresh League HQ before saving.');
+    }
+
+    if (request.maxTeams === currentMaxTeams) {
+      throw new HttpsError('failed-precondition', 'Choose a different league size before saving.');
+    }
+
+    if (request.maxTeams < memberIds.length) {
+      throw new HttpsError('failed-precondition',
+        `This league already has ${memberIds.length} teams. Choose at least ${memberIds.length}.`,
+        { reason: 'below-joined-team-count' });
+    }
+
+    const joinStatus = request.maxTeams === memberIds.length ? 'full' : 'open';
+    const timestamp = FieldValue.serverTimestamp();
+    const lockedAt = joinStatus === 'full' ? timestamp : null;
+    const lockedReason = joinStatus === 'full' ? 'league-full' : null;
+
+    transaction.set(leagueRef, {
+      maxTeams: request.maxTeams,
+      joinStatus,
+      joinLockedAt: lockedAt,
+      joinLockedReason: lockedReason,
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.set(inviteRef, {
+      active: joinStatus === 'open' && expiryMilliseconds > nowMilliseconds,
+      lockedAt,
+      lockedReason,
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.create(auditRef, {
+      schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
+      id: auditId,
+      leagueId: request.leagueId,
+      action: 'league-capacity-changed',
+      actorId: commissionerId,
+      actorRole: 'commissioner',
+      authority: 'cloud-function',
+      authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
+      reason: 'Commissioner changed league size before Draft setup was saved.',
+      release: LEAGUE_CAPACITY_RELEASE_LABEL,
+      values: {
+        payloadHash,
+        previousMaxTeams: currentMaxTeams,
+        maxTeams: request.maxTeams,
+        teamCount: memberIds.length,
+        joinStatus,
+      },
+      createdAt: timestamp,
+    });
+
+    return {
+      updated: true, leagueId: request.leagueId, maxTeams: request.maxTeams,
+      teamCount: memberIds.length, joinStatus, idempotentReplay: false, auditId,
+    };
+  });
+}
+
+export const updateLeagueCapacitySecure = onCall({
+  region: FUNCTION_REGION,
+  timeoutSeconds: 45,
+  memory: '256MiB',
+  maxInstances: 40,
+  cors: TRUSTED_WEB_ORIGINS,
+  invoker: 'public',
+}, async (request): Promise<UpdateLeagueCapacitySecureResult> => {
+  const commissionerId = requireAuthenticatedUserId(request.auth, 'change league size');
+  requireVerifiedRecentAuthentication(request.auth, 'change league size');
+  return executePreDraftLeagueCapacityUpdate({
+    commissionerId,
+    request: normalizeUpdateLeagueCapacityRequest(request.data),
+  });
+});
 
 
 function getRecord(value: unknown): Record<string, unknown> {

@@ -24,10 +24,12 @@ async function sha256(relativePath) {
 async function sha256FunctionsIndexBeforeD1M() {
   const source = await read('functions/src/index.ts');
   const d1mExport = '  getFinalScoreReconciliationPage,\n';
+  const l1bExport = '  updateLeagueCapacitySecure,\n';
 
   assert.equal(source.split(d1mExport).length - 1, 1);
+  assert.equal(source.split(l1bExport).length - 1, 1);
   return createHash('sha256')
-    .update(source.replace(d1mExport, ''))
+    .update(source.replace(d1mExport, '').replace(l1bExport, ''))
     .digest('hex');
 }
 
@@ -180,8 +182,8 @@ test('B1I preserves scoring, projections, rules, and server authority', async ()
   );
   assert.equal(
     await sha256FunctionsIndexBeforeD1M(),
-    // D1M adds only the reviewed getFinalScoreReconciliationPage export; the
-    // complete post-FF1.31 Functions index remains byte-for-byte pinned here.
+    // D1M and L1B add only their reviewed exports; every other Function export
+    // remains byte-for-byte pinned here.
     '447079dbdf40ca5854d8c6c7f00b9ec00f0244026a40b78a75411defbae98307',
   );
 });

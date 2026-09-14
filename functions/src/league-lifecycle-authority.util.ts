@@ -177,6 +177,38 @@ export function isDraftJoinLocked(draftData: unknown): boolean {
   );
 }
 
+export function getPreDraftLeagueCapacityBlockReason(input: {
+  joinStatus: unknown;
+  draftData: unknown;
+  cycleDocumentCount: number;
+  draftPickDocumentCount: number;
+  transactionDocumentCount: number;
+  waiverDocumentCount: number;
+}): string | null {
+  if (input.joinStatus !== 'open' && input.joinStatus !== 'full') {
+    return 'membership-locked';
+  }
+
+  if (input.draftData !== undefined && input.draftData !== null) {
+    const draft = asRecord(input.draftData);
+
+    if (
+      !draft || draft['status'] !== 'setup' ||
+      !Array.isArray(draft['roundOneOrder']) || draft['roundOneOrder'].length > 0 ||
+      !Array.isArray(draft['draftedAssetKeys']) || draft['draftedAssetKeys'].length > 0 ||
+      draft['nextOverallPick'] !== 1
+    ) {
+      return 'draft-locked';
+    }
+  }
+
+  if (input.cycleDocumentCount > 0) return 'competition-started';
+  if (input.draftPickDocumentCount > 0) return 'draft-picks-exist';
+  if (input.transactionDocumentCount > 0) return 'transactions-exist';
+  if (input.waiverDocumentCount > 0) return 'waivers-exist';
+  return null;
+}
+
 export type PreDraftMemberRemovalBlockReason =
   | 'membership-locked'
   | 'membership-state-unsafe'

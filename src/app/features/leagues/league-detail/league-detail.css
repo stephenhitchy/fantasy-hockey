@@ -1735,6 +1735,18 @@
   margin-top: 22px;
 }
 
+.capacity-controls {
+  display: grid;
+  gap: 10px;
+  max-width: 260px;
+}
+
+.capacity-controls label {
+  color: var(--rr-color-text);
+  font-weight: 750;
+}
+
+
 .commissioner-member-management .section-heading p {
   max-width: 720px;
   margin: 6px 0 0;

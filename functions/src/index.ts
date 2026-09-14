@@ -4406,6 +4406,7 @@ export {
   joinLeagueSecure,
   migrateLeagueAuthoritySchema,
   removeLeagueMemberSecure,
+  updateLeagueCapacitySecure,
   updateLeagueCosmeticsSecure,
 } from './league-lifecycle-authority';
 

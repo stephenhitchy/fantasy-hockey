@@ -51,6 +51,7 @@ import {
   getLeagueById,
   League,
   removeLeagueMemberBeforeDraft,
+  updateLeagueCapacityBeforeDraft,
   updateLeagueProfileIcon,
 } from '../../../core/league/league.service';
 import { buildLeagueInviteUrl } from '../../../core/league/invite-link-intent.service';
@@ -106,6 +107,9 @@ export class LeagueDetail implements OnDestroy {
   @ViewChild('memberRemovalStatus')
   private memberRemovalStatus?: ElementRef<HTMLElement>;
 
+  @ViewChild('capacityStatus')
+  private capacityStatus?: ElementRef<HTMLElement>;
+
   leagueId = '';
   userId = '';
   teamNameDraft = '';
@@ -113,6 +117,8 @@ export class LeagueDetail implements OnDestroy {
   deleteLeaguePasswordDraft = '';
   memberRemovalTeamNameDraft = '';
   memberRemovalPasswordDraft = '';
+  capacityDraft = 2;
+  capacityPasswordDraft = '';
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -149,6 +155,10 @@ export class LeagueDetail implements OnDestroy {
   memberRemovalInProgress = signal(false);
   memberRemovalMessage = signal('');
   memberRemovalError = signal('');
+  capacitySaving = signal(false);
+  capacityMessage = signal('');
+  capacityError = signal('');
+  readonly capacityChoices = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   readonly profileIconCategories = PROFILE_ICON_CATEGORIES;
 
@@ -449,6 +459,7 @@ export class LeagueDetail implements OnDestroy {
       }
 
       this.league.set(league);
+      this.capacityDraft = league.maxTeams;
       startPlayerAvailabilityListenerForLeague(leagueId);
       this.isCommissioner.set(league.commissionerId === user.uid);
 
@@ -522,6 +533,81 @@ export class LeagueDetail implements OnDestroy {
     }
 
     return 'Member removal is unavailable until League HQ finishes loading current authority.';
+  }
+
+  canSaveCapacity(): boolean {
+    const league = this.league();
+    const joined = league?.teamCount;
+
+    return Boolean(
+      league && this.preDraftMemberRemovalAvailable() &&
+      typeof joined === 'number' && Number.isInteger(joined) && joined >= 1 &&
+      this.capacityDraft >= joined && this.capacityDraft <= 12 &&
+      this.capacityDraft !== league.maxTeams && this.capacityPasswordDraft &&
+      this.clientHealth.competitiveActionsReady() && !this.capacitySaving(),
+    );
+  }
+
+  async saveCapacity(): Promise<void> {
+    const league = this.league();
+    const teamCount = league?.teamCount;
+
+    if (!league || !this.isCommissioner() || !this.preDraftMemberRemovalAvailable()) {
+      this.capacityError.set(this.memberRemovalAvailabilityMessage());
+      return;
+    }
+
+    if (!this.clientHealth.competitiveActionsReady()) {
+      this.capacityError.set(this.clientHealth.competitiveActionBlockReason());
+      return;
+    }
+
+    if (!this.canSaveCapacity() || typeof teamCount !== 'number' || !Number.isInteger(teamCount)) {
+      this.capacityError.set('Choose a different size that is at least the current joined-team count, then confirm your password.');
+      return;
+    }
+
+    this.capacitySaving.set(true);
+    this.capacityError.set('');
+    this.capacityMessage.set('');
+
+    try {
+      await reauthenticateCurrentUserWithPassword(this.capacityPasswordDraft);
+      this.capacityPasswordDraft = '';
+
+      if (this.destroyed) return;
+
+      const result = await updateLeagueCapacityBeforeDraft({
+        leagueId: this.leagueId,
+        maxTeams: this.capacityDraft,
+        expectedMaxTeams: league.maxTeams,
+        expectedTeamCount: teamCount,
+      });
+
+      if (this.destroyed) return;
+
+      this.league.update((current) => current ? {
+        ...current,
+        maxTeams: result.maxTeams,
+        teamCount: result.teamCount,
+        joinStatus: result.joinStatus,
+        joinLockedAt: result.joinStatus === 'open' ? null : current.joinLockedAt,
+        joinLockedReason: result.joinStatus === 'open' ? null : 'league-full',
+      } : current);
+      this.capacityDraft = result.maxTeams;
+      this.capacityMessage.set(
+        `League size is now ${result.maxTeams} teams. The existing invite code is unchanged.`,
+      );
+      window.setTimeout(() => {
+        if (!this.destroyed) this.capacityStatus?.nativeElement.focus();
+      });
+    } catch (error: unknown) {
+      if (!this.destroyed) {
+        this.capacityError.set(error instanceof Error ? error.message : 'League size could not be changed. Refresh League HQ.');
+      }
+    } finally {
+      if (!this.destroyed) this.capacitySaving.set(false);
+    }
   }
 
   openMemberRemoval(team: FantasyTeam, event: Event): void {

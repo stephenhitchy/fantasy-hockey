@@ -23,10 +23,12 @@ async function sha256(relativePath) {
 async function sha256FunctionsIndexBeforeD1M() {
   const source = await read('functions/src/index.ts');
   const d1mExport = '  getFinalScoreReconciliationPage,\n';
+  const l1bExport = '  updateLeagueCapacitySecure,\n';
 
   assert.equal(source.split(d1mExport).length - 1, 1);
+  assert.equal(source.split(l1bExport).length - 1, 1);
   return createHash('sha256')
-    .update(source.replace(d1mExport, ''))
+    .update(source.replace(d1mExport, '').replace(l1bExport, ''))
     .digest('hex');
 }
 

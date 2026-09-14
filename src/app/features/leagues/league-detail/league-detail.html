@@ -674,14 +674,78 @@
     </section>
 
     @if (isCommissioner()) {
+      <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="league-capacity-title">
+        <div class="section-heading rr-section-heading">
+          <div>
+            <h2 id="league-capacity-title">League size</h2>
+            <p>{{ league()?.teamCount ?? teams().length }} joined. Change before Draft order is saved.</p>
+          </div>
+        </div>
+
+        @if (!preDraftMemberRemovalAvailable()) {
+          <p class="rr-notice" role="note">{{ memberRemovalAvailabilityMessage() }}</p>
+        } @else {
+          <div class="capacity-controls">
+            <label for="league-capacity-select">Limit</label>
+            <select
+              id="league-capacity-select"
+              class="rr-field"
+              aria-label="Maximum league teams"
+              [(ngModel)]="capacityDraft"
+              [disabled]="capacitySaving()"
+            >
+              @for (size of capacityChoices; track size) {
+                <option [ngValue]="size" [disabled]="size < (league()?.teamCount ?? teams().length)">
+                  {{ size }}
+                </option>
+              }
+            </select>
+
+            <label for="league-capacity-password">Password</label>
+            <input
+              id="league-capacity-password"
+              class="rr-field"
+              aria-label="Current password for league size change"
+              type="password"
+              maxlength="128"
+              autocomplete="current-password"
+              [(ngModel)]="capacityPasswordDraft"
+              [disabled]="capacitySaving()"
+            />
+
+            <button
+              type="button"
+              class="rr-button rr-button--primary"
+              aria-label="Save league size"
+              (click)="saveCapacity()"
+              [disabled]="!canSaveCapacity()"
+            >
+              {{ capacitySaving() ? 'Saving…' : 'Save' }}
+            </button>
+          </div>
+        }
+
+        @if (capacityMessage()) {
+          <p
+            #capacityStatus
+            class="member-removal-message rr-notice rr-notice--success"
+            role="status"
+            aria-live="polite"
+            tabindex="-1"
+          >{{ capacityMessage() }}</p>
+        }
+        @if (capacityError()) {
+          <p class="rr-notice rr-notice--danger" role="alert">{{ capacityError() }}</p>
+        }
+      </section>
+
       <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="member-management-title">
         <div class="section-heading rr-section-heading">
           <div>
             <span class="draft-section-eyebrow">Commissioner Only</span>
             <h2 id="member-management-title">Manage league members</h2>
             <p>
-              Remove an invited manager only before Draft setup is saved. Once competition is
-              configured, RinkRat preserves the team and its history.
+              Remove members only before Draft setup is saved; team history stays intact.
             </p>
           </div>
         </div>
