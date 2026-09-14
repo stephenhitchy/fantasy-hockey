@@ -1,5 +1,10 @@
 # League Lifecycle L1B — Change Existing League Size
 
+L1C adds a separate, explicitly confirmed reset for an unstarted scheduled
+Draft more than 24 hours away; see
+`docs/RINKRAT_LEAGUE_L1C_SCHEDULED_CAPACITY_REOPEN.md`. The L1B path below
+still does not change saved Draft settings.
+
 ## Implemented behavior
 
 In League HQ, the current commissioner may change an existing league's maximum

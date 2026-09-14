@@ -156,6 +156,9 @@ interface UpdateLeagueCapacitySecureRequest {
   maxTeams: number;
   expectedMaxTeams: number;
   expectedTeamCount: number;
+  reopenScheduledDraft?: true;
+  expectedScheduledStartMilliseconds?: number;
+  expectedSettingsSubmissionId?: string;
 }
 
 export interface UpdateLeagueCapacitySecureResponse {
@@ -166,6 +169,7 @@ export interface UpdateLeagueCapacitySecureResponse {
   joinStatus: 'open' | 'full';
   idempotentReplay: boolean;
   auditId: string;
+  rescheduleRequired: boolean;
 }
 
 interface UpdateLeagueCosmeticsSecureRequest {
@@ -1163,6 +1167,10 @@ export async function updateLeagueCapacityBeforeDraft(input: {
   maxTeams: number;
   expectedMaxTeams: number;
   expectedTeamCount: number;
+  scheduledDraft?: {
+    scheduledStartMilliseconds: number;
+    settingsSubmissionId: string;
+  };
 }): Promise<UpdateLeagueCapacitySecureResponse> {
   if (!auth.currentUser) {
     throw new Error('Sign in before changing league size.');
@@ -1175,7 +1183,10 @@ export async function updateLeagueCapacityBeforeDraft(input: {
       !Number.isInteger(input.expectedMaxTeams) || input.expectedMaxTeams < 2 ||
       input.expectedMaxTeams > 12 ||
       !Number.isInteger(input.expectedTeamCount) || input.expectedTeamCount < 1 ||
-      input.expectedTeamCount > 12 || input.maxTeams < input.expectedTeamCount) {
+      input.expectedTeamCount > 12 || input.maxTeams < input.expectedTeamCount ||
+      (input.scheduledDraft !== undefined &&
+        (!Number.isSafeInteger(input.scheduledDraft.scheduledStartMilliseconds) ||
+          !input.scheduledDraft.settingsSubmissionId))) {
     throw new Error('Choose a size between the current joined count and 12 teams.');
   }
 
@@ -1184,6 +1195,11 @@ export async function updateLeagueCapacityBeforeDraft(input: {
     maxTeams: input.maxTeams,
     expectedMaxTeams: input.expectedMaxTeams,
     expectedTeamCount: input.expectedTeamCount,
+    ...(input.scheduledDraft ? {
+      reopenScheduledDraft: true as const,
+      expectedScheduledStartMilliseconds: input.scheduledDraft.scheduledStartMilliseconds,
+      expectedSettingsSubmissionId: input.scheduledDraft.settingsSubmissionId,
+    } : {}),
   };
   const pending = getOrCreatePendingLeagueCapacity(JSON.stringify(payload));
   const callable = httpsCallable<UpdateLeagueCapacitySecureRequest, UpdateLeagueCapacitySecureResponse>(
@@ -1199,6 +1215,7 @@ export async function updateLeagueCapacityBeforeDraft(input: {
         data.teamCount > data.maxTeams ||
         data.joinStatus !== (data.teamCount === data.maxTeams ? 'full' : 'open') ||
         typeof data.idempotentReplay !== 'boolean' ||
+        data.rescheduleRequired !== Boolean(input.scheduledDraft) ||
         typeof data.auditId !== 'string' ||
         !data.auditId.startsWith('league-capacity-changed-')) {
       throw new Error('The server could not confirm the size change. Refresh League HQ.');

@@ -209,6 +209,56 @@ export function getPreDraftLeagueCapacityBlockReason(input: {
   return null;
 }
 
+export const SCHEDULED_DRAFT_CAPACITY_REOPEN_LEAD_MILLISECONDS = 24 * 60 * 60 * 1000;
+
+export function getScheduledDraftCapacityReopenBlockReason(input: {
+  joinStatus: unknown;
+  joinLockedReason: unknown;
+  draftData: unknown;
+  scheduledStartMilliseconds: number | null;
+  expectedScheduledStartMilliseconds: number;
+  expectedSettingsSubmissionId: string;
+  nowMilliseconds: number;
+  cycleDocumentCount: number;
+  draftPickDocumentCount: number;
+  transactionDocumentCount: number;
+  waiverDocumentCount: number;
+}): string | null {
+  if (input.joinStatus !== 'locked' || input.joinLockedReason !== 'draft-order-saved') {
+    return 'membership-locked';
+  }
+
+  const draft = asRecord(input.draftData);
+
+  if (!draft || draft['status'] !== 'scheduled' ||
+      draft['clockStatus'] !== 'stopped' || draft['nextOverallPick'] !== 1 ||
+      !Array.isArray(draft['roundOneOrder']) || draft['roundOneOrder'].length === 0 ||
+      !Array.isArray(draft['draftedAssetKeys']) || draft['draftedAssetKeys'].length > 0 ||
+      draft['pickStartedAt'] != null || draft['startedAt'] != null ||
+      draft['completedAt'] != null || draft['lastPickId'] != null ||
+      draft['serverDraftProjectionSnapshotId'] != null ||
+      draft['serverDraftProjectionSnapshotHash'] != null) {
+    return 'draft-locked';
+  }
+
+  if (input.scheduledStartMilliseconds === null ||
+      input.scheduledStartMilliseconds !== input.expectedScheduledStartMilliseconds ||
+      draft['lastSettingsSubmissionId'] !== input.expectedSettingsSubmissionId) {
+    return 'draft-settings-changed';
+  }
+
+  if (input.scheduledStartMilliseconds - input.nowMilliseconds <=
+      SCHEDULED_DRAFT_CAPACITY_REOPEN_LEAD_MILLISECONDS) {
+    return 'draft-start-too-close';
+  }
+
+  if (input.cycleDocumentCount > 0) return 'competition-started';
+  if (input.draftPickDocumentCount > 0) return 'draft-picks-exist';
+  if (input.transactionDocumentCount > 0) return 'transactions-exist';
+  if (input.waiverDocumentCount > 0) return 'waivers-exist';
+  return null;
+}
+
 export type PreDraftMemberRemovalBlockReason =
   | 'membership-locked'
   | 'membership-state-unsafe'

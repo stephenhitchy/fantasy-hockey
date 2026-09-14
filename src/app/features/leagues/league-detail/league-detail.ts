@@ -119,6 +119,7 @@ export class LeagueDetail implements OnDestroy {
   memberRemovalPasswordDraft = '';
   capacityDraft = 2;
   capacityPasswordDraft = '';
+  capacityResetDraftConfirmed = false;
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
@@ -158,6 +159,7 @@ export class LeagueDetail implements OnDestroy {
   capacitySaving = signal(false);
   capacityMessage = signal('');
   capacityError = signal('');
+  capacityRescheduleRequired = signal(false);
   readonly capacityChoices = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   readonly profileIconCategories = PROFILE_ICON_CATEGORIES;
@@ -218,6 +220,26 @@ export class LeagueDetail implements OnDestroy {
       draft.draftedAssetKeys.length === 0
     );
   });
+
+  readonly scheduledCapacityReopenAvailable = computed(() => {
+    const league = this.league();
+    const draft = this.draft();
+    const scheduledStart = getScheduledStartDate(draft);
+
+    return Boolean(
+      league && draft && this.isCommissioner() && !this.cycle() &&
+      league.joinStatus === 'locked' && league.joinLockedReason === 'draft-order-saved' &&
+      draft.status === 'scheduled' && draft.clockStatus === 'stopped' &&
+      draft.nextOverallPick === 1 && draft.draftedAssetKeys.length === 0 &&
+      draft.roundOneOrder.length === (league.teamCount ?? this.teams().length) &&
+      draft.lastSettingsSubmissionId && scheduledStart &&
+      scheduledStart.getTime() - this.now() > 24 * 60 * 60 * 1000,
+    );
+  });
+
+  readonly capacityChangeAvailable = computed(() =>
+    this.preDraftMemberRemovalAvailable() || this.scheduledCapacityReopenAvailable(),
+  );
 
   readonly selectedLeagueProfileIconId = computed(() =>
     getFantasyTeamProfileIconId(this.myTeam()),
@@ -535,15 +557,30 @@ export class LeagueDetail implements OnDestroy {
     return 'Member removal is unavailable until League HQ finishes loading current authority.';
   }
 
+  capacityAvailabilityMessage(): string {
+    if (this.draft()?.status === 'scheduled') {
+      const start = getScheduledStartDate(this.draft());
+
+      if (start && start.getTime() - this.now() <= 24 * 60 * 60 * 1000) {
+        return 'League size is frozen within 24 hours of the scheduled Draft start.';
+      }
+
+      return 'This scheduled Draft cannot be reopened safely. Refresh League HQ or contact support.';
+    }
+
+    return this.memberRemovalAvailabilityMessage();
+  }
+
   canSaveCapacity(): boolean {
     const league = this.league();
     const joined = league?.teamCount;
 
     return Boolean(
-      league && this.preDraftMemberRemovalAvailable() &&
+      league && this.capacityChangeAvailable() &&
       typeof joined === 'number' && Number.isInteger(joined) && joined >= 1 &&
       this.capacityDraft >= joined && this.capacityDraft <= 12 &&
       this.capacityDraft !== league.maxTeams && this.capacityPasswordDraft &&
+      (!this.scheduledCapacityReopenAvailable() || this.capacityResetDraftConfirmed) &&
       this.clientHealth.competitiveActionsReady() && !this.capacitySaving(),
     );
   }
@@ -552,8 +589,8 @@ export class LeagueDetail implements OnDestroy {
     const league = this.league();
     const teamCount = league?.teamCount;
 
-    if (!league || !this.isCommissioner() || !this.preDraftMemberRemovalAvailable()) {
-      this.capacityError.set(this.memberRemovalAvailabilityMessage());
+    if (!league || !this.isCommissioner() || !this.capacityChangeAvailable()) {
+      this.capacityError.set(this.capacityAvailabilityMessage());
       return;
     }
 
@@ -567,9 +604,12 @@ export class LeagueDetail implements OnDestroy {
       return;
     }
 
+    const scheduledDraft = this.scheduledCapacityReopenAvailable() ? this.draft() : null;
+    const scheduledStart = getScheduledStartDate(scheduledDraft);
     this.capacitySaving.set(true);
     this.capacityError.set('');
     this.capacityMessage.set('');
+    this.capacityRescheduleRequired.set(false);
 
     try {
       await reauthenticateCurrentUserWithPassword(this.capacityPasswordDraft);
@@ -582,6 +622,12 @@ export class LeagueDetail implements OnDestroy {
         maxTeams: this.capacityDraft,
         expectedMaxTeams: league.maxTeams,
         expectedTeamCount: teamCount,
+        ...(scheduledDraft && scheduledStart && scheduledDraft.lastSettingsSubmissionId ? {
+          scheduledDraft: {
+            scheduledStartMilliseconds: scheduledStart.getTime(),
+            settingsSubmissionId: scheduledDraft.lastSettingsSubmissionId,
+          },
+        } : {}),
       });
 
       if (this.destroyed) return;
@@ -595,8 +641,12 @@ export class LeagueDetail implements OnDestroy {
         joinLockedReason: result.joinStatus === 'open' ? null : 'league-full',
       } : current);
       this.capacityDraft = result.maxTeams;
+      this.capacityResetDraftConfirmed = false;
+      this.capacityRescheduleRequired.set(result.rescheduleRequired);
       this.capacityMessage.set(
-        `League size is now ${result.maxTeams} teams. The existing invite code is unchanged.`,
+        result.rescheduleRequired
+          ? `League size is now ${result.maxTeams} teams. The existing invite code is unchanged. Draft setup is reopened; save a new order and start time after managers join.`
+          : `League size is now ${result.maxTeams} teams. The existing invite code is unchanged.`,
       );
       window.setTimeout(() => {
         if (!this.destroyed) this.capacityStatus?.nativeElement.focus();

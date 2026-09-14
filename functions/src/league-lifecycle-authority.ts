@@ -17,6 +17,7 @@ import {
   getEffectiveActiveLeagueCount,
   getOccupiedLeagueOwnerIds,
   getPreDraftLeagueCapacityBlockReason,
+  getScheduledDraftCapacityReopenBlockReason,
   getPreDraftMemberRemovalBlockReason,
   getUnexpectedDocumentKeys,
   isDraftJoinLocked,
@@ -57,7 +58,7 @@ const LEAGUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const COMMISSIONER_REASON_MAX_LENGTH = 240;
 const SECURITY_RELEASE_LABEL = 'Security Batch S1C';
 const MEMBER_REMOVAL_RELEASE_LABEL = 'League Lifecycle L1A';
-const LEAGUE_CAPACITY_RELEASE_LABEL = 'League Lifecycle L1B';
+const LEAGUE_CAPACITY_RELEASE_LABEL = 'League Lifecycle L1C';
 
 const SUPPORTED_LEAGUE_LOGO_IDS = new Set([
   'crossed-sticks',
@@ -204,6 +205,9 @@ interface NormalizedUpdateLeagueCapacityRequest {
   maxTeams: number;
   expectedMaxTeams: number;
   expectedTeamCount: number;
+  reopenScheduledDraft?: true;
+  expectedScheduledStartMilliseconds?: number;
+  expectedSettingsSubmissionId?: string;
 }
 
 export interface UpdateLeagueCapacitySecureResult {
@@ -214,6 +218,7 @@ export interface UpdateLeagueCapacitySecureResult {
   joinStatus: 'open' | 'full';
   idempotentReplay: boolean;
   auditId: string;
+  rescheduleRequired: boolean;
 }
 
 interface UpdateLeagueCosmeticsSecureRequest {
@@ -556,7 +561,8 @@ function normalizeUpdateLeagueCapacityRequest(data: unknown): NormalizedUpdateLe
     : {};
   requireOnlyInputKeys(
     input,
-    ['requestId', 'leagueId', 'maxTeams', 'expectedMaxTeams', 'expectedTeamCount'],
+    ['requestId', 'leagueId', 'maxTeams', 'expectedMaxTeams', 'expectedTeamCount',
+      'reopenScheduledDraft', 'expectedScheduledStartMilliseconds', 'expectedSettingsSubmissionId'],
     'League capacity update',
   );
 
@@ -567,12 +573,36 @@ function normalizeUpdateLeagueCapacityRequest(data: unknown): NormalizedUpdateLe
     throw new HttpsError('invalid-argument', 'Refresh League HQ before changing the league size.');
   }
 
+  const reopenScheduledDraft = input['reopenScheduledDraft'];
+
+  if (reopenScheduledDraft !== undefined && reopenScheduledDraft !== true) {
+    throw new HttpsError('invalid-argument', 'Refresh League HQ before reopening Draft setup.');
+  }
+
+  if (reopenScheduledDraft === true &&
+      (!Number.isSafeInteger(input['expectedScheduledStartMilliseconds']) ||
+        typeof input['expectedSettingsSubmissionId'] !== 'string' ||
+        !REQUEST_ID_PATTERN.test(input['expectedSettingsSubmissionId']))) {
+    throw new HttpsError('invalid-argument', 'Refresh League HQ before reopening Draft setup.');
+  }
+
+  if (reopenScheduledDraft !== true &&
+      (input['expectedScheduledStartMilliseconds'] !== undefined ||
+        input['expectedSettingsSubmissionId'] !== undefined)) {
+    throw new HttpsError('invalid-argument', 'Refresh League HQ before changing league size.');
+  }
+
   return {
     requestId: requireRequestId(input['requestId'], 'league capacity update'),
     leagueId: requireLeagueId(input['leagueId']),
     maxTeams: requireMaxTeams(input['maxTeams']),
     expectedMaxTeams: requireMaxTeams(input['expectedMaxTeams']),
     expectedTeamCount,
+    ...(reopenScheduledDraft === true ? {
+      reopenScheduledDraft: true as const,
+      expectedScheduledStartMilliseconds: input['expectedScheduledStartMilliseconds'] as number,
+      expectedSettingsSubmissionId: input['expectedSettingsSubmissionId'] as string,
+    } : {}),
   };
 }
 
@@ -2130,6 +2160,7 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
       return {
         updated: true, leagueId: request.leagueId, teamCount, maxTeams,
         joinStatus, idempotentReplay: true, auditId,
+        rescheduleRequired: values['rescheduleRequired'] === true,
       };
     }
 
@@ -2176,18 +2207,38 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
     }
 
     const invite = inviteSnapshot.data() ?? {};
-    const blockReason = getPreDraftLeagueCapacityBlockReason({
-      joinStatus: league['joinStatus'],
-      draftData: draftSnapshot.data(),
+    const safetyInput = {
       cycleDocumentCount: cyclesSnapshot.size,
       draftPickDocumentCount: picksSnapshot.size,
       transactionDocumentCount: transactionsSnapshot.size,
       waiverDocumentCount: waiversSnapshot.size,
-    });
+    };
+    const blockReason = request.reopenScheduledDraft
+      ? getScheduledDraftCapacityReopenBlockReason({
+          ...safetyInput,
+          joinStatus: league['joinStatus'],
+          joinLockedReason: league['joinLockedReason'],
+          draftData: draftSnapshot.data(),
+          scheduledStartMilliseconds: timestampMilliseconds(
+            draftSnapshot.data()?.['scheduledStartAt'],
+          ),
+          expectedScheduledStartMilliseconds: request.expectedScheduledStartMilliseconds!,
+          expectedSettingsSubmissionId: request.expectedSettingsSubmissionId!,
+          nowMilliseconds,
+        })
+      : getPreDraftLeagueCapacityBlockReason({
+          ...safetyInput,
+          joinStatus: league['joinStatus'],
+          draftData: draftSnapshot.data(),
+        });
 
     if (blockReason) {
       throw new HttpsError('failed-precondition',
-        'League size can change only before Draft setup is saved and competition begins.',
+        blockReason === 'draft-start-too-close'
+          ? 'League size can change only more than 24 hours before the scheduled Draft starts.'
+          : request.reopenScheduledDraft
+            ? 'This scheduled Draft can no longer be reopened safely. Refresh League HQ.'
+            : 'League size can change only before Draft setup is saved and competition begins.',
         { reason: blockReason });
     }
 
@@ -2220,10 +2271,14 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
         asString(invite['leagueId']) !== request.leagueId ||
         asString(invite['inviteCode']) !== inviteCode ||
         expiryMilliseconds === null ||
-        (league['joinStatus'] === 'full') !== (memberIds.length === currentMaxTeams) ||
-        (league['joinStatus'] === 'full' && invite['active'] !== false) ||
-        (league['joinStatus'] === 'open' && expiryMilliseconds > nowMilliseconds &&
-          invite['active'] !== true)) {
+        (request.reopenScheduledDraft
+          ? (invite['active'] !== false ||
+            (invite['lockedReason'] !== 'draft-order-saved' &&
+              !(invite['lockedReason'] === 'league-full' && memberIds.length === currentMaxTeams)))
+          : ((league['joinStatus'] === 'full') !== (memberIds.length === currentMaxTeams) ||
+            (league['joinStatus'] === 'full' && invite['active'] !== false) ||
+            (league['joinStatus'] === 'open' && expiryMilliseconds > nowMilliseconds &&
+              invite['active'] !== true)))) {
       throw new HttpsError('failed-precondition',
         'League membership or invite state is inconsistent. Refresh or repair League HQ first.',
         { reason: 'membership-authority-mismatch' });
@@ -2245,6 +2300,18 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
         { reason: 'below-joined-team-count' });
     }
 
+    if (request.reopenScheduledDraft) {
+      const draft = draftSnapshot.data() ?? {};
+      const order = draft['roundOneOrder'] as unknown[];
+
+      if (order.length !== memberIds.length ||
+          order.some((ownerId) => typeof ownerId !== 'string') ||
+          [...order].sort().some((ownerId, index) => ownerId !== memberIds[index])) {
+        throw new HttpsError('failed-precondition',
+          'The saved Draft order does not match current members. Refresh League HQ.');
+      }
+    }
+
     const joinStatus = request.maxTeams === memberIds.length ? 'full' : 'open';
     const timestamp = FieldValue.serverTimestamp();
     const lockedAt = joinStatus === 'full' ? timestamp : null;
@@ -2263,6 +2330,40 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
       lockedReason,
       updatedAt: timestamp,
     }, { merge: true });
+    if (request.reopenScheduledDraft) {
+      transaction.set(draftRef, {
+        status: 'setup',
+        roundOneOrder: [],
+        scheduledStartAt: null,
+        clockStatus: 'stopped',
+        pickStartedAt: null,
+        pausedRemainingSeconds: null,
+        clockUpdatedBy: null,
+        clockUpdatedAt: timestamp,
+        lastSettingsSubmissionId: null,
+        projectionPreparationRequestId: null,
+        projectionPreparationStatus: null,
+        serverDraftReadinessStatus: null,
+        serverDraftReadinessScheduledStartAt: null,
+        serverDraftReadinessAvailabilityRevision: null,
+        serverDraftReadinessProjectionRequestId: null,
+        serverDraftReadinessProjectionSnapshotId: null,
+        serverDraftReadinessProjectionSnapshotHash: null,
+        serverDraftReadinessAttemptCount: 0,
+        serverDraftReadinessRetryAfterAt: null,
+        serverDraftReadinessMessage: null,
+        serverDraftReadinessUpdatedAt: timestamp,
+        serverDraftProjectionSnapshotId: null,
+        serverDraftProjectionSnapshotHash: null,
+        serverDraftProjectionAuthorityVersion: null,
+        serverDraftProjectionCatalogHash: null,
+        serverAutomationStatus: 'waiting',
+        serverAutomationMessage:
+          'League membership was reopened. The commissioner must save a new Draft order and start time.',
+        serverAutomationUpdatedAt: timestamp,
+        updatedAt: timestamp,
+      }, { merge: true });
+    }
     transaction.create(auditRef, {
       schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
       id: auditId,
@@ -2272,14 +2373,20 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
       actorRole: 'commissioner',
       authority: 'cloud-function',
       authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
-      reason: 'Commissioner changed league size before Draft setup was saved.',
-      release: LEAGUE_CAPACITY_RELEASE_LABEL,
+      reason: request.reopenScheduledDraft
+        ? 'Commissioner changed league size and reopened unstarted Draft setup.'
+        : 'Commissioner changed league size before Draft setup was saved.',
+      release: request.reopenScheduledDraft ? LEAGUE_CAPACITY_RELEASE_LABEL : 'League Lifecycle L1B',
       values: {
         payloadHash,
         previousMaxTeams: currentMaxTeams,
         maxTeams: request.maxTeams,
         teamCount: memberIds.length,
         joinStatus,
+        ...(request.reopenScheduledDraft ? {
+          rescheduleRequired: true,
+          previousScheduledStartMilliseconds: request.expectedScheduledStartMilliseconds,
+        } : {}),
       },
       createdAt: timestamp,
     });
@@ -2287,6 +2394,7 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
     return {
       updated: true, leagueId: request.leagueId, maxTeams: request.maxTeams,
       teamCount: memberIds.length, joinStatus, idempotentReplay: false, auditId,
+      rescheduleRequired: request.reopenScheduledDraft === true,
     };
   });
 }

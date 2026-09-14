@@ -678,12 +678,12 @@
         <div class="section-heading rr-section-heading">
           <div>
             <h2 id="league-capacity-title">League size</h2>
-            <p>{{ league()?.teamCount ?? teams().length }} joined. Change before Draft order is saved.</p>
+            <p>{{ league()?.teamCount ?? teams().length }} joined. Until 24h before Draft.</p>
           </div>
         </div>
 
-        @if (!preDraftMemberRemovalAvailable()) {
-          <p class="rr-notice" role="note">{{ memberRemovalAvailabilityMessage() }}</p>
+        @if (!capacityChangeAvailable()) {
+          <p class="rr-notice" role="note">{{ capacityAvailabilityMessage() }}</p>
         } @else {
           <div class="capacity-controls">
             <label for="league-capacity-select">Limit</label>
@@ -713,10 +713,22 @@
               [disabled]="capacitySaving()"
             />
 
+            @if (scheduledCapacityReopenAvailable()) {
+              <label class="capacity-reset-confirmation" for="league-capacity-reset-confirm">
+                <input
+                  id="league-capacity-reset-confirm"
+                  type="checkbox"
+                  [(ngModel)]="capacityResetDraftConfirmed"
+                  [disabled]="capacitySaving()"
+                />
+                <span>Clear Draft time and order; I'll reschedule.</span>
+              </label>
+            }
+
             <button
               type="button"
               class="rr-button rr-button--primary"
-              aria-label="Save league size"
+              [attr.aria-label]="scheduledCapacityReopenAvailable() ? 'Change league size and reopen Draft setup' : 'Save league size'"
               (click)="saveCapacity()"
               [disabled]="!canSaveCapacity()"
             >
@@ -733,6 +745,11 @@
             aria-live="polite"
             tabindex="-1"
           >{{ capacityMessage() }}</p>
+          @if (capacityRescheduleRequired()) {
+            <a class="rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft', 'setup']">
+              Draft Setup
+            </a>
+          }
         }
         @if (capacityError()) {
           <p class="rr-notice rr-notice--danger" role="alert">{{ capacityError() }}</p>
@@ -745,7 +762,7 @@
             <span class="draft-section-eyebrow">Commissioner Only</span>
             <h2 id="member-management-title">Manage league members</h2>
             <p>
-              Remove members only before Draft setup is saved; team history stays intact.
+              Remove only before Draft setup.
             </p>
           </div>
         </div>
@@ -767,7 +784,7 @@
             {{ memberRemovalAvailabilityMessage() }}
           </p>
         } @else if (removableMemberTeams().length === 0) {
-          <p class="member-removal-empty">No other managers have joined this league yet.</p>
+          <p class="member-removal-empty">No other managers.</p>
         } @else {
           <div class="member-removal-list" role="list" aria-label="League members eligible for removal">
             @for (team of removableMemberTeams(); track team.ownerId) {
@@ -809,8 +826,8 @@
               <div>
                 <strong id="member-removal-confirmation-title">Remove {{ target.teamName }}?</strong>
                 <p>
-                  Their membership, empty team, empty roster, and Draft queue will be removed.
-                  This action is blocked if Draft or competition history exists.
+                  Removes their membership, empty team, roster, and Draft queue.
+                  Blocked if Draft or competition history exists.
                 </p>
               </div>
             </div>
