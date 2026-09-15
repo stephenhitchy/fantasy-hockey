@@ -2,7 +2,7 @@
 
 **Season candidate:** Release Candidate 65
 
-**Current verified Production Hosting source:** `6fb443c5dac882f001a81adb93adf2fd205844f4`
+**Current verified Production Hosting source:** `cde86671f3691b702cebeb4ea2e7605154858d14`
 
 **Protected contracts:** Production Scoring V4 / Projection V11 / six-game ownership / Game 7 rollover
 
@@ -474,9 +474,10 @@ record changes.
 ### OPS-01 D1N route/device evidence
 
 Complete authenticated reconnect, multi-tab, navigation cleanup, pending-write,
-Draft-focus, and physical-device evidence. Run the staging-only 100 and 500
-operation ramps and record queue age, p95/p99, contention, error rate,
-concurrency, Firestore use, and cost.
+Draft-focus, and physical-device evidence. Independently run the staging-only
+100 and 500 operation ramps and record queue age, p95/p99, contention, error
+rate, concurrency, Firestore use, and cost. The device lane does not block an
+infrastructure-only ramp, but both lanes must pass before Draft authorization.
 
 Pass: listeners return to the expected route baseline, no unexplained write or
 leak remains, and both private-season ramps meet documented thresholds.

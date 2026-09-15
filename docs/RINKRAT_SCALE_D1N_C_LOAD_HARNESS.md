@@ -47,15 +47,17 @@ Do not run a ramp until all of these are true:
   `git diff --check`, and the clean-source guard;
 - the exact commit is deployed only to the two staging workers and staging
   Hosting, and the live staging manifest matches it;
-- the aggregate physical iPhone, Android, reconnect, cleanup, and multi-tab
-  prerequisite file passes D1N-C-A;
 - the staging Billing export prerequisite file proves a settled,
   staging-filtered row and active budget alert; and
 - no other D1N-C run is seeding or running.
 
-Do not convert the owner’s prior manual device testing into invented counts.
-The required aggregate evidence file must contain measurements actually
-recorded from the exact candidate.
+Physical iPhone, Android, reconnect, cleanup, and multi-tab evidence is an
+independent Draft/public-scale lane. It does not block this infrastructure-only
+backend ramp. If a device-evidence file is supplied, it must contain
+measurements actually recorded from the exact candidate and pass the strict
+D1N-C-A validator. If it is omitted, the raw and finalized ramp evidence records
+`physicalDeviceEvidenceStatus: "deferred"` and cannot authorize a real Draft or
+public scale. Never convert prior manual testing into invented counts.
 
 ## Exact staging deployment boundary
 
@@ -98,28 +100,32 @@ npm run d1n:c:preflight -- \
   --project=rinkrat-staging-d1nc-2026 \
   --stage=100 \
   --ack=inspect-d1n-c-stage-100-in-rinkrat-staging-d1nc-2026 \
-  --device-evidence=/absolute/private/d1n-device-evidence.json \
   --billing-export-evidence=/absolute/private/d1n-billing-prerequisite.json
 
 npm run staging:d1n:c:run -- \
   --project=rinkrat-staging-d1nc-2026 \
   --stage=100 \
   --ack=run-d1n-c-stage-100-in-rinkrat-staging-d1nc-2026 \
-  --device-evidence=/absolute/private/d1n-device-evidence.json \
   --billing-export-evidence=/absolute/private/d1n-billing-prerequisite.json \
   --output=/absolute/private/d1n-c-stage-100-raw.json
 ```
 
+Add `--device-evidence=/absolute/private/d1n-device-evidence.json` to both
+commands only when that exact-revision physical evidence has actually been
+recorded. The Billing evidence argument is always mandatory.
+
 The executable refuses Production, emulator variables, a dirty worktree, a
 non-`main` branch, Git divergence, unsupported stages, a weak acknowledgement,
-evidence output inside the repository, and either worker whose immutable
+missing Billing prerequisite, invalid optional device evidence, evidence output
+inside the repository, and either worker whose immutable
 deployed source archive differs from the clean Git commit. It enqueues 50
 scoring probes and 50 Draft probes at stage 100, plus the bounded duplicate
 deliveries.
 
 ## Observability and evidence finalization
 
-The raw file includes the worker-derived operation counts, retries, recovered
+The raw file includes an explicit backend-only scope and whether physical-device
+evidence was `verified` or `deferred`, plus the worker-derived operation counts, retries, recovered
 transaction contention, duplicates, p50/p95/p99/maximum task timing, queue age,
 drain time, interval concurrency, and cold starts. It intentionally has status
 `awaiting-external-usage-and-cost` and cannot pass the fixed evaluator.
@@ -240,4 +246,6 @@ Passing stages 100 and 500 closes only OPS-01’s staging load requirement. A
 real Draft still requires the source-controlled FF1 gate: exact-release
 DRF-01–DRF-09, LIFE-01–LIFE-08, rollback/freeze evidence, an explicit
 post-Draft manager-replacement decision, no unresolved P0/P1, and a formal
-FF1.16 Draft GO naming the exact live release and rollback point.
+FF1.16 Draft GO naming the exact live release and rollback point. Deferred
+physical-device evidence must be completed independently before that GO; a
+passing backend ramp never substitutes for it.

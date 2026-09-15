@@ -12,6 +12,7 @@ import {
   D1NC_REQUIRED_FUNCTIONS,
   D1NC_REQUIRED_ROUTES,
   D1NC_STAGING_PROJECT_ID,
+  evaluatePhysicalDeviceEvidenceGate,
   evaluateRampEvidence,
   previousRampStage,
   validateBillingExportEvidence,
@@ -78,6 +79,12 @@ function passingRamp(stage = 100) {
     projectId: D1NC_STAGING_PROJECT_ID,
     sourceRevision: revision,
     stage,
+    scope: {
+      backendLoadOnly: true,
+      physicalDeviceEvidenceStatus: 'deferred',
+      authorizesRealDraft: false,
+      authorizesPublicScale: false,
+    },
     operations: {
       requested: stage,
       completed: stage,
@@ -129,6 +136,8 @@ function passingRamp(stage = 100) {
 
 test('source-only preflight passes without network or mutation', () => {
   const output = execFileSync(process.execPath, [
+    '--no-warnings',
+    '--experimental-strip-types',
     'scripts/capacity/d1n-c-load-preflight.mjs',
     '--source-only',
   ], { cwd: root, encoding: 'utf8' });
@@ -221,6 +230,24 @@ test('physical evidence requires both real phones, reconnect, route cleanup, and
   assert.equal(validatePhysicalDeviceEvidence(weakenedTotal, revision).ready, false);
 });
 
+test('physical-device evidence is independent from backend-ramp authorization', () => {
+  assert.deepEqual(evaluatePhysicalDeviceEvidenceGate(undefined, revision), {
+    issues: [],
+    ready: true,
+    status: 'deferred',
+  });
+  assert.equal(
+    evaluatePhysicalDeviceEvidenceGate(physicalEvidence(), revision).status,
+    'verified',
+  );
+  const invalid = physicalEvidence();
+  invalid.profiles.androidChrome.physical = false;
+  const result = evaluatePhysicalDeviceEvidenceGate(invalid, revision);
+  assert.equal(result.ready, false);
+  assert.equal(result.status, 'invalid');
+  assert.match(result.issues.join('\n'), /physical Android Chrome/);
+});
+
 test('billing export evidence must be settled, staging-filtered, revision-bound, and budgeted', () => {
   const evidence = {
     schemaVersion: 1,
@@ -267,6 +294,22 @@ test('missing cost, duplicate results, slow tails, backlog, or excess concurrenc
   assert.match(result.issues.join('\n'), /cost/);
 });
 
+test('a ramp cannot claim Draft or public-scale authorization and must record device coverage', () => {
+  const missingScope = passingRamp(100);
+  delete missingScope.scope;
+  assert.match(evaluateRampEvidence(missingScope).issues.join('\n'), /backend-load-only scope/);
+
+  const overclaimed = passingRamp(100);
+  overclaimed.scope.authorizesRealDraft = true;
+  overclaimed.scope.authorizesPublicScale = true;
+  overclaimed.scope.physicalDeviceEvidenceStatus = 'invented';
+  const result = evaluateRampEvidence(overclaimed);
+  assert.equal(result.ready, false);
+  assert.match(result.issues.join('\n'), /physical-device evidence status/);
+  assert.match(result.issues.join('\n'), /real Draft authorization/);
+  assert.match(result.issues.join('\n'), /public-scale authorization/);
+});
+
 test('empty or internally inconsistent telemetry cannot masquerade as a completed workload', () => {
   const evidence = passingRamp(100);
   evidence.latency.scoringTaskMilliseconds = { p50: 10, p95: 9, p99: 11, max: 12 };
@@ -298,10 +341,11 @@ test('runbook defines acceptance, observability, exact staging resources, and ro
     'No Production Firebase project may be a load target.',
     '100, 500, 2,000, and 5,000 operations',
     'physical Android Chrome',
+    'does not block an infrastructure-only backend ramp',
     'processLeagueAutomationTask',
     'processDraftClockDeadline',
     'Cloud Billing export',
     'Rollback',
   ]) assert.match(runbook, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(runbook, /requires no Firebase deployment/);
+  assert.match(runbook, /no Function redeployment is required/);
 });

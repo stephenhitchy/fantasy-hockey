@@ -271,6 +271,22 @@ export function validatePhysicalDeviceEvidence(evidence, expectedRevision) {
   return { issues, ready: issues.length === 0 };
 }
 
+export function evaluatePhysicalDeviceEvidenceGate(evidence, expectedRevision) {
+  if (evidence === null || typeof evidence === 'undefined') {
+    return {
+      issues: [],
+      ready: true,
+      status: 'deferred',
+    };
+  }
+
+  const validation = validatePhysicalDeviceEvidence(evidence, expectedRevision);
+  return {
+    ...validation,
+    status: validation.ready ? 'verified' : 'invalid',
+  };
+}
+
 function validUtcTimestamp(value) {
   return typeof value === 'string'
     && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
@@ -324,6 +340,18 @@ export function evaluateRampEvidence(evidence) {
   if (!D1NC_RAMP_STAGES.includes(stage)) issues.push('ramp stage is unsupported');
   if (!/^[0-9a-f]{40}$/i.test(String(evidence?.sourceRevision ?? ''))) {
     issues.push('ramp evidence requires one full source revision');
+  }
+  if (evidence?.scope?.backendLoadOnly !== true) {
+    issues.push('ramp evidence must identify the backend-load-only scope');
+  }
+  if (!['verified', 'deferred'].includes(evidence?.scope?.physicalDeviceEvidenceStatus)) {
+    issues.push('ramp evidence requires a verified or deferred physical-device evidence status');
+  }
+  if (evidence?.scope?.authorizesRealDraft !== false) {
+    issues.push('ramp evidence must not claim real Draft authorization');
+  }
+  if (evidence?.scope?.authorizesPublicScale !== false) {
+    issues.push('ramp evidence must not claim public-scale authorization');
   }
 
   const operations = evidence?.operations;
@@ -600,8 +628,11 @@ export async function main(argv = process.argv.slice(2)) {
 
   const [toolchain, git] = await Promise.all([inspectToolchain(source), inspectGit()]);
   const manifest = await fetchManifest(D1NC_STAGING_URL, git.commit);
-  const deviceEvidence = await readEvidenceFile(optionString(options, 'device-evidence'));
-  const deviceValidation = validatePhysicalDeviceEvidence(deviceEvidence, git.commit);
+  const deviceEvidencePath = optionString(options, 'device-evidence');
+  const deviceEvidence = deviceEvidencePath
+    ? await readEvidenceFile(deviceEvidencePath)
+    : undefined;
+  const deviceValidation = evaluatePhysicalDeviceEvidenceGate(deviceEvidence, git.commit);
   requireCondition(deviceValidation.ready, `Physical-device evidence failed:\n- ${deviceValidation.issues.join('\n- ')}`);
   const billingEvidence = await readEvidenceFile(optionString(options, 'billing-export-evidence'));
   const billingValidation = validateBillingExportEvidence(billingEvidence, git.commit);
@@ -624,6 +655,10 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(`Ramp stage authorized for harness execution: ${stage}`);
   console.log(`Required workers ACTIVE on Node 22: ${D1NC_REQUIRED_FUNCTIONS.length}/${D1NC_REQUIRED_FUNCTIONS.length}`);
   console.log(`Required worker source archives matched clean Git: ${D1NC_REQUIRED_FUNCTIONS.length}/${D1NC_REQUIRED_FUNCTIONS.length}`);
+  console.log(`Physical-device evidence: ${deviceValidation.status.toUpperCase()}`);
+  if (deviceValidation.status === 'deferred') {
+    console.log('The backend ramp remains infrastructure-only and does not authorize a real Draft or public scale.');
+  }
   console.log('This preflight generated no traffic and modified no Firebase resource or document.');
   console.log('Production was not read except for project-number separation and was never a load target.');
   console.log(`Staging build: ${manifest.buildId}`);

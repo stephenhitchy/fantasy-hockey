@@ -141,6 +141,42 @@ test('the deterministic plan is balanced, sharded, hashed, and includes bounded 
   assert.equal(plan.runFingerprint, repeat.runFingerprint);
 });
 
+test('raw ramp evidence records deferred device coverage without claiming broader readiness', () => {
+  const plan = buildD1ncLoadRunPlan({
+    stage: 100,
+    sourceRevision: revision,
+    entropy,
+    nonce,
+    startedAtMilliseconds,
+  });
+  const documents = completedDocuments(plan);
+  const common = {
+    stage: 100,
+    sourceRevision: revision,
+    runFingerprint: plan.runFingerprint,
+    runStartedAtMilliseconds: startedAtMilliseconds,
+    runCompletedAtMilliseconds: startedAtMilliseconds + 10_000,
+    operations: documents.operations,
+    results: documents.results,
+    peakOperationBacklog: 100,
+    finalTaskQueueDepth: 0,
+  };
+  const evidence = summarizeD1ncLoadResults(common);
+  assert.deepEqual(evidence.scope, {
+    backendLoadOnly: true,
+    physicalDeviceEvidenceStatus: 'deferred',
+    authorizesRealDraft: false,
+    authorizesPublicScale: false,
+  });
+  assert.throws(
+    () => summarizeD1ncLoadResults({
+      ...common,
+      physicalDeviceEvidenceStatus: 'invented',
+    }),
+    /physical-device evidence status/,
+  );
+});
+
 test('dispatch batches interleave worker kinds and assign deadlines from enqueue time', () => {
   const plan = buildD1ncLoadRunPlan({
     stage: 100,

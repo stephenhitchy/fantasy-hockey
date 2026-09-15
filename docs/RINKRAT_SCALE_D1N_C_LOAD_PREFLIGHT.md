@@ -33,10 +33,12 @@ no direct Production dependency. See
 `docs/RINKRAT_SCALE_D1N_C_LOAD_HARNESS.md`. D1N-C-A still refuses to pretend
 that a stale/no-op task is representative scoring or Draft throughput.
 
-## Physical-device prerequisite
+## Independent physical-device evidence lane
 
-Before the first 100-operation ramp, the exact staging build must have bounded
-aggregate evidence from physical iPhone Safari and physical Android Chrome.
+Physical-device evidence does not block an infrastructure-only backend ramp.
+It remains a separate requirement before a real Draft or any public-scale
+authorization. The exact staging build must ultimately have bounded aggregate
+evidence from physical iPhone Safari and physical Android Chrome.
 Each device and viewport must record at least twenty privacy-safe samples for
 Available Players, Matchup, Draft, League Home, and Projection. Those twenty
 samples must explicitly include cold, warm, and reconnect profiles; their
@@ -55,6 +57,12 @@ template is
 `docs/evidence-templates/d1n-c-physical-device-evidence.template.json`. It
 contains aggregate labels only and must never contain account, league, team,
 roster, player, game, document, invite, or task identifiers.
+
+The preflight accepts `--device-evidence` when measured evidence is available
+and validates it strictly. Invalid supplied evidence fails closed. When the
+argument is omitted, the ramp evidence is explicitly marked `deferred`,
+`backendLoadOnly`, and unable to authorize either a real Draft or public scale.
+No manual testing may be converted into invented counts.
 
 Cloud Billing export must be enabled before traffic begins because it does not
 backfill usage from before enablement. Observe at least one settled export row,
@@ -98,18 +106,22 @@ exact billed cost.
 
 ## Read-only preflight
 
-After D1N-C-A is merged, the physical evidence is complete, the exact clean
-commit is deployed only to the required staging resources, and the staging
-manifest matches that commit, run:
+After this policy is merged, the exact clean commit is represented by the
+staging Hosting manifest, the two required staging workers match the clean Git
+source byte for byte, and the mandatory Billing prerequisite is complete, run:
 
 ```bash
 npm run d1n:c:preflight -- \
   --project=rinkrat-staging-d1nc-2026 \
   --stage=100 \
   --ack=inspect-d1n-c-stage-100-in-rinkrat-staging-d1nc-2026 \
-  --device-evidence=path/to/private-aggregate-device-evidence.json \
   --billing-export-evidence=path/to/private-aggregate-billing-evidence.json
 ```
+
+When measured physical-device evidence exists for the exact revision, add
+`--device-evidence=path/to/private-aggregate-device-evidence.json`. Omitting it
+does not block an infrastructure-only backend ramp; it leaves the independent
+Draft/public-scale device gate open.
 
 The preflight requires a clean synchronized `main`, Node 22.23.1/npm 11.17.0,
 an exact matching staging manifest, a distinct billed staging project,
@@ -134,6 +146,8 @@ different source revision blocks advancement.
 
 Every ramp result must record bounded aggregates for:
 
+- backend-only scope, physical-device evidence status, and explicit refusal to
+  authorize a real Draft or public scale;
 - requested/completed scoring and Draft operations;
 - retries, recovered contention, terminal errors, and duplicates;
 - scoring p50/p95/p99/maximum duration;
@@ -151,8 +165,12 @@ load.
 
 ## Deployment, rollback, and next slice
 
-D1N-C-A changes documentation, tests, and local read-only tooling only. It
-requires no Firebase deployment. Rollback is a normal Git revert.
+This device-evidence policy follow-up changes documentation, tests, and local
+load tooling only. It changes no Function runtime. Staging Hosting must still
+be rebuilt from the clean merge commit so the manifest binds the source used by
+the preflight; no Function redeployment is required when the existing two
+staging archives continue to match. Rollback is a normal Git revert plus
+restoration of the preceding staging Hosting release if the manifest advanced.
 
 D1N-C-B requires only the two explicitly reviewed staging Function workers
 above plus the staging Hosting manifest used to bind the clean source revision.

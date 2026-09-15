@@ -48,6 +48,10 @@ test('the generator refuses broad deployment and preserves external evidence req
   assert.match(harness, /divergence === '0\/0'/);
   assert.match(harness, /FIRESTORE_EMULATOR_HOST/);
   assert.match(harness, /awaiting-external-usage-and-cost/);
+  assert.match(harness, /D1N-C Cloud Billing export evidence path is required/);
+  assert.doesNotMatch(harness, /requireCondition\(deviceEvidence && billingEvidence/);
+  assert.match(harness, /'--experimental-strip-types'/);
+  assert.match(harness, /physicalDeviceEvidenceStatus: deviceEvidence \? 'verified' : 'deferred'/);
   assert.match(
     read('scripts/capacity/d1n-c-load-preflight.mjs'),
     /verifyFf132DeployedFunctionSourceArchives\(staging\.exactFunctions, git\.commit\)/,

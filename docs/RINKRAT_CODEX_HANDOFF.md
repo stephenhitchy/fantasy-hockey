@@ -117,7 +117,7 @@ must not automatically rewrite production scores.
 ## Current verified release posture
 
 - Production Hosting manifest: exact source
-  `6fb443c5dac882f001a81adb93adf2fd205844f4`, Release Candidate 65,
+  `cde86671f3691b702cebeb4ea2e7605154858d14`, Release Candidate 65,
   Production Scoring V4, Projection V11.
 - Deployed Production Function inventory: 107 expected by the currently live
   source and 107 matched, with no missing,
@@ -171,18 +171,21 @@ billed staging project, authenticated high-risk-route samples, repaired Draft
 focus/same-page cleanup, pending-write attribution, and a deployed no-op
 identity-write repair that removed the observed `team:list` pending write.
 Controlled reconnect, multi-tab, physical-device evidence and the 100/500/
-2,000/5,000 staging ramps remain open. The 2,000/5,000 ramps are public-scale
-evidence, not a blocker for a controlled 2–4 league family-and-friends cohort.
+2,000/5,000 staging ramps remain open. Physical-device evidence and backend
+load are independent lanes: missing phone evidence does not block an
+infrastructure-only ramp, but it still blocks real-Draft/public-scale claims.
+The 2,000/5,000 ramps are public-scale evidence, not a blocker for a controlled
+2–4 league family-and-friends cohort.
 
 D1N-C-A adds a read-only, Production-refusing load preflight and aggregate
-physical-device evidence schema. D1N-C-B now supplies the separately reviewed
-source candidate for a bounded staging-only generator, transactional synthetic
-worker probes, duplicate-delivery evidence, and Cloud Monitoring/Billing
-finalization. It fixes the 100/500/2,000/5,000 sequence, requires the immediately
-preceding stage to pass on the same revision, checks the isolated billed project
-and exact staging manifest, and preserves the existing two worker limits. No
-load has been run by the implementation work. Physical iPhone/Android evidence,
-an exact staging deployment, and the 100/500 measurements remain open.
+physical-device evidence schema. D1N-C-B is merged at `120ae6da`; its two
+staging workers are ACTIVE on Node 22, their immutable archives match that
+clean Git source byte for byte, and staging Hosting identifies the same commit.
+It supplies the bounded generator, transactional synthetic worker probes,
+duplicate-delivery evidence, and Cloud Monitoring/Billing finalization while
+preserving the existing worker limits. No load has been run. Settled
+staging-filtered Billing export evidence and the 100/500 measurements remain
+open. Physical iPhone/Android evidence remains open in its independent lane.
 
 ## Current Draft-room UX posture
 
@@ -623,24 +626,25 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Stephen deploys the exact reviewed Production delta from clean synchronized
-   `ff1095d6`: the documented 22 targeted Functions in worker-before-producer
-   order, followed by `hosting:app`. Do not use a broad deployment.
-2. Verify every targeted Production Function revision/archive and confirm the
-   public manifest identifies exactly `ff1095d6`; rerun the read-only preflight
-   and inventory audit before making a Draft decision.
+1. Merge the D1N-C device-evidence policy follow-up, advance only staging
+   Hosting to that clean source revision, and retain the existing two workers
+   only if their immutable archives still match that revision byte for byte.
+2. Prove the settled staging-filtered Billing export row and active budget
+   alert, run the guarded infrastructure-only 100-operation ramp, finalize its
+   Monitoring/Billing evidence, and independently review it before 500.
 3. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-4. Independently review and merge D1N-C-B, complete aggregate physical
-   iPhone/Android D1N evidence on that exact staging build, then review the 100
-   ramp and settled cost evidence before permitting 500.
+4. Complete physical iPhone/Android D1N evidence separately before a real Draft
+   or public-scale claim; do not invent samples or treat the backend ramp as a
+   substitute.
 5. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.
 6. Record the no-post-Draft-replacement or account-transfer decision.
-7. Generate and independently review the D1J season-freeze kit, exact tag,
-   targeted rollback, incident plan, and formal invitation/Draft go-no-go.
+7. Generate and independently review the D1J season-freeze kit, exact Production
+   Function archive record, tag, targeted rollback, incident plan, and formal
+   invitation/Draft go-no-go.
 8. After the formal FF1.16 Draft GO, begin the observed 2–4 league, 10–30
    manager season under the post-Draft competitive freeze.
 9. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery

@@ -359,7 +359,13 @@ export function summarizeD1ncLoadResults({
   results,
   peakOperationBacklog,
   finalTaskQueueDepth,
+  physicalDeviceEvidenceStatus = 'deferred',
 }) {
+  requireCondition(
+    physicalDeviceEvidenceStatus === 'verified'
+      || physicalDeviceEvidenceStatus === 'deferred',
+    'D1N-C physical-device evidence status is invalid.',
+  );
   requireCondition(operations.length === stage, 'D1N-C operation count is incomplete.');
   requireCondition(results.length === stage, 'D1N-C result count is incomplete.');
   requireCondition(
@@ -444,6 +450,12 @@ export function summarizeD1ncLoadResults({
     sourceRevision,
     runFingerprint,
     stage,
+    scope: {
+      backendLoadOnly: true,
+      physicalDeviceEvidenceStatus,
+      authorizesRealDraft: false,
+      authorizesPublicScale: false,
+    },
     operations: {
       requested: stage,
       completed: stage,
@@ -709,16 +721,18 @@ async function executeRun(options) {
   const previousEvidence = optionString(options, 'previous-evidence');
   assertD1ncLoadHarnessSafety({ projectId, stage, acknowledgement });
   requirePrivateOutputPath(outputPath);
-  requireCondition(deviceEvidence && billingEvidence, 'D1N-C prerequisite evidence paths are required.');
+  requireCondition(billingEvidence, 'D1N-C Cloud Billing export evidence path is required.');
 
   const sourceRevision = readCleanMainRevision();
   const preflightArguments = [
+    '--no-warnings',
+    '--experimental-strip-types',
     'scripts/capacity/d1n-c-load-preflight.mjs',
     `--project=${projectId}`,
     `--stage=${stage}`,
     `--ack=${buildD1ncAcknowledgement(stage)}`,
-    `--device-evidence=${deviceEvidence}`,
     `--billing-export-evidence=${billingEvidence}`,
+    ...(deviceEvidence ? [`--device-evidence=${deviceEvidence}`] : []),
     ...(previousEvidence ? [`--previous-evidence=${previousEvidence}`] : []),
   ];
   runCommand(process.execPath, preflightArguments);
@@ -780,6 +794,7 @@ async function executeRun(options) {
       results: documents.results,
       peakOperationBacklog,
       finalTaskQueueDepth: taskDrainResult.finalTaskQueueDepth,
+      physicalDeviceEvidenceStatus: deviceEvidence ? 'verified' : 'deferred',
     });
     await runRef.set({
       status: 'awaiting-external-usage-and-cost',
