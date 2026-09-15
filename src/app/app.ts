@@ -6,6 +6,7 @@ import { Subscription } from 'rxjs';
 import { repairViewportOverlayLock } from './shared/accessibility/viewport-overlay-portal.directive';
 
 import { auth } from './core/firebase-auth';
+import { LeagueJoinConfirmationService } from './core/league/league-join-confirmation.service';
 import { ClientPerformanceMonitorService } from './core/observability/client-performance-monitor.service';
 import { CompetitiveActionMonitorService } from './core/observability/competitive-action-monitor.service';
 import { NavigationHistoryService } from './core/navigation/navigation-history.service';
@@ -90,6 +91,7 @@ export class App implements OnDestroy {
     protected readonly releaseUpdate: ReleaseUpdateService,
     protected readonly actionMonitor: CompetitiveActionMonitorService,
     protected readonly challengeService: TeamIdentityChallengeService,
+    protected readonly joinConfirmation: LeagueJoinConfirmationService,
     protected readonly pwa: RinkRatPwaService,
     navigationHistory: NavigationHistoryService,
   ) {
@@ -126,6 +128,7 @@ export class App implements OnDestroy {
 
       if (!user) {
         this.challengeService.reset();
+        this.joinConfirmation.dismiss();
         return;
       }
 

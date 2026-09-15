@@ -19,6 +19,7 @@ import {
   unbindPendingLeagueInviteAccount,
 } from '../../../core/league/invite-link-intent.service';
 import { joinLeagueByInviteCode } from '../../../core/league/league.service';
+import { LeagueJoinConfirmationService } from '../../../core/league/league-join-confirmation.service';
 import {
   getVerificationEmailState,
   requestVerificationEmail,
@@ -89,6 +90,7 @@ export class LeagueInviteLink implements OnDestroy {
     private readonly router: Router,
     private readonly telemetry: TelemetryService,
     private readonly challengeService: TeamIdentityChallengeService,
+    private readonly joinConfirmation: LeagueJoinConfirmationService,
   ) {
     const inviteCode = normalizeLeagueInviteCode(
       this.route.snapshot.paramMap.get('inviteCode'),
@@ -443,7 +445,12 @@ export class LeagueInviteLink implements OnDestroy {
         continuation: true,
       });
       void this.challengeService.refresh(user.uid, { force: true });
-      await this.router.navigate(['/leagues', leagueId]);
+      this.joinConfirmation.confirm(leagueId);
+      try {
+        await this.router.navigate(['/leagues', leagueId]);
+      } catch {
+        // Membership is already confirmed; the persistent notice retains a safe recovery link.
+      }
     } catch (error: unknown) {
       const message = this.friendlyJoinError(error);
 

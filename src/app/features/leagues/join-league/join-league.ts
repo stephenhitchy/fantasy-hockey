@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { auth } from '../../../core/firebase';
 import { joinLeagueByInviteCode } from '../../../core/league/league.service';
+import { LeagueJoinConfirmationService } from '../../../core/league/league-join-confirmation.service';
 import { getUserProfile } from '../../../core/user/user.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { TeamIdentityChallengeService } from '../../../core/user/team-identity-challenge.service';
@@ -24,6 +25,7 @@ export class JoinLeague {
     private router: Router,
     private telemetry: TelemetryService,
     private challengeService: TeamIdentityChallengeService,
+    private joinConfirmation: LeagueJoinConfirmationService,
   ) {}
 
   async submit(): Promise<void> {
@@ -45,7 +47,12 @@ export class JoinLeague {
       );
       this.telemetry.track('league_joined', { invite_code_length: this.inviteCode.trim().length });
       void this.challengeService.refresh(user.uid, { force: true });
-      await this.router.navigate(['/leagues', leagueId]);
+      this.joinConfirmation.confirm(leagueId);
+      try {
+        await this.router.navigate(['/leagues', leagueId]);
+      } catch {
+        // Membership is already confirmed; the persistent notice retains a safe recovery link.
+      }
     } catch (error: any) {
       this.errorMessage.set(error?.message || 'Unable to join the league right now.');
     } finally {

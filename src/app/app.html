@@ -66,4 +66,34 @@
   </aside>
 }
 
+@if (joinConfirmation.current(); as confirmation) {
+  <aside
+    class="challenge-completion-toast league-join-confirmation-toast"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    <span class="challenge-completion-icon" aria-hidden="true">✓</span>
+    <div class="challenge-completion-copy">
+      <span>Membership confirmed</span>
+      <strong>You're in!</strong>
+      <small>Your team is ready. Welcome to the league.</small>
+    </div>
+    <a
+      class="challenge-completion-action"
+      [routerLink]="['/leagues', confirmation.leagueId]"
+    >
+      Open League HQ
+    </a>
+    <button
+      class="challenge-completion-dismiss"
+      type="button"
+      aria-label="Dismiss league join confirmation"
+      (click)="joinConfirmation.dismiss()"
+    >
+      ×
+    </button>
+  </aside>
+}
+
 <router-outlet></router-outlet>

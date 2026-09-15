@@ -30,6 +30,7 @@
     "test:draft-authority": "npm --prefix functions run build && npm run test:draft-authority:run",
     "verify:batch3": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run",
     "test:league-onboarding:run": "node --test --test-concurrency=1 test/league-onboarding/*.test.mjs",
+    "test:league-join-confirmation:run": "node --test --test-concurrency=1 test/league-join-confirmation/*.test.mjs && ng test --watch=false --include='src/app/core/league/league-join-confirmation.service.spec.ts' --include='src/app/features/leagues/join-league/join-league.spec.ts'",
     "verify:batch3-hotfix": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run",
     "test:competition-authority:run": "node --test --test-concurrency=1 test/competition-authority/*.test.mjs",
     "verify:batch4": "npm run test:rules && npm run build:all && npm run test:draft-authority:run && npm run test:league-onboarding:run && npm run test:competition-authority:run",
@@ -665,6 +666,8 @@
     "test:batchl1b": "firebase emulators:exec --project demo-rinkrat-l1b --only firestore \"npm run test:batchl1b:run\"",
     "verify:batchl1b:core": "npm run verify:batchff1-17:core && npm run test:batchl1b && npm run validate:release-manifest",
     "verify:batchl1b": "npm run toolchain:verify && npm run verify:batchl1b:core && npm run security:dependency-audit",
+    "verify:batchl1e:core": "npm run verify:batchl1b:core && npm run test:league-join-confirmation:run && npm run validate:release-manifest",
+    "verify:batchl1e": "npm run toolchain:verify && npm run verify:batchl1e:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs"
   },
   "private": true,
