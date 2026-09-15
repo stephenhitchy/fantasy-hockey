@@ -24,6 +24,27 @@ describe('LeagueDetail', () => {
     expect(component).toBeTruthy();
   });
 
+  it('keeps league size management in a closed disclosure with a compact capacity summary', () => {
+    component.loading.set(false);
+    component.isCommissioner.set(true);
+    component.league.set({
+      teamCount: 2,
+      joinStatus: 'open',
+      maxTeams: 4,
+    } as League);
+    fixture.detectChanges();
+
+    const disclosure = fixture.nativeElement.querySelector('.league-capacity-disclosure') as HTMLDetailsElement | null;
+    const summary = disclosure?.querySelector('summary');
+
+    expect(disclosure).toBeTruthy();
+    expect(disclosure?.open).toBe(false);
+    expect(summary?.textContent).toContain('League size');
+    expect(summary?.textContent).toContain('2 joined · 4-team limit');
+    expect(disclosure?.querySelector('#league-capacity-select')).toBeTruthy();
+    expect(disclosure?.querySelector('#league-capacity-password')).toBeTruthy();
+  });
+
   it('offers an explicit capacity reset only for a scheduled Draft more than 24 hours away', () => {
     const now = Date.now();
     component.now.set(now);

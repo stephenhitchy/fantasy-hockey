@@ -674,87 +674,92 @@
     </section>
 
     @if (isCommissioner()) {
-      <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="league-capacity-title">
-        <div class="section-heading rr-section-heading">
-          <div>
-            <h2 id="league-capacity-title">League size</h2>
-            <p>{{ league()?.teamCount ?? teams().length }} joined. Until 24h before Draft.</p>
-          </div>
-        </div>
+      <details class="league-tools league-capacity-disclosure rr-card">
+        <summary>
+          <span>
+            <strong id="league-capacity-title" role="heading" aria-level="2">League size</strong>
+            <small>
+              {{ league()?.teamCount ?? teams().length }} joined · {{ league()?.maxTeams ?? capacityDraft }}-team limit
+            </small>
+          </span>
+          <span class="summary-chevron" aria-hidden="true">⌄</span>
+        </summary>
 
-        @if (!capacityChangeAvailable()) {
-          <p class="rr-notice" role="note">{{ capacityAvailabilityMessage() }}</p>
-        } @else {
-          <div class="capacity-controls">
-            <label for="league-capacity-select">Limit</label>
-            <select
-              id="league-capacity-select"
-              class="rr-field"
-              aria-label="Maximum league teams"
-              [(ngModel)]="capacityDraft"
-              [disabled]="capacitySaving()"
-            >
-              @for (size of capacityChoices; track size) {
-                <option [ngValue]="size" [disabled]="size < (league()?.teamCount ?? teams().length)">
-                  {{ size }}
-                </option>
+        <div class="commissioner-tools-body" aria-labelledby="league-capacity-title">
+          @if (!capacityChangeAvailable()) {
+            <p class="rr-notice" role="note">{{ capacityAvailabilityMessage() }}</p>
+          } @else {
+            <div class="capacity-controls">
+              <label for="league-capacity-select">Limit</label>
+              <select
+                id="league-capacity-select"
+                class="rr-field"
+                aria-label="Maximum league teams"
+                [(ngModel)]="capacityDraft"
+                [disabled]="capacitySaving()"
+              >
+                @for (size of capacityChoices; track size) {
+                  <option [ngValue]="size" [disabled]="size < (league()?.teamCount ?? teams().length)">
+                    {{ size }}
+                  </option>
+                }
+              </select>
+
+              <label for="league-capacity-password">Password</label>
+              <input
+                id="league-capacity-password"
+                class="rr-field"
+                aria-label="Current password for league size change"
+                type="password"
+                maxlength="128"
+                autocomplete="current-password"
+                [(ngModel)]="capacityPasswordDraft"
+                [disabled]="capacitySaving()"
+              />
+
+              @if (scheduledCapacityReopenAvailable()) {
+                <label class="capacity-reset-confirmation" for="league-capacity-reset-confirm">
+                  <input
+                    id="league-capacity-reset-confirm"
+                    type="checkbox"
+                    [(ngModel)]="capacityResetDraftConfirmed"
+                    [disabled]="capacitySaving()"
+                  />
+                  <span>Clear Draft time and order; I'll reschedule.</span>
+                </label>
               }
-            </select>
 
-            <label for="league-capacity-password">Password</label>
-            <input
-              id="league-capacity-password"
-              class="rr-field"
-              aria-label="Current password for league size change"
-              type="password"
-              maxlength="128"
-              autocomplete="current-password"
-              [(ngModel)]="capacityPasswordDraft"
-              [disabled]="capacitySaving()"
-            />
-
-            @if (scheduledCapacityReopenAvailable()) {
-              <label class="capacity-reset-confirmation" for="league-capacity-reset-confirm">
-                <input
-                  id="league-capacity-reset-confirm"
-                  type="checkbox"
-                  [(ngModel)]="capacityResetDraftConfirmed"
-                  [disabled]="capacitySaving()"
-                />
-                <span>Clear Draft time and order; I'll reschedule.</span>
-              </label>
-            }
-
-            <button
-              type="button"
-              class="rr-button rr-button--primary"
-              [attr.aria-label]="scheduledCapacityReopenAvailable() ? 'Change league size and reopen Draft setup' : 'Save league size'"
-              (click)="saveCapacity()"
-              [disabled]="!canSaveCapacity()"
-            >
-              {{ capacitySaving() ? 'Saving…' : 'Save' }}
-            </button>
-          </div>
-        }
-
-        @if (capacityMessage()) {
-          <p
-            #capacityStatus
-            class="member-removal-message rr-notice rr-notice--success"
-            role="status"
-            aria-live="polite"
-            tabindex="-1"
-          >{{ capacityMessage() }}</p>
-          @if (capacityRescheduleRequired()) {
-            <a class="rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft', 'setup']">
-              Draft Setup
-            </a>
+              <button
+                type="button"
+                class="rr-button rr-button--primary"
+                [attr.aria-label]="scheduledCapacityReopenAvailable() ? 'Change league size and reopen Draft setup' : 'Save league size'"
+                (click)="saveCapacity()"
+                [disabled]="!canSaveCapacity()"
+              >
+                {{ capacitySaving() ? 'Saving…' : 'Save' }}
+              </button>
+            </div>
           }
-        }
-        @if (capacityError()) {
-          <p class="rr-notice rr-notice--danger" role="alert">{{ capacityError() }}</p>
-        }
-      </section>
+
+          @if (capacityMessage()) {
+            <p
+              #capacityStatus
+              class="member-removal-message rr-notice rr-notice--success"
+              role="status"
+              aria-live="polite"
+              tabindex="-1"
+            >{{ capacityMessage() }}</p>
+            @if (capacityRescheduleRequired()) {
+              <a class="rr-button rr-button--primary" [routerLink]="['/leagues', leagueId, 'draft', 'setup']">
+                Draft Setup
+              </a>
+            }
+          }
+          @if (capacityError()) {
+            <p class="rr-notice rr-notice--danger" role="alert">{{ capacityError() }}</p>
+          }
+        </div>
+      </details>
 
       <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="member-management-title">
         <div class="section-heading rr-section-heading">

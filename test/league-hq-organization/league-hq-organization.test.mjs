@@ -131,6 +131,20 @@ test('less-frequent and commissioner tools are separated from essential navigati
   assert.ok(diagnostics > navigationEnd, 'Technical diagnostics must not crowd the shared league navigation.');
 });
 
+test('league size management is a compact, closed-by-default commissioner disclosure', async () => {
+  const html = await source(htmlPath);
+
+  assert.match(html, /<details class="league-tools league-capacity-disclosure rr-card">/);
+  assert.match(html, /<strong id="league-capacity-title" role="heading" aria-level="2">League size<\/strong>/);
+  assert.match(html, /\{\{ league\(\)\?\.teamCount \?\? teams\(\)\.length \}\} joined/);
+  assert.match(html, /class="commissioner-tools-body" aria-labelledby="league-capacity-title"/);
+  assert.doesNotMatch(
+    html,
+    /<details class="league-tools league-capacity-disclosure rr-card" open>/,
+    'Rare league-size controls should not dominate League HQ by opening automatically.',
+  );
+});
+
 test('cycle matchup cards are available behind disclosure instead of dominating the page', async () => {
   const html = await source(htmlPath);
 
