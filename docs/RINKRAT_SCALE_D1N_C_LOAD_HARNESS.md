@@ -61,14 +61,31 @@ public scale. Never convert prior manual testing into invented counts.
 
 ## Exact staging deployment boundary
 
-Stephen performs deployment after review. First deploy only these staging
-Functions from the clean merge commit:
+Stephen performs deployment after review. Deploy only these staging Functions
+from the clean merge commit, in consumer-first order:
 
 ```bash
 firebase deploy \
   --project rinkrat-staging-d1nc-2026 \
-  --only "functions:processLeagueAutomationTask,functions:processDraftClockDeadline"
+  --only functions:processDraftClockDeadline
+
+firebase deploy \
+  --project rinkrat-staging-d1nc-2026 \
+  --only functions:processLeagueAutomationTask
+
+firebase deploy \
+  --project rinkrat-staging-d1nc-2026 \
+  --only functions:runScheduledDraftAutomation
+
+firebase deploy \
+  --project rinkrat-staging-d1nc-2026 \
+  --only functions:continueServerDraftAutomation
 ```
+
+`processLeagueAutomationTask` has no runtime behavior change in this repair,
+but the strict D1N-C preflight compares its immutable common Functions source
+archive with the clean commit. The other three resources are the Draft
+consumer and its two task producers.
 
 Then deploy only site-pinned staging Hosting so the manifest binds that exact
 source:
@@ -136,9 +153,15 @@ drain time, interval concurrency, and cold starts. It intentionally has status
 `awaiting-external-usage-and-cost` and cannot pass the fixed evaluator.
 
 The generator interleaves scoring and Draft operations in bounded enqueue
-batches. Each Draft deadline is assigned five seconds ahead of its own enqueue
-batch, so fixture seeding and earlier producer batches are not mislabeled as
-worker deadline drift. A partial seed, partial enqueue, or drain timeout moves
+batches. After the first completed stage-100 run exposed idle-queue Draft
+ramp-up, the candidate harness now schedules two write-free Draft queue waves:
+one task per measured Draft operation at T-60 and another at T-10. The measured
+Draft operations share one exact deadline at least 65 seconds after planning.
+At stage 100 this is 50 Draft results plus 100 warmups; the warmups remain part
+of expected queue drain, Cloud Monitoring, and settled Billing/cost evidence,
+but cannot create a synthetic result or competitive write. The recorded
+`draftQueueWarmupTaskCount` must equal the selected operation stage. A partial
+seed, partial enqueue, or drain timeout moves
 the synthetic run to a terminal diagnostic state; any late task for that exact
 authenticated run is acknowledged without a competitive write or a seven-day
 retry loop.
@@ -221,6 +244,15 @@ Do not advance a failed or incomplete stage. Do not weaken thresholds to make a
 run pass. Retry only after the failure is understood and a separately reviewed
 fix is deployed.
 
+The first fully executed stage-100 run is retained as a failed timing
+diagnostic. It completed 100/100 unique operations and 10/10 duplicates with
+zero terminal errors, retries, duplicate results, or recovered contention, but
+Draft deadline-drift p95/p99 was 30,230/30,620 milliseconds. Scoring p95/p99
+was 149/1,160 milliseconds, queue-age p95/p99 was 33,755/34,563 milliseconds,
+and protected invariants remained unchanged. Stage 500 is blocked until the
+FF1.34 warmup candidate passes a fresh finalized stage-100 run under the same
+fixed limits. See `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`.
+
 ## Cleanup and rollback
 
 Preserve raw/final evidence, task history, logs, and the synthetic run through
@@ -240,13 +272,13 @@ npm run staging:d1n:c:run -- \
 The cleanup target must match the strict synthetic marker, project, stage, and
 run-ID format. It recursively removes only that reviewed `d1nLoadRuns` root.
 
-For runtime rollback, stop creating load tasks, retain the failed evidence,
-and restore the immediately preceding reviewed revisions of only
-`processDraftClockDeadline` and `processLeagueAutomationTask` in reverse
-consumer order. If these workers did not exist in staging before the slice,
-their exact targeted removal is the rollback after evidence retention. Restore
-the preceding staging Hosting release last. Never broaden rollback to
-Production or unrelated Firebase resources.
+For runtime rollback, stop creating new warmups by restoring the immediately
+preceding reviewed `continueServerDraftAutomation` and
+`runScheduledDraftAutomation` revisions. Then restore
+`processDraftClockDeadline`, restore the archive-parity
+`processLeagueAutomationTask` revision, and restore the preceding staging
+Hosting release last. Never broaden rollback to Production or unrelated
+Firebase resources.
 
 ## Draft decision boundary
 

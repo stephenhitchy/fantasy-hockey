@@ -3,8 +3,11 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
+  buildScheduledDraftQueueWarmupTaskId,
+  DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
   DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
+  getScheduledDraftQueueWarmupTaskDispatchMilliseconds,
   getScheduledDraftStartTaskDispatchMilliseconds,
 } from '../../functions/src/draft-readiness.util.ts';
 import {
@@ -20,10 +23,11 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
 }
 
-test('exact-start work is dispatched ten seconds early to absorb a cold start', () => {
+test('write-free queue warmups precede an exact-zero authoritative start task', () => {
   const start = Date.parse('2026-10-06T02:00:00.000Z');
   const now = start - 15 * 60 * 1000;
 
+  assert.deepEqual(DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS, [60_000, 10_000]);
   assert.equal(DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS, 10_000);
   assert.equal(DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS, 250);
   assert.equal(
@@ -31,8 +35,35 @@ test('exact-start work is dispatched ten seconds early to absorb a cold start', 
       scheduledStartMilliseconds: start,
       nowMilliseconds: now,
     }),
-    start - DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
+    start,
   );
+  assert.equal(
+    getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+      scheduledStartMilliseconds: start,
+      nowMilliseconds: now,
+      warmupLeadMilliseconds: 60_000,
+    }),
+    start - 60_000,
+  );
+  assert.equal(
+    getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+      scheduledStartMilliseconds: start,
+      nowMilliseconds: now,
+      warmupLeadMilliseconds: 10_000,
+    }),
+    start - 10_000,
+  );
+  const warmupId = buildScheduledDraftQueueWarmupTaskId({
+    leagueId: 'league-1',
+    scheduledStartMilliseconds: start,
+    warmupLeadMilliseconds: 60_000,
+  });
+  assert.match(warmupId, /^[a-f0-9]{40}$/);
+  assert.notEqual(warmupId, buildScheduledDraftQueueWarmupTaskId({
+    leagueId: 'league-1',
+    scheduledStartMilliseconds: start,
+    warmupLeadMilliseconds: 10_000,
+  }));
 });
 
 test('late scheduling dispatches promptly and malformed timing fails closed', () => {
@@ -43,7 +74,7 @@ test('late scheduling dispatches promptly and malformed timing fails closed', ()
       scheduledStartMilliseconds: start,
       nowMilliseconds: start - 4_000,
     }),
-    start - 3_750,
+    start,
   );
   assert.equal(
     getScheduledDraftStartTaskDispatchMilliseconds({
@@ -56,6 +87,22 @@ test('late scheduling dispatches promptly and malformed timing fails closed', ()
     getScheduledDraftStartTaskDispatchMilliseconds({
       scheduledStartMilliseconds: Number.NaN,
       nowMilliseconds: start,
+    }),
+    null,
+  );
+  assert.equal(
+    getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+      scheduledStartMilliseconds: start,
+      nowMilliseconds: start - 4_000,
+      warmupLeadMilliseconds: 10_000,
+    }),
+    start - 3_750,
+  );
+  assert.equal(
+    getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+      scheduledStartMilliseconds: start,
+      nowMilliseconds: start - 4_000,
+      warmupLeadMilliseconds: 30_000,
     }),
     null,
   );
@@ -82,7 +129,7 @@ test('warm task waits for zero, rereads authority, and never opens early', async
   assert.match(handler, /timer returned early/);
 });
 
-test('warmup preserves existing task identity, retry, rate, and worker limits', async () => {
+test('queue warmups preserve start identity, retry, rate, and worker limits', async () => {
   const source = await read('functions/src/draft-automation.ts');
   const scheduleIndex = source.indexOf('async function scheduleScheduledDraftStartTask(');
   const scheduleEnd = source.indexOf('function isTaskAlreadyExistsError', scheduleIndex);
@@ -91,9 +138,22 @@ test('warmup preserves existing task identity, retry, rate, and worker limits', 
   const functionBody = source.slice(functionIndex, source.indexOf('\n);', functionIndex) + 3);
 
   assert.match(schedule, /buildScheduledDraftStartTaskId/);
+  assert.match(schedule, /buildScheduledDraftQueueWarmupTaskId/);
   assert.match(schedule, /getScheduledDraftStartTaskDispatchMilliseconds/);
+  assert.match(schedule, /getScheduledDraftQueueWarmupTaskDispatchMilliseconds/);
   assert.match(schedule, /taskDispatchAt/);
   assert.match(schedule, /warmupLeadMilliseconds/);
+  assert.match(source, /taskType === 'queue-warmup'/);
+  assert.match(source, /Draft queue warmup task completed/);
+  const warmupHandlerIndex = source.indexOf('function processDraftQueueWarmupTask(');
+  const warmupHandlerEnd = source.indexOf(
+    'async function processScheduledDraftStartTask(',
+    warmupHandlerIndex,
+  );
+  const warmupHandler = source.slice(warmupHandlerIndex, warmupHandlerEnd);
+  assert.ok(warmupHandlerIndex > 0);
+  assert.ok(warmupHandlerEnd > warmupHandlerIndex);
+  assert.doesNotMatch(warmupHandler, /\bdb\.|runTransaction|\.set\(|\.update\(|sleep\(|openScheduledDraft/);
   assert.match(functionBody, /timeoutSeconds: 120/);
   assert.match(functionBody, /maxAttempts: 5/);
   assert.match(functionBody, /maxConcurrentDispatches: 10/);

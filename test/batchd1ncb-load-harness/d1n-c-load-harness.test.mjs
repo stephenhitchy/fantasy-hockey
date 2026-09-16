@@ -5,6 +5,7 @@ import test from 'node:test';
 
 import {
   assertD1ncLoadHarnessSafety,
+  buildD1ncDraftQueueWarmupPlan,
   buildD1ncExpectedTaskIds,
   buildD1ncLoadRunAcknowledgement,
   buildD1ncLoadRunPlan,
@@ -205,6 +206,7 @@ test('raw ramp evidence records deferred device coverage without claiming broade
     results: documents.results,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
+    draftQueueWarmupTaskCount: 100,
   };
   const evidence = summarizeD1ncLoadResults(common);
   assert.deepEqual(evidence.scope, {
@@ -213,6 +215,7 @@ test('raw ramp evidence records deferred device coverage without claiming broade
     authorizesRealDraft: false,
     authorizesPublicScale: false,
   });
+  assert.equal(evidence.queue.draftQueueWarmupTaskCount, 100);
   assert.throws(
     () => summarizeD1ncLoadResults({
       ...common,
@@ -241,6 +244,32 @@ test('dispatch batches interleave worker kinds and assign deadlines from enqueue
     .every((entry) => entry.scheduledAtMilliseconds === startedAtMilliseconds + 30_000));
   assert.ok(prepared.filter((entry) => entry.kind === 'draft')
     .every((entry) => entry.scheduledAtMilliseconds === startedAtMilliseconds + 35_000));
+
+  const warmupPlan = buildD1ncDraftQueueWarmupPlan(
+    plan,
+    startedAtMilliseconds,
+  );
+  assert.equal(warmupPlan.tasks.length, 100);
+  assert.equal(
+    warmupPlan.expectedScheduledStartAtMilliseconds,
+    startedAtMilliseconds + 65_000,
+  );
+  assert.equal(
+    warmupPlan.tasks.filter((entry) => entry.warmupLeadMilliseconds === 60_000).length,
+    50,
+  );
+  assert.equal(
+    warmupPlan.tasks.filter((entry) => entry.warmupLeadMilliseconds === 10_000).length,
+    50,
+  );
+  const exactPrepared = prepareD1ncDispatchBatch(
+    plan.operations,
+    startedAtMilliseconds + 1_000,
+    warmupPlan.expectedScheduledStartAtMilliseconds,
+  );
+  assert.ok(exactPrepared.filter((entry) => entry.kind === 'draft')
+    .every((entry) =>
+      entry.scheduledAtMilliseconds === warmupPlan.expectedScheduledStartAtMilliseconds));
 });
 
 test('expected Cloud Task identities are bounded and drain checks ignore unrelated work', () => {
@@ -253,7 +282,7 @@ test('expected Cloud Task identities are bounded and drain checks ignore unrelat
   });
   const expected = buildD1ncExpectedTaskIds(plan);
   assert.equal(expected.scoring.size, 55);
-  assert.equal(expected.draft.size, 55);
+  assert.equal(expected.draft.size, 155);
   const scoringId = [...expected.scoring][0];
   const draftId = [...expected.draft][0];
   assert.equal(countRemainingD1ncTasks([
@@ -330,6 +359,7 @@ test('raw run evidence cannot pass until matching Monitoring and settled Billing
     results: documents.results,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
+    draftQueueWarmupTaskCount: 100,
   });
   assert.equal(evaluateRampEvidence(aggregate).ready, false);
   assert.equal(aggregate.queue.producerMilliseconds, 1_000);
@@ -386,6 +416,7 @@ test('summary rejects missing operations, mismatched kinds, incomplete duplicate
     runCompletedAtMilliseconds: startedAtMilliseconds + 10_000,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
+    draftQueueWarmupTaskCount: 100,
   };
   assert.throws(() => summarizeD1ncLoadResults({ ...input, operations: documents.operations.slice(1), results: documents.results }), /operation count/);
   assert.throws(() => summarizeD1ncLoadResults({ ...input, finalTaskQueueDepth: 1, operations: documents.operations, results: documents.results }), /did not drain/);

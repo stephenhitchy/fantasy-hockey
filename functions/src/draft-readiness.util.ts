@@ -13,6 +13,8 @@ export const DRAFT_AVAILABILITY_MAX_ERROR_BACKOFF_MILLISECONDS =
   15 * 60 * 1000;
 export const DRAFT_AVAILABILITY_OVERDUE_RECOVERY_MILLISECONDS =
   60 * 60 * 1000;
+export const DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS = [60_000, 10_000] as const;
+// Retained for already-enqueued pre-zero tasks created by the preceding release.
 export const DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS = 10_000;
 export const DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS = 250;
 
@@ -314,6 +316,45 @@ export function buildScheduledDraftStartTaskId(input: {
     .slice(0, 40);
 }
 
+export function buildScheduledDraftQueueWarmupTaskId(input: {
+  leagueId: string;
+  scheduledStartMilliseconds: number;
+  warmupLeadMilliseconds: number;
+}): string {
+  return createHash('sha256')
+    .update(
+      [
+        'scheduled-draft-queue-warmup',
+        input.leagueId,
+        String(input.scheduledStartMilliseconds),
+        String(input.warmupLeadMilliseconds),
+      ].join(':'),
+    )
+    .digest('hex')
+    .slice(0, 40);
+}
+
+export function getScheduledDraftQueueWarmupTaskDispatchMilliseconds(input: {
+  scheduledStartMilliseconds: number;
+  nowMilliseconds: number;
+  warmupLeadMilliseconds: number;
+}): number | null {
+  if (
+    !Number.isFinite(input.scheduledStartMilliseconds) ||
+    !Number.isFinite(input.nowMilliseconds) ||
+    !DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS.includes(
+      input.warmupLeadMilliseconds as 60_000 | 10_000,
+    )
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    input.nowMilliseconds + DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
+    input.scheduledStartMilliseconds - input.warmupLeadMilliseconds,
+  );
+}
+
 export function getScheduledDraftStartTaskDispatchMilliseconds(input: {
   scheduledStartMilliseconds: number;
   nowMilliseconds: number;
@@ -327,7 +368,7 @@ export function getScheduledDraftStartTaskDispatchMilliseconds(input: {
 
   return Math.max(
     input.nowMilliseconds + DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
-    input.scheduledStartMilliseconds - DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
+    input.scheduledStartMilliseconds,
   );
 }
 

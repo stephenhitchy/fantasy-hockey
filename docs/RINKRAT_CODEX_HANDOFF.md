@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-10
+Last updated: 2026-09-16
 
 ## Repository
 
@@ -179,17 +179,24 @@ The 2,000/5,000 ramps are public-scale evidence, not a blocker for a controlled
 
 D1N-C-A adds a read-only, Production-refusing load preflight and aggregate
 physical-device evidence schema. D1N-C-B and the independent-device policy are
-merged through `adfac941`; its two staging workers are ACTIVE on Node 22, their
-immutable archives match clean Git byte for byte, and staging Hosting identifies
-that exact commit. The settled staging-filtered Billing prerequisite and budget
-alert are verified. The first stage-100 attempt stopped before task creation
-because local Application Default Credentials could not infer the Cloud Tasks
-OIDC service account. It retained one explicit `enqueue-error` synthetic run
-with 100 operation fixtures, zero results, and zero active tasks. The current
-tooling repair verifies both exact ACTIVE worker resources share one runtime
-service account and supplies that deployed identity before seeding. No worker
-load has completed; 100/500 measurements and physical iPhone/Android evidence
-remain open in their independent lanes.
+merged. Exact `a08fbbc0` staging source, both ACTIVE Node 22 worker archives,
+the settled staging-filtered Billing prerequisite, and the staging-only budget
+alert passed preflight. The first fully executed stage-100 run completed every
+one of its 100 unique operations and ten duplicates with zero terminal error,
+retry, duplicate result, recovered contention, or protected-state change.
+Scoring p95/p99 was 149/1,160 milliseconds and queue-age p95/p99 was
+33,755/34,563 milliseconds. The run failed only the fixed Draft deadline-drift
+gate: clustered Draft p95/p99 was 30,230/30,620 milliseconds as the idle
+ten-slot queue ramped.
+
+FF1.34 is the current source candidate. It schedules deterministic write-free
+warmup waves at T-60 and T-10 through the unchanged Draft queue, then schedules
+the authoritative task at exact zero. The legacy ten-second early handler stays
+available for already-enqueued tasks. The D1N harness counts every warmup in
+task drain, Cloud Monitoring, and settled Billing cost while retaining every
+fixed threshold. Independently review, merge, deploy exactly four staging
+Functions plus site-pinned Hosting, and repeat/finalize stage 100 before 500.
+Physical iPhone/Android evidence remains open in its independent lane.
 
 ## Current Draft-room UX posture
 
@@ -630,28 +637,32 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Merge the D1N-C task-enqueue identity repair, advance only staging Hosting
-   to that clean source revision, and retain the existing two workers only if
-   their immutable archives still match that revision byte for byte.
-2. Rerun the guarded infrastructure-only 100-operation ramp, retain the prior
-   zero-result `enqueue-error` diagnostic run, finalize the successful run's
-   Monitoring/Billing evidence, and independently review it before 500.
-3. Complete the owner's two-manager supported-UI Draft rehearsal and record
+1. Independently review and merge FF1.34's write-free Draft queue-ramp repair.
+   Run the complete inherited gate, builds, diff check, and clean-source guard.
+2. Deploy staging in consumer-first order:
+   `processDraftClockDeadline`, archive-parity
+   `processLeagueAutomationTask`, `runScheduledDraftAutomation`,
+   `continueServerDraftAutomation`, then only site-pinned staging Hosting.
+3. Verify the manifest and both D1N worker archives match the exact merge, then
+   rerun the guarded 100-operation ramp. Preserve both earlier diagnostics and
+   finalize the new run's Monitoring and settled Billing evidence. Advance to
+   500 only if every unchanged threshold passes.
+4. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-4. Complete physical iPhone/Android D1N evidence separately before a real Draft
+5. Complete physical iPhone/Android D1N evidence separately before a real Draft
    or public-scale claim; do not invent samples or treat the backend ramp as a
    substitute.
-5. Complete the Historical Replay lifecycle evidence separately; the automated
+6. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.
-6. Record the no-post-Draft-replacement or account-transfer decision.
-7. Generate and independently review the D1J season-freeze kit, exact Production
+7. Record the no-post-Draft-replacement or account-transfer decision.
+8. Generate and independently review the D1J season-freeze kit, exact Production
    Function archive record, tag, targeted rollback, incident plan, and formal
    invitation/Draft go-no-go.
-8. After the formal FF1.16 Draft GO, begin the observed 2–4 league, 10–30
+9. After the formal FF1.16 Draft GO, begin the observed 2–4 league, 10–30
    manager season under the post-Draft competitive freeze.
-9. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+10. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

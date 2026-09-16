@@ -53,6 +53,9 @@ test('the generator refuses broad deployment and preserves external evidence req
   assert.match(harness, /'--experimental-strip-types'/);
   assert.match(harness, /serviceAccountId: taskServiceAccountId/);
   assert.match(harness, /serviceConfig\?\.serviceAccountEmail/);
+  assert.match(harness, /buildD1ncDraftQueueWarmupPlan/);
+  assert.match(harness, /draftQueueWarmupTaskCount/);
+  assert.match(harness, /taskType: warmup\.taskType/);
   assert.match(harness, /physicalDeviceEvidenceStatus: deviceEvidence \? 'verified' : 'deferred'/);
   assert.match(
     read('scripts/capacity/d1n-c-load-preflight.mjs'),
@@ -65,6 +68,7 @@ test('the generator refuses broad deployment and preserves external evidence req
 
 test('the runbook defines acceptance, edge cases, tests, observability, exact resources, and rollback', () => {
   const runbook = read('docs/RINKRAT_SCALE_D1N_C_LOAD_HARNESS.md');
+  const queueRamp = read('docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md');
   for (const phrase of [
     'processLeagueAutomationTask',
     'processDraftClockDeadline',
@@ -76,7 +80,23 @@ test('the runbook defines acceptance, edge cases, tests, observability, exact re
     'No Production Function or Hosting deployment',
     'DRF-01–DRF-09',
     'LIFE-01–LIFE-08',
+    'draftQueueWarmupTaskCount',
   ]) assert.match(runbook, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(runbook, /functions:processLeagueAutomationTask,functions:processDraftClockDeadline/);
+  for (const resource of [
+    'functions:processDraftClockDeadline',
+    'functions:processLeagueAutomationTask',
+    'functions:runScheduledDraftAutomation',
+    'functions:continueServerDraftAutomation',
+  ]) assert.match(runbook, new RegExp(resource));
   assert.doesNotMatch(runbook, /--only\s+functions\s*(?:\n|$)/);
+  for (const phrase of [
+    'T-60',
+    'T-10',
+    'exact zero',
+    'write-free',
+    '30,230/30,620',
+    'Production Scoring V4',
+    'Projection V11',
+    'Rollback',
+  ]) assert.match(queueRamp, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
 });

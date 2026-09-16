@@ -35,15 +35,18 @@ import { processD1nLoadProbeIfPresent } from './d1n-load-probe.service';
 import type { D1nLoadProbeTaskPayload } from './d1n-load-probe.util';
 import {
   buildDraftAvailabilityRefreshTaskId,
+  buildScheduledDraftQueueWarmupTaskId,
   buildScheduledDraftStartTaskId,
   buildDraftReadinessRequestKey,
   DraftAvailabilityRefreshTaskPayload,
   DRAFT_AVAILABILITY_REFRESH_BUCKET_MILLISECONDS,
+  DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
   draftReadinessMatchesSchedule,
   getDraftAvailabilityDailyKey,
   getDraftAvailabilityPreparationState,
   getDraftReadinessWindowState,
+  getScheduledDraftQueueWarmupTaskDispatchMilliseconds,
   getScheduledDraftStartTaskDispatchMilliseconds,
   getScheduledDraftStartTaskState,
   isDraftAvailabilityEvidenceUsable,
@@ -198,9 +201,16 @@ interface DraftScheduledStartTaskPayload {
   expectedScheduledStartAtMilliseconds: number;
 }
 
+interface DraftQueueWarmupTaskPayload {
+  taskType: 'queue-warmup';
+  expectedScheduledStartAtMilliseconds: number;
+  warmupLeadMilliseconds: number;
+}
+
 type DraftClockTaskPayload =
   | DraftPickDeadlineTaskPayload
-  | DraftScheduledStartTaskPayload;
+  | DraftScheduledStartTaskPayload
+  | DraftQueueWarmupTaskPayload;
 
 export interface DraftTurnRepairResult {
   repaired: boolean;
@@ -943,8 +953,10 @@ async function scheduleScheduledDraftStartTask(
     return 'not-due';
   }
 
+  const queue = getDraftClockTaskQueue();
+
   try {
-    await getDraftClockTaskQueue().enqueue(payload, {
+    await queue.enqueue(payload, {
       id: buildScheduledDraftStartTaskId({
         leagueId,
         scheduledStartMilliseconds,
@@ -952,28 +964,64 @@ async function scheduleScheduledDraftStartTask(
       scheduleTime: new Date(taskDispatchMilliseconds),
       dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
     });
-
-    console.info('Scheduled exact Draft-start task.', {
-      leagueId,
-      scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
-      taskDispatchAt: new Date(taskDispatchMilliseconds).toISOString(),
-      warmupLeadMilliseconds:
-        scheduledStartMilliseconds - taskDispatchMilliseconds,
-    });
-
-    return 'scheduled';
   } catch (error: unknown) {
-    if (isTaskAlreadyExistsError(error)) {
-      return 'scheduled';
+    if (!isTaskAlreadyExistsError(error)) {
+      console.error('Unable to schedule exact Draft-start task.', {
+        leagueId,
+        scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+        error,
+      });
+      return 'error';
+    }
+  }
+
+  for (const warmupLeadMilliseconds of DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS) {
+    const warmupDispatchMilliseconds =
+      getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+        scheduledStartMilliseconds,
+        nowMilliseconds: taskEnqueuedAtMilliseconds,
+        warmupLeadMilliseconds,
+      });
+
+    if (warmupDispatchMilliseconds === null) {
+      return 'error';
     }
 
-    console.error('Unable to schedule exact Draft-start task.', {
-      leagueId,
-      scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
-      error,
-    });
-    return 'error';
+    const warmupPayload: DraftQueueWarmupTaskPayload = {
+      taskType: 'queue-warmup',
+      expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
+      warmupLeadMilliseconds,
+    };
+
+    try {
+      await queue.enqueue(warmupPayload, {
+        id: buildScheduledDraftQueueWarmupTaskId({
+          leagueId,
+          scheduledStartMilliseconds,
+          warmupLeadMilliseconds,
+        }),
+        scheduleTime: new Date(warmupDispatchMilliseconds),
+        dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
+      });
+    } catch (error: unknown) {
+      if (!isTaskAlreadyExistsError(error)) {
+        console.error('Unable to schedule Draft queue warmup task.', {
+          scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+          warmupLeadMilliseconds,
+          error,
+        });
+        return 'error';
+      }
+    }
   }
+
+  console.info('Scheduled exact Draft-start task and queue warmups.', {
+    scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+    taskDispatchAt: new Date(taskDispatchMilliseconds).toISOString(),
+    warmupLeadMilliseconds: [...DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS],
+  });
+
+  return 'scheduled';
 }
 
 function isTaskAlreadyExistsError(error: unknown): boolean {
@@ -2478,6 +2526,31 @@ export const runScheduledDraftAutomation = onSchedule(
   },
 );
 
+function processDraftQueueWarmupTask(
+  payload: DraftQueueWarmupTaskPayload,
+): void {
+  const expectedScheduledStartMilliseconds = Math.trunc(
+    payload.expectedScheduledStartAtMilliseconds,
+  );
+  const warmupLeadMilliseconds = Math.trunc(payload.warmupLeadMilliseconds);
+
+  if (
+    !Number.isFinite(expectedScheduledStartMilliseconds) ||
+    !DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS.includes(
+      warmupLeadMilliseconds as 60_000 | 10_000,
+    )
+  ) {
+    console.warn('Ignored malformed Draft queue warmup task.');
+    return;
+  }
+
+  console.info('Draft queue warmup task completed.', {
+    warmupLeadMilliseconds,
+    millisecondsUntilExpectedStart:
+      expectedScheduledStartMilliseconds - Date.now(),
+  });
+}
+
 async function processScheduledDraftStartTask(
   payload: DraftScheduledStartTaskPayload,
 ): Promise<void> {
@@ -2637,6 +2710,11 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
     const payload = request.data;
 
     if (await processD1nLoadProbeIfPresent(payload, 'draft')) {
+      return;
+    }
+
+    if (payload?.taskType === 'queue-warmup') {
+      processDraftQueueWarmupTask(payload);
       return;
     }
 

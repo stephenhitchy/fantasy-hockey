@@ -25,6 +25,8 @@ export const D1NC_LOAD_REGION = 'us-central1';
 export const D1NC_LOAD_SHARD_COUNT = 16;
 export const D1NC_LOAD_DUPLICATE_DELIVERY_RATE = 0.1;
 export const D1NC_LOAD_DRAFT_SCHEDULE_LEAD_MILLISECONDS = 5_000;
+export const D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS = [60_000, 10_000];
+export const D1NC_LOAD_DRAFT_QUEUE_MINIMUM_START_LEAD_MILLISECONDS = 65_000;
 export const D1NC_LOAD_TASK_DRAIN_TIMEOUT_MILLISECONDS = 120_000;
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -296,6 +298,43 @@ function taskId(plan, operation, delivery) {
   return sha256(`${plan.runId}:${operation.kind}:${operation.operationId}:${delivery}`).slice(0, 40);
 }
 
+function draftQueueWarmupTaskId(plan, warmupLeadMilliseconds, ordinal) {
+  return sha256(
+    `${plan.runId}:draft-queue-warmup:${warmupLeadMilliseconds}:${ordinal}`,
+  ).slice(0, 40);
+}
+
+export function buildD1ncDraftQueueWarmupPlan(
+  plan,
+  nowMilliseconds = Date.now(),
+) {
+  requireCondition(
+    Number.isFinite(nowMilliseconds) && nowMilliseconds > 0,
+    'D1N-C Draft queue warmup time is invalid.',
+  );
+  const draftOperations = plan.operations.filter((operation) => operation.kind === 'draft');
+  requireCondition(draftOperations.length > 0, 'D1N-C Draft queue warmup requires Draft operations.');
+  const expectedScheduledStartAtMilliseconds =
+    nowMilliseconds + D1NC_LOAD_DRAFT_QUEUE_MINIMUM_START_LEAD_MILLISECONDS;
+  const tasks = D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS.flatMap(
+    (warmupLeadMilliseconds) =>
+      draftOperations.map((operation, index) => ({
+        taskType: 'queue-warmup',
+        expectedScheduledStartAtMilliseconds,
+        warmupLeadMilliseconds,
+        scheduleTime: new Date(
+          expectedScheduledStartAtMilliseconds - warmupLeadMilliseconds,
+        ),
+        id: draftQueueWarmupTaskId(plan, warmupLeadMilliseconds, index + 1),
+        operationId: operation.operationId,
+      })),
+  );
+  return {
+    expectedScheduledStartAtMilliseconds,
+    tasks,
+  };
+}
+
 export function buildD1ncExpectedTaskIds(plan) {
   const expected = {
     scoring: new Set(),
@@ -305,6 +344,18 @@ export function buildD1ncExpectedTaskIds(plan) {
     expected[operation.kind].add(taskId(plan, operation, 'primary'));
     if (plan.duplicateOperationIds.has(operation.operationId)) {
       expected[operation.kind].add(taskId(plan, operation, 'duplicate'));
+    }
+  }
+  const draftOperationCount = plan.operations.filter(
+    (operation) => operation.kind === 'draft',
+  ).length;
+  for (const warmupLeadMilliseconds of D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS) {
+    for (let index = 0; index < draftOperationCount; index += 1) {
+      expected.draft.add(draftQueueWarmupTaskId(
+        plan,
+        warmupLeadMilliseconds,
+        index + 1,
+      ));
     }
   }
   return expected;
@@ -317,17 +368,30 @@ export function countRemainingD1ncTasks(activeTaskNames, expectedTaskIds) {
   }, 0);
 }
 
-export function prepareD1ncDispatchBatch(operations, nowMilliseconds = Date.now()) {
+export function prepareD1ncDispatchBatch(
+  operations,
+  nowMilliseconds = Date.now(),
+  draftScheduledAtMilliseconds = null,
+) {
   requireCondition(
     Number.isFinite(nowMilliseconds) && nowMilliseconds > 0,
     'D1N-C dispatch time is invalid.',
+  );
+  requireCondition(
+    draftScheduledAtMilliseconds === null ||
+      (
+        Number.isFinite(draftScheduledAtMilliseconds) &&
+        draftScheduledAtMilliseconds > nowMilliseconds
+      ),
+    'D1N-C Draft dispatch deadline is invalid.',
   );
   return [...operations]
     .sort((left, right) => left.ordinal - right.ordinal || left.kind.localeCompare(right.kind))
     .map((operation) => ({
       ...operation,
       scheduledAtMilliseconds: operation.kind === 'draft'
-        ? nowMilliseconds + D1NC_LOAD_DRAFT_SCHEDULE_LEAD_MILLISECONDS
+        ? draftScheduledAtMilliseconds ??
+          nowMilliseconds + D1NC_LOAD_DRAFT_SCHEDULE_LEAD_MILLISECONDS
         : nowMilliseconds,
     }));
 }
@@ -407,6 +471,7 @@ export function summarizeD1ncLoadResults({
   results,
   peakOperationBacklog,
   finalTaskQueueDepth,
+  draftQueueWarmupTaskCount = 0,
   physicalDeviceEvidenceStatus = 'deferred',
 }) {
   requireCondition(
@@ -419,6 +484,11 @@ export function summarizeD1ncLoadResults({
   requireCondition(
     Number.isSafeInteger(finalTaskQueueDepth) && finalTaskQueueDepth === 0,
     'D1N-C expected Cloud Tasks did not drain to zero.',
+  );
+  requireCondition(
+    Number.isSafeInteger(draftQueueWarmupTaskCount) &&
+      draftQueueWarmupTaskCount === stage,
+    'D1N-C Draft queue warmup task count is incomplete.',
   );
   const resultIds = new Set(results.map((entry) => entry.operationId));
   requireCondition(resultIds.size === stage, 'D1N-C results are not unique.');
@@ -524,6 +594,7 @@ export function summarizeD1ncLoadResults({
       measurementSource: 'worker-operation-backlog',
       peakDepth: peakOperationBacklog,
       finalDepth: finalTaskQueueDepth,
+      draftQueueWarmupTaskCount,
       oldestAgeMilliseconds: percentileRecord(queueAges),
       producerMilliseconds: Math.max(
         0,
@@ -620,13 +691,33 @@ async function enqueueRun(functions, plan, runRef) {
     scoring: functions.taskQueue(D1NC_LOAD_SCORING_QUEUE),
     draft: functions.taskQueue(D1NC_LOAD_DRAFT_QUEUE),
   };
+  const draftQueueWarmupPlan = buildD1ncDraftQueueWarmupPlan(plan);
+  await inBatches(draftQueueWarmupPlan.tasks, 20, async (warmup) => {
+    await queues.draft.enqueue(
+      {
+        taskType: warmup.taskType,
+        expectedScheduledStartAtMilliseconds:
+          warmup.expectedScheduledStartAtMilliseconds,
+        warmupLeadMilliseconds: warmup.warmupLeadMilliseconds,
+      },
+      {
+        id: warmup.id,
+        scheduleTime: warmup.scheduleTime,
+        dispatchDeadlineSeconds: 120,
+      },
+    );
+  });
   const orderedOperations = [...plan.operations].sort(
     (left, right) => left.ordinal - right.ordinal || left.kind.localeCompare(right.kind),
   );
   let enqueuedOperationCount = 0;
   let peakOperationBacklog = 0;
   for (let index = 0; index < orderedOperations.length; index += 20) {
-    const operations = prepareD1ncDispatchBatch(orderedOperations.slice(index, index + 20));
+    const operations = prepareD1ncDispatchBatch(
+      orderedOperations.slice(index, index + 20),
+      Date.now(),
+      draftQueueWarmupPlan.expectedScheduledStartAtMilliseconds,
+    );
     await Promise.all(
       operations.map((operation) =>
         runRef.collection('operations').doc(operation.operationId).update({
@@ -663,6 +754,7 @@ async function enqueueRun(functions, plan, runRef) {
   return {
     enqueueCompletedAtMilliseconds: Date.now(),
     peakOperationBacklog,
+    draftQueueWarmupTaskCount: draftQueueWarmupPlan.tasks.length,
   };
 }
 
@@ -844,6 +936,7 @@ async function executeRun(options) {
       results: documents.results,
       peakOperationBacklog,
       finalTaskQueueDepth: taskDrainResult.finalTaskQueueDepth,
+      draftQueueWarmupTaskCount: enqueueEvidence.draftQueueWarmupTaskCount,
       physicalDeviceEvidenceStatus: deviceEvidence ? 'verified' : 'deferred',
     });
     await runRef.set({

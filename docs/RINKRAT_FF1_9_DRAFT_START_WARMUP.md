@@ -1,7 +1,10 @@
 # FF1.25 — Bounded Draft-Start Warmup
 
-Status: source implementation candidate; isolated staging timing evidence is
-required before any Production release.
+Status: completed historical FF1.25 implementation and staging evidence. Its
+ten-second in-handler wait remains supported for already-enqueued tasks, but
+FF1.34 supersedes new scheduling with separate write-free T-60/T-10 queue
+warmups and an authoritative exact-zero task after clustered D1N-C evidence
+showed that holding start tasks consumed the existing queue slots.
 
 ## Approved problem
 
@@ -100,7 +103,11 @@ The warm wait occupies one of the existing ten concurrent task-dispatch slots
 for at most the bounded lead window. That is acceptable only for the current
 small pilot gate; clustered-start queue age and p95/p99 latency remain required
 D1N load evidence before making a broader scale claim or changing any queue or
-worker limit.
+worker limit. The completed stage-100 attempt later measured about 30 seconds
+of p95/p99 Draft deadline drift under a 50-task cold burst. See
+`docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md` for the successor design; do not
+remove this handler path until every retained preceding-release task has aged
+out.
 
 ## Deployment resources
 

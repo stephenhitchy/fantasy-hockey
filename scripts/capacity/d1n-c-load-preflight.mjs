@@ -405,12 +405,21 @@ export function evaluateRampEvidence(evidence) {
     issues.push('queue evidence must come from the worker operation backlog');
   }
   const finalDepth = requiredMetric(evidence?.queue, 'finalDepth', 'final queue depth', issues);
+  const draftQueueWarmupTaskCount = requiredMetric(
+    evidence?.queue,
+    'draftQueueWarmupTaskCount',
+    'Draft queue warmup task count',
+    issues,
+  );
   const queueAge = requiredPercentiles(evidence?.queue?.oldestAgeMilliseconds, 'queue age', issues);
   const queueAgeP95 = queueAge.p95;
   const queueAgeP99 = queueAge.p99;
   const drainMilliseconds = requiredMetric(evidence?.queue, 'drainMilliseconds', 'queue drain time', issues);
   if (peakDepth === 0) issues.push('peak queue depth must prove that work was enqueued');
   if (finalDepth !== 0) issues.push('queue backlog did not return to zero');
+  if (stage && draftQueueWarmupTaskCount !== stage) {
+    issues.push('Draft queue warmup task count must equal the measured stage');
+  }
   if (queueAgeP95 !== null && queueAgeP95 > D1NC_THRESHOLDS.queueAgeP95Milliseconds) {
     issues.push('queue age p95 exceeds 60 seconds');
   }
