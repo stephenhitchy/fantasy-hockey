@@ -1,8 +1,11 @@
 # FF1.35 — Sustained Draft Queue Ramp
 
-Status: source implementation candidate. Independent review, clean merge,
-exact staging deployment, and a fresh finalized D1N-C stage-100 pass are
-required before acceptance.
+Status: deployed and measured on exact staging source `7880747e`. The repair
+improved clustered Draft p95/p99 drift from 10,426/10,826 milliseconds to
+3,536/3,736 milliseconds. The p99 gate passed, but p95 still failed the
+unchanged 2,000-millisecond limit. FF1.36 supersedes the final write-free
+warmup with a read-only authority-path prime and corrects future-deadline drain
+measurement; stage 500 remains blocked.
 
 ## Evidence-driven problem
 

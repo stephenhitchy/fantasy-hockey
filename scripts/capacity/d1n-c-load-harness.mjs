@@ -341,6 +341,7 @@ export function buildD1ncDraftQueueWarmupPlan(
     (warmupLeadMilliseconds) =>
       draftOperations.map((operation, index) => ({
         taskType: 'queue-warmup',
+        leagueId: operation.operationId,
         expectedScheduledStartAtMilliseconds,
         warmupLeadMilliseconds,
         scheduleTime: new Date(
@@ -487,6 +488,7 @@ export function summarizeD1ncLoadResults({
   runFingerprint,
   runStartedAtMilliseconds,
   queueDrainStartedAtMilliseconds = runStartedAtMilliseconds,
+  queueDrainEligibleAtMilliseconds = queueDrainStartedAtMilliseconds,
   runCompletedAtMilliseconds,
   operations,
   results,
@@ -557,6 +559,22 @@ export function summarizeD1ncLoadResults({
       && entry.completedAtMilliseconds >= entry.startedAtMilliseconds),
     'D1N-C result timing is invalid.',
   );
+  requireCondition(
+    [
+      runStartedAtMilliseconds,
+      queueDrainStartedAtMilliseconds,
+      queueDrainEligibleAtMilliseconds,
+      runCompletedAtMilliseconds,
+    ].every(Number.isFinite)
+      && queueDrainStartedAtMilliseconds >= runStartedAtMilliseconds
+      && queueDrainEligibleAtMilliseconds >= runStartedAtMilliseconds
+      && runCompletedAtMilliseconds >= queueDrainStartedAtMilliseconds
+      && runCompletedAtMilliseconds >= queueDrainEligibleAtMilliseconds
+      && intervals.every(
+        (entry) => entry.completedAtMilliseconds <= runCompletedAtMilliseconds,
+      ),
+    'D1N-C run timing window is invalid.',
+  );
   const scoringDurations = scoringResults.map((entry) => Number(entry.durationMilliseconds));
   const draftDrift = draftResults.map((entry) => Number(entry.deadlineDriftMilliseconds));
   const queueAges = results.map((entry) => Number(entry.queueAgeMilliseconds));
@@ -581,8 +599,6 @@ export function summarizeD1ncLoadResults({
     duplicateDeliveryCount >= plannedDuplicateDeliveryCount,
     'D1N-C duplicate-delivery proof did not finish before evidence capture.',
   );
-  const completedAtValues = intervals.map((entry) => entry.completedAtMilliseconds);
-
   return {
     schemaVersion: 1,
     evidenceStatus: 'awaiting-external-usage-and-cost',
@@ -624,7 +640,10 @@ export function summarizeD1ncLoadResults({
       ),
       drainMilliseconds: Math.max(
         0,
-        Math.max(...completedAtValues) - queueDrainStartedAtMilliseconds,
+        runCompletedAtMilliseconds - Math.max(
+          queueDrainStartedAtMilliseconds,
+          queueDrainEligibleAtMilliseconds,
+        ),
       ),
     },
     functions: {
@@ -718,6 +737,7 @@ async function enqueueRun(functions, plan, runRef) {
     await queues.draft.enqueue(
       {
         taskType: warmup.taskType,
+        leagueId: warmup.leagueId,
         expectedScheduledStartAtMilliseconds:
           warmup.expectedScheduledStartAtMilliseconds,
         warmupLeadMilliseconds: warmup.warmupLeadMilliseconds,
@@ -777,6 +797,8 @@ async function enqueueRun(functions, plan, runRef) {
     enqueueCompletedAtMilliseconds: Date.now(),
     peakOperationBacklog,
     draftQueueWarmupTaskCount: draftQueueWarmupPlan.tasks.length,
+    expectedScheduledStartAtMilliseconds:
+      draftQueueWarmupPlan.expectedScheduledStartAtMilliseconds,
   };
 }
 
@@ -953,6 +975,8 @@ async function executeRun(options) {
       runFingerprint: plan.runFingerprint,
       runStartedAtMilliseconds: plan.startedAtMilliseconds,
       queueDrainStartedAtMilliseconds: enqueueEvidence.enqueueCompletedAtMilliseconds,
+      queueDrainEligibleAtMilliseconds:
+        enqueueEvidence.expectedScheduledStartAtMilliseconds,
       runCompletedAtMilliseconds,
       operations: documents.operations,
       results: documents.results,

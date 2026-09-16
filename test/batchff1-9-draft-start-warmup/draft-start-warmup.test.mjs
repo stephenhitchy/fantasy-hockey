@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   buildScheduledDraftQueueWarmupTaskId,
+  DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS,
   DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
   DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
@@ -23,7 +24,7 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
 }
 
-test('write-free queue warmups precede an exact-zero authoritative start task', () => {
+test('non-mutating queue warmups precede an exact-zero authoritative start task', () => {
   const start = Date.parse('2026-10-06T02:00:00.000Z');
   const now = start - 15 * 60 * 1000;
 
@@ -32,6 +33,7 @@ test('write-free queue warmups precede an exact-zero authoritative start task', 
     Array.from({ length: 18 }, (_, index) => 180_000 - index * 10_000),
   );
   assert.equal(DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS, 10_000);
+  assert.equal(DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS, 10_000);
   assert.equal(DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS, 250);
   assert.equal(
     getScheduledDraftStartTaskDispatchMilliseconds({
@@ -154,6 +156,7 @@ test('queue warmups preserve start identity, retry, rate, and worker limits', as
   assert.match(schedule, /getScheduledDraftQueueWarmupTaskDispatchMilliseconds/);
   assert.match(schedule, /taskDispatchAt/);
   assert.match(schedule, /warmupLeadMilliseconds/);
+  assert.match(schedule, /const warmupPayload[\s\S]*leagueId/);
   assert.match(schedule, /warmupDispatchMilliseconds === null[\s\S]*continue/);
   assert.match(source, /taskType === 'queue-warmup'/);
   assert.match(source, /Draft queue warmup task completed/);
@@ -165,7 +168,11 @@ test('queue warmups preserve start identity, retry, rate, and worker limits', as
   const warmupHandler = source.slice(warmupHandlerIndex, warmupHandlerEnd);
   assert.ok(warmupHandlerIndex > 0);
   assert.ok(warmupHandlerEnd > warmupHandlerIndex);
-  assert.doesNotMatch(warmupHandler, /\bdb\.|runTransaction|\.set\(|\.update\(|sleep\(|openScheduledDraft/);
+  assert.match(warmupHandler, /DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS/);
+  assert.match(warmupHandler, /await db\.doc\(`leagues\/\$\{leagueId\}\/draft\/current`\)\.get\(\)/);
+  assert.match(warmupHandler, /authority prime failed open/);
+  assert.match(warmupHandler, /catch \{/);
+  assert.doesNotMatch(warmupHandler, /runTransaction|\.set\(|\.update\(|sleep\(|openScheduledDraft/);
   assert.match(functionBody, /timeoutSeconds: 120/);
   assert.match(functionBody, /maxAttempts: 5/);
   assert.match(functionBody, /maxConcurrentDispatches: 10/);

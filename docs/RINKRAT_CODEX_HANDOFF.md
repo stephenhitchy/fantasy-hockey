@@ -196,14 +196,22 @@ and every protected invariant while improving Draft p95/p99 drift to
 millisecond gate. Logs proved the cold T-60 wave dispatched at about one task
 per second and the T-10/measured work at about five per second.
 
-FF1.35 is the current source candidate. It keeps every queue/worker limit and
-write-free handler, but sustains deterministic warmups every ten seconds from
-T-180 through T-10. Elapsed warmups are skipped rather than competing with an
-imminent authority task. The D1N harness counts all 900 stage-100 warmups in
-drain, Monitoring, Billing, and cost while retaining every fixed threshold.
-Independently review, merge, deploy the same four staging Functions plus
-site-pinned Hosting, and repeat/finalize stage 100 before 500. Physical
-iPhone/Android evidence remains open in its independent lane.
+FF1.35 was merged and deployed on exact staging source `7880747e`. Its repeat
+again preserved 100/100 operations, 10/10 duplicates, zero errors/retries/
+contention, and every protected invariant. Scoring p95/p99 was 135/1,593
+milliseconds and queue-age p95/p99 was 32,095/32,893 milliseconds. Draft
+p95/p99 improved to 3,536/3,736 milliseconds: p99 passed, but p95 remained
+above the unchanged 2,000-millisecond gate. The raw 170,209-millisecond drain
+value also counted the intentional wait until future work became eligible.
+
+FF1.36 is the current source candidate. It retains all 900 warmups, every
+queue/worker limit, exact-zero authority, and every fixed threshold. Only the
+final fifty T-10 warmups perform one read-only authority-path get; the earlier
+850 remain read-free. Queue drain begins at the later of producer completion
+and the shared scheduled deadline, while operation queue age and Draft drift
+retain their exact due-time origins. Independently review, merge, deploy the
+same four staging Functions plus site-pinned Hosting, and repeat/finalize stage
+100 before 500. Physical iPhone/Android evidence remains open independently.
 
 ## Current Draft-room UX posture
 

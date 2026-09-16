@@ -40,6 +40,7 @@ import {
   buildDraftReadinessRequestKey,
   DraftAvailabilityRefreshTaskPayload,
   DRAFT_AVAILABILITY_REFRESH_BUCKET_MILLISECONDS,
+  DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS,
   DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
   draftReadinessMatchesSchedule,
@@ -203,6 +204,7 @@ interface DraftScheduledStartTaskPayload {
 
 interface DraftQueueWarmupTaskPayload {
   taskType: 'queue-warmup';
+  leagueId?: string;
   expectedScheduledStartAtMilliseconds: number;
   warmupLeadMilliseconds: number;
 }
@@ -991,6 +993,7 @@ async function scheduleScheduledDraftStartTask(
 
     const warmupPayload: DraftQueueWarmupTaskPayload = {
       taskType: 'queue-warmup',
+      leagueId,
       expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
       warmupLeadMilliseconds,
     };
@@ -2533,9 +2536,9 @@ export const runScheduledDraftAutomation = onSchedule(
   },
 );
 
-function processDraftQueueWarmupTask(
+async function processDraftQueueWarmupTask(
   payload: DraftQueueWarmupTaskPayload,
-): void {
+): Promise<void> {
   const expectedScheduledStartMilliseconds = Math.trunc(
     payload.expectedScheduledStartAtMilliseconds,
   );
@@ -2551,8 +2554,30 @@ function processDraftQueueWarmupTask(
     return;
   }
 
+  const leagueId = resolveSafeFirestoreDocumentId(
+    payload.leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const shouldPrimeAuthorityRead =
+    warmupLeadMilliseconds === DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS &&
+    leagueId !== null;
+  let authorityReadPrimed = false;
+
+  if (shouldPrimeAuthorityRead) {
+    try {
+      await db.doc(`leagues/${leagueId}/draft/current`).get();
+      authorityReadPrimed = true;
+    } catch {
+      console.warn(
+        'Draft queue authority prime failed open; exact-zero authority remains unchanged.',
+        { warmupLeadMilliseconds },
+      );
+    }
+  }
+
   console.info('Draft queue warmup task completed.', {
     warmupLeadMilliseconds,
+    authorityReadPrimed,
     millisecondsUntilExpectedStart:
       expectedScheduledStartMilliseconds - Date.now(),
   });
@@ -2721,7 +2746,7 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
     }
 
     if (payload?.taskType === 'queue-warmup') {
-      processDraftQueueWarmupTask(payload);
+      await processDraftQueueWarmupTask(payload);
       return;
     }
 

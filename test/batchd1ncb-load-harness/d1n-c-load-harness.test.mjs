@@ -203,7 +203,9 @@ test('raw ramp evidence records deferred device coverage without claiming broade
     sourceRevision: revision,
     runFingerprint: plan.runFingerprint,
     runStartedAtMilliseconds: startedAtMilliseconds,
-    runCompletedAtMilliseconds: startedAtMilliseconds + 10_000,
+    queueDrainStartedAtMilliseconds: startedAtMilliseconds + 1_000,
+    queueDrainEligibleAtMilliseconds: startedAtMilliseconds + 185_000,
+    runCompletedAtMilliseconds: startedAtMilliseconds + 185_125,
     operations: documents.operations,
     results: documents.results,
     peakOperationBacklog: 100,
@@ -218,6 +220,8 @@ test('raw ramp evidence records deferred device coverage without claiming broade
     authorizesPublicScale: false,
   });
   assert.equal(evidence.queue.draftQueueWarmupTaskCount, 900);
+  assert.equal(evidence.queue.producerMilliseconds, 1_000);
+  assert.equal(evidence.queue.drainMilliseconds, 125);
   assert.throws(
     () => summarizeD1ncLoadResults({
       ...common,
@@ -271,6 +275,9 @@ test('dispatch batches interleave worker kinds and assign deadlines from enqueue
   assert.equal(
     warmupPlan.tasks.filter((entry) => entry.warmupLeadMilliseconds === 10_000).length,
     50,
+  );
+  assert.ok(
+    warmupPlan.tasks.every((entry) => /^[a-f0-9]{32}$/.test(entry.leagueId)),
   );
   const exactPrepared = prepareD1ncDispatchBatch(
     plan.operations,
@@ -364,7 +371,8 @@ test('raw run evidence cannot pass until matching Monitoring and settled Billing
     runFingerprint: plan.runFingerprint,
     runStartedAtMilliseconds: startedAtMilliseconds,
     queueDrainStartedAtMilliseconds: startedAtMilliseconds + 1_000,
-    runCompletedAtMilliseconds: startedAtMilliseconds + 10_000,
+    queueDrainEligibleAtMilliseconds: startedAtMilliseconds + 185_000,
+    runCompletedAtMilliseconds: startedAtMilliseconds + 185_125,
     operations: documents.operations,
     results: documents.results,
     peakOperationBacklog: 100,
@@ -379,7 +387,7 @@ test('raw run evidence cannot pass until matching Monitoring and settled Billing
     sourceRevision: revision,
     runFingerprint: plan.runFingerprint,
     windowStart: '2026-09-04T17:59:00Z',
-    windowEnd: '2026-09-04T18:01:00Z',
+    windowEnd: '2026-09-04T18:04:00Z',
   };
   const finalized = finalizeD1ncLoadEvidence(
     aggregate,
@@ -423,7 +431,8 @@ test('summary rejects missing operations, mismatched kinds, incomplete duplicate
     runFingerprint: plan.runFingerprint,
     runStartedAtMilliseconds: startedAtMilliseconds,
     queueDrainStartedAtMilliseconds: startedAtMilliseconds + 1_000,
-    runCompletedAtMilliseconds: startedAtMilliseconds + 10_000,
+    queueDrainEligibleAtMilliseconds: startedAtMilliseconds + 185_000,
+    runCompletedAtMilliseconds: startedAtMilliseconds + 185_125,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
     draftQueueWarmupTaskCount: 900,
@@ -442,4 +451,10 @@ test('summary rejects missing operations, mismatched kinds, incomplete duplicate
   const missingZero = structuredClone(documents.results);
   missingZero.find((entry) => entry.kind === 'scoring').scoring.zeroPointGameCount = 0;
   assert.throws(() => summarizeD1ncLoadResults({ ...input, operations: documents.operations, results: missingZero }), /zero-point/);
+  assert.throws(() => summarizeD1ncLoadResults({
+    ...input,
+    queueDrainEligibleAtMilliseconds: input.runCompletedAtMilliseconds + 1,
+    operations: documents.operations,
+    results: documents.results,
+  }), /timing window/);
 });

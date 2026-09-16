@@ -33,6 +33,7 @@ export const DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS = [
   20_000,
   10_000,
 ] as const;
+export const DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS = 10_000;
 // Retained for already-enqueued pre-zero tasks created by the preceding release.
 export const DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS = 10_000;
 export const DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS = 250;

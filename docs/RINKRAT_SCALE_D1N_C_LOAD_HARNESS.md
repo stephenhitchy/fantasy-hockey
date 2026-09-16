@@ -157,9 +157,11 @@ batches. FF1.34's two-wave repeat materially improved but did not pass the
 fixed drift gate, so FF1.35 schedules one write-free warmup per measured Draft
 operation every ten seconds from T-180 through T-10. The measured Draft
 operations share one exact deadline at least 185 seconds after planning. At
-stage 100 this is 50 Draft results plus 900 warmups. Warmups remain part of
-expected queue drain, Cloud Monitoring, and settled Billing/cost evidence, but
-cannot create a synthetic result or competitive write. The recorded
+stage 100 this is 50 Draft results plus 900 warmups. FF1.36 makes only the final
+fifty T-10 warmups perform one read-only authority-path prime each; the other
+850 remain read-free. Warmups remain part of expected queue drain, Cloud
+Monitoring, and settled Billing/cost evidence, but cannot create a synthetic
+result or competitive write. The recorded
 `draftQueueWarmupTaskCount` must equal nine times the selected operation stage.
 A partial seed, partial enqueue, or drain timeout moves
 the synthetic run to a terminal diagnostic state; any late task for that exact
@@ -173,9 +175,12 @@ drain. After every result and planned duplicate converges, the runner also
 lists both exact staging queues and waits until every hashed task identity for
 the run is absent; an operation result alone cannot falsely claim an empty
 queue while a retry remains scheduled. Producer duration is reported
-separately; the two-minute drain gate starts only after the final enqueue
-completes, while per-operation queue age still measures from each operation's
-own enqueue or scheduled deadline.
+separately; the two-minute drain gate starts only after the final enqueue and
+scheduled work becomes eligible, while per-operation queue age still measures
+from each operation's own enqueue or scheduled deadline. An intentional future
+schedule is never counted as queue drain time. The drain ends only after every
+expected task identity is absent from both exact staging queues; a late warmup
+or retry therefore cannot disappear behind the last operation result.
 
 For the exact raw run window:
 
@@ -244,15 +249,20 @@ Do not advance a failed or incomplete stage. Do not weaken thresholds to make a
 run pass. Retry only after the failure is understood and a separately reviewed
 fix is deployed.
 
-Two fully executed stage-100 runs are retained as failed timing diagnostics.
+Three fully executed stage-100 runs are retained as failed timing diagnostics.
 Exact `a08fbbc0` recorded Draft p95/p99 drift of 30,230/30,620 milliseconds.
 Exact `9cc3dd01` preserved 100/100 operations, 10/10 duplicates, zero
 errors/retries/contention, and every invariant while improving Draft p95/p99
 to 10,426/10,826 milliseconds; scoring p95/p99 was 159/1,620 milliseconds and
-queue-age p95/p99 was 44,111/44,907 milliseconds. Stage 500 is blocked until
-FF1.35 passes a fresh finalized stage-100 run under the same fixed limits. See
-`docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md` and
-`docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`.
+queue-age p95/p99 was 44,111/44,907 milliseconds. FF1.35 then improved Draft
+p95/p99 to 3,536/3,736 milliseconds with every operation, duplicate, and
+invariant intact. Its p99 passed, but p95 remained above 2,000 milliseconds,
+and its raw 170,209-millisecond drain value included the intentional future-
+deadline hold. Stage 500 is blocked until FF1.36 passes a fresh finalized
+stage-100 run under the same fixed limits. See
+`docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`,
+`docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`, and
+`docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md`.
 
 ## Cleanup and rollback
 
