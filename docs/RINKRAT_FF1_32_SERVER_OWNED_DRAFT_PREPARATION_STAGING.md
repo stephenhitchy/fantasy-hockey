@@ -123,7 +123,7 @@ produced by the current writer. This remains local tooling only.
   RUNNING state, dispatch rate, concurrency, and retry configuration for both
   `refreshDraftPlayerAvailabilityTask` and `processDraftClockDeadline`.
   The Draft-deadline queue must retain 500 dispatches per second, burst 100,
-  concurrency 10, five attempts, two-second minimum backoff, 3,600-second
+  FF1.38-reviewed concurrency 20, five attempts, two-second minimum backoff, 3,600-second
   maximum backoff, and 16 doublings; the availability queue retains its
   reviewed limit of one concurrent dispatch and bounded three-attempt policy.
   The Projection queue must separately remain RUNNING with two concurrent
@@ -308,7 +308,7 @@ produced by the current writer. This remains local tooling only.
   bounded three-attempt backoff policy, while the Projection queue remains
   RUNNING with two concurrent dispatches and its single-attempt policy. The
   Draft-deadline queue remains RUNNING at 500 dispatches per second, burst 100,
-  concurrency 10, five attempts, backoff from two through 3,600 seconds, and 16
+  FF1.38-reviewed concurrency 20, five attempts, backoff from two through 3,600 seconds, and 16
   doublings.
 - The operator explicitly reserves an exclusive shared-availability
   maintenance window. Any existing evidence lock or non-fixture Draft in

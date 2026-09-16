@@ -1,9 +1,10 @@
 # FF1.37 — Draft Queue Final Pulse
 
-Status: source implementation, focused regression coverage, the complete
-inherited release gate, and both builds pass. Clean merge, exact staging
-deployment, and a fresh finalized D1N-C stage-100 pass remain required before
-acceptance.
+Status: merged and deployed on exact isolated-staging source `084f352c`. The
+fresh stage-100 run preserved every correctness invariant but recorded Draft
+p95/p99 drift of 2,422/2,523 milliseconds. The unchanged p95 gate failed, stage
+500 remains blocked, and FF1.38 supersedes this candidate with measured Draft
+queue concurrency tuning.
 
 ## Evidence-driven problem
 
@@ -24,7 +25,7 @@ the fifty-task burst at roughly 20–22 tasks per second after that idle gap.
 The remaining failure is dispatch continuity, not transaction contention or
 authority-path initialization.
 
-## Narrow repair
+## Implemented repair
 
 Retain the deterministic T-180-through-T-10 cadence, T-10 read-only authority
 prime, exact zero authority task, retry policy, ten-dispatch concurrency,
@@ -53,6 +54,17 @@ their exact due time.
 - Draft p95/p99 stays fixed at 2,000/5,000 milliseconds.
 - Queue/worker limits and cost ceilings are unchanged.
 
+## Measured result
+
+The exact `084f352c` run completed 100/100 operations and all ten planned
+duplicates with zero terminal errors, retries, duplicate competitive results,
+recovered contention, or protected-state changes. Scoring p95/p99 was
+525/1,265 milliseconds, queue-age p95/p99 was 45,478/46,274 milliseconds,
+corrected drain was 4,338 milliseconds, and Draft p95/p99 was 2,422/2,523
+milliseconds. T-5 pulses completed about 2.7 seconds before zero, while
+exact-zero transactions were about 0.17–0.26 seconds. The ten-slot queue—not
+transaction or Function capacity—remained the bounded tail.
+
 ## Exact staging boundary and rollback
 
 After clean review and merge, deploy in consumer-first order:
@@ -67,7 +79,8 @@ No Production deployment belongs to this repair. Roll back producers first
 (`continueServerDraftAutomation`, then `runScheduledDraftAutomation`), followed
 by `processDraftClockDeadline`, archive-parity
 `processLeagueAutomationTask`, and the preceding staging Hosting release.
-Preserve the failed exact-`118f113b` raw evidence and aggregate logs.
+Preserve both the failed exact-`118f113b` and exact-`084f352c` raw evidence and
+aggregate logs.
 
 ## Protected contracts
 

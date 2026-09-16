@@ -62,7 +62,7 @@ The most important current findings are:
 
 - **The live-scoring queue foundation now exists, but cutover remains the primary red risk.** P1E adds deterministic per-league tasks, due-time schedules, shadow/canary/primary modes, recovery, queue health, and a conservative 24-task pending-depth limit. The default remains shadow, so the two-league ten-minute sweep is still the production path until staging parity and throughput are proven.
 - **Draft deadlines already use exact Cloud Tasks.** `processDraftClockDeadline` is the primary path, with deterministic task IDs and scheduled delivery. The 250-league sequential scan is a fallback recovery path, not the only clock engine.
-- **Draft task throughput and fallback coverage still need staging tests.** Ten concurrent task dispatches may or may not be sufficient depending on measured task duration and Firestore contention.
+- **Draft task throughput and fallback coverage still need staged ramps.** Five exact stage-100 runs proved that ten concurrent task dispatches were insufficient for the fixed two-second p95 drift gate even though transaction duration and Firestore contention were healthy. FF1.38 is the bounded twenty-dispatch candidate; stage 100 must pass again before 500.
 - **The NHL proxy remains an amber risk.** It is capped at ten instances and its fastest cache is process-local.
 - **Cold starts and reconnect storms can create millions of Firestore reads.** Listener counts must be measured by route and traffic must be ramped gradually.
 - **Firebase Hosting is not the leading risk.** Static Angular assets are CDN-friendly.

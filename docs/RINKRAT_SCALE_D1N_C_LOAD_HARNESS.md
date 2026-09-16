@@ -25,9 +25,11 @@ the FF1 Draft/lifecycle gate.
 The implementation does not change Production Scoring V4, Projection V11,
 six-game ownership, seventh-game rollover, immutable started windows, Draft or
 transaction authority, standings, playoffs, Rules, indexes, TTL, App Check,
-queue rollout mode, pending-task limits, worker concurrency, or canonical
-authority. The existing worker limits remain four concurrent scoring tasks and
-ten concurrent Draft tasks.
+queue rollout mode, pending-task limits, or canonical authority. Scoring
+remains limited to four concurrent tasks. FF1.38 raises only
+the measured Draft task-queue dispatch ceiling from ten to twenty; Function
+instance/request concurrency and every competitive-authority boundary remain
+unchanged.
 
 Every synthetic operation has a hashed deterministic identity. Ten percent of
 each workload is intentionally delivered twice using distinct hashed Cloud
@@ -72,20 +74,12 @@ firebase deploy \
 firebase deploy \
   --project rinkrat-staging-d1nc-2026 \
   --only functions:processLeagueAutomationTask
-
-firebase deploy \
-  --project rinkrat-staging-d1nc-2026 \
-  --only functions:runScheduledDraftAutomation
-
-firebase deploy \
-  --project rinkrat-staging-d1nc-2026 \
-  --only functions:continueServerDraftAutomation
 ```
 
 `processLeagueAutomationTask` has no runtime behavior change in this repair,
 but the strict D1N-C preflight compares its immutable common Functions source
-archive with the clean commit. The other three resources are the Draft
-consumer and its two task producers.
+archive with the clean commit. FF1.38 changes only the Draft consumer queue
+ceiling, so its task producers do not require deployment.
 
 Then deploy only site-pinned staging Hosting so the manifest binds that exact
 source:
@@ -98,8 +92,10 @@ firebase deploy \
 ```
 
 No Production Function or Hosting deployment belongs to this load-evidence
-slice. No Rules, indexes, TTL, App Check, queue configuration, worker limit, or
-Firebase configuration deployment is required.
+slice. No Rules, indexes, TTL, App Check, scoring-queue, worker-instance, or
+Firebase configuration deployment is required. The Draft queue ceiling changes
+only through the targeted `processDraftClockDeadline` Function deployment; no
+standalone queue mutation is permitted.
 
 ## Run the 100-operation stage
 
@@ -241,7 +237,7 @@ Stop immediately and preserve the run if any of these occur:
 - scoring p95/p99 exceeds 20/60 seconds;
 - Draft deadline drift p95/p99 exceeds 2/5 seconds;
 - queue age p95/p99 exceeds 60/120 seconds or drain exceeds two minutes;
-- observed interval concurrency exceeds 4 scoring or 10 Draft operations;
+- observed interval concurrency exceeds 4 scoring or 20 Draft operations;
 - the queue does not return to zero;
 - settled incremental cost exceeds the stage ceiling; or
 - a protected competitive document changes.
@@ -250,7 +246,7 @@ Do not advance a failed or incomplete stage. Do not weaken thresholds to make a
 run pass. Retry only after the failure is understood and a separately reviewed
 fix is deployed.
 
-Four fully executed stage-100 runs are retained as failed timing diagnostics.
+Five fully executed stage-100 runs are retained as failed timing diagnostics.
 Exact `a08fbbc0` recorded Draft p95/p99 drift of 30,230/30,620 milliseconds.
 Exact `9cc3dd01` preserved 100/100 operations, 10/10 duplicates, zero
 errors/retries/contention, and every invariant while improving Draft p95/p99
@@ -264,13 +260,20 @@ corrected drain measurement on exact `118f113b`: 100/100 operations and all
 ten duplicates converged without correctness failure, corrected drain was
 5,745 milliseconds, and Draft p95/p99 improved to 2,416/2,521 milliseconds.
 The p99 gate passed again, but p95 remained 416 milliseconds high after the
-T-10 wave finished about seven seconds before zero. Stage 500 is blocked until
-FF1.37's final read-free T-5 pulse passes a fresh finalized stage-100 run under
-the same fixed limits. See
+T-10 wave finished about seven seconds before zero. Exact `084f352c` then added
+FF1.37's T-5 pulse. It preserved 100/100 operations, all ten duplicates, zero
+errors/retries/contention, every invariant, and a 4,338-millisecond corrected
+drain; Draft p95/p99 was 2,422/2,523 milliseconds. Logs showed the pulses
+completed before zero and exact transactions remained near 0.17–0.26 seconds,
+leaving the ten-dispatch queue ceiling as the bottleneck. FF1.38 raises only
+that measured ceiling to twenty. Stage 500 is blocked until the FF1.38 repeat
+passes and finalizes under every unchanged latency, integrity, and cost gate.
+See
 `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`,
 `docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`,
-`docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md`, and
-`docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md`.
+`docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md`,
+`docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md`, and
+`docs/RINKRAT_FF1_38_DRAFT_QUEUE_CONCURRENCY.md`.
 
 ## Cleanup and rollback
 
@@ -291,10 +294,8 @@ npm run staging:d1n:c:run -- \
 The cleanup target must match the strict synthetic marker, project, stage, and
 run-ID format. It recursively removes only that reviewed `d1nLoadRuns` root.
 
-For runtime rollback, stop creating new warmups by restoring the immediately
-preceding reviewed `continueServerDraftAutomation` and
-`runScheduledDraftAutomation` revisions. Then restore
-`processDraftClockDeadline`, restore the archive-parity
+For FF1.38 runtime rollback, restore the exact preceding `084f352c`
+`processDraftClockDeadline` revision, restore the archive-parity
 `processLeagueAutomationTask` revision, and restore the preceding staging
 Hosting release last. Never broaden rollback to Production or unrelated
 Firebase resources.

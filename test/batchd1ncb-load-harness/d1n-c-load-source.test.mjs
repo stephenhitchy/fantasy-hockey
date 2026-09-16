@@ -20,7 +20,7 @@ test('both real workers branch to the staging probe before normal competitive va
   );
   assert.match(scoring, /maxConcurrentDispatches:\s*LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES/);
   assert.match(scoring, /LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES\s*=\s*4/);
-  assert.match(draft, /maxConcurrentDispatches:\s*10/);
+  assert.match(draft, /maxConcurrentDispatches:\s*20/);
 });
 
 test('synthetic service writes are isolated and the runtime guard is exact', () => {
@@ -68,7 +68,7 @@ test('the generator refuses broad deployment and preserves external evidence req
 
 test('the runbook defines acceptance, edge cases, tests, observability, exact resources, and rollback', () => {
   const runbook = read('docs/RINKRAT_SCALE_D1N_C_LOAD_HARNESS.md');
-  const queueRamp = read('docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md');
+  const queueRamp = read('docs/RINKRAT_FF1_38_DRAFT_QUEUE_CONCURRENCY.md');
   for (const phrase of [
     'processLeagueAutomationTask',
     'processDraftClockDeadline',
@@ -85,17 +85,14 @@ test('the runbook defines acceptance, edge cases, tests, observability, exact re
   for (const resource of [
     'functions:processDraftClockDeadline',
     'functions:processLeagueAutomationTask',
-    'functions:runScheduledDraftAutomation',
-    'functions:continueServerDraftAutomation',
   ]) assert.match(runbook, new RegExp(resource));
   assert.doesNotMatch(runbook, /--only\s+functions\s*(?:\n|$)/);
   for (const phrase of [
-    'T-180',
-    'T-10',
-    'T-5',
-    'exact zero',
-    'read-only',
-    '2,416/2,521',
+    '2,422/2,523',
+    'twenty',
+    '2,000/5,000',
+    'exact-zero',
+    'transaction',
     'Production Scoring V4',
     'Projection V11',
     'Rollback',

@@ -445,7 +445,7 @@ function draftClockQueue(overrides = {}) {
       FF132_DRAFT_CLOCK_TASK_QUEUE,
     state: 'RUNNING',
     rateLimits: {
-      maxConcurrentDispatches: 10,
+      maxConcurrentDispatches: 20,
       maxDispatchesPerSecond: 500,
       maxBurstSize: 100,
     },
@@ -1840,7 +1840,7 @@ test('the Draft-clock queue preserves its exact retry and concurrency policy', (
   const cases = [
     { state: 'PAUSED' },
     { name: queue.name.replace(FF132_DRAFT_CLOCK_TASK_QUEUE, 'other') },
-    { rateLimits: { ...queue.rateLimits, maxConcurrentDispatches: 11 } },
+    { rateLimits: { ...queue.rateLimits, maxConcurrentDispatches: 21 } },
     { rateLimits: { ...queue.rateLimits, maxDispatchesPerSecond: 499 } },
     { rateLimits: { ...queue.rateLimits, maxBurstSize: 99 } },
     { retryConfig: { ...queue.retryConfig, maxAttempts: 4 } },

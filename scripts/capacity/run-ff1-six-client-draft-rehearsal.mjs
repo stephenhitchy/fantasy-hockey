@@ -194,7 +194,7 @@ export const FF1_SIX_CLIENT_SCHEDULER_TOPOLOGY = Object.freeze({
 export const FF1_SIX_CLIENT_TASK_QUEUE_TOPOLOGY = Object.freeze({
   processDraftClockDeadline: {
     maxAttempts: 5, minBackoff: '2s', maxBackoff: '3600s', maxDoublings: 16,
-    maxConcurrentDispatches: 10,
+    maxConcurrentDispatches: 20,
   },
   processLeagueAutomationTask: {
     maxAttempts: 5, minBackoff: '30s', maxBackoff: '3600s', maxDoublings: 16,

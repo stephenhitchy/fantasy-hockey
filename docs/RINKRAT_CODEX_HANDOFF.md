@@ -214,14 +214,23 @@ the unchanged gate. Logs proved all fifty T-10 authority primes succeeded and
 completed about seven seconds before zero; exact transactions were about
 0.18–0.28 seconds, leaving queue dispatch continuity as the remaining tail.
 
-FF1.37 is the current source candidate. It retains the entire cadence, T-10
-read-only authority prime, exact-zero authority, every queue/worker limit, and
-every fixed threshold, while adding one final read-free T-5 pulse per Draft.
-At stage 100 this raises visible warmup work from 900 to 950 without adding a
-read, write, transaction, clock transition, or pick. Independently review,
-merge, deploy the same four staging Functions plus site-pinned Hosting, and
-repeat/finalize stage 100 before 500. Physical iPhone/Android evidence remains
-open independently.
+FF1.37 was merged and deployed on exact staging source `084f352c`. Its repeat
+preserved 100/100 operations, all ten duplicates, zero terminal errors,
+retries, duplicate results, recovered contention, and every invariant.
+Scoring p95/p99 was 525/1,265 milliseconds, queue-age p95/p99 was
+45,478/46,274 milliseconds, corrected drain was 4,338 milliseconds, and Draft
+p95/p99 was 2,422/2,523 milliseconds. T-5 pulses completed before zero and
+exact transactions remained near 0.17–0.26 seconds, isolating the ten-dispatch
+queue ceiling as the remaining tail.
+
+FF1.38 is the current source candidate. It raises only the measured Draft
+queue dispatch ceiling from ten to twenty. The 500-per-second rate, retry
+policy, Function instance/request concurrency, warmup cadence, exact-zero
+authority, scoring queue, and every 2,000/5,000-millisecond timing gate remain
+unchanged. Independently review, merge, deploy only the Draft consumer,
+archive-parity scoring worker, and site-pinned Hosting, then repeat/finalize
+stage 100 before 500. Physical iPhone/Android evidence remains open
+independently.
 
 ## Current Draft-room UX posture
 

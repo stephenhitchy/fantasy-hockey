@@ -193,7 +193,7 @@ test('queue warmups preserve start identity, retry, rate, and worker limits', as
   assert.doesNotMatch(warmupHandler, /runTransaction|\.set\(|\.update\(|sleep\(|openScheduledDraft/);
   assert.match(functionBody, /timeoutSeconds: 120/);
   assert.match(functionBody, /maxAttempts: 5/);
-  assert.match(functionBody, /maxConcurrentDispatches: 10/);
+  assert.match(functionBody, /maxConcurrentDispatches: 20/);
   assert.doesNotMatch(functionBody, /minInstances/);
 });
 

@@ -264,7 +264,7 @@ test('capacity model recognizes exact draft tasks and identifies league scoring 
 
   assert.equal(report.architecture.draftDeadlineTaskQueuePresent, true);
   assert.equal(report.architecture.draftDeadlineTaskDeterministicIds, true);
-  assert.equal(report.architecture.draftDeadlineTaskMaxConcurrentDispatches, 10);
+  assert.equal(report.architecture.draftDeadlineTaskMaxConcurrentDispatches, 20);
   assert.equal(report.architecture.draftAutomationScanLimit, 250);
   assert.equal(report.architecture.leagueAutomationParallelism, 2);
   assert.equal(report.estimates.scoringConcurrencyTargets['10s'], 142);
