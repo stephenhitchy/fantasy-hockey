@@ -155,14 +155,15 @@ drain time, interval concurrency, and cold starts. It intentionally has status
 The generator interleaves scoring and Draft operations in bounded enqueue
 batches. FF1.34's two-wave repeat materially improved but did not pass the
 fixed drift gate, so FF1.35 schedules one write-free warmup per measured Draft
-operation every ten seconds from T-180 through T-10. The measured Draft
-operations share one exact deadline at least 185 seconds after planning. At
-stage 100 this is 50 Draft results plus 900 warmups. FF1.36 makes only the final
-fifty T-10 warmups perform one read-only authority-path prime each; the other
-850 remain read-free. Warmups remain part of expected queue drain, Cloud
+operation every ten seconds from T-180 through T-10. FF1.37 adds one final
+read-free T-5 pulse. The measured Draft operations share one exact deadline at
+least 185 seconds after planning. At stage 100 this is 50 Draft results plus
+950 warmups. FF1.36 makes only the fifty T-10 warmups perform one read-only
+authority-path prime each; the earlier 850 and final fifty T-5 pulses remain
+read-free. Warmups remain part of expected queue drain, Cloud
 Monitoring, and settled Billing/cost evidence, but cannot create a synthetic
 result or competitive write. The recorded
-`draftQueueWarmupTaskCount` must equal nine times the selected operation stage.
+`draftQueueWarmupTaskCount` must equal 9.5 times the selected operation stage.
 A partial seed, partial enqueue, or drain timeout moves
 the synthetic run to a terminal diagnostic state; any late task for that exact
 authenticated run is acknowledged without a competitive write or a seven-day
@@ -249,7 +250,7 @@ Do not advance a failed or incomplete stage. Do not weaken thresholds to make a
 run pass. Retry only after the failure is understood and a separately reviewed
 fix is deployed.
 
-Three fully executed stage-100 runs are retained as failed timing diagnostics.
+Four fully executed stage-100 runs are retained as failed timing diagnostics.
 Exact `a08fbbc0` recorded Draft p95/p99 drift of 30,230/30,620 milliseconds.
 Exact `9cc3dd01` preserved 100/100 operations, 10/10 duplicates, zero
 errors/retries/contention, and every invariant while improving Draft p95/p99
@@ -258,11 +259,18 @@ queue-age p95/p99 was 44,111/44,907 milliseconds. FF1.35 then improved Draft
 p95/p99 to 3,536/3,736 milliseconds with every operation, duplicate, and
 invariant intact. Its p99 passed, but p95 remained above 2,000 milliseconds,
 and its raw 170,209-millisecond drain value included the intentional future-
-deadline hold. Stage 500 is blocked until FF1.36 passes a fresh finalized
-stage-100 run under the same fixed limits. See
+deadline hold. FF1.36 then removed the Firestore authority-path cold tail and
+corrected drain measurement on exact `118f113b`: 100/100 operations and all
+ten duplicates converged without correctness failure, corrected drain was
+5,745 milliseconds, and Draft p95/p99 improved to 2,416/2,521 milliseconds.
+The p99 gate passed again, but p95 remained 416 milliseconds high after the
+T-10 wave finished about seven seconds before zero. Stage 500 is blocked until
+FF1.37's final read-free T-5 pulse passes a fresh finalized stage-100 run under
+the same fixed limits. See
 `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`,
-`docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`, and
-`docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md`.
+`docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`,
+`docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md`, and
+`docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md`.
 
 ## Cleanup and rollback
 

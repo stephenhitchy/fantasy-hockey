@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   buildScheduledDraftQueueWarmupTaskId,
   DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS,
+  DRAFT_QUEUE_FINAL_PULSE_LEAD_MILLISECONDS,
   DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
   DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
@@ -30,10 +31,14 @@ test('non-mutating queue warmups precede an exact-zero authoritative start task'
 
   assert.deepEqual(
     DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
-    Array.from({ length: 18 }, (_, index) => 180_000 - index * 10_000),
+    [
+      ...Array.from({ length: 18 }, (_, index) => 180_000 - index * 10_000),
+      5_000,
+    ],
   );
   assert.equal(DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS, 10_000);
   assert.equal(DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS, 10_000);
+  assert.equal(DRAFT_QUEUE_FINAL_PULSE_LEAD_MILLISECONDS, 5_000);
   assert.equal(DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS, 250);
   assert.equal(
     getScheduledDraftStartTaskDispatchMilliseconds({
@@ -58,6 +63,14 @@ test('non-mutating queue warmups precede an exact-zero authoritative start task'
     }),
     start - 10_000,
   );
+  assert.equal(
+    getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+      scheduledStartMilliseconds: start,
+      nowMilliseconds: now,
+      warmupLeadMilliseconds: 5_000,
+    }),
+    start - 5_000,
+  );
   const warmupId = buildScheduledDraftQueueWarmupTaskId({
     leagueId: 'league-1',
     scheduledStartMilliseconds: start,
@@ -68,6 +81,11 @@ test('non-mutating queue warmups precede an exact-zero authoritative start task'
     leagueId: 'league-1',
     scheduledStartMilliseconds: start,
     warmupLeadMilliseconds: 10_000,
+  }));
+  assert.notEqual(warmupId, buildScheduledDraftQueueWarmupTaskId({
+    leagueId: 'league-1',
+    scheduledStartMilliseconds: start,
+    warmupLeadMilliseconds: 5_000,
   }));
 });
 

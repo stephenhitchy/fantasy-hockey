@@ -103,7 +103,7 @@ function passingRamp(stage = 100) {
       measurementSource: 'worker-operation-backlog',
       peakDepth: 20,
       finalDepth: 0,
-      draftQueueWarmupTaskCount: stage * 9,
+      draftQueueWarmupTaskCount: stage * 9.5,
       oldestAgeMilliseconds: { p50: 1_000, p95: 5_000, p99: 10_000, max: 12_000 },
       drainMilliseconds: 20_000,
     },

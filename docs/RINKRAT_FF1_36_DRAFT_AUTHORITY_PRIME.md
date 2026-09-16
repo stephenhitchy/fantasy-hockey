@@ -1,8 +1,10 @@
 # FF1.36 — Draft Authority-Path Prime
 
-Status: source implementation and regression coverage complete. The inherited
-release gate and both builds pass. Clean merge, exact staging deployment, and
-a fresh finalized D1N-C stage-100 pass are required before acceptance.
+Status: merged and deployed on exact staging source `118f113b`. Its guarded
+stage-100 run preserved every correctness invariant and passed Draft p99, but
+Draft p95 was 2,416 milliseconds and remained above the fixed 2,000-
+millisecond gate. FF1.37 supersedes this candidate with one final read-free
+T-5 queue pulse; stage 500 remains blocked.
 
 ## Evidence-driven problem
 
@@ -59,6 +61,18 @@ absent, so a late warmup or retry remains visible.
 - Queue-drain timing is not invented or estimated; only its eligibility origin
   is corrected, and the retained FF1.35 raw file is never rewritten.
 
+## Exact staging result
+
+The exact `118f113b` run completed 100/100 operations and all ten planned
+duplicates with zero terminal errors, retries, duplicate competitive results,
+recovered contention, or protected-state changes. Scoring p95/p99 was
+174/1,506 milliseconds, queue-age p95/p99 was 34,284/35,087 milliseconds,
+corrected drain was 5,745 milliseconds, and Draft p95/p99 was 2,416/2,521
+milliseconds. The T-10 authority read removed the cold Firestore tail, but all
+fifty primes completed about seven seconds before zero; the exact burst then
+remained limited by queue dispatch continuity. Preserve this raw failure and
+see `docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md`.
+
 ## Exact staging boundary and rollback
 
 After clean review and merge, deploy in consumer-first order:
@@ -73,7 +87,7 @@ No Production deployment belongs to this repair. Roll back producers first
 (`continueServerDraftAutomation`, then `runScheduledDraftAutomation`), followed
 by `processDraftClockDeadline`, archive-parity
 `processLeagueAutomationTask`, and the preceding staging Hosting release.
-Preserve all three failed stage-100 runs and their aggregate logs.
+Preserve all four failed stage-100 runs and their aggregate logs.
 
 ## Protected contracts
 

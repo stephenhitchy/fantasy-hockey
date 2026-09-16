@@ -204,14 +204,24 @@ p95/p99 improved to 3,536/3,736 milliseconds: p99 passed, but p95 remained
 above the unchanged 2,000-millisecond gate. The raw 170,209-millisecond drain
 value also counted the intentional wait until future work became eligible.
 
-FF1.36 is the current source candidate. It retains all 900 warmups, every
-queue/worker limit, exact-zero authority, and every fixed threshold. Only the
-final fifty T-10 warmups perform one read-only authority-path get; the earlier
-850 remain read-free. Queue drain begins at the later of producer completion
-and the shared scheduled deadline, while operation queue age and Draft drift
-retain their exact due-time origins. Independently review, merge, deploy the
-same four staging Functions plus site-pinned Hosting, and repeat/finalize stage
-100 before 500. Physical iPhone/Android evidence remains open independently.
+FF1.36 was merged and deployed on exact staging source `118f113b`. Its guarded
+stage-100 repeat again preserved 100/100 operations, all ten duplicates, zero
+errors/retries/contention, and every invariant. Scoring p95/p99 was 174/1,506
+milliseconds, queue-age p95/p99 was 34,284/35,087 milliseconds, and corrected
+post-eligibility drain was 5,745 milliseconds. Draft p95/p99 improved to
+2,416/2,521 milliseconds: p99 passed, but p95 remained 416 milliseconds above
+the unchanged gate. Logs proved all fifty T-10 authority primes succeeded and
+completed about seven seconds before zero; exact transactions were about
+0.18–0.28 seconds, leaving queue dispatch continuity as the remaining tail.
+
+FF1.37 is the current source candidate. It retains the entire cadence, T-10
+read-only authority prime, exact-zero authority, every queue/worker limit, and
+every fixed threshold, while adding one final read-free T-5 pulse per Draft.
+At stage 100 this raises visible warmup work from 900 to 950 without adding a
+read, write, transaction, clock transition, or pick. Independently review,
+merge, deploy the same four staging Functions plus site-pinned Hosting, and
+repeat/finalize stage 100 before 500. Physical iPhone/Android evidence remains
+open independently.
 
 ## Current Draft-room UX posture
 

@@ -25,7 +25,7 @@ export const D1NC_STAGING_URL = 'https://rinkrat-staging-d1nc-2026.web.app';
 export const D1NC_STAGING_DATABASE_LOCATION = 'us-west4';
 export const D1NC_STAGING_FUNCTION_REGION = 'us-central1';
 export const D1NC_RAMP_STAGES = Object.freeze([100, 500, 2_000, 5_000]);
-export const D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE = 9;
+export const D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE = 9.5;
 export const D1NC_REQUIRED_FUNCTIONS = Object.freeze([
   'processDraftClockDeadline',
   'processLeagueAutomationTask',

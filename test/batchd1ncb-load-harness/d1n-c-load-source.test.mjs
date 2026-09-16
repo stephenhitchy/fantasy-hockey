@@ -68,7 +68,7 @@ test('the generator refuses broad deployment and preserves external evidence req
 
 test('the runbook defines acceptance, edge cases, tests, observability, exact resources, and rollback', () => {
   const runbook = read('docs/RINKRAT_SCALE_D1N_C_LOAD_HARNESS.md');
-  const queueRamp = read('docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md');
+  const queueRamp = read('docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md');
   for (const phrase of [
     'processLeagueAutomationTask',
     'processDraftClockDeadline',
@@ -92,9 +92,10 @@ test('the runbook defines acceptance, edge cases, tests, observability, exact re
   for (const phrase of [
     'T-180',
     'T-10',
+    'T-5',
     'exact zero',
     'read-only',
-    '3,536/3,736',
+    '2,416/2,521',
     'Production Scoring V4',
     'Projection V11',
     'Rollback',
