@@ -29,7 +29,7 @@ import {
 } from './run-ff1-draft-readiness-staging-evidence.mjs';
 import {
   buildScheduledDraftStartTaskId,
-  DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
+  DRAFT_START_TASK_RESERVATION_LEAD_MILLISECONDS,
 } from '../../functions/src/draft-readiness.util.ts';
 import {
   acquireFf132EvidenceLock,
@@ -194,7 +194,7 @@ export const FF1_SIX_CLIENT_SCHEDULER_TOPOLOGY = Object.freeze({
 export const FF1_SIX_CLIENT_TASK_QUEUE_TOPOLOGY = Object.freeze({
   processDraftClockDeadline: {
     maxAttempts: 5, minBackoff: '2s', maxBackoff: '3600s', maxDoublings: 16,
-    maxConcurrentDispatches: 20,
+    maxConcurrentDispatches: 60,
   },
   processLeagueAutomationTask: {
     maxAttempts: 5, minBackoff: '30s', maxBackoff: '3600s', maxDoublings: 16,
@@ -1649,7 +1649,7 @@ export function assertFf1SixClientScheduledStartTaskProvenance({
   assert.equal(task?.dispatchDeadline, DRAFT_CLOCK_TASK_DISPATCH_DEADLINE);
   assert.equal(
     Date.parse(task?.scheduleTime ?? ''),
-    scheduledStartMilliseconds - DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
+    scheduledStartMilliseconds - DRAFT_START_TASK_RESERVATION_LEAD_MILLISECONDS,
     'The Draft-clock task dispatch time does not match the exact warm-start contract.',
   );
 

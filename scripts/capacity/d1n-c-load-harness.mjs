@@ -44,8 +44,8 @@ export const D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS = [
   30_000,
   20_000,
   10_000,
-  5_000,
 ];
+export const D1NC_LOAD_DRAFT_RESERVATION_LEAD_MILLISECONDS = 5_000;
 export const D1NC_LOAD_DRAFT_QUEUE_MINIMUM_START_LEAD_MILLISECONDS = 185_000;
 export const D1NC_LOAD_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE =
   D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS.length / 2;
@@ -779,7 +779,12 @@ async function enqueueRun(functions, plan, runRef) {
         id: taskId(plan, operation, delivery),
         dispatchDeadlineSeconds: operation.kind === 'scoring' ? 540 : 120,
         ...(operation.kind === 'draft'
-          ? { scheduleTime: new Date(operation.scheduledAtMilliseconds) }
+          ? {
+              scheduleTime: new Date(
+                operation.scheduledAtMilliseconds -
+                  D1NC_LOAD_DRAFT_RESERVATION_LEAD_MILLISECONDS,
+              ),
+            }
           : {}),
       };
       await queues[operation.kind].enqueue(taskPayload(plan, operation), options);

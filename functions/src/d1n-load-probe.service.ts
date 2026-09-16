@@ -7,6 +7,7 @@ import {
   assertD1nLoadProbeRuntimeProject,
   buildD1nLoadProbeResult,
   D1NC_LOAD_FIXTURE_MARKER,
+  d1nLoadProbeReservationDelayMilliseconds,
   d1nLoadSha256,
   type D1nLoadProbeKind,
   parseD1nLoadProbeTaskPayload,
@@ -38,6 +39,10 @@ function boundedErrorCode(error: unknown): string {
     : 'unknown';
 }
 
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 export async function processD1nLoadProbeIfPresent(
   rawPayload: unknown,
   expectedKind: D1nLoadProbeKind,
@@ -66,6 +71,15 @@ export async function processD1nLoadProbeIfPresent(
   );
   if (!runId || !operationId) {
     throw new Error('D1N-C load probe document identity is invalid.');
+  }
+
+  const reservationDelayMilliseconds = d1nLoadProbeReservationDelayMilliseconds(
+    expectedKind,
+    payload.scheduledAtMilliseconds,
+    Date.now(),
+  );
+  if (reservationDelayMilliseconds > 0) {
+    await sleep(reservationDelayMilliseconds);
   }
 
   const runRef = db.doc(`d1nLoadRuns/${runId}`);

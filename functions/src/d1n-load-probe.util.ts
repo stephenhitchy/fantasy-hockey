@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 
 export const D1NC_LOAD_STAGING_PROJECT_ID = 'rinkrat-staging-d1nc-2026';
 export const D1NC_LOAD_FIXTURE_MARKER = 'rinkrat-d1n-c-load-fixture-v1';
+export const D1NC_LOAD_DRAFT_RESERVATION_LEAD_MILLISECONDS = 5_000;
+export const D1NC_LOAD_DRAFT_MAXIMUM_EARLY_ARRIVAL_MILLISECONDS = 6_000;
 export const D1NC_LOAD_SCHEMA_VERSION = 1;
 export const D1NC_LOAD_STAGES = [100, 500, 2_000, 5_000] as const;
 
@@ -135,6 +137,23 @@ export function parseD1nLoadProbeTaskPayload(
     nonce: payload['nonce'] as string,
     scheduledAtMilliseconds,
   };
+}
+
+export function d1nLoadProbeReservationDelayMilliseconds(
+  kind: D1nLoadProbeKind,
+  scheduledAtMilliseconds: number,
+  nowMilliseconds: number,
+): number {
+  if (kind !== 'draft') {
+    return 0;
+  }
+  const delayMilliseconds = scheduledAtMilliseconds - nowMilliseconds;
+  requireCondition(
+    Number.isFinite(delayMilliseconds) &&
+      delayMilliseconds <= D1NC_LOAD_DRAFT_MAXIMUM_EARLY_ARRIVAL_MILLISECONDS,
+    'D1N-C Draft probe arrived outside its bounded reservation window.',
+  );
+  return Math.max(0, delayMilliseconds);
 }
 
 export function assertD1nLoadProbeRuntimeProject(projectId: string): void {

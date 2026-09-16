@@ -96,7 +96,7 @@ test('exact task opens verified readiness directly and then schedules pick one',
   assert.match(source, /Ignored stale scheduled Draft-start task/);
   assert.match(source, /reached zero before server readiness completed[\s\S]*?Retrying/);
   assert.match(source, /retryConfig: \{[\s\S]*?maxAttempts: 5/);
-  assert.match(source, /rateLimits: \{[\s\S]*?maxConcurrentDispatches: 20/);
+  assert.match(source, /rateLimits: \{[\s\S]*?maxConcurrentDispatches: 60/);
 });
 
 test('schedule changes wake server preparation without recursive readiness triggers', async () => {

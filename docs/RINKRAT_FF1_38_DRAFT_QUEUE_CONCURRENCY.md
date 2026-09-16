@@ -1,9 +1,9 @@
 # FF1.38 — Draft Queue Concurrency
 
-Status: source implementation, focused regression coverage, the inherited
-release gate, and both builds pass. Clean review/commit, merge, exact staging
-deployment, and a fresh finalized D1N-C stage-100 pass remain required before
-acceptance.
+Status: merged and deployed on exact isolated-staging source `cd6eede0`. Its
+fresh stage-100 run preserved every correctness invariant but recorded Draft
+p95/p99 drift of 5,120/5,324 milliseconds. Both unchanged gates failed, stage
+500 remains blocked, and FF1.39 supersedes this queue-ceiling-only hypothesis.
 
 ## Evidence-driven problem
 
@@ -52,6 +52,21 @@ all task drain, Monitoring usage, settled Billing cost, and every invariant.
   authority; competing calls still serialize on the same authoritative state.
 - Stage 500 remains blocked until the new stage-100 run is finalized with Cloud
   Monitoring and settled Cloud Billing evidence and independently reviewed.
+
+## Measured result
+
+The exact `cd6eede0` run completed 100/100 operations and all ten duplicates
+with zero terminal errors, retries, duplicate results, recovered contention,
+or protected-state changes. Scoring p95/p99 was 400/982 milliseconds,
+queue-age p95/p99 was 46,107/46,904 milliseconds, corrected drain was 9,380
+milliseconds, and Draft p95/p99 was 5,120/5,324 milliseconds.
+
+All 1,005 Draft-queue requests returned HTTP 204. Warmups reached twenty
+concurrent requests, while measured transactions remained about 0.19–0.24
+seconds. Cloud Tasks nevertheless smoothed the fifty-five exact-zero
+deliveries across about 5.3 seconds at roughly ten per second. The configured
+ceiling was not the remaining determinant; see
+`docs/RINKRAT_FF1_39_DRAFT_START_RESERVATION.md`.
 
 ## Exact staging boundary and rollback
 

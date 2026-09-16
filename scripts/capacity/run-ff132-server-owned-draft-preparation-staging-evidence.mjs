@@ -1362,7 +1362,7 @@ export function assertFf132DraftClockTaskQueue(queue) {
     `projects/${D1N_STAGING_PROJECT_ID}/locations/${FF132_REGION}/queues/${FF132_DRAFT_CLOCK_TASK_QUEUE}`,
   );
   assert.equal(queue?.state, 'RUNNING');
-  assert.equal(queue?.rateLimits?.maxConcurrentDispatches, 20);
+  assert.equal(queue?.rateLimits?.maxConcurrentDispatches, 60);
   assert.equal(queue?.rateLimits?.maxDispatchesPerSecond, 500);
   assert.equal(queue?.rateLimits?.maxBurstSize, 100);
   assert.equal(queue?.retryConfig?.maxAttempts, 5);

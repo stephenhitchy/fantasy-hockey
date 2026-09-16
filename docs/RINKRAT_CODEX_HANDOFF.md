@@ -223,14 +223,31 @@ p95/p99 was 2,422/2,523 milliseconds. T-5 pulses completed before zero and
 exact transactions remained near 0.17–0.26 seconds, isolating the ten-dispatch
 queue ceiling as the remaining tail.
 
-FF1.38 is the current source candidate. It raises only the measured Draft
-queue dispatch ceiling from ten to twenty. The 500-per-second rate, retry
-policy, Function instance/request concurrency, warmup cadence, exact-zero
-authority, scoring queue, and every 2,000/5,000-millisecond timing gate remain
-unchanged. Independently review, merge, deploy only the Draft consumer,
-archive-parity scoring worker, and site-pinned Hosting, then repeat/finalize
-stage 100 before 500. Physical iPhone/Android evidence remains open
-independently.
+FF1.38 was merged and deployed on exact staging source `cd6eede0`. Its repeat
+preserved 100/100 operations, all ten duplicates, zero terminal errors,
+retries, duplicate results, recovered contention, and every invariant.
+Scoring p95/p99 was 400/982 milliseconds, queue-age p95/p99 was
+46,107/46,904 milliseconds, corrected drain was 9,380 milliseconds, and Draft
+p95/p99 regressed to 5,120/5,324 milliseconds. All 1,005 Draft-queue requests
+returned HTTP 204 and warmups reached twenty concurrent requests, but Cloud
+Tasks smoothed the fifty-five measured exact-zero deliveries across about 5.3
+seconds at roughly ten per second while transactions remained about
+0.19–0.24 seconds.
+
+FF1.39 is the current source candidate. It dispatches the deterministic
+scheduled-start authority task at T-5, holds only inside the existing bounded
+early window, rereads authority after zero, removes the superseded read-free
+T-5 pulse, and raises the Draft queue ceiling from twenty to sixty so stage
+100 can reserve fifty primary starts plus five duplicate probes. The D1N-C
+harness now measures this same reservation path and expects 900 warmups. The
+500-per-second rate, retry policy, Function instance/request concurrency,
+transactional Draft authority, scoring queue, and every 2,000/5,000-
+millisecond timing gate remain unchanged. Its focused regression coverage,
+complete inherited gate, both builds, final diff review, and clean candidate
+commit review are complete. Exact staging deployment of the Draft consumer,
+archive-parity scoring worker, two Draft producers, and site-pinned Hosting,
+and repeat/finalize stage 100 before 500 remain required. Physical
+iPhone/Android evidence remains open independently.
 
 ## Current Draft-room UX posture
 
@@ -671,17 +688,16 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge FF1.35's sustained write-free Draft
-   queue-ramp repair.
-   Run the complete inherited gate, builds, diff check, and clean-source guard.
+1. Use the exact clean merged FF1.39 commit for isolated staging only. Recheck
+   clean-source identity immediately before any targeted deployment.
 2. Deploy staging in consumer-first order:
    `processDraftClockDeadline`, archive-parity
    `processLeagueAutomationTask`, `runScheduledDraftAutomation`,
    `continueServerDraftAutomation`, then only site-pinned staging Hosting.
-3. Verify the manifest and both D1N worker archives match the exact merge, then
-   rerun the guarded 100-operation ramp. Preserve both earlier diagnostics and
-   finalize the new run's Monitoring and settled Billing evidence. Advance to
-   500 only if every unchanged threshold passes.
+3. Verify the manifest and all four targeted Function archives match the exact
+   merge, then rerun the guarded 100-operation ramp. Preserve every earlier
+   diagnostic and finalize the new run's Monitoring and settled Billing
+   evidence. Advance to 500 only if every unchanged threshold passes.
 4. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.

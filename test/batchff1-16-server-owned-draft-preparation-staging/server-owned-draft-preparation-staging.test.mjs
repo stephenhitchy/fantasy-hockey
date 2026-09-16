@@ -445,7 +445,7 @@ function draftClockQueue(overrides = {}) {
       FF132_DRAFT_CLOCK_TASK_QUEUE,
     state: 'RUNNING',
     rateLimits: {
-      maxConcurrentDispatches: 20,
+      maxConcurrentDispatches: 60,
       maxDispatchesPerSecond: 500,
       maxBurstSize: 100,
     },

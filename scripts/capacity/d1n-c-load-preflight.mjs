@@ -25,7 +25,7 @@ export const D1NC_STAGING_URL = 'https://rinkrat-staging-d1nc-2026.web.app';
 export const D1NC_STAGING_DATABASE_LOCATION = 'us-west4';
 export const D1NC_STAGING_FUNCTION_REGION = 'us-central1';
 export const D1NC_RAMP_STAGES = Object.freeze([100, 500, 2_000, 5_000]);
-export const D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE = 9.5;
+export const D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE = 9;
 export const D1NC_REQUIRED_FUNCTIONS = Object.freeze([
   'processDraftClockDeadline',
   'processLeagueAutomationTask',
@@ -60,7 +60,7 @@ export const D1NC_THRESHOLDS = Object.freeze({
   retryRate: 0.01,
   recoveredContentionRate: 0.01,
   scoringMaximumConcurrency: 4,
-  draftMaximumConcurrency: 20,
+  draftMaximumConcurrency: 60,
   incrementalCostUsdByStage: Object.freeze({
     100: 2,
     500: 5,
@@ -444,7 +444,7 @@ export function evaluateRampEvidence(evidence) {
     issues.push('scoring concurrency exceeded the protected limit of four');
   }
   if (draftConcurrency !== null && draftConcurrency > D1NC_THRESHOLDS.draftMaximumConcurrency) {
-    issues.push('Draft concurrency exceeded the measured limit of twenty');
+    issues.push('Draft concurrency exceeded the measured limit of sixty');
   }
 
   const firestoreReads = requiredMetric(evidence?.firestore, 'reads', 'Firestore reads', issues);
@@ -521,7 +521,7 @@ async function inspectStaticSource() {
   requireCondition(/MAX_CONCURRENT_DISPATCHES = 4;/.test(scoringSource), 'Scoring concurrency changed from four.');
   requireCondition(/MAX_PENDING_TASKS = 24;/.test(scoringSource), 'Scoring pending-task limit changed from 24.');
   requireCondition(/DRAFT_AUTOMATION_SCAN_LIMIT = 250;/.test(draftSource), 'Draft recovery scan changed from 250.');
-  requireCondition(/processDraftClockDeadline[\s\S]*maxConcurrentDispatches: 20,/.test(draftSource), 'Draft concurrency changed from twenty.');
+  requireCondition(/processDraftClockDeadline[\s\S]*maxConcurrentDispatches: 60,/.test(draftSource), 'Draft concurrency changed from sixty.');
   requireCondition(runbook.includes('No Production Firebase project may be a load target.'), 'The Production refusal boundary is missing.');
   requireCondition(packageJson.scripts?.['verify:batchd1nc'], 'The D1N-C verification gate is missing.');
   return { packageJson, policy, expectedNode, expectedNpm };

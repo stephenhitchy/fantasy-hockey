@@ -20,12 +20,13 @@ test('both real workers branch to the staging probe before normal competitive va
   );
   assert.match(scoring, /maxConcurrentDispatches:\s*LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES/);
   assert.match(scoring, /LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES\s*=\s*4/);
-  assert.match(draft, /maxConcurrentDispatches:\s*20/);
+  assert.match(draft, /maxConcurrentDispatches:\s*60/);
 });
 
 test('synthetic service writes are isolated and the runtime guard is exact', () => {
   const service = read('functions/src/d1n-load-probe.service.ts');
   const utility = read('functions/src/d1n-load-probe.util.ts');
+  const harness = read('scripts/capacity/d1n-c-load-harness.mjs');
   assert.match(utility, /D1NC_LOAD_STAGING_PROJECT_ID = 'rinkrat-staging-d1nc-2026'/);
   assert.match(utility, /disabled outside the isolated staging project/);
   assert.match(service, /resolveSafeFirestoreDocumentId\(\s*payload\.runId/);
@@ -37,6 +38,9 @@ test('synthetic service writes are isolated and the runtime guard is exact', () 
   assert.match(service, /duplicateDeliveryCount: FieldValue\.increment\(1\)/);
   assert.match(service, /if \(operationAuthorityValidated\)/);
   assert.match(service, /maxAttempts: 5/);
+  assert.match(service, /d1nLoadProbeReservationDelayMilliseconds/);
+  assert.match(utility, /D1NC_LOAD_DRAFT_RESERVATION_LEAD_MILLISECONDS = 5_000/);
+  assert.match(harness, /D1NC_LOAD_DRAFT_RESERVATION_LEAD_MILLISECONDS = 5_000/);
 });
 
 test('the generator refuses broad deployment and preserves external evidence requirements', () => {
@@ -68,7 +72,7 @@ test('the generator refuses broad deployment and preserves external evidence req
 
 test('the runbook defines acceptance, edge cases, tests, observability, exact resources, and rollback', () => {
   const runbook = read('docs/RINKRAT_SCALE_D1N_C_LOAD_HARNESS.md');
-  const queueRamp = read('docs/RINKRAT_FF1_38_DRAFT_QUEUE_CONCURRENCY.md');
+  const queueRamp = read('docs/RINKRAT_FF1_39_DRAFT_START_RESERVATION.md');
   for (const phrase of [
     'processLeagueAutomationTask',
     'processDraftClockDeadline',
@@ -88,10 +92,10 @@ test('the runbook defines acceptance, edge cases, tests, observability, exact re
   ]) assert.match(runbook, new RegExp(resource));
   assert.doesNotMatch(runbook, /--only\s+functions\s*(?:\n|$)/);
   for (const phrase of [
-    '2,422/2,523',
-    'twenty',
+    '5,120/5,324',
+    'sixty',
     '2,000/5,000',
-    'exact-zero',
+    'reservation',
     'transaction',
     'Production Scoring V4',
     'Projection V11',

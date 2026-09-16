@@ -5,9 +5,9 @@ import test from 'node:test';
 import {
   buildScheduledDraftQueueWarmupTaskId,
   DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS,
-  DRAFT_QUEUE_FINAL_PULSE_LEAD_MILLISECONDS,
   DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
   DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
+  DRAFT_START_TASK_RESERVATION_LEAD_MILLISECONDS,
   DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS,
   getScheduledDraftQueueWarmupTaskDispatchMilliseconds,
   getScheduledDraftStartTaskDispatchMilliseconds,
@@ -25,27 +25,24 @@ async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
 }
 
-test('non-mutating queue warmups precede an exact-zero authoritative start task', () => {
+test('non-mutating queue warmups precede a bounded reserved authoritative start task', () => {
   const start = Date.parse('2026-10-06T02:00:00.000Z');
   const now = start - 15 * 60 * 1000;
 
   assert.deepEqual(
     DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
-    [
-      ...Array.from({ length: 18 }, (_, index) => 180_000 - index * 10_000),
-      5_000,
-    ],
+    Array.from({ length: 18 }, (_, index) => 180_000 - index * 10_000),
   );
   assert.equal(DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS, 10_000);
   assert.equal(DRAFT_QUEUE_AUTHORITY_PRIME_LEAD_MILLISECONDS, 10_000);
-  assert.equal(DRAFT_QUEUE_FINAL_PULSE_LEAD_MILLISECONDS, 5_000);
+  assert.equal(DRAFT_START_TASK_RESERVATION_LEAD_MILLISECONDS, 5_000);
   assert.equal(DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS, 250);
   assert.equal(
     getScheduledDraftStartTaskDispatchMilliseconds({
       scheduledStartMilliseconds: start,
       nowMilliseconds: now,
     }),
-    start,
+    start - 5_000,
   );
   assert.equal(
     getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
@@ -69,7 +66,7 @@ test('non-mutating queue warmups precede an exact-zero authoritative start task'
       nowMilliseconds: now,
       warmupLeadMilliseconds: 5_000,
     }),
-    start - 5_000,
+    null,
   );
   const warmupId = buildScheduledDraftQueueWarmupTaskId({
     leagueId: 'league-1',
@@ -97,7 +94,7 @@ test('late scheduling skips elapsed warmups and malformed timing fails closed', 
       scheduledStartMilliseconds: start,
       nowMilliseconds: start - 4_000,
     }),
-    start,
+    start - 3_750,
   );
   assert.equal(
     getScheduledDraftStartTaskDispatchMilliseconds({
@@ -193,7 +190,7 @@ test('queue warmups preserve start identity, retry, rate, and worker limits', as
   assert.doesNotMatch(warmupHandler, /runTransaction|\.set\(|\.update\(|sleep\(|openScheduledDraft/);
   assert.match(functionBody, /timeoutSeconds: 120/);
   assert.match(functionBody, /maxAttempts: 5/);
-  assert.match(functionBody, /maxConcurrentDispatches: 20/);
+  assert.match(functionBody, /maxConcurrentDispatches: 60/);
   assert.doesNotMatch(functionBody, /minInstances/);
 });
 

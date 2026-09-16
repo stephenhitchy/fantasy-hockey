@@ -103,11 +103,11 @@ function passingRamp(stage = 100) {
       measurementSource: 'worker-operation-backlog',
       peakDepth: 20,
       finalDepth: 0,
-      draftQueueWarmupTaskCount: stage * 9.5,
+      draftQueueWarmupTaskCount: stage * 9,
       oldestAgeMilliseconds: { p50: 1_000, p95: 5_000, p99: 10_000, max: 12_000 },
       drainMilliseconds: 20_000,
     },
-    functions: { maximumScoringConcurrency: 4, maximumDraftConcurrency: 20, coldStarts: 2 },
+    functions: { maximumScoringConcurrency: 4, maximumDraftConcurrency: 60, coldStarts: 2 },
     firestore: {
       measurementSource: 'cloud-monitoring',
       reads: 2_000,
@@ -282,7 +282,7 @@ test('missing cost, duplicate results, slow tails, backlog, or excess concurrenc
   evidence.latency.draftDeadlineDriftMilliseconds.p99 = 5_001;
   evidence.queue.oldestAgeMilliseconds.p95 = 60_001;
   evidence.queue.finalDepth = 1;
-  evidence.functions.maximumDraftConcurrency = 21;
+  evidence.functions.maximumDraftConcurrency = 61;
   delete evidence.cost.incrementalUsd;
   const result = evaluateRampEvidence(evidence);
   assert.equal(result.ready, false);

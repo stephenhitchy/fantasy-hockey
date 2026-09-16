@@ -2735,7 +2735,7 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       minBackoffSeconds: 2,
     },
     rateLimits: {
-      maxConcurrentDispatches: 20,
+      maxConcurrentDispatches: 60,
     },
   },
   async (request) => {

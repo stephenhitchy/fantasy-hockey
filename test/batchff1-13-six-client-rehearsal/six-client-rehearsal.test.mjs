@@ -1156,7 +1156,7 @@ test('the shared availability revision and exact future task identity are determ
     'processDraftClockDeadline';
   const fullTask = {
     name: resource,
-    scheduleTime: new Date(start - 10_000).toISOString(),
+    scheduleTime: new Date(start - 5_000).toISOString(),
     dispatchDeadline: '60s',
     dispatchCount: 0,
     responseCount: 0,

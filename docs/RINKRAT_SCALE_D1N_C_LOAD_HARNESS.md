@@ -26,10 +26,10 @@ The implementation does not change Production Scoring V4, Projection V11,
 six-game ownership, seventh-game rollover, immutable started windows, Draft or
 transaction authority, standings, playoffs, Rules, indexes, TTL, App Check,
 queue rollout mode, pending-task limits, or canonical authority. Scoring
-remains limited to four concurrent tasks. FF1.38 raises only
-the measured Draft task-queue dispatch ceiling from ten to twenty; Function
-instance/request concurrency and every competitive-authority boundary remain
-unchanged.
+remains limited to four concurrent tasks. FF1.39 reserves scheduled-start work
+five seconds before zero and raises the measured Draft task-queue dispatch
+ceiling from twenty to sixty; Function instance/request concurrency and every
+competitive-authority boundary remain unchanged.
 
 Every synthetic operation has a hashed deterministic identity. Ten percent of
 each workload is intentionally delivered twice using distinct hashed Cloud
@@ -151,15 +151,16 @@ drain time, interval concurrency, and cold starts. It intentionally has status
 The generator interleaves scoring and Draft operations in bounded enqueue
 batches. FF1.34's two-wave repeat materially improved but did not pass the
 fixed drift gate, so FF1.35 schedules one write-free warmup per measured Draft
-operation every ten seconds from T-180 through T-10. FF1.37 adds one final
-read-free T-5 pulse. The measured Draft operations share one exact deadline at
-least 185 seconds after planning. At stage 100 this is 50 Draft results plus
-950 warmups. FF1.36 makes only the fifty T-10 warmups perform one read-only
-authority-path prime each; the earlier 850 and final fifty T-5 pulses remain
-read-free. Warmups remain part of expected queue drain, Cloud
+operation every ten seconds from T-180 through T-10. FF1.36 makes only the
+fifty T-10 warmups perform one read-only authority-path prime each. FF1.39
+replaces FF1.37's read-free T-5 pulse with the measured authority task itself:
+the task dispatches at T-5, holds without Firestore access, and begins its
+transaction only at zero. The measured Draft operations share one exact
+deadline at least 185 seconds after planning. At stage 100 this is 50 Draft
+results plus 900 warmups. Warmups remain part of expected queue drain, Cloud
 Monitoring, and settled Billing/cost evidence, but cannot create a synthetic
 result or competitive write. The recorded
-`draftQueueWarmupTaskCount` must equal 9.5 times the selected operation stage.
+`draftQueueWarmupTaskCount` must equal 9 times the selected operation stage.
 A partial seed, partial enqueue, or drain timeout moves
 the synthetic run to a terminal diagnostic state; any late task for that exact
 authenticated run is acknowledged without a competitive write or a seven-day
@@ -246,7 +247,7 @@ Do not advance a failed or incomplete stage. Do not weaken thresholds to make a
 run pass. Retry only after the failure is understood and a separately reviewed
 fix is deployed.
 
-Five fully executed stage-100 runs are retained as failed timing diagnostics.
+Six fully executed stage-100 runs are retained as failed timing diagnostics.
 Exact `a08fbbc0` recorded Draft p95/p99 drift of 30,230/30,620 milliseconds.
 Exact `9cc3dd01` preserved 100/100 operations, 10/10 duplicates, zero
 errors/retries/contention, and every invariant while improving Draft p95/p99
@@ -265,15 +266,22 @@ FF1.37's T-5 pulse. It preserved 100/100 operations, all ten duplicates, zero
 errors/retries/contention, every invariant, and a 4,338-millisecond corrected
 drain; Draft p95/p99 was 2,422/2,523 milliseconds. Logs showed the pulses
 completed before zero and exact transactions remained near 0.17–0.26 seconds,
-leaving the ten-dispatch queue ceiling as the bottleneck. FF1.38 raises only
-that measured ceiling to twenty. Stage 500 is blocked until the FF1.38 repeat
-passes and finalizes under every unchanged latency, integrity, and cost gate.
+leaving the ten-dispatch queue ceiling as the bottleneck. Exact `cd6eede0`
+then raised the ceiling to twenty while preserving correctness, but Cloud
+Tasks smoothed its fifty-five measured deliveries across about 5.3 seconds;
+Draft p95/p99 regressed to 5,120/5,324 milliseconds even though exact
+transactions stayed around 0.19–0.24 seconds. FF1.39 therefore reserves the
+authoritative task at T-5, removes the superseded no-op T-5 pulse, and allows
+sixty bounded concurrent Draft dispatches. Stage 500 is blocked until a fresh
+stage-100 run passes and finalizes under every unchanged latency, integrity,
+and cost gate.
 See
 `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`,
 `docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`,
 `docs/RINKRAT_FF1_36_DRAFT_AUTHORITY_PRIME.md`,
-`docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md`, and
-`docs/RINKRAT_FF1_38_DRAFT_QUEUE_CONCURRENCY.md`.
+`docs/RINKRAT_FF1_37_DRAFT_QUEUE_FINAL_PULSE.md`,
+`docs/RINKRAT_FF1_38_DRAFT_QUEUE_CONCURRENCY.md`, and
+`docs/RINKRAT_FF1_39_DRAFT_START_RESERVATION.md`.
 
 ## Cleanup and rollback
 
@@ -294,11 +302,12 @@ npm run staging:d1n:c:run -- \
 The cleanup target must match the strict synthetic marker, project, stage, and
 run-ID format. It recursively removes only that reviewed `d1nLoadRuns` root.
 
-For FF1.38 runtime rollback, restore the exact preceding `084f352c`
-`processDraftClockDeadline` revision, restore the archive-parity
-`processLeagueAutomationTask` revision, and restore the preceding staging
-Hosting release last. Never broaden rollback to Production or unrelated
-Firebase resources.
+For FF1.39 runtime rollback, restore the exact preceding `cd6eede0` producer
+revisions (`continueServerDraftAutomation`, then
+`runScheduledDraftAutomation`), restore `processDraftClockDeadline`, restore
+the archive-parity `processLeagueAutomationTask` revision, and restore the
+preceding staging Hosting release last. Never broaden rollback to Production
+or unrelated Firebase resources.
 
 ## Draft decision boundary
 

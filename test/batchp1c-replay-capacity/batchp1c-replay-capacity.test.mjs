@@ -69,7 +69,7 @@ test('the 100K capacity model inspects real source limits and labels itself as a
   assert.ok(report.estimates.coldStartDocumentReads >= 1_000_000);
   assert.equal(report.architecture.draftDeadlineTaskQueuePresent, true);
   assert.equal(report.architecture.draftDeadlineTaskDeterministicIds, true);
-  assert.equal(report.architecture.draftDeadlineTaskMaxConcurrentDispatches, 20);
+  assert.equal(report.architecture.draftDeadlineTaskMaxConcurrentDispatches, 60);
   assert.equal(report.architecture.draftAutomationScanLimit, 250);
   assert.equal(report.architecture.leagueAutomationParallelism, 2);
   assert.equal(report.architecture.nhlProxyMaxInstances, 10);
