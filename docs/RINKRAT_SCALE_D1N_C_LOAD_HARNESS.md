@@ -153,15 +153,15 @@ drain time, interval concurrency, and cold starts. It intentionally has status
 `awaiting-external-usage-and-cost` and cannot pass the fixed evaluator.
 
 The generator interleaves scoring and Draft operations in bounded enqueue
-batches. After the first completed stage-100 run exposed idle-queue Draft
-ramp-up, the candidate harness now schedules two write-free Draft queue waves:
-one task per measured Draft operation at T-60 and another at T-10. The measured
-Draft operations share one exact deadline at least 65 seconds after planning.
-At stage 100 this is 50 Draft results plus 100 warmups; the warmups remain part
-of expected queue drain, Cloud Monitoring, and settled Billing/cost evidence,
-but cannot create a synthetic result or competitive write. The recorded
-`draftQueueWarmupTaskCount` must equal the selected operation stage. A partial
-seed, partial enqueue, or drain timeout moves
+batches. FF1.34's two-wave repeat materially improved but did not pass the
+fixed drift gate, so FF1.35 schedules one write-free warmup per measured Draft
+operation every ten seconds from T-180 through T-10. The measured Draft
+operations share one exact deadline at least 185 seconds after planning. At
+stage 100 this is 50 Draft results plus 900 warmups. Warmups remain part of
+expected queue drain, Cloud Monitoring, and settled Billing/cost evidence, but
+cannot create a synthetic result or competitive write. The recorded
+`draftQueueWarmupTaskCount` must equal nine times the selected operation stage.
+A partial seed, partial enqueue, or drain timeout moves
 the synthetic run to a terminal diagnostic state; any late task for that exact
 authenticated run is acknowledged without a competitive write or a seven-day
 retry loop.
@@ -244,14 +244,15 @@ Do not advance a failed or incomplete stage. Do not weaken thresholds to make a
 run pass. Retry only after the failure is understood and a separately reviewed
 fix is deployed.
 
-The first fully executed stage-100 run is retained as a failed timing
-diagnostic. It completed 100/100 unique operations and 10/10 duplicates with
-zero terminal errors, retries, duplicate results, or recovered contention, but
-Draft deadline-drift p95/p99 was 30,230/30,620 milliseconds. Scoring p95/p99
-was 149/1,160 milliseconds, queue-age p95/p99 was 33,755/34,563 milliseconds,
-and protected invariants remained unchanged. Stage 500 is blocked until the
-FF1.34 warmup candidate passes a fresh finalized stage-100 run under the same
-fixed limits. See `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`.
+Two fully executed stage-100 runs are retained as failed timing diagnostics.
+Exact `a08fbbc0` recorded Draft p95/p99 drift of 30,230/30,620 milliseconds.
+Exact `9cc3dd01` preserved 100/100 operations, 10/10 duplicates, zero
+errors/retries/contention, and every invariant while improving Draft p95/p99
+to 10,426/10,826 milliseconds; scoring p95/p99 was 159/1,620 milliseconds and
+queue-age p95/p99 was 44,111/44,907 milliseconds. Stage 500 is blocked until
+FF1.35 passes a fresh finalized stage-100 run under the same fixed limits. See
+`docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md` and
+`docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`.
 
 ## Cleanup and rollback
 

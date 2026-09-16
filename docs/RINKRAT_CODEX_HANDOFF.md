@@ -189,14 +189,21 @@ Scoring p95/p99 was 149/1,160 milliseconds and queue-age p95/p99 was
 gate: clustered Draft p95/p99 was 30,230/30,620 milliseconds as the idle
 ten-slot queue ramped.
 
-FF1.34 is the current source candidate. It schedules deterministic write-free
-warmup waves at T-60 and T-10 through the unchanged Draft queue, then schedules
-the authoritative task at exact zero. The legacy ten-second early handler stays
-available for already-enqueued tasks. The D1N harness counts every warmup in
-task drain, Cloud Monitoring, and settled Billing cost while retaining every
-fixed threshold. Independently review, merge, deploy exactly four staging
-Functions plus site-pinned Hosting, and repeat/finalize stage 100 before 500.
-Physical iPhone/Android evidence remains open in its independent lane.
+FF1.34 was merged and deployed on exact staging source `9cc3dd01`. Its repeat
+preserved 100/100 operations, 10/10 duplicates, zero errors/retries/contention,
+and every protected invariant while improving Draft p95/p99 drift to
+10,426/10,826 milliseconds. It still failed the unchanged 2,000/5,000-
+millisecond gate. Logs proved the cold T-60 wave dispatched at about one task
+per second and the T-10/measured work at about five per second.
+
+FF1.35 is the current source candidate. It keeps every queue/worker limit and
+write-free handler, but sustains deterministic warmups every ten seconds from
+T-180 through T-10. Elapsed warmups are skipped rather than competing with an
+imminent authority task. The D1N harness counts all 900 stage-100 warmups in
+drain, Monitoring, Billing, and cost while retaining every fixed threshold.
+Independently review, merge, deploy the same four staging Functions plus
+site-pinned Hosting, and repeat/finalize stage 100 before 500. Physical
+iPhone/Android evidence remains open in its independent lane.
 
 ## Current Draft-room UX posture
 
@@ -637,7 +644,8 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Independently review and merge FF1.34's write-free Draft queue-ramp repair.
+1. Independently review and merge FF1.35's sustained write-free Draft
+   queue-ramp repair.
    Run the complete inherited gate, builds, diff check, and clean-source guard.
 2. Deploy staging in consumer-first order:
    `processDraftClockDeadline`, archive-parity

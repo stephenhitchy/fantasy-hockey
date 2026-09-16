@@ -2,9 +2,12 @@
 
 Status: completed historical FF1.25 implementation and staging evidence. Its
 ten-second in-handler wait remains supported for already-enqueued tasks, but
-FF1.34 supersedes new scheduling with separate write-free T-60/T-10 queue
+FF1.34 superseded new scheduling with separate write-free T-60/T-10 queue
 warmups and an authoritative exact-zero task after clustered D1N-C evidence
-showed that holding start tasks consumed the existing queue slots.
+showed that holding start tasks consumed the existing queue slots. FF1.35 now
+supersedes that two-wave producer with a sustained T-180-through-T-10 cadence
+after exact staging evidence showed two waves still did not fully ramp the
+idle queue.
 
 ## Approved problem
 

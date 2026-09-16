@@ -27,7 +27,10 @@ test('write-free queue warmups precede an exact-zero authoritative start task', 
   const start = Date.parse('2026-10-06T02:00:00.000Z');
   const now = start - 15 * 60 * 1000;
 
-  assert.deepEqual(DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS, [60_000, 10_000]);
+  assert.deepEqual(
+    DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS,
+    Array.from({ length: 18 }, (_, index) => 180_000 - index * 10_000),
+  );
   assert.equal(DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS, 10_000);
   assert.equal(DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS, 250);
   assert.equal(
@@ -66,7 +69,7 @@ test('write-free queue warmups precede an exact-zero authoritative start task', 
   }));
 });
 
-test('late scheduling dispatches promptly and malformed timing fails closed', () => {
+test('late scheduling skips elapsed warmups and malformed timing fails closed', () => {
   const start = Date.parse('2026-10-06T02:00:00.000Z');
 
   assert.equal(
@@ -96,13 +99,21 @@ test('late scheduling dispatches promptly and malformed timing fails closed', ()
       nowMilliseconds: start - 4_000,
       warmupLeadMilliseconds: 10_000,
     }),
-    start - 3_750,
+    null,
   );
   assert.equal(
     getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
       scheduledStartMilliseconds: start,
-      nowMilliseconds: start - 4_000,
+      nowMilliseconds: start - 45_000,
       warmupLeadMilliseconds: 30_000,
+    }),
+    start - 30_000,
+  );
+  assert.equal(
+    getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
+      scheduledStartMilliseconds: start,
+      nowMilliseconds: start - 45_000,
+      warmupLeadMilliseconds: 25_000,
     }),
     null,
   );
@@ -143,6 +154,7 @@ test('queue warmups preserve start identity, retry, rate, and worker limits', as
   assert.match(schedule, /getScheduledDraftQueueWarmupTaskDispatchMilliseconds/);
   assert.match(schedule, /taskDispatchAt/);
   assert.match(schedule, /warmupLeadMilliseconds/);
+  assert.match(schedule, /warmupDispatchMilliseconds === null[\s\S]*continue/);
   assert.match(source, /taskType === 'queue-warmup'/);
   assert.match(source, /Draft queue warmup task completed/);
   const warmupHandlerIndex = source.indexOf('function processDraftQueueWarmupTask(');

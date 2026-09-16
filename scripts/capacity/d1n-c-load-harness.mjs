@@ -25,8 +25,29 @@ export const D1NC_LOAD_REGION = 'us-central1';
 export const D1NC_LOAD_SHARD_COUNT = 16;
 export const D1NC_LOAD_DUPLICATE_DELIVERY_RATE = 0.1;
 export const D1NC_LOAD_DRAFT_SCHEDULE_LEAD_MILLISECONDS = 5_000;
-export const D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS = [60_000, 10_000];
-export const D1NC_LOAD_DRAFT_QUEUE_MINIMUM_START_LEAD_MILLISECONDS = 65_000;
+export const D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS = [
+  180_000,
+  170_000,
+  160_000,
+  150_000,
+  140_000,
+  130_000,
+  120_000,
+  110_000,
+  100_000,
+  90_000,
+  80_000,
+  70_000,
+  60_000,
+  50_000,
+  40_000,
+  30_000,
+  20_000,
+  10_000,
+];
+export const D1NC_LOAD_DRAFT_QUEUE_MINIMUM_START_LEAD_MILLISECONDS = 185_000;
+export const D1NC_LOAD_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE =
+  D1NC_LOAD_DRAFT_QUEUE_WARMUP_LEADS_MILLISECONDS.length / 2;
 export const D1NC_LOAD_TASK_DRAIN_TIMEOUT_MILLISECONDS = 120_000;
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -487,7 +508,8 @@ export function summarizeD1ncLoadResults({
   );
   requireCondition(
     Number.isSafeInteger(draftQueueWarmupTaskCount) &&
-      draftQueueWarmupTaskCount === stage,
+      draftQueueWarmupTaskCount ===
+        stage * D1NC_LOAD_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE,
     'D1N-C Draft queue warmup task count is incomplete.',
   );
   const resultIds = new Set(results.map((entry) => entry.operationId));

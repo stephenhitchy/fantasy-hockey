@@ -1,8 +1,10 @@
 # FF1.34 — Draft Queue Ramp Warmup
 
-Status: source implementation candidate. It requires independent review, a
-clean merge, exact staging deployment, and a repeated D1N-C stage-100 ramp
-before it can be accepted.
+Status: deployed and measured on exact staging source `9cc3dd01`. The repair
+improved clustered Draft p95/p99 drift from 30,230/30,620 milliseconds to
+10,426/10,826 milliseconds, but still failed the unchanged 2,000/5,000-
+millisecond gate. FF1.35 supersedes its two-wave producer with a sustained
+write-free cadence; stage 500 remains blocked.
 
 ## Observed problem
 
@@ -24,6 +26,13 @@ an incorrect Draft result.
 The failed raw evidence is retained outside Git. Its Monitoring and settled
 Billing evidence must not be represented as a pass, and stage 500 remains
 blocked.
+
+The exact FF1.34 repeat also retained 100/100 completed operations, 10/10
+duplicate deliveries, zero errors/retries/contention, zero duplicate results,
+and unchanged protected invariants. Logs proved the cold T-60 wave dispatched
+at about one task per second and the T-10 wave plus measured work at about five
+tasks per second. Two short waves did not establish the sustained successful
+dispatch history Cloud Tasks requires before a burst.
 
 ## Architecture
 

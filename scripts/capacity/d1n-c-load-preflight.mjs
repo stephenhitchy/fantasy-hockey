@@ -25,6 +25,7 @@ export const D1NC_STAGING_URL = 'https://rinkrat-staging-d1nc-2026.web.app';
 export const D1NC_STAGING_DATABASE_LOCATION = 'us-west4';
 export const D1NC_STAGING_FUNCTION_REGION = 'us-central1';
 export const D1NC_RAMP_STAGES = Object.freeze([100, 500, 2_000, 5_000]);
+export const D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE = 9;
 export const D1NC_REQUIRED_FUNCTIONS = Object.freeze([
   'processDraftClockDeadline',
   'processLeagueAutomationTask',
@@ -417,8 +418,12 @@ export function evaluateRampEvidence(evidence) {
   const drainMilliseconds = requiredMetric(evidence?.queue, 'drainMilliseconds', 'queue drain time', issues);
   if (peakDepth === 0) issues.push('peak queue depth must prove that work was enqueued');
   if (finalDepth !== 0) issues.push('queue backlog did not return to zero');
-  if (stage && draftQueueWarmupTaskCount !== stage) {
-    issues.push('Draft queue warmup task count must equal the measured stage');
+  if (
+    stage &&
+    draftQueueWarmupTaskCount !==
+      stage * D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE
+  ) {
+    issues.push('Draft queue warmup task count must equal the sustained measured-stage plan');
   }
   if (queueAgeP95 !== null && queueAgeP95 > D1NC_THRESHOLDS.queueAgeP95Milliseconds) {
     issues.push('queue age p95 exceeds 60 seconds');

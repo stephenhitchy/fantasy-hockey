@@ -13,7 +13,26 @@ export const DRAFT_AVAILABILITY_MAX_ERROR_BACKOFF_MILLISECONDS =
   15 * 60 * 1000;
 export const DRAFT_AVAILABILITY_OVERDUE_RECOVERY_MILLISECONDS =
   60 * 60 * 1000;
-export const DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS = [60_000, 10_000] as const;
+export const DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS = [
+  180_000,
+  170_000,
+  160_000,
+  150_000,
+  140_000,
+  130_000,
+  120_000,
+  110_000,
+  100_000,
+  90_000,
+  80_000,
+  70_000,
+  60_000,
+  50_000,
+  40_000,
+  30_000,
+  20_000,
+  10_000,
+] as const;
 // Retained for already-enqueued pre-zero tasks created by the preceding release.
 export const DRAFT_START_TASK_WARMUP_LEAD_MILLISECONDS = 10_000;
 export const DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS = 250;
@@ -342,17 +361,19 @@ export function getScheduledDraftQueueWarmupTaskDispatchMilliseconds(input: {
   if (
     !Number.isFinite(input.scheduledStartMilliseconds) ||
     !Number.isFinite(input.nowMilliseconds) ||
-    !DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS.includes(
-      input.warmupLeadMilliseconds as 60_000 | 10_000,
+    !(DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS as readonly number[]).includes(
+      input.warmupLeadMilliseconds,
     )
   ) {
     return null;
   }
 
-  return Math.max(
-    input.nowMilliseconds + DRAFT_START_TASK_ENQUEUE_DELAY_MILLISECONDS,
-    input.scheduledStartMilliseconds - input.warmupLeadMilliseconds,
-  );
+  const dispatchMilliseconds =
+    input.scheduledStartMilliseconds - input.warmupLeadMilliseconds;
+
+  return dispatchMilliseconds > input.nowMilliseconds
+    ? dispatchMilliseconds
+    : null;
 }
 
 export function getScheduledDraftStartTaskDispatchMilliseconds(input: {

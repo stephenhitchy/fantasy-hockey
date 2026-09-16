@@ -975,6 +975,8 @@ async function scheduleScheduledDraftStartTask(
     }
   }
 
+  const scheduledWarmupLeadMilliseconds: number[] = [];
+
   for (const warmupLeadMilliseconds of DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS) {
     const warmupDispatchMilliseconds =
       getScheduledDraftQueueWarmupTaskDispatchMilliseconds({
@@ -984,7 +986,7 @@ async function scheduleScheduledDraftStartTask(
       });
 
     if (warmupDispatchMilliseconds === null) {
-      return 'error';
+      continue;
     }
 
     const warmupPayload: DraftQueueWarmupTaskPayload = {
@@ -1013,12 +1015,17 @@ async function scheduleScheduledDraftStartTask(
         return 'error';
       }
     }
+
+    scheduledWarmupLeadMilliseconds.push(warmupLeadMilliseconds);
   }
 
   console.info('Scheduled exact Draft-start task and queue warmups.', {
     scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
     taskDispatchAt: new Date(taskDispatchMilliseconds).toISOString(),
-    warmupLeadMilliseconds: [...DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS],
+    warmupLeadMilliseconds: scheduledWarmupLeadMilliseconds,
+    skippedElapsedWarmupCount:
+      DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS.length -
+      scheduledWarmupLeadMilliseconds.length,
   });
 
   return 'scheduled';
@@ -2536,8 +2543,8 @@ function processDraftQueueWarmupTask(
 
   if (
     !Number.isFinite(expectedScheduledStartMilliseconds) ||
-    !DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS.includes(
-      warmupLeadMilliseconds as 60_000 | 10_000,
+    !(DRAFT_QUEUE_WARMUP_LEAD_MILLISECONDS as readonly number[]).includes(
+      warmupLeadMilliseconds,
     )
   ) {
     console.warn('Ignored malformed Draft queue warmup task.');

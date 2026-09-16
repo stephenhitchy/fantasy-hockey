@@ -10,6 +10,7 @@ import {
   buildD1ncLoadRunAcknowledgement,
   buildD1ncLoadRunPlan,
   countRemainingD1ncTasks,
+  D1NC_LOAD_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE,
   maximumIntervalConcurrency,
   percentile,
   prepareD1ncDispatchBatch,
@@ -17,6 +18,7 @@ import {
   summarizeD1ncLoadResults,
 } from '../../scripts/capacity/d1n-c-load-harness.mjs';
 import {
+  D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE,
   D1NC_STAGING_PROJECT_ID,
   evaluateRampEvidence,
 } from '../../scripts/capacity/d1n-c-load-preflight.mjs';
@@ -206,7 +208,7 @@ test('raw ramp evidence records deferred device coverage without claiming broade
     results: documents.results,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
-    draftQueueWarmupTaskCount: 100,
+    draftQueueWarmupTaskCount: 900,
   };
   const evidence = summarizeD1ncLoadResults(common);
   assert.deepEqual(evidence.scope, {
@@ -215,7 +217,7 @@ test('raw ramp evidence records deferred device coverage without claiming broade
     authorizesRealDraft: false,
     authorizesPublicScale: false,
   });
-  assert.equal(evidence.queue.draftQueueWarmupTaskCount, 100);
+  assert.equal(evidence.queue.draftQueueWarmupTaskCount, 900);
   assert.throws(
     () => summarizeD1ncLoadResults({
       ...common,
@@ -249,10 +251,18 @@ test('dispatch batches interleave worker kinds and assign deadlines from enqueue
     plan,
     startedAtMilliseconds,
   );
-  assert.equal(warmupPlan.tasks.length, 100);
+  assert.equal(warmupPlan.tasks.length, 900);
+  assert.equal(
+    D1NC_LOAD_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE,
+    D1NC_DRAFT_QUEUE_WARMUPS_PER_OPERATION_STAGE,
+  );
   assert.equal(
     warmupPlan.expectedScheduledStartAtMilliseconds,
-    startedAtMilliseconds + 65_000,
+    startedAtMilliseconds + 185_000,
+  );
+  assert.equal(
+    warmupPlan.tasks.filter((entry) => entry.warmupLeadMilliseconds === 180_000).length,
+    50,
   );
   assert.equal(
     warmupPlan.tasks.filter((entry) => entry.warmupLeadMilliseconds === 60_000).length,
@@ -282,7 +292,7 @@ test('expected Cloud Task identities are bounded and drain checks ignore unrelat
   });
   const expected = buildD1ncExpectedTaskIds(plan);
   assert.equal(expected.scoring.size, 55);
-  assert.equal(expected.draft.size, 155);
+  assert.equal(expected.draft.size, 955);
   const scoringId = [...expected.scoring][0];
   const draftId = [...expected.draft][0];
   assert.equal(countRemainingD1ncTasks([
@@ -359,7 +369,7 @@ test('raw run evidence cannot pass until matching Monitoring and settled Billing
     results: documents.results,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
-    draftQueueWarmupTaskCount: 100,
+    draftQueueWarmupTaskCount: 900,
   });
   assert.equal(evaluateRampEvidence(aggregate).ready, false);
   assert.equal(aggregate.queue.producerMilliseconds, 1_000);
@@ -416,7 +426,7 @@ test('summary rejects missing operations, mismatched kinds, incomplete duplicate
     runCompletedAtMilliseconds: startedAtMilliseconds + 10_000,
     peakOperationBacklog: 100,
     finalTaskQueueDepth: 0,
-    draftQueueWarmupTaskCount: 100,
+    draftQueueWarmupTaskCount: 900,
   };
   assert.throws(() => summarizeD1ncLoadResults({ ...input, operations: documents.operations.slice(1), results: documents.results }), /operation count/);
   assert.throws(() => summarizeD1ncLoadResults({ ...input, finalTaskQueueDepth: 1, operations: documents.operations, results: documents.results }), /did not drain/);
