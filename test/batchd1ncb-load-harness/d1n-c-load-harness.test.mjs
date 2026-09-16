@@ -12,6 +12,7 @@ import {
   maximumIntervalConcurrency,
   percentile,
   prepareD1ncDispatchBatch,
+  resolveD1ncLoadTaskServiceAccount,
   summarizeD1ncLoadResults,
 } from '../../scripts/capacity/d1n-c-load-harness.mjs';
 import {
@@ -139,6 +140,50 @@ test('the deterministic plan is balanced, sharded, hashed, and includes bounded 
     .every((entry) => entry.ownedGamePoints.length === 6 && entry.ownedGamePoints.includes(0)));
   assert.deepEqual(plan.operations, repeat.operations);
   assert.equal(plan.runFingerprint, repeat.runFingerprint);
+});
+
+test('task delivery uses the one exact service account shared by both staging workers', () => {
+  const serviceAccountEmail = '123456789-compute@developer.gserviceaccount.com';
+  const deployment = (name, overrides = {}) => ({
+    name: `projects/${D1NC_STAGING_PROJECT_ID}/locations/us-central1/functions/${name}`,
+    state: 'ACTIVE',
+    serviceConfig: { serviceAccountEmail },
+    ...overrides,
+  });
+  const deployments = [
+    deployment('processLeagueAutomationTask'),
+    deployment('processDraftClockDeadline'),
+  ];
+  assert.equal(resolveD1ncLoadTaskServiceAccount(deployments), serviceAccountEmail);
+  assert.throws(
+    () => resolveD1ncLoadTaskServiceAccount(deployments.slice(0, 1)),
+    /deployment is missing/,
+  );
+  assert.throws(
+    () => resolveD1ncLoadTaskServiceAccount([
+      deployments[0],
+      deployment('processDraftClockDeadline', {
+        serviceConfig: { serviceAccountEmail: 'different@project.iam.gserviceaccount.com' },
+      }),
+    ]),
+    /do not share one runtime service account/,
+  );
+  assert.throws(
+    () => resolveD1ncLoadTaskServiceAccount([
+      deployments[0],
+      deployment('processDraftClockDeadline', { state: 'FAILED' }),
+    ]),
+    /not ACTIVE/,
+  );
+  assert.throws(
+    () => resolveD1ncLoadTaskServiceAccount([
+      deployments[0],
+      deployment('processDraftClockDeadline', {
+        name: 'projects/nhl-fantasy-app-ab673/locations/us-central1/functions/processDraftClockDeadline',
+      }),
+    ]),
+    /not the exact staging resource/,
+  );
 });
 
 test('raw ramp evidence records deferred device coverage without claiming broader readiness', () => {

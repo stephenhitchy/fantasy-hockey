@@ -178,14 +178,18 @@ The 2,000/5,000 ramps are public-scale evidence, not a blocker for a controlled
 2–4 league family-and-friends cohort.
 
 D1N-C-A adds a read-only, Production-refusing load preflight and aggregate
-physical-device evidence schema. D1N-C-B is merged at `120ae6da`; its two
-staging workers are ACTIVE on Node 22, their immutable archives match that
-clean Git source byte for byte, and staging Hosting identifies the same commit.
-It supplies the bounded generator, transactional synthetic worker probes,
-duplicate-delivery evidence, and Cloud Monitoring/Billing finalization while
-preserving the existing worker limits. No load has been run. Settled
-staging-filtered Billing export evidence and the 100/500 measurements remain
-open. Physical iPhone/Android evidence remains open in its independent lane.
+physical-device evidence schema. D1N-C-B and the independent-device policy are
+merged through `adfac941`; its two staging workers are ACTIVE on Node 22, their
+immutable archives match clean Git byte for byte, and staging Hosting identifies
+that exact commit. The settled staging-filtered Billing prerequisite and budget
+alert are verified. The first stage-100 attempt stopped before task creation
+because local Application Default Credentials could not infer the Cloud Tasks
+OIDC service account. It retained one explicit `enqueue-error` synthetic run
+with 100 operation fixtures, zero results, and zero active tasks. The current
+tooling repair verifies both exact ACTIVE worker resources share one runtime
+service account and supplies that deployed identity before seeding. No worker
+load has completed; 100/500 measurements and physical iPhone/Android evidence
+remain open in their independent lanes.
 
 ## Current Draft-room UX posture
 
@@ -626,11 +630,11 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Merge the D1N-C device-evidence policy follow-up, advance only staging
-   Hosting to that clean source revision, and retain the existing two workers
-   only if their immutable archives still match that revision byte for byte.
-2. Prove the settled staging-filtered Billing export row and active budget
-   alert, run the guarded infrastructure-only 100-operation ramp, finalize its
+1. Merge the D1N-C task-enqueue identity repair, advance only staging Hosting
+   to that clean source revision, and retain the existing two workers only if
+   their immutable archives still match that revision byte for byte.
+2. Rerun the guarded infrastructure-only 100-operation ramp, retain the prior
+   zero-result `enqueue-error` diagnostic run, finalize the successful run's
    Monitoring/Billing evidence, and independently review it before 500.
 3. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,

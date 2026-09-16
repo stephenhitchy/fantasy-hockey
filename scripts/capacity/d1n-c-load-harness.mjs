@@ -31,6 +31,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const requireFunctions = createRequire(new URL('../../functions/package.json', import.meta.url));
 const REVISION_PATTERN = /^[a-f0-9]{40}$/;
 const RUN_ID_PATTERN = /^d1nc-[a-f0-9]{20}-(?:100|500|2000|5000)$/;
+const SERVICE_ACCOUNT_EMAIL_PATTERN = /^[a-z0-9][a-z0-9._-]*@[a-z0-9.-]+\.gserviceaccount\.com$/;
 const DEFAULT_POLL_MILLISECONDS = 2_000;
 
 function requireCondition(condition, message) {
@@ -144,6 +145,53 @@ function requirePrivateOutputPath(outputPath) {
     relative.startsWith('..') && !path.isAbsolute(relative),
     'D1N-C evidence output must stay outside the Git worktree.',
   );
+}
+
+export function resolveD1ncLoadTaskServiceAccount(deployments) {
+  requireCondition(Array.isArray(deployments), 'D1N-C worker deployment evidence is invalid.');
+  const expectedNames = [D1NC_LOAD_SCORING_QUEUE, D1NC_LOAD_DRAFT_QUEUE];
+  const expectedByName = new Map(expectedNames.map((name) => [name, null]));
+  for (const deployment of deployments) {
+    const fullName = String(deployment?.name ?? '');
+    const name = fullName.split('/').at(-1) ?? '';
+    requireCondition(expectedByName.has(name), `Unexpected D1N-C worker deployment: ${name || 'unknown'}.`);
+    requireCondition(expectedByName.get(name) === null, `Duplicate D1N-C worker deployment: ${name}.`);
+    requireCondition(
+      fullName === `projects/${D1NC_STAGING_PROJECT_ID}/locations/${D1NC_LOAD_REGION}/functions/${name}`,
+      `D1N-C worker ${name} is not the exact staging resource.`,
+    );
+    requireCondition(deployment?.state === 'ACTIVE', `D1N-C worker ${name} is not ACTIVE.`);
+    const serviceAccountEmail = String(deployment?.serviceConfig?.serviceAccountEmail ?? '');
+    requireCondition(
+      SERVICE_ACCOUNT_EMAIL_PATTERN.test(serviceAccountEmail),
+      `D1N-C worker ${name} has no valid runtime service account.`,
+    );
+    expectedByName.set(name, serviceAccountEmail);
+  }
+  for (const [name, serviceAccountEmail] of expectedByName) {
+    requireCondition(serviceAccountEmail !== null, `D1N-C worker deployment is missing: ${name}.`);
+  }
+  const identities = new Set(expectedByName.values());
+  requireCondition(
+    identities.size === 1,
+    'D1N-C workers do not share one runtime service account for authenticated task delivery.',
+  );
+  return [...identities][0];
+}
+
+function inspectD1ncLoadTaskServiceAccount() {
+  const deployments = [D1NC_LOAD_SCORING_QUEUE, D1NC_LOAD_DRAFT_QUEUE].map((name) =>
+    JSON.parse(runCommand('gcloud', [
+      'functions',
+      'describe',
+      name,
+      '--gen2',
+      `--region=${D1NC_LOAD_REGION}`,
+      `--project=${D1NC_STAGING_PROJECT_ID}`,
+      '--format=json',
+    ])),
+  );
+  return resolveD1ncLoadTaskServiceAccount(deployments);
 }
 
 function deterministicPoints(index) {
@@ -736,6 +784,7 @@ async function executeRun(options) {
     ...(previousEvidence ? [`--previous-evidence=${previousEvidence}`] : []),
   ];
   runCommand(process.execPath, preflightArguments);
+  const taskServiceAccountId = inspectD1ncLoadTaskServiceAccount();
 
   const { applicationDefault, deleteApp, initializeApp } = requireFunctions('firebase-admin/app');
   const { FieldValue, getFirestore } = requireFunctions('firebase-admin/firestore');
@@ -743,6 +792,7 @@ async function executeRun(options) {
   const app = initializeApp({
     credential: applicationDefault(),
     projectId: D1NC_STAGING_PROJECT_ID,
+    serviceAccountId: taskServiceAccountId,
   }, `d1nc-load-${Date.now()}`);
 
   try {

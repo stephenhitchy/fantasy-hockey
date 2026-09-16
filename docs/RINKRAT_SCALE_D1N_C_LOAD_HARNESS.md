@@ -118,7 +118,12 @@ The executable refuses Production, emulator variables, a dirty worktree, a
 non-`main` branch, Git divergence, unsupported stages, a weak acknowledgement,
 missing Billing prerequisite, invalid optional device evidence, evidence output
 inside the repository, and either worker whose immutable
-deployed source archive differs from the clean Git commit. It enqueues 50
+deployed source archive differs from the clean Git commit. Before creating a
+synthetic run, it also reads both exact deployed worker resources, requires
+them to be ACTIVE with one shared runtime service account, and supplies that
+verified identity to Firebase Admin for authenticated Cloud Tasks delivery.
+This avoids guessing an OIDC identity when the operator uses local Application
+Default Credentials. It enqueues 50
 scoring probes and 50 Draft probes at stage 100, plus the bounded duplicate
 deliveries.
 
@@ -137,6 +142,9 @@ worker deadline drift. A partial seed, partial enqueue, or drain timeout moves
 the synthetic run to a terminal diagnostic state; any late task for that exact
 authenticated run is acknowledged without a competitive write or a seven-day
 retry loop.
+An `enqueue-error` run is retained for diagnosis and must show zero worker
+results before a corrected attempt. It does not count as a completed ramp and
+must not be silently deleted or represented as load evidence.
 Peak operation backlog is sampled while batches are enqueued and while they
 drain. After every result and planned duplicate converges, the runner also
 lists both exact staging queues and waits until every hashed task identity for
