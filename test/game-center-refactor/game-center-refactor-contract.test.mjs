@@ -117,6 +117,28 @@ describe('Batch 6A Game Center component boundaries', () => {
     );
   });
 
+  test('desktop player cards reuse the removed status-copy space without changing mobile', async () => {
+    const stylesheet = await read('src/app/features/cycles/cycle-one/cycle-one.css');
+
+    assert.match(
+      stylesheet,
+      /@media \(min-width: 781px\)\s*\{[\s\S]*?\.g \.active-matchup-player-card\s*\{[\s\S]*?grid-template-areas:\s*'logo identity scores'\s*'markers markers scores';/,
+    );
+    assert.match(
+      stylesheet,
+      /@media \(min-width: 781px\)[\s\S]*?\.g \.active-matchup-player-card \.window-game-markers\s*\{[\s\S]*?grid-area:\s*markers;/,
+    );
+    assert.match(
+      stylesheet,
+      /@media \(min-width: 1181px\) and \(max-width: 1599px\)[\s\S]*?\.teams-comparison:not\(\.single-team-view\) \.active-matchup-player-card\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) 52px;[\s\S]*?grid-template-areas:\s*'identity scores'\s*'markers scores';/,
+    );
+    assert.match(
+      stylesheet,
+      /\.teams-comparison:not\(\.single-team-view\) \.active-matchup-player-card \.fantasy-player-logo\s*\{\s*display:\s*none;/,
+    );
+    assert.match(stylesheet, /@media \(max-width: 780px\)/);
+  });
+
   test('the visual stylesheet is globally emitted but scoped to the Game Center host', async () => {
     const component = await read('src/app/features/cycles/cycle-one/cycle-one.ts');
     const stylesheet = await read('src/app/features/cycles/cycle-one/cycle-one.css');

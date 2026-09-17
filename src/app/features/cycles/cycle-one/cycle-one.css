@@ -2265,6 +2265,51 @@
   background: #fff1ae;
 }
 
+@media (min-width: 781px) {
+  .g .active-matchup-player-card {
+    grid-template-areas:
+      'logo identity scores'
+      'markers markers scores';
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+
+  .g .active-matchup-player-card .fantasy-player-logo {
+    grid-area: logo;
+  }
+
+  .g .active-matchup-player-card .fantasy-player-main {
+    grid-area: identity;
+  }
+
+  .g .active-matchup-player-card .fantasy-player-score-stack {
+    grid-area: scores;
+  }
+
+  .g .active-matchup-player-card .window-game-markers {
+    grid-area: markers;
+    align-self: end;
+    margin-top: 7px;
+  }
+}
+
+@media (min-width: 1181px) and (max-width: 1599px) {
+  .g .teams-comparison:not(.single-team-view) .active-matchup-player-card {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    grid-template-areas:
+      'identity scores'
+      'markers scores';
+  }
+
+  .g .teams-comparison:not(.single-team-view) .active-matchup-player-card .fantasy-player-logo {
+    display: none;
+  }
+
+  .g .teams-comparison:not(.single-team-view) .active-matchup-player-card .fantasy-player-main strong {
+    overflow-wrap: break-word;
+  }
+}
+
 .g .marker-unavailable {
   color: #05070a;
   border-color: #93a7bd;
