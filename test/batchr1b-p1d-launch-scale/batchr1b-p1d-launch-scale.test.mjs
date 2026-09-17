@@ -449,8 +449,11 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/playoffs/playoff-window-bank.service.ts',
         // D1M adds an isolated, detect-only final-score reconciliation classifier.
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
+        // D1.24 changes only league-adjusted Draft ranking and Auto-Draft selection.
+        'src/draft-pick-engine.ts',
+        'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    'fbffd287343e1545f009e7576e897ecede44a7cdb8712f8366c4b036476eceef',
+    '6607b68fbc27c15ca181ba4b2036f5e7003c13d4fe341b8be9aa735db16c05dd',
   );
 });

@@ -386,8 +386,11 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/playoffs/playoff-window-bank.service.ts',
         // D1M adds an isolated, detect-only final-score reconciliation classifier.
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
+        // D1.24 changes only league-adjusted Draft ranking and Auto-Draft selection.
+        'src/draft-pick-engine.ts',
+        'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '374217e5c5f20d2c9ca877a42c13f41eb501e2bb7a99b60206ceab1bbdd69fb9',
+    '8a5bf374365214ba6331ab0f7fe04eab7f9cd5d56324b55122cdad9d2de32ad8',
   );
 });

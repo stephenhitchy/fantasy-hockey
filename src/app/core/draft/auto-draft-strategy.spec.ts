@@ -1,10 +1,17 @@
 import {
+  AUTO_DRAFT_BENCH_ROLE_TARGETS,
   getAutoDraftBenchRole,
   getAutoDraftCandidateBlockReason,
   isAutomaticDraftCandidateAllowed,
 } from './auto-draft-strategy';
 
 describe('auto-draft roster strategy', () => {
+  const noBenchPlayers = { F: 0, D: 0, G: 0 } as const;
+
+  it('targets two forwards, one defenseman, and no reserve goalie unit', () => {
+    expect(AUTO_DRAFT_BENCH_ROLE_TARGETS).toEqual({ F: 2, D: 1, G: 0 });
+  });
+
   it('maps all forward positions into one bench coverage role', () => {
     expect(getAutoDraftBenchRole('LW')).toBe('F');
     expect(getAutoDraftBenchRole('C')).toBe('F');
@@ -18,7 +25,7 @@ describe('auto-draft roster strategy', () => {
       hasOpenStartingSlot: true,
       destination: 'bench' as const,
       assetPosition: 'G' as const,
-      existingBenchRoles: new Set<'F' | 'D' | 'G'>(),
+      existingBenchRoleCounts: noBenchPlayers,
     };
 
     expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
@@ -31,7 +38,7 @@ describe('auto-draft roster strategy', () => {
         hasOpenStartingSlot: true,
         destination: 'active',
         assetPosition: 'C',
-        existingBenchRoles: new Set(['G']),
+        existingBenchRoleCounts: { F: 0, D: 0, G: 1 },
       }),
     ).toBe(true);
   });
@@ -42,31 +49,54 @@ describe('auto-draft roster strategy', () => {
         hasOpenStartingSlot: false,
         destination: 'bench',
         assetPosition: 'LW',
-        existingBenchRoles: new Set(),
+        existingBenchRoleCounts: noBenchPlayers,
       }),
     ).toBe(true);
   });
 
-  it('rejects a second forward while defense and goalie remain uncovered', () => {
-    const context = {
-      hasOpenStartingSlot: false,
-      destination: 'bench' as const,
-      assetPosition: 'RW' as const,
-      existingBenchRoles: new Set<'F' | 'D' | 'G'>(['F']),
-    };
-
-    expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
-    expect(getAutoDraftCandidateBlockReason(context)).toBe('duplicate-bench-role');
-  });
-
-  it('fills the missing third role after two manual bench picks', () => {
+  it('allows a second forward while the two-forward target remains open', () => {
     expect(
       isAutomaticDraftCandidateAllowed({
         hasOpenStartingSlot: false,
         destination: 'bench',
-        assetPosition: 'G',
-        existingBenchRoles: new Set(['F', 'D']),
+        assetPosition: 'RW',
+        existingBenchRoleCounts: { F: 1, D: 0, G: 0 },
       }),
     ).toBe(true);
+  });
+
+  it('rejects a third forward after the two-forward target is filled', () => {
+    const context = {
+      hasOpenStartingSlot: false,
+      destination: 'bench' as const,
+      assetPosition: 'RW' as const,
+      existingBenchRoleCounts: { F: 2, D: 0, G: 0 },
+    };
+
+    expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
+    expect(getAutoDraftCandidateBlockReason(context)).toBe('bench-role-filled');
+  });
+
+  it('fills defense after two forward bench picks', () => {
+    expect(
+      isAutomaticDraftCandidateAllowed({
+        hasOpenStartingSlot: false,
+        destination: 'bench',
+        assetPosition: 'D',
+        existingBenchRoleCounts: { F: 2, D: 0, G: 0 },
+      }),
+    ).toBe(true);
+  });
+
+  it('does not use a bench slot on a second goalie unit', () => {
+    const context = {
+      hasOpenStartingSlot: false,
+      destination: 'bench' as const,
+      assetPosition: 'G' as const,
+      existingBenchRoleCounts: noBenchPlayers,
+    };
+
+    expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
+    expect(getAutoDraftCandidateBlockReason(context)).toBe('bench-role-filled');
   });
 });

@@ -1,3 +1,28 @@
+# Draft Batch D1.24 — League-Adjusted Rankings and Auto-Draft Bench Depth
+
+**Candidate:** RC65 / D1.24
+**Competitive models:** Production Scoring V4, Projection V11, Draft Ranking V2
+
+D1.24 separates raw fantasy-point projections from league-adjusted draft
+value. The ranking layer uses the exact fantasy-team count, required starters,
+and an expected two-forward/one-defense/no-goalie bench to establish each
+position's first waiver replacement. Team Goalie Units outside the number of
+required starters are kept in waiver order but moved below the drafted pool,
+preventing the former late-draft goalie wall.
+
+Server Auto-Draft still fills every starter first, then takes two forwards and
+one defenseman for the bench. It does not spend a bench pick on a second Team
+Goalie Unit, including when that unit is in the manager's queue. Manual picks
+remain unrestricted.
+
+Projection V11 statistical outputs and Production Scoring V4 are unchanged.
+Fresh snapshots carry Draft Ranking V2 compatibility evidence so old ranking
+snapshots are not silently reused. Full design, verification, deployment, and
+rollback details are in
+`docs/RINKRAT_DRAFT_D1_24_LEAGUE_ADJUSTED_RANKINGS.md`.
+
+---
+
 # Data Infrastructure Batch D1I — Season Launch Guardrails
 
 **Candidate:** RC66 / D1I
