@@ -1988,6 +1988,25 @@
     padding-top: 0;
   }
 
+  .g .matchups-section {
+    width: calc(100% + 20px);
+    margin-inline: -10px;
+    padding: 0;
+  }
+
+  .g .matchup-section-heading {
+    padding: 16px 10px 0;
+  }
+
+  .g .matchup-detail-card {
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .g .matchup-card-heading {
+    padding: 12px 10px 0;
+  }
+
   .g .mobile-matchup-scorebar {
     position: sticky;
     z-index: 850;

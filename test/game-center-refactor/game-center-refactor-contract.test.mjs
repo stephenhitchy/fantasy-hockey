@@ -139,6 +139,38 @@ describe('Batch 6A Game Center component boundaries', () => {
     assert.match(stylesheet, /@media \(max-width: 780px\)/);
   });
 
+  test('the phone matchup removes nested horizontal gutters around the player comparison', async () => {
+    const [stylesheet, mobileStyles, globalStyles] = await Promise.all([
+      read('src/app/features/cycles/cycle-one/cycle-one.css'),
+      read(
+        'src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.css',
+      ),
+      read('src/styles.css'),
+    ]);
+
+    assert.match(
+      stylesheet,
+      /@media \(max-width: 780px\)[\s\S]*?\.g \.matchups-section\s*\{[\s\S]*?width:\s*calc\(100% \+ 20px\);[\s\S]*?margin-inline:\s*-10px;[\s\S]*?padding:\s*0;/,
+    );
+    assert.match(
+      stylesheet,
+      /@media \(max-width: 780px\)[\s\S]*?\.g \.matchup-detail-card\s*\{[\s\S]*?padding:\s*0;[\s\S]*?border-radius:\s*0;/,
+    );
+    assert.match(
+      mobileStyles,
+      /\.mobile-live-player-row\s*\{[\s\S]*?padding:\s*6px 0;/,
+    );
+    assert.match(
+      globalStyles,
+      /@media \(max-width: 780px\)[\s\S]*?app-cycle-one \.matchup-detail-card\s*\{[\s\S]*?padding:\s*0 !important;[\s\S]*?border-radius:\s*0;/,
+    );
+    assert.doesNotMatch(
+      globalStyles,
+      /app-cycle-one \.matchup-detail-card\s*\{\s*padding:\s*(?:6|8)px !important;/,
+      'Narrow-phone overrides must not restore the removed detail-card gutter.',
+    );
+  });
+
   test('the visual stylesheet is globally emitted but scoped to the Game Center host', async () => {
     const component = await read('src/app/features/cycles/cycle-one/cycle-one.ts');
     const stylesheet = await read('src/app/features/cycles/cycle-one/cycle-one.css');

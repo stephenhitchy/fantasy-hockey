@@ -839,7 +839,8 @@ app-cycle-one .mobile-head-to-head-roster {
 
 @media (max-width: 390px) {
   app-cycle-one .matchup-detail-card {
-    padding: 8px !important;
+    padding: 0 !important;
+    border-radius: 0;
   }
 
   app-cycle-one .mobile-h2h-team-strip {
@@ -931,8 +932,8 @@ app-cycle-one .mobile-head-to-head-roster {
   }
 
   app-cycle-one .matchup-detail-card {
-    padding: 10px !important;
-    border-radius: 17px;
+    padding: 0 !important;
+    border-radius: 0;
   }
 
   app-cycle-one .mobile-h2h-team-strip {
@@ -1009,8 +1010,8 @@ app-cycle-one .mobile-head-to-head-roster {
   }
 
   app-cycle-one .matchup-detail-card {
-    padding: 6px !important;
-    border-radius: 14px;
+    padding: 0 !important;
+    border-radius: 0;
   }
 
   app-cycle-one .mobile-h2h-team-strip {

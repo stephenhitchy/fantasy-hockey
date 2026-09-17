@@ -372,7 +372,7 @@
 
   .mobile-live-player-row {
     min-width: 0;
-    padding: 6px;
+    padding: 6px 0;
   }
 
   .mobile-live-player-row + .mobile-live-player-row,
