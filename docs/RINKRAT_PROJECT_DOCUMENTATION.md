@@ -13,7 +13,9 @@ preventing the former late-draft goalie wall.
 Server Auto-Draft still fills every starter first, then takes two forwards and
 one defenseman for the bench. It does not spend a bench pick on a second Team
 Goalie Unit, including when that unit is in the manager's queue. Manual picks
-remain unrestricted.
+remain unrestricted. After a manager drafts one Goalie Unit, the Draft Room
+hides the remaining units from that manager's default player pool; the goalie
+filter and an explicit visibility control preserve manual access.
 
 Projection V11 statistical outputs and Production Scoring V4 are unchanged.
 Fresh snapshots carry Draft Ranking V2 compatibility evidence so old ranking
