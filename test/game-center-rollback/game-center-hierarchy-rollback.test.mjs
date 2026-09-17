@@ -88,6 +88,14 @@ describe('Batch 6B.2 Game Center hierarchy rollback', () => {
     assert.match(mobileLineup, /presenter\.breakdownPositions/);
     assert.match(mobileLineup, /presenter\.getPositionCurrentTotal/);
     assert.match(mobileStyles, /\.mobile-position-comparison/);
+    assert.match(
+      mobileStyles,
+      /\.mobile-position-comparison thead th:first-child\s*\{[\s\S]*?white-space:\s*nowrap;/,
+    );
+    assert.match(
+      mobileStyles,
+      /@media \(max-width: 360px\)[\s\S]*?\.mobile-live-player-statusline-compact\s*\{[\s\S]*?width:\s*100%;/,
+    );
     assert.ok(
       mobileLineup.indexOf('@for (section of getPositionSections(); track section.key)') <
         mobileLineup.indexOf('Points by position'),

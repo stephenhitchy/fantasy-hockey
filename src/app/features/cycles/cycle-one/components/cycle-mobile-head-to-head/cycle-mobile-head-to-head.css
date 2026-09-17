@@ -248,7 +248,8 @@
   }
 
   .mobile-position-comparison thead th {
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
     border-top: 0;
     color: var(--text-secondary);
     font-size: var(--rr-mobile-text-micro);
@@ -260,6 +261,10 @@
   .mobile-position-comparison tbody th {
     width: 42px;
     text-align: left;
+  }
+
+  .mobile-position-comparison thead th:first-child {
+    white-space: nowrap;
   }
 
   .mobile-position-comparison tbody th {
@@ -799,6 +804,23 @@
 
   .mobile-live-player-statusline {
     font-size: 11px;
+  }
+
+  .mobile-live-player-statusline-compact {
+    gap: 3px;
+    width: 100%;
+    padding-inline: 3px;
+  }
+
+  .mobile-live-player-statusline-compact i {
+    width: 15px;
+    height: 15px;
+    font-size: 10px;
+  }
+
+  .mobile-live-player-statusline-compact strong,
+  .mobile-live-player-statusline-compact span {
+    font-size: 10px;
   }
 
 }
