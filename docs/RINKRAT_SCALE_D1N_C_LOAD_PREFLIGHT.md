@@ -97,7 +97,7 @@ reviewed after each stage, never silently weakened:
 | recovered contention rate | at most 1% |
 | queue drain after the spike | at most 2 minutes |
 | scoring concurrency | never above 4 |
-| Draft concurrency | never above 20 |
+| Draft concurrency | never above 60 |
 | incremental billed cost | $2 / $5 / $15 / $25 by stage |
 
 Cost must come from the Cloud Billing export after usage has settled. Client

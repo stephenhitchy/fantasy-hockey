@@ -91,6 +91,11 @@ test('the runbook defines acceptance, edge cases, tests, observability, exact re
     'functions:processLeagueAutomationTask',
   ]) assert.match(runbook, new RegExp(resource));
   assert.doesNotMatch(runbook, /--only\s+functions\s*(?:\n|$)/);
+  assert.match(runbook, /observed interval concurrency exceeds 4 scoring or 60 Draft operations/);
+  assert.match(
+    read('docs/RINKRAT_SCALE_D1N_C_LOAD_PREFLIGHT.md'),
+    /Draft concurrency \| never above 60/,
+  );
   for (const phrase of [
     '5,120/5,324',
     'sixty',

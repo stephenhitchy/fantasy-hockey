@@ -234,7 +234,8 @@ Tasks smoothed the fifty-five measured exact-zero deliveries across about 5.3
 seconds at roughly ten per second while transactions remained about
 0.19–0.24 seconds.
 
-FF1.39 is the current source candidate. It dispatches the deterministic
+FF1.39 is merged and was deployed to exact isolated-staging source
+`a462006d`. It dispatches the deterministic
 scheduled-start authority task at T-5, holds only inside the existing bounded
 early window, rereads authority after zero, removes the superseded read-free
 T-5 pulse, and raises the Draft queue ceiling from twenty to sixty so stage
@@ -244,10 +245,21 @@ harness now measures this same reservation path and expects 900 warmups. The
 transactional Draft authority, scoring queue, and every 2,000/5,000-
 millisecond timing gate remain unchanged. Its focused regression coverage,
 complete inherited gate, both builds, final diff review, and clean candidate
-commit review are complete. Exact staging deployment of the Draft consumer,
-archive-parity scoring worker, two Draft producers, and site-pinned Hosting,
-and repeat/finalize stage 100 before 500 remain required. Physical
-iPhone/Android evidence remains open independently.
+commit review are complete. Its finalized stage-100 run passed every fixed
+gate: 100/100 operations, ten/ten duplicate deliveries, zero errors/retries/
+contention/protected-state changes, scoring p95/p99 521/1,116 milliseconds,
+Draft p95/p99 121/819 milliseconds, queue-age p95/p99 35,888/36,698
+milliseconds, 5,519-millisecond drain, concurrency 3/48, 1,900 reads, 541
+writes, zero terminal aborts, and zero net incremental billed USD in the
+settled staging-filtered export window. Physical evidence was deferred.
+
+Later client-only commits advanced clean `main` to `698074ef` and staging
+Hosting to `cee32db9` without changing the two load-worker source archives.
+The retained passing file remains correctly bound to `a462006d` and cannot
+authorize stage 500 under the same-revision progression rule. Bind staging
+Hosting to the next clean merged revision, reverify both immutable worker
+archives, and repeat/finalize stage 100 on that exact revision before 500.
+Physical iPhone/Android evidence remains open independently.
 
 ## Current Draft-room UX posture
 
@@ -688,16 +700,15 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Use the exact clean merged FF1.39 commit for isolated staging only. Recheck
-   clean-source identity immediately before any targeted deployment.
-2. Deploy staging in consumer-first order:
-   `processDraftClockDeadline`, archive-parity
-   `processLeagueAutomationTask`, `runScheduledDraftAutomation`,
-   `continueServerDraftAutomation`, then only site-pinned staging Hosting.
-3. Verify the manifest and all four targeted Function archives match the exact
-   merge, then rerun the guarded 100-operation ramp. Preserve every earlier
-   diagnostic and finalize the new run's Monitoring and settled Billing
-   evidence. Advance to 500 only if every unchanged threshold passes.
+1. Merge and verify the narrow FF1.39 evidence/runbook correction on clean
+   `main`. Do not relabel the passing `a462006d` file as a later revision.
+2. Have Stephen deploy only site-pinned staging Hosting from that exact clean
+   merge. The four FF1.39 Functions are already ACTIVE from `a462006d`; do not
+   redeploy them unless the read-only archive verifier finds a real mismatch.
+3. Verify the exact staging manifest and both immutable load-worker archives,
+   then repeat/finalize stage 100 on the same revision. Preserve the passing
+   `a462006d` evidence and every earlier diagnostic. Advance to 500 only if the
+   new revision also passes every unchanged threshold and independent review.
 4. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.

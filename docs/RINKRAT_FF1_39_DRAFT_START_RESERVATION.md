@@ -1,9 +1,12 @@
 # FF1.39 — Bounded Draft-start Reservation
 
 Status: source implementation, focused regression coverage, the complete
-inherited gate, both builds, final diff review, and the clean candidate commit
-and review are complete. Exact isolated-staging deployment and a fresh
-finalized stage-100 pass remain required. Stage 500 is blocked.
+inherited gate, both builds, final diff review, exact isolated-staging
+deployment, and one finalized stage-100 pass are complete at `a462006d`.
+Later client-only releases advanced `main` and staging Hosting, so the retained
+pass cannot satisfy the same-revision prerequisite for stage 500. A fresh
+stage-100 pass on the exact current revision remains required. Stage 500 is
+blocked.
 
 ## Evidence-driven problem
 
@@ -66,6 +69,28 @@ evidence.
 - Draft concurrency above sixty fails closed in preflight and final evidence.
 - Stage 500 remains blocked until the new stage-100 run is finalized with
   Cloud Monitoring usage, settled Cloud Billing cost, and independent review.
+
+## Finalized `a462006d` stage-100 evidence
+
+The exact staging rollout and repeat completed 100/100 operations and all ten
+planned duplicate deliveries exactly once. It recorded zero terminal errors,
+retries, duplicate competitive results, recovered contention, terminal
+Firestore aborts, or protected-state changes. Scoring p95/p99 was 521/1,116
+milliseconds; Draft deadline-drift p95/p99 was 121/819 milliseconds;
+queue-age p95/p99 was 35,888/36,698 milliseconds; corrected drain was 5,519
+milliseconds; and observed scoring/Draft concurrency was 3/48 beneath the
+fixed 4/60 ceilings. Cloud Monitoring recorded 1,900 reads and 541 writes. The
+settled, staging-filtered Cloud Billing export recorded zero net incremental
+billed USD for the enclosing window.
+
+The evidence is finalized and ready for independent review, with physical
+device evidence explicitly deferred. It therefore proves the backend gate for
+that exact revision only and does not authorize a real Draft or public scale.
+Because `main` and staging Hosting later advanced through client-only commits,
+the source-controlled same-revision gate correctly refuses to use this file as
+the prerequisite for stage 500. Preserve it without relabeling and repeat
+stage 100 after the current clean `main` is bound to site-pinned staging
+Hosting and both worker archives pass byte verification again.
 
 ## Exact staging boundary and rollback
 

@@ -238,7 +238,7 @@ Stop immediately and preserve the run if any of these occur:
 - scoring p95/p99 exceeds 20/60 seconds;
 - Draft deadline drift p95/p99 exceeds 2/5 seconds;
 - queue age p95/p99 exceeds 60/120 seconds or drain exceeds two minutes;
-- observed interval concurrency exceeds 4 scoring or 20 Draft operations;
+- observed interval concurrency exceeds 4 scoring or 60 Draft operations;
 - the queue does not return to zero;
 - settled incremental cost exceeds the stage ceiling; or
 - a protected competitive document changes.
@@ -275,6 +275,27 @@ authoritative task at T-5, removes the superseded no-op T-5 pulse, and allows
 sixty bounded concurrent Draft dispatches. Stage 500 is blocked until a fresh
 stage-100 run passes and finalizes under every unchanged latency, integrity,
 and cost gate.
+
+Exact `a462006d` then passed the complete stage-100 fixed gate. All 100
+operations and ten duplicate deliveries converged exactly once with zero
+terminal error, retry, duplicate competitive result, recovered contention, or
+protected-state change. Scoring p95/p99 was 521/1,116 milliseconds, Draft
+deadline-drift p95/p99 was 121/819 milliseconds, queue-age p95/p99 was
+35,888/36,698 milliseconds, corrected drain was 5,519 milliseconds, and the
+observed scoring/Draft concurrency maxima were 3/48 beneath the fixed 4/60
+ceilings. Cloud Monitoring recorded 1,900 reads, 541 writes, and zero terminal
+aborts; the settled staging-filtered Billing export recorded zero net
+incremental billed USD for the enclosing window. Physical-device evidence was
+deferred, so this pass does not authorize a real Draft or public scale.
+
+That finalized evidence is revision-bound to `a462006d`. Later client-only
+commits advanced `main` and staging Hosting without changing either load-worker
+source archive. The exact-revision progression rule intentionally prevents the
+old file from authorizing stage 500. First bind site-pinned staging Hosting to
+the new clean `main`, let preflight reverify both immutable worker archives,
+and repeat/finalize stage 100 on that same revision. Do not relabel the retained
+`a462006d` evidence or weaken the same-revision gate.
+
 See
 `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`,
 `docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`,
