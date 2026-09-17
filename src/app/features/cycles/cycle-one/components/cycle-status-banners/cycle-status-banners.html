@@ -2,9 +2,7 @@
       <section
         class="compact-auto-status rr-notice rr-notice--info"
         [class.compact-status-error]="presenter.getAutoLeagueStatusClass() === 'auto-status-error'"
-        [class.compact-status-working]="
-          presenter.getAutoLeagueStatusClass() === 'auto-status-working' || presenter.scoringLoading()
-        "
+        [class.compact-status-working]="presenter.getAutoLeagueStatusClass() === 'auto-status-working'"
         role="status"
         aria-live="polite"
       >
@@ -16,16 +14,3 @@
         </div>
       </section>
     }
-
-    <section
-      class="shared-scoring-status-card rr-notice rr-notice--info"
-      [class.shared-scoring-refreshing]="presenter.liveScoringControl()?.status === 'refreshing'"
-      [class.shared-scoring-error]="presenter.liveScoringControl()?.status === 'error'"
-    >
-      <app-live-score-freshness
-        [control]="presenter.liveScoringControl()"
-        [snapshot]="presenter.sharedScoringSnapshot()"
-        [cycleStatus]="presenter.cycle()?.status ?? null"
-        [embedded]="true"
-      ></app-live-score-freshness>
-    </section>

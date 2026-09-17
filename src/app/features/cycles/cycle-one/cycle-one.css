@@ -1932,10 +1932,9 @@
   gap: 11px;
   margin-bottom: 16px;
   padding: 11px 13px;
-  border: 1px solid rgba(127, 178, 238, 0.38);
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 38%, var(--rr-color-border));
   border-radius: 12px;
-  background: rgba(18, 40, 65, 0.82);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  background: color-mix(in srgb, var(--rr-color-info) 8%, var(--rr-color-surface-raised));
 }
 
 .g .compact-status-indicator {
@@ -1944,8 +1943,8 @@
   flex: 0 0 auto;
   margin-top: 5px;
   border-radius: 50%;
-  background: #8fc7ff;
-  box-shadow: 0 0 0 4px rgba(143, 199, 255, 0.12);
+  background: var(--rr-color-info);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rr-color-info) 14%, transparent);
 }
 
 .g .compact-auto-status strong,
@@ -1955,14 +1954,14 @@
 }
 
 .g .compact-auto-status strong {
-  color: #ffffff;
+  color: var(--rr-color-text-primary);
   font-size: 13px;
   font-weight: 950;
 }
 
 .g .compact-auto-status p {
   margin-top: 3px;
-  color: #b9c9db;
+  color: var(--rr-color-text-secondary);
   font-size: 12px;
   font-weight: 750;
   line-height: 1.4;
@@ -1973,13 +1972,13 @@
 }
 
 .g .compact-status-error {
-  border-color: rgba(255, 141, 154, 0.55);
-  background: rgba(78, 28, 40, 0.82);
+  border-color: color-mix(in srgb, var(--rr-color-danger) 52%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-color-danger) 10%, var(--rr-color-surface-raised));
 }
 
 .g .compact-status-error .compact-status-indicator {
-  background: #ff9ca7;
-  box-shadow: 0 0 0 4px rgba(255, 156, 167, 0.13);
+  background: var(--rr-color-danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rr-color-danger) 14%, transparent);
 }
 
 @keyframes compact-status-pulse {
@@ -2340,48 +2339,6 @@
   font-size: 0.66rem;
   line-height: 1.35;
 }
-
-.g .shared-scoring-status-card {
-  display: block;
-  margin: 14px 0 0;
-  padding: 13px 16px;
-  border: 1px solid #35536d;
-  border-radius: 14px;
-  color: #d8e8f5;
-  background: rgba(12, 31, 48, 0.88);
-}
-
-.g .shared-scoring-pulse {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.12);
-}
-
-.g .shared-scoring-refreshing .shared-scoring-pulse {
-  background: #60a5fa;
-  box-shadow: 0 0 0 5px rgba(96, 165, 250, 0.14);
-  animation: shared-scoring-pulse 1.4s ease-in-out infinite;
-}
-
-.g .shared-scoring-error {
-  border-color: #be5265;
-  color: #ffd5dc;
-  background: rgba(61, 20, 31, 0.88);
-}
-
-.g .shared-scoring-error .shared-scoring-pulse {
-  background: #fb7185;
-  box-shadow: 0 0 0 5px rgba(251, 113, 133, 0.14);
-}
-
-@keyframes shared-scoring-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(0.92); }
-  50% { opacity: 1; transform: scale(1.08); }
-}
-
-
 
 @media (max-width: 720px) {
   .g .matchup-card-heading {

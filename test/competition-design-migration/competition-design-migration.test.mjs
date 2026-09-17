@@ -128,7 +128,7 @@ test('Game Center composes shared shell, matchup cards, progress, badges, and co
     'team-roster-progress-track rr-progress',
     'team-roster-progress-fill rr-progress__value',
     '<app-league-quick-navigation',
-    'shared-scoring-status-card rr-notice rr-notice--info',
+    'compact-auto-status rr-notice rr-notice--info',
   ]) {
     assert.match(combined, new RegExp(marker));
   }

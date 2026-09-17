@@ -516,10 +516,6 @@ export class CycleOne implements OnDestroy {
       return `${this.getCycleLabel()} Complete`;
     }
 
-    if (this.scoringLoading()) {
-      return 'Checking Current Scores';
-    }
-
     if (!this.cycleScoring()) {
       return 'Waiting for Scoring Data';
     }
@@ -572,10 +568,6 @@ export class CycleOne implements OnDestroy {
       }
 
       return `${this.getCycleLabel()} has final scores saved. ${this.getNextCycleLabel()} will be created or opened automatically when the flow continues.`;
-    }
-
-    if (this.scoringLoading()) {
-      return 'The app is loading NHL game results and recalculating fantasy scores.';
     }
 
     if (!this.cycleScoring()) {
@@ -637,7 +629,6 @@ export class CycleOne implements OnDestroy {
       this.completeCycleError() ||
       this.startNextCycleError() ||
       this.scoringError() ||
-      this.scoringLoading() ||
       this.completingCycle() ||
       this.startingNextCycle() ||
       (this.cycleScoring() && !this.hasCurrentCycleScheduledGames()),
@@ -2452,18 +2443,18 @@ export class CycleOne implements OnDestroy {
     const matchup = this.getCurrentDisplayedMatchup();
 
     if (matchup?.status === 'complete') {
-      return 'Matchup completed';
+      return 'Final';
     }
 
     if (result.confidence === 'scheduled') {
-      return 'Scheduled matchup finish';
+      return 'Matchup ends';
     }
 
     if (result.confidence === 'projected') {
-      return 'Projected matchup finish';
+      return 'Projected end';
     }
 
-    return 'Matchup timeline';
+    return 'Matchup timing';
   }
 
   getMatchupFinishDateLabel(): string {
@@ -2471,41 +2462,11 @@ export class CycleOne implements OnDestroy {
 
     if (!result.finishDate || result.confidence === 'partial' || result.confidence === 'unavailable') {
       return this.scheduleProjectionLoading()
-        ? 'Calculating from NHL schedules...'
-        : 'Finish date is still being calculated';
+        ? 'Calculating end date…'
+        : 'End date pending';
     }
 
     return this.formatMatchupFinishDate(result.finishDate, true);
-  }
-
-  getMatchupFinishProgressLabel(): string {
-    const result = this.matchupFinishDate();
-
-    if (result.totalSlotCount === 0) {
-      return 'Waiting for the matchup lineup.';
-    }
-
-    if (result.unresolvedSlotCount > 0) {
-      return `${result.resolvedSlotCount} of ${result.totalSlotCount} starting roster-slot schedules resolved`;
-    }
-
-    if (result.projectedSlotCount > 0) {
-      return `${result.scheduledSlotCount} locked · ${result.projectedSlotCount} projected roster-slot schedules`;
-    }
-
-    return `All ${result.totalSlotCount} starting roster-slot schedules are locked`;
-  }
-
-  getMatchupFinishDescription(): string {
-    const result = this.matchupFinishDate();
-
-    if (result.confidence === 'partial' || result.confidence === 'unavailable') {
-      return 'RinkRat is waiting for the remaining roster-slot boundaries and NHL schedules before showing one definitive date.';
-    }
-
-    return result.confidence === 'projected'
-      ? 'This date includes future roster slots that have not opened yet. It updates if an NHL game is postponed or a planned starter changes.'
-      : 'This exact matchup finishes after the final starting roster slot completes its sixth scheduled NHL team game.';
   }
 
   getMobileMatchupFinishLabel(): string {

@@ -235,4 +235,44 @@ describe('Batch 6A Game Center component boundaries', () => {
       assert.doesNotMatch(source, /firebase\/|firestore|httpsCallable|setDoc|updateDoc|runTransaction/);
     }
   });
+
+  test('the score-first page hides routine refresh telemetry and keeps only a concise finish date', async () => {
+    const [route, statusComponent, statusTemplate, finishTemplate, finishStyles] =
+      await Promise.all([
+        read('src/app/features/cycles/cycle-one/cycle-one.ts'),
+        read(
+          'src/app/features/cycles/cycle-one/components/cycle-status-banners/cycle-status-banners.ts',
+        ),
+        read(
+          'src/app/features/cycles/cycle-one/components/cycle-status-banners/cycle-status-banners.html',
+        ),
+        read(
+          'src/app/features/cycles/cycle-one/components/cycle-matchup-finish-card/cycle-matchup-finish-card.html',
+        ),
+        read(
+          'src/app/features/cycles/cycle-one/components/cycle-matchup-finish-card/cycle-matchup-finish-card.css',
+        ),
+      ]);
+
+    assert.doesNotMatch(statusComponent, /LiveScoreFreshness/);
+    assert.doesNotMatch(statusTemplate, /app-live-score-freshness|shared-scoring-status-card/);
+    assert.match(statusTemplate, /role="status"/);
+    assert.match(statusTemplate, /aria-live="polite"/);
+
+    const visibilityMethod = route.match(
+      /shouldShowCompactAutoStatus\(\): boolean \{[\s\S]*?\n  \}/,
+    )?.[0] ?? '';
+    assert.doesNotMatch(visibilityMethod, /scoringLoading/);
+    assert.doesNotMatch(route, /Checking Current Scores/);
+
+    assert.match(finishTemplate, /matchup-finish-eyebrow/);
+    assert.match(finishTemplate, /matchup-finish-date/);
+    assert.doesNotMatch(
+      finishTemplate,
+      /matchup-finish-icon|matchup-finish-progress|<p>|reaches game 6/,
+    );
+    assert.match(finishStyles, /font-size: 12px/);
+    assert.match(finishStyles, /font-size: 14px/);
+    assert.match(finishStyles, /--rr-card-shadow: none/);
+  });
 });

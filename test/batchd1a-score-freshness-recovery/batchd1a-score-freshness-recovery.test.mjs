@@ -153,7 +153,7 @@ test('timestamp helpers handle Firestore-like values and bounded relative labels
   assert.equal(formatLiveScoringCountdown(1_000, 61_000), '1 min overdue');
 });
 
-test('detailed and overview matchup pages both expose the compact score timing component', async () => {
+test('score timing details stay on the overview while Game Center reserves banners for actionable states', async () => {
   const [bannerTs, bannerHtml, overviewTs, overviewHtml, componentHtml, componentCss] = await Promise.all([
     read('src/app/features/cycles/cycle-one/components/cycle-status-banners/cycle-status-banners.ts'),
     read('src/app/features/cycles/cycle-one/components/cycle-status-banners/cycle-status-banners.html'),
@@ -163,9 +163,11 @@ test('detailed and overview matchup pages both expose the compact score timing c
     read('src/app/shared/live-score-freshness/live-score-freshness.css'),
   ]);
 
-  assert.match(bannerTs, /LiveScoreFreshness/);
-  assert.match(bannerHtml, /app-live-score-freshness/);
-  assert.match(bannerHtml, /shared-scoring-status-card rr-notice rr-notice--info/);
+  assert.doesNotMatch(bannerTs, /LiveScoreFreshness/);
+  assert.doesNotMatch(bannerHtml, /app-live-score-freshness/);
+  assert.match(bannerHtml, /compact-auto-status rr-notice rr-notice--info/);
+  assert.match(bannerHtml, /role="status"/);
+  assert.match(bannerHtml, /aria-live="polite"/);
   assert.match(overviewTs, /listenToSharedLiveScoringControl/);
   assert.match(overviewHtml, /app-live-score-freshness/);
   assert.match(componentHtml, /Last checked/);

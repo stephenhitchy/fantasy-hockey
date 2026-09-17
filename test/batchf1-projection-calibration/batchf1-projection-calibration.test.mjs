@@ -337,8 +337,8 @@ test('the versioned production scoring engine and rules remain pinned to the app
   }
 });
 
-test('Game Center exposes the exact matchup timeline in both desktop and mobile score surfaces', async () => {
-  const [page, mobile, presenter] = await Promise.all([
+test('Game Center exposes the exact matchup date in concise desktop and mobile score surfaces', async () => {
+  const [page, mobile, finishCard, presenter] = await Promise.all([
     readFile(
       new URL('../../src/app/features/cycles/cycle-one/cycle-one.html', import.meta.url),
       'utf8',
@@ -351,6 +351,13 @@ test('Game Center exposes the exact matchup timeline in both desktop and mobile 
       'utf8',
     ),
     readFile(
+      new URL(
+        '../../src/app/features/cycles/cycle-one/components/cycle-matchup-finish-card/cycle-matchup-finish-card.html',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    readFile(
       new URL('../../src/app/features/cycles/cycle-one/cycle-one.ts', import.meta.url),
       'utf8',
     ),
@@ -358,8 +365,9 @@ test('Game Center exposes the exact matchup timeline in both desktop and mobile 
 
   assert.match(page, /app-cycle-matchup-finish-card/);
   assert.match(mobile, /getMobileMatchupFinishLabel/);
+  assert.match(finishCard, /getMatchupFinishDateLabel/);
+  assert.doesNotMatch(finishCard, /reaches game 6|matchup-finish-progress/);
   assert.match(presenter, /calculateDisplayedMatchupFinishDate/);
-  assert.match(presenter, /final starting roster slot completes its sixth scheduled NHL team game/);
 });
 
 test('Projection Lab identifies V11 trajectory adjustments without merging them with availability', async () => {
