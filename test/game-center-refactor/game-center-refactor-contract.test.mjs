@@ -72,12 +72,12 @@ describe('Batch 6A Game Center component boundaries', () => {
       'getWindowGameMarkers',
       'getAssetGamesPlayed',
       'getPositionGamesLeft',
-      'getPendingWindowCallout',
       'isFutureWindowPending',
     ]) {
       assert.match(teamPanel + mobile, new RegExp(`presenter\\.${requiredCall}\\(`));
     }
 
+    assert.doesNotMatch(teamPanel + mobile, /getPendingWindowCallout|getPendingWindowTooltip/);
     assert.match(teamPanel, /Roster Progress/);
     assert.match(teamPanel, /Does not score while on the bench/);
   });

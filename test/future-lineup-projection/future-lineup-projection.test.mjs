@@ -417,8 +417,9 @@ test('Game Center refreshes future previews from roster, window, and projection 
   assert.match(source, /this\.playerPool\.set\(await loadDraftPlayerPool\(true\)\);\s*\n\s*this\.refreshEffectivePicks\(\);/);
   assert.match(source, /getCycleProjectionPreviewSignature/);
   assert.match(source, /slotWindow\.assetKey !== pick\.asset\.assetKey/);
-  assert.match(source, /Scheduled move · Matchup/);
-  assert.match(source, /Planned starter · Matchup/);
+  assert.match(source, /private isQueuedIncomingPreview\(pick: DraftPick\): boolean/);
+  assert.match(source, /private isPlannedFutureLineupPick\(pick: DraftPick\): boolean/);
+  assert.doesNotMatch(source, /has not started for this roster slot yet/);
 });
 
 test('the batch does not alter scoring rules or the projection engine', async () => {

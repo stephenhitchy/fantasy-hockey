@@ -57,11 +57,13 @@ describe('Batch 6B.2 Game Center hierarchy rollback', () => {
   });
 
   test('keeps pending timing and unavailable projections out of the calm matchup surface', async () => {
-    const [page, matchup, breakdown, mobileLineup, styles, presenter] = await Promise.all([
+    const [page, matchup, teamPanel, breakdown, mobileLineup, mobileStyles, styles, presenter] = await Promise.all([
       read('src/app/features/cycles/cycle-one/cycle-one.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-matchup-card/cycle-matchup-card.html'),
+      read('src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-matchup-breakdown/cycle-matchup-breakdown.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html'),
+      read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.css'),
       read('src/app/features/cycles/cycle-one/cycle-one.css'),
       read('src/app/features/cycles/cycle-one/cycle-one.ts'),
     ]);
@@ -71,6 +73,12 @@ describe('Batch 6B.2 Game Center hierarchy rollback', () => {
     assert.match(breakdown, /shouldShowMatchupProjectionNote\(matchup\)/);
     assert.match(mobileLineup, /hasRosterDisplayMetricForMatchup\(matchup\)/);
     assert.match(mobileLineup, /hasTeamCycleProjection/);
+    assert.match(mobileLineup, /Points by position/);
+    assert.match(mobileLineup, /presenter\.breakdownPositions/);
+    assert.match(mobileLineup, /presenter\.getPositionCurrentTotal/);
+    assert.match(mobileStyles, /\.mobile-position-comparison/);
+    assert.doesNotMatch(teamPanel + mobileLineup + presenter, /getPendingWindowCallout|getPendingWindowTooltip/);
+    assert.doesNotMatch(mobileLineup, /getActiveStatusLine/);
     assert.match(styles, /\.g \.matchup-view-selector \{\s*display: none;/);
     assert.match(presenter, /getMobileMatchupFinishLabel\(\): string \| null/);
     assert.match(presenter, /return null;/);

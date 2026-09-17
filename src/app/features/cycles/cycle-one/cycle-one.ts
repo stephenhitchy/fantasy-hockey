@@ -3005,36 +3005,6 @@ export class CycleOne implements OnDestroy {
     return !window || window.status === 'scheduled';
   }
 
-  getPendingWindowCallout(pick: DraftPick): string {
-    const window = this.getWindowForPick(pick);
-    const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
-
-    if (this.isQueuedIncomingPreview(pick)) {
-      return `Scheduled move · Matchup ${cycleNumber}`;
-    }
-
-    if (this.isPlannedFutureLineupPick(pick)) {
-      return `Planned starter · Matchup ${cycleNumber}`;
-    }
-
-    return `Matchup ${cycleNumber} has not started for this roster slot yet.`;
-  }
-
-  getPendingWindowTooltip(pick: DraftPick): string {
-    const window = this.getWindowForPick(pick);
-    const cycleNumber = window?.cycleNumber ?? this.cycleNumber;
-
-    if (this.isQueuedIncomingPreview(pick)) {
-      return `${this.getAssetName(pick.asset)} is scheduled to take this roster slot as soon as the outgoing player's current six-game count ends. The Matchup ${cycleNumber} projection is an estimate until this slot starts, then it locks to the new player.`;
-    }
-
-    if (this.isPlannedFutureLineupPick(pick)) {
-      return `${this.getAssetName(pick.asset)} is the player currently assigned to this future roster slot. The Matchup ${cycleNumber} projection is an estimate until the slot's six-game count begins.`;
-    }
-
-    return `This player appears here early so you can track the whole roster. ${this.getCycleLabel()} will begin for this slot when ${this.getAssetName(pick.asset)} reaches the first NHL team game in this six-game count.`;
-  }
-
   getWindowStatusLabel(pick: DraftPick): string {
     const window = this.getWindowForPick(pick);
 

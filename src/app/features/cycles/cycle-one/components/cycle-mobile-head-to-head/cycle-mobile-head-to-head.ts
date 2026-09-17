@@ -101,14 +101,6 @@ export class CycleMobileHeadToHead {
     return this.presenter.getBenchAssetMobileStatus(asset);
   }
 
-  getActiveStatusLine(pick: DraftPick): string {
-    if (this.presenter.isFutureWindowPending(pick)) {
-      return this.presenter.getPendingWindowCallout(pick);
-    }
-
-    return this.presenter.getWindowStatusLabel(pick);
-  }
-
   getMarkerClass(marker: CycleWindowGameMarker): string {
     return `mobile-window-marker mobile-window-marker-${marker.status}`;
   }

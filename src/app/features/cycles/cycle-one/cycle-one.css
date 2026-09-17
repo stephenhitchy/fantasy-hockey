@@ -875,21 +875,6 @@
     0 6px 14px rgba(0, 0, 0, 0.24);
 }
 
-.g .future-window-callout {
-  margin-top: 4px;
-  padding: 3px 6px;
-  border: 1px dashed rgba(154, 198, 245, 0.45);
-  border-radius: 999px;
-  background: rgba(122, 164, 214, 0.1);
-  color: #d6e7fa;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 900;
-  letter-spacing: 0.03em;
-  white-space: normal;
-  line-height: 1.2;
-}
-
 .g .fantasy-player-card.future-window-player-card .fantasy-player-score-stack {
   opacity: 0.92;
 }
@@ -2615,7 +2600,6 @@
   .g .position-total-row strong,
   .g .position-total-row small,
   .g .position-total-row em,
-  .g .future-window-callout,
   .g .result-badge,
   .g .scoreboard-result-badge,
   .g .matchup-readiness-badge,

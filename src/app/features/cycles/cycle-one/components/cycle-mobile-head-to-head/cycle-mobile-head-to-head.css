@@ -199,6 +199,90 @@
     background: var(--owner-theme-primary, var(--user-team-primary));
   }
 
+  .mobile-position-comparison {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--surface-1) 96%, transparent);
+    box-shadow: var(--pixel-inset-highlight);
+  }
+
+  .mobile-position-comparison-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 7px;
+  }
+
+  .mobile-position-comparison-heading h3,
+  .mobile-position-comparison-heading p {
+    margin: 0;
+  }
+
+  .mobile-position-comparison-heading h3 {
+    color: var(--text-primary);
+    font-family: var(--rr-font-interface);
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .mobile-position-comparison-heading p {
+    color: var(--text-muted);
+    font-size: var(--rr-mobile-text-micro);
+    font-weight: 750;
+  }
+
+  .mobile-position-comparison table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+
+  .mobile-position-comparison th,
+  .mobile-position-comparison td {
+    padding: 6px 5px;
+    border-top: 1px solid color-mix(in srgb, var(--border-soft) 62%, transparent);
+    text-align: center;
+  }
+
+  .mobile-position-comparison thead th {
+    overflow-wrap: anywhere;
+    border-top: 0;
+    color: var(--text-secondary);
+    font-size: var(--rr-mobile-text-micro);
+    font-weight: 850;
+    line-height: 1.15;
+  }
+
+  .mobile-position-comparison thead th:first-child,
+  .mobile-position-comparison tbody th {
+    width: 42px;
+    text-align: left;
+  }
+
+  .mobile-position-comparison tbody th {
+    color: var(--text-secondary);
+    font-family: var(--rr-font-interface);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .mobile-position-comparison td {
+    color: var(--text-primary);
+  }
+
+  .mobile-position-comparison td strong {
+    font-family: var(--rr-font-numeric);
+    font-size: 15px;
+    font-weight: 900;
+  }
+
+  .mobile-position-comparison td.is-leading strong {
+    color: var(--rr-success);
+  }
+
   .mobile-live-lineup {
     display: grid;
     gap: 9px;
@@ -654,6 +738,16 @@
 
   .mobile-matchup-team-scoreline strong {
     font-size: 15px;
+  }
+
+  .mobile-position-comparison {
+    padding-inline: 8px;
+  }
+
+  .mobile-position-comparison-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .mobile-live-player-row-head-to-head {
