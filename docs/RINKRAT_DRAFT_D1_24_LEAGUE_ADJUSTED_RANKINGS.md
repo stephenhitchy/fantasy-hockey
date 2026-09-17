@@ -68,6 +68,12 @@ confirmed. This is presentation-only and manager-specific. The Goalie Units
 position filter or the explicit `Show Extra Goalie Units` control restores
 them for deliberate manual comparison or selection.
 
+The live Draft order keeps the fantasy team name on completed selections as
+well as upcoming picks. Its mobile cards provide more room for team names, and
+each card opens that manager's roster in the existing Rosters panel. The panel
+defaults to the signed-in manager and can switch among every Draft team using
+the already-loaded team and pick data; it adds no Firestore read or listener.
+
 ## Verification
 
 Focused verification:
@@ -77,6 +83,7 @@ npm --prefix functions run build
 npm run test:draft-authority:run
 npm test -- --watch=false --include src/app/core/draft/auto-draft-strategy.spec.ts
 npm test -- --watch=false --include src/app/features/draft/draft-room/draft-goalie-visibility.util.spec.ts
+npm test -- --watch=false --include src/app/features/draft/draft-room/draft-roster-scouting.util.spec.ts
 ```
 
 The Draft Ranking V2 fixtures prove:

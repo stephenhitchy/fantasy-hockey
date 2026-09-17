@@ -384,8 +384,8 @@
           [class.active]="mobilePanel() === 'roster'"
           (click)="setMobilePanel('roster')"
         >
-          <span>Roster</span>
-          <small>{{ getMyDraftedCount() }}/{{ getMyRosterSlotTotal() }}</small>
+          <span>Rosters</span>
+          <small>{{ teams().length }}</small>
         </button>
       </nav>
 
@@ -423,7 +423,7 @@
             <span class="eyebrow">Draft Order</span>
             <h2>Recent & Upcoming Picks</h2>
           </div>
-          <span>Swipe or scroll</span>
+          <span>Tap to scout</span>
         </div>
 
         <div
@@ -432,11 +432,14 @@
           aria-label="Recent and upcoming draft picks"
         >
           @for (entry of draftTimeline(); track entry.preview.overallPick) {
-            <article
+            <button
+              type="button"
               class="draft-pick-track-item rr-list-row"
               [class.completed-pick]="!!entry.pick"
               [class.current-pick]="entry.preview.overallPick === currentPick()?.overallPick"
               [attr.data-pick-number]="entry.preview.overallPick"
+              [attr.aria-label]="getDraftTimelineScoutLabel(entry)"
+              (click)="scoutTeam(entry.preview.ownerId)"
             >
               <span class="draft-pick-number">#{{ entry.preview.overallPick }}</span>
 
@@ -455,7 +458,12 @@
                 }
 
                 <div class="draft-pick-track-copy">
-                  <strong>{{ getAssetName(completedPick.asset) }}</strong>
+                  <strong [attr.title]="getAssetName(completedPick.asset)">
+                    {{ getAssetName(completedPick.asset) }}
+                  </strong>
+                  <small class="draft-pick-owner" [attr.title]="getTeamName(entry.preview.ownerId)">
+                    {{ getTeamName(entry.preview.ownerId) }}
+                  </small>
                   <small>
                     {{ completedPick.asset.position }}
                     ·
@@ -463,12 +471,12 @@
                   </small>
                 </div>
               } @else {
-                <span class="upcoming-pick-marker" aria-hidden="true">⌛</span>
+                <app-manager-avatar [profileIconId]="getTeamProfileIconId(entry.preview.ownerId)" [label]="getTeamManagerLabel(entry.preview.ownerId)" size="xs" />
 
-                <div class="draft-pick-track-copy manager-name-stack">
-                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(entry.preview.ownerId)" [label]="getTeamManagerLabel(entry.preview.ownerId)" size="xs" />
-                  <div>
-                    <strong>{{ getTeamName(entry.preview.ownerId) }}</strong>
+                <div class="draft-pick-track-copy">
+                    <strong [attr.title]="getTeamName(entry.preview.ownerId)">
+                      {{ getTeamName(entry.preview.ownerId) }}
+                    </strong>
                   <small>
                     {{
                       entry.preview.overallPick === currentPick()?.overallPick
@@ -476,10 +484,9 @@
                         : 'Upcoming pick'
                     }}
                   </small>
-                  </div>
                 </div>
               }
-            </article>
+            </button>
           }
         </div>
       </section>
@@ -920,8 +927,28 @@
             [class.mobile-panel-active]="mobilePanel() === 'roster'"
             role="tabpanel"
           >
-  <span class="eyebrow">Your Roster</span>
-  <h2>Drafted Players</h2>
+  <div class="queue-card-heading">
+    <div>
+      <span class="eyebrow">{{ isScoutingOwnRoster() ? 'Your Roster' : 'Scouting' }}</span>
+      <h2>{{ displayedRosterTeam()?.teamName }}</h2>
+    </div>
+    <app-manager-avatar [profileIconId]="getTeamProfileIconId(displayedRosterOwnerId())" [label]="getTeamManagerLabel(displayedRosterOwnerId())" size="sm" />
+  </div>
+
+  <label class="rr-field-group roster-scout-picker">
+    <span>Scout team</span>
+    <select
+      class="rr-select"
+      [ngModel]="displayedRosterOwnerId()"
+      (ngModelChange)="setScoutedOwnerId($event)"
+    >
+      @for (team of scoutTeams(); track team.ownerId) {
+        <option [value]="team.ownerId">
+          {{ team.teamName }}{{ team.ownerId === userId ? ' (You)' : '' }}
+        </option>
+      }
+    </select>
+  </label>
 
   <div class="drafted-roster-list">
     @for (position of rosterPositions; track position) {
@@ -929,15 +956,15 @@
         <div class="drafted-position-header">
           <strong>{{ position }}</strong>
           <span>
-            Active {{ getMyStarterPositionCount(position) }} / {{ getPositionRequirement(position) }}
-            @if (getMyBenchPositionCount(position) > 0) {
-              · +{{ getMyBenchPositionCount(position) }} bench
+            Active {{ getViewedStarterCount(position) }} / {{ getPositionRequirement(position) }}
+            @if (getViewedBenchCount(position) > 0) {
+              · +{{ getViewedBenchCount(position) }} bench
             }
           </span>
         </div>
 
         @for (
-          pick of getMyPicksByPosition(position);
+          pick of getViewedPicks(position);
           track pick.overallPick
         ) {
           <article
@@ -1073,7 +1100,7 @@
         }
 
         @for (
-          emptySlot of getEmptySlotsForPosition(position);
+          emptySlot of getViewedEmptySlots(position);
           track $index
         ) {
           <div class="empty-roster-slot">

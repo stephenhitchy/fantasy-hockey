@@ -128,6 +128,11 @@ import {
   shouldShowDraftPoolAsset,
 } from './draft-goalie-visibility.util';
 
+import {
+  getDraftRosterPicksByPosition,
+  resolveDraftRosterOwnerId,
+} from './draft-roster-scouting.util';
+
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
 const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
 
@@ -234,6 +239,7 @@ export class DraftRoom implements OnDestroy {
   now = signal(Date.now());
 
   mobilePanel = signal<DraftMobilePanel>('players');
+  scoutedOwnerId = signal('');
   selectedAssetKey = signal<string | null>(null);
   pickSubmissionPhase = signal<'idle' | 'submitting' | 'confirming'>('idle');
   browserOnline = signal(typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -341,9 +347,7 @@ export class DraftRoom implements OnDestroy {
   }
 
   getMyPicksByPosition(position: DraftPosition): DraftPick[] {
-    return this.picks().filter(
-      (pick) => pick.ownerId === this.userId && pick.asset.position === position,
-    );
+    return getDraftRosterPicksByPosition(this.picks(), this.userId, position);
   }
 
   isBenchDraftPick(pick: DraftPick): boolean {
@@ -372,10 +376,28 @@ export class DraftRoom implements OnDestroy {
     return this.getMyPicksByPosition(position).filter((pick) => this.isBenchDraftPick(pick)).length;
   }
 
-  getEmptySlotsForPosition(position: DraftPosition): number[] {
+  getViewedPicks(position: DraftPosition): DraftPick[] {
+    return getDraftRosterPicksByPosition(
+      this.picks(),
+      this.displayedRosterOwnerId(),
+      position,
+    );
+  }
+
+  getViewedStarterCount(position: DraftPosition): number {
+    return this.getViewedPicks(position)
+      .filter((pick) => !this.isBenchDraftPick(pick)).length;
+  }
+
+  getViewedBenchCount(position: DraftPosition): number {
+    return this.getViewedPicks(position)
+      .filter((pick) => this.isBenchDraftPick(pick)).length;
+  }
+
+  getViewedEmptySlots(position: DraftPosition): number[] {
     const openSlotCount = Math.max(
       0,
-      this.getPositionRequirement(position) - this.getMyStarterPositionCount(position),
+      this.getPositionRequirement(position) - this.getViewedStarterCount(position),
     );
 
     return Array.from({ length: openSlotCount }, (_, index) => index);
@@ -880,6 +902,38 @@ export class DraftRoom implements OnDestroy {
   );
 
   readonly isMyTurn = computed(() => this.currentPick()?.ownerId === this.userId);
+
+  readonly scoutTeams = computed(() => {
+    const draftOrder = this.draft()?.roundOneOrder ?? [];
+    const draftPositionByOwner = new Map(
+      draftOrder.map((ownerId, index) => [ownerId, index]),
+    );
+
+    return [...this.teams()].sort((first, second) => {
+      const firstDraftPosition = draftPositionByOwner.get(first.ownerId) ?? Number.MAX_SAFE_INTEGER;
+      const secondDraftPosition = draftPositionByOwner.get(second.ownerId) ?? Number.MAX_SAFE_INTEGER;
+
+      return firstDraftPosition - secondDraftPosition || first.teamName.localeCompare(second.teamName);
+    });
+  });
+
+  readonly displayedRosterOwnerId = computed(() =>
+    resolveDraftRosterOwnerId({
+      requestedOwnerId: this.scoutedOwnerId(),
+      currentOwnerId: this.userId,
+      availableOwnerIds: this.scoutTeams().map((team) => team.ownerId),
+    }),
+  );
+
+  readonly displayedRosterTeam = computed(() =>
+    this.scoutTeams().find(
+      (team) => team.ownerId === this.displayedRosterOwnerId(),
+    ) ?? null,
+  );
+
+  readonly isScoutingOwnRoster = computed(
+    () => this.displayedRosterOwnerId() === this.userId,
+  );
 
   readonly totalPickCount = computed(() => getDraftTotalPickCount(this.draft()));
 
@@ -1727,6 +1781,35 @@ export class DraftRoom implements OnDestroy {
 
   setMobilePanel(panel: DraftMobilePanel): void {
     this.mobilePanel.set(panel);
+  }
+
+  scoutTeam(ownerId: string): void {
+    if (!this.teams().some((team) => team.ownerId === ownerId)) {
+      return;
+    }
+
+    this.scoutedOwnerId.set(ownerId);
+    this.mobilePanel.set('roster');
+  }
+
+  setScoutedOwnerId(ownerId: string): void {
+    if (this.teams().some((team) => team.ownerId === ownerId)) {
+      this.scoutedOwnerId.set(ownerId);
+    }
+  }
+
+  getDraftTimelineScoutLabel(entry: DraftTimelineEntry): string {
+    const teamName = this.getTeamName(entry.preview.ownerId);
+
+    if (entry.pick) {
+      return `Scout ${teamName} roster. Pick #${entry.preview.overallPick}: ${this.getAssetName(entry.pick.asset)}.`;
+    }
+
+    return `Scout ${teamName} roster. Pick #${entry.preview.overallPick} ${
+      entry.preview.overallPick === this.currentPick()?.overallPick
+        ? 'is on the clock.'
+        : 'is upcoming.'
+    }`;
   }
 
   selectAssetForMobile(asset: DraftableAsset): void {

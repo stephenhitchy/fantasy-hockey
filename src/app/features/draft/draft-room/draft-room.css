@@ -827,16 +827,21 @@
 .draft-pick-track-item {
   position: relative;
   display: grid;
-  flex: 0 0 178px;
+  flex: 0 0 196px;
   grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
   gap: 9px;
-  min-height: 70px;
+  min-height: 86px;
   padding: 20px 10px 10px;
   border: 1px solid var(--rr-draft-room-migration-color-15);
   border-radius: 11px;
   background: #f7f9fc;
   scroll-snap-align: center;
+  text-align: left;
+}
+.draft-pick-track-item:focus-visible {
+  outline: 3px solid var(--rr-info);
+  outline-offset: 2px;
 }
 .draft-pick-track-item.completed-pick {
   border-color: #b7d7bf;
@@ -857,8 +862,7 @@
   letter-spacing: 0.05em;
 }
 .draft-pick-logo,
-.draft-pick-logo-fallback,
-.upcoming-pick-marker {
+.draft-pick-logo-fallback {
   display: grid;
   width: 40px;
   height: 40px;
@@ -867,20 +871,12 @@
 .draft-pick-logo {
   object-fit: contain;
 }
-.draft-pick-logo-fallback,
-.upcoming-pick-marker {
+.draft-pick-logo-fallback {
   border-radius: 9px;
   background: #e7eef5;
   color: #45617e;
   font-size: 9px;
   font-weight: 950;
-}
-.upcoming-pick-marker {
-  font-size: 18px;
-}
-.current-pick .upcoming-pick-marker {
-  background: #f4df9f;
-  color: #70520b;
 }
 .draft-pick-track-copy {
   min-width: 0;
@@ -895,12 +891,19 @@
 .draft-pick-track-copy strong {
   color: var(--rr-draft-room-migration-color-09);
   font-size: 12px;
+  white-space: normal;
 }
 .draft-pick-track-copy small {
   margin-top: 4px;
   color: #6f8194;
   font-size: 10px;
   font-weight: 800;
+}
+.draft-pick-track-copy .draft-pick-owner {
+  white-space: normal;
+}
+.roster-scout-picker {
+  margin-top: 12px;
 }
 .auto-pick-message {
   border: 1px solid var(--rr-draft-room-migration-color-04);
@@ -1745,8 +1748,8 @@
     font-size: 14px;
   }
   .draft-pick-track-item {
-    flex-basis: 142px;
-    min-height: 60px;
+    flex-basis: 184px;
+    min-height: 84px;
   }
   .draft-layout {
     display: block;
