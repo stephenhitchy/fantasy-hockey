@@ -440,8 +440,7 @@
   }
 
   .mobile-live-player-row-head-to-head .mobile-live-player-topline img {
-    width: 23px;
-    height: 23px;
+    display: none;
   }
 
   .mobile-live-player-row-head-to-head .mobile-roster-rank {
@@ -560,6 +559,16 @@
     font-size: 14px;
     font-weight: 900;
     line-height: 1.05;
+  }
+
+  .mobile-live-player-row-head-to-head .mobile-live-player-name strong {
+    display: -webkit-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .mobile-live-player-name small {
@@ -863,10 +872,6 @@
 
   .mobile-live-player-row-head-to-head .mobile-live-player-team-b {
     grid-template-columns: 36px minmax(0, 1fr);
-  }
-
-  .mobile-live-player-row-head-to-head .mobile-live-player-topline img {
-    display: none;
   }
 
   .mobile-live-player-row-head-to-head .mobile-live-player-numbers {
