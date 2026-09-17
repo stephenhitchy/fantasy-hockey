@@ -108,12 +108,9 @@
   top: 0;
   bottom: 0;
   left: 0;
-  width: 4px;
-  background: var(--user-team-primary);
-  box-shadow:
-    4px 0 0 var(--user-team-secondary),
-    8px 0 0 var(--user-team-tertiary);
-  opacity: 0.82;
+  width: 2px;
+  background: color-mix(in srgb, var(--border-soft) 88%, var(--user-team-primary));
+  opacity: 0.68;
   pointer-events: none;
 }
 
