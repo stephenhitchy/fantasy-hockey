@@ -186,7 +186,7 @@ describe('server draft pick engine', () => {
     assert.equal(selection.selectionType, 'automatic');
   });
 
-  test('automatic bench selections preserve forward, defense, and goalie role diversity', () => {
+  test('automatic bench selections fill two forward roles before considering a third forward', () => {
     const roster = fillAllStarters(emptyRoster());
     roster.benchSlots[0].asset = {
       ...skater('skater-300', 'LW', 40),
@@ -212,7 +212,41 @@ describe('server draft pick engine', () => {
       ],
     });
 
-    assert.equal(selection.asset.assetKey, 'skater-302');
+    assert.equal(selection.asset.assetKey, 'skater-301');
+    assert.equal(selection.selectionType, 'queue');
+  });
+
+  test('automatic bench selections fill one defense role and never select a second goalie unit', () => {
+    const roster = fillAllStarters(emptyRoster());
+    roster.benchSlots[0].asset = {
+      ...skater('skater-310', 'LW', 40),
+      rosterStatus: 'benched',
+      cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+    };
+    roster.benchSlots[1].asset = {
+      ...skater('skater-311', 'C', 45),
+      rosterStatus: 'benched',
+      cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+    };
+    const fixtureDraft = draft();
+    const selection = selectAutomaticDraftCandidate({
+      queue: {
+        ownerId: 'a',
+        assetKeys: ['goalie-unit-312', 'skater-313'],
+        autoDraftEnabled: true,
+        consecutiveClockExpirations: 2,
+        autoDraftActivatedByTimeout: true,
+      },
+      draft: fixtureDraft,
+      roster,
+      rostersByOwnerId: new Map([['a', roster], ['b', fillAllStarters(emptyRoster())]]),
+      assets: [
+        goalie('goalie-unit-312', 99),
+        skater('skater-313', 'D', 60),
+      ],
+    });
+
+    assert.equal(selection.asset.assetKey, 'skater-313');
     assert.equal(selection.selectionType, 'queue');
   });
 

@@ -120,7 +120,7 @@ test('the account watchlist remains available outside Draft while the Draft queu
   assert.match(freeAgentsTemplate, /Watching' : 'Watch'/);
   assert.doesNotMatch(template, /Two consecutive expired turns automatically switch auto-draft on until/);
   assert.doesNotMatch(styles, /draft-watchlist-filter|draft-watchlist-button/);
-  assert.ok(Buffer.byteLength(styles, 'utf8') < 45_000);
+  assert.ok(Buffer.byteLength(styles, 'utf8') < 46_000);
 });
 
 test('Clear Ice removes repeated descriptions while retaining competitive and destructive guidance', async () => {

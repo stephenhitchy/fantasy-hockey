@@ -18,7 +18,7 @@ describe('auto-draft roster strategy', () => {
       hasOpenStartingSlot: true,
       destination: 'bench' as const,
       assetPosition: 'G' as const,
-      existingBenchRoles: new Set<'F' | 'D' | 'G'>(),
+      existingBenchRoleCounts: { F: 0, D: 0, G: 0 },
     };
 
     expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
@@ -31,7 +31,7 @@ describe('auto-draft roster strategy', () => {
         hasOpenStartingSlot: true,
         destination: 'active',
         assetPosition: 'C',
-        existingBenchRoles: new Set(['G']),
+        existingBenchRoleCounts: { F: 0, D: 0, G: 1 },
       }),
     ).toBe(true);
   });
@@ -42,31 +42,44 @@ describe('auto-draft roster strategy', () => {
         hasOpenStartingSlot: false,
         destination: 'bench',
         assetPosition: 'LW',
-        existingBenchRoles: new Set(),
+        existingBenchRoleCounts: { F: 0, D: 0, G: 0 },
       }),
     ).toBe(true);
   });
 
-  it('rejects a second forward while defense and goalie remain uncovered', () => {
+  it('allows a second forward on the automatic bench', () => {
     const context = {
       hasOpenStartingSlot: false,
       destination: 'bench' as const,
       assetPosition: 'RW' as const,
-      existingBenchRoles: new Set<'F' | 'D' | 'G'>(['F']),
+      existingBenchRoleCounts: { F: 1, D: 0, G: 0 },
+    };
+
+    expect(isAutomaticDraftCandidateAllowed(context)).toBe(true);
+    expect(getAutoDraftCandidateBlockReason(context)).toBe(null);
+  });
+
+  it('rejects a third forward after two automatic bench forwards', () => {
+    const context = {
+      hasOpenStartingSlot: false,
+      destination: 'bench' as const,
+      assetPosition: 'C' as const,
+      existingBenchRoleCounts: { F: 2, D: 0, G: 0 },
     };
 
     expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
-    expect(getAutoDraftCandidateBlockReason(context)).toBe('duplicate-bench-role');
+    expect(getAutoDraftCandidateBlockReason(context)).toBe('bench-role-full');
   });
 
-  it('fills the missing third role after two manual bench picks', () => {
-    expect(
-      isAutomaticDraftCandidateAllowed({
-        hasOpenStartingSlot: false,
-        destination: 'bench',
-        assetPosition: 'G',
-        existingBenchRoles: new Set(['F', 'D']),
-      }),
-    ).toBe(true);
+  it('never allows a goalie unit on the automatic bench', () => {
+    const context = {
+      hasOpenStartingSlot: false,
+      destination: 'bench' as const,
+      assetPosition: 'G' as const,
+      existingBenchRoleCounts: { F: 1, D: 1, G: 0 },
+    };
+
+    expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
+    expect(getAutoDraftCandidateBlockReason(context)).toBe('bench-role-full');
   });
 });

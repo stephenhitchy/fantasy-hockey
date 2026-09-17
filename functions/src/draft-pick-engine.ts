@@ -20,6 +20,12 @@ export interface DraftDestination {
 
 export type DraftBenchRole = 'F' | 'D' | 'G';
 
+const AUTOMATIC_BENCH_ROLE_LIMITS: Readonly<Record<DraftBenchRole, number>> = {
+  F: 2,
+  D: 1,
+  G: 0,
+};
+
 export interface AutomaticDraftSelection {
   asset: DraftableAsset;
   selectionType: Extract<DraftSelectionType, 'queue' | 'automatic'>;
@@ -112,13 +118,13 @@ function needsAnyStarter(roster: FantasyRoster): boolean {
   return roster.activeSlots.some((slot) => slot.asset === null);
 }
 
-function getExistingBenchRoles(roster: FantasyRoster): Set<DraftBenchRole> {
-  return new Set(
-    roster.benchSlots
-      .map((slot) => slot.asset?.position)
-      .filter((position): position is DraftPosition => Boolean(position))
-      .map(getDraftBenchRole),
-  );
+function getExistingBenchRoleCount(
+  roster: FantasyRoster,
+  role: DraftBenchRole,
+): number {
+  return roster.benchSlots.filter(
+    (slot) => slot.asset && getDraftBenchRole(slot.asset.position) === role,
+  ).length;
 }
 
 export function isAutomaticDraftCandidateAllowed(
@@ -138,7 +144,9 @@ export function isAutomaticDraftCandidateAllowed(
     return false;
   }
 
-  return !getExistingBenchRoles(roster).has(getDraftBenchRole(asset.position));
+  const role = getDraftBenchRole(asset.position);
+
+  return getExistingBenchRoleCount(roster, role) < AUTOMATIC_BENCH_ROLE_LIMITS[role];
 }
 
 function getAssetDraftValue(asset: DraftableAsset): number | null {

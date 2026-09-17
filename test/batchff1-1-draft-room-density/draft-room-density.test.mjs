@@ -203,6 +203,31 @@ test('Draft actions remain gated by the existing authoritative live-turn contrac
   assert.match(component, /getDraftDestinationForAsset\(this\.userId, asset\) !== null/);
 });
 
+test('Draft-night status stays compact while pick ownership and mobile team names remain readable', async () => {
+  const [component, template, styles, automation] = await Promise.all([
+    read('src/app/features/draft/draft-room/draft-room.ts'),
+    read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-room.css'),
+    read('functions/src/draft-automation.ts'),
+  ]);
+
+  assert.match(template, /class="draft-pick-owner-name"[\s\S]*?getTeamName\(completedPick\.ownerId\)/);
+  assert.match(template, /class="draft-pick-manager-avatar"[\s\S]*?getTeamManagerLabel\(entry\.preview\.ownerId\)/);
+  assert.doesNotMatch(template, /⌛|upcoming-pick-marker/);
+  assert.match(styles, /\.manager-name-stack strong\s*\{[\s\S]*?-webkit-line-clamp:\s*2/);
+  assert.match(styles, /\.draft-mobile-command-bar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+  assert.match(styles, /\.draft-mobile-command-owner > strong\s*\{[\s\S]*?white-space:\s*normal[\s\S]*?-webkit-line-clamp:\s*2/);
+  assert.match(styles, /\.draft-mobile-command-action\s*\{[\s\S]*?grid-column:\s*1 \/ -1[\s\S]*?width:\s*100%/);
+  assert.match(styles, /\.pool-controls\s*\{[\s\S]*?background:\s*color-mix\(in srgb, var\(--surface-2\) 94%, var\(--rr-info\)\)/);
+  assert.match(template, /@if \(realtimeConnectionState\(\) !== 'connected'\)/);
+  assert.match(template, /injurySyncState\(\)\?\.status === 'running'[\s\S]*?injurySyncState\(\)\?\.status === 'error'/);
+  assert.match(template, /\[class\.draft-room-header-live\]="draft\(\)\?\.status === 'live'"/);
+
+  assert.match(automation, /nextConsecutiveClockExpirations = Math\.min\(2,/);
+  assert.match(automation, /if \(nextConsecutiveClockExpirations >= 2\)/);
+  assert.match(component, /Auto-Draft On · 2 Missed Turns/);
+});
+
 test('icon and stateful Draft controls expose stable player-specific accessible names', async () => {
   const [template, accessibilityAudit] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.html'),
@@ -244,7 +269,7 @@ test('Draft cards use one compact desktop line and a bounded mobile reflow', asy
   assert.match(styles, /min-height:\s*var\(--rr-mobile-control-min-height\)/);
   assert.doesNotMatch(styles, /\.draft-asset-card button:hover/);
   assert.doesNotMatch(globalStyles, /\.asset-metric strong,[\s\S]*?color:\s*var\(--text-primary\) !important/);
-  assert.ok(Buffer.byteLength(styles, 'utf8') < 45_000);
+  assert.ok(Buffer.byteLength(styles, 'utf8') < 46_000);
 });
 
 test('the density slice adds no Draft write path, image fetch path, or projection/scoring calculation', async () => {

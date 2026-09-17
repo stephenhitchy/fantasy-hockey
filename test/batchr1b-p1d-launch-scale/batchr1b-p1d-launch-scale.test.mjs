@@ -468,6 +468,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/d1n-load-probe.util.ts',
       ]),
     }),
-    '958f23683430f1a892ad73dd21b894580934aa62f0f2a9659747999798d80355',
+    '40667e56ee4e7615bec57c9d935c93793d9720fd5b01cb7501dbf972ae02331d',
   );
 });

@@ -8,13 +8,19 @@ export interface AutoDraftCandidateContext {
   hasOpenStartingSlot: boolean;
   destination: AutoDraftRosterArea;
   assetPosition: AutoDraftPositionCode;
-  existingBenchRoles: ReadonlySet<AutoDraftBenchRole>;
+  existingBenchRoleCounts: Readonly<Record<AutoDraftBenchRole, number>>;
 }
 
 export type AutoDraftCandidateBlockReason =
   | 'fill-starters-first'
-  | 'duplicate-bench-role'
+  | 'bench-role-full'
   | null;
+
+const AUTO_DRAFT_BENCH_ROLE_LIMITS: Readonly<Record<AutoDraftBenchRole, number>> = {
+  F: 2,
+  D: 1,
+  G: 0,
+};
 
 export function getAutoDraftBenchRole(position: AutoDraftPositionCode): AutoDraftBenchRole {
   if (position === 'D') {
@@ -31,11 +37,12 @@ export function getAutoDraftBenchRole(position: AutoDraftPositionCode): AutoDraf
 /**
  * Auto-draft follows two strict phases:
  * 1. Fill every active roster slot.
- * 2. Fill the three bench coverage roles: one forward, one defenseman, and one goalie unit.
+ * 2. Fill the bench with two forwards and one defenseman. A second goalie unit
+ *    is never selected automatically.
  *
  * Manual drafting is intentionally unaffected by this policy. If a manager manually
- * creates duplicate bench roles before enabling auto-draft, later automatic picks use
- * any still-missing role whenever an open bench slot remains.
+ * creates a different bench mix before enabling auto-draft, later automatic picks use
+ * any remaining forward or defense quota whenever an open bench slot remains.
  */
 export function getAutoDraftCandidateBlockReason(
   context: AutoDraftCandidateContext,
@@ -48,8 +55,10 @@ export function getAutoDraftCandidateBlockReason(
     return 'fill-starters-first';
   }
 
-  return context.existingBenchRoles.has(getAutoDraftBenchRole(context.assetPosition))
-    ? 'duplicate-bench-role'
+  const role = getAutoDraftBenchRole(context.assetPosition);
+
+  return context.existingBenchRoleCounts[role] >= AUTO_DRAFT_BENCH_ROLE_LIMITS[role]
+    ? 'bench-role-full'
     : null;
 }
 

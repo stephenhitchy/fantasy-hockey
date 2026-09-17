@@ -65,7 +65,8 @@ test('FF1 keeps invitation authorization separate from Draft authorization', asy
   assert.match(runbook, /never use a broad Firebase deployment/i);
   assert.match(handoff, /RINKRAT_FF1_INVITATION_GATE_RUNBOOK\.md/);
   assert.match(roadmap, /# \[x\] FF1\.13[\s\S]*1754f807/);
-  assert.match(roadmap, /\[ \] FF1\.9 Authorize real Drafts only after/i);
+  assert.match(roadmap, /\[!\] FF1\.9 Authorize real Drafts only after/i);
+  assert.match(roadmap, /first real family-and-friends Draft occurred[\s\S]*before the formal record was completed/i);
 });
 
 test('combined documentation and root README are present', async () => {

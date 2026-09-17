@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-16
+Last updated: 2026-09-17
 
 ## Repository
 
@@ -250,6 +250,27 @@ and repeat/finalize stage 100 before 500 remain required. Physical
 iPhone/Android evidence remains open independently.
 
 ## Current Draft-room UX posture
+
+The first real family-and-friends Draft occurred on 2026-09-16. The
+post-Draft competitive freeze is therefore active even though the formal
+FF1.16 record still needs to be closed. Preserve the completed Draft, teams,
+rosters, and every competitive identifier.
+
+FF1.40 is the current narrow observed Draft-night repair candidate. It keeps
+fantasy-team names readable in the mobile clock/upcoming-pick surfaces,
+retains selecting-team ownership on completed picks, removes redundant healthy
+connection/injury copy, harmonizes the player-filter surface with all four
+themes, and changes server Auto-Draft bench completion to two forwards plus
+one defenseman with no bench goalie. The already-live two-consecutive-missed-
+turn threshold is unchanged and now has explicit regression coverage. Manual
+picks and existing/completed Draft records are untouched.
+
+The league-size scarcity request remains deliberately separate. Projection
+V11 already consumes league team count, uses 3 LW / 3 C / 3 RW / 4 D / 1 G
+starter depth per team, computes value above replacement, and applies a goalie
+starter-slot curve. Do not change its flexible-bench replacement counts or
+ranking weights until the owner decides whether the revised order must affect
+only the visible board or both the board and authoritative Auto-Draft.
 
 The compact Draft cards, bounded injury/return presentation, player
 headshot-with-team-badge identity, and FF1.18 one-hour Draft lobby are merged.
@@ -664,13 +685,14 @@ lock was released.
 
 ## 2026–27 private-season freeze
 
-Invitation and Draft authorization are separate gates. The owner reports the
+Invitation and Draft authorization were separate gates. The owner reports the
 current invitation/removal paths passing on desktop Safari/Chrome and physical
-iPhone Safari and has accepted the missing Android invitation sample for the
-small observed cohort. Do not conduct a real Draft until the exact-build
-six-team lifecycle, physical iPhone and Android Draft rehearsal, D1N
-reconnect/100/500 evidence, and D1J freeze/tag/rollback record pass with no
-unresolved P0/P1 integrity finding.
+iPhone Safari and accepted the missing Android invitation sample for the
+small observed cohort. The first real Draft nevertheless occurred on
+2026-09-16 before the formal FF1.16 record closed. Do not recreate that Draft
+or rewrite its competitive records. Close the exact-build, physical-device,
+D1N reconnect/100/500, and D1J freeze/tag/rollback evidence as residual-risk
+work before expanding the cohort.
 
 After the first real Draft, freeze competitive feature work. Preserve league,
 membership, team, roster, Draft, player-window, transaction, standings, and
@@ -688,32 +710,38 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Use the exact clean merged FF1.39 commit for isolated staging only. Recheck
-   clean-source identity immediately before any targeted deployment.
-2. Deploy staging in consumer-first order:
-   `processDraftClockDeadline`, archive-parity
-   `processLeagueAutomationTask`, `runScheduledDraftAutomation`,
-   `continueServerDraftAutomation`, then only site-pinned staging Hosting.
-3. Verify the manifest and all four targeted Function archives match the exact
-   merge, then rerun the guarded 100-operation ramp. Preserve every earlier
-   diagnostic and finalize the new run's Monitoring and settled Billing
-   evidence. Advance to 500 only if every unchanged threshold passes.
-4. Complete the owner's two-manager supported-UI Draft rehearsal and record
+1. Prepare and independently review FF1.40's clean candidate commit, then
+   perform the exact staging deployment of `processDraftClockDeadline`,
+   `runScheduledDraftAutomation`, `continueServerDraftAutomation`,
+   `processAutoDraftQueueChange`, and site-pinned Hosting only.
+2. Verify the exact Function revisions and Hosting manifest, then exercise a
+   disposable staging Draft at 320/390/430/desktop widths, four themes, 200%
+   zoom, keyboard focus, long team names, recent-pick ownership, two missed
+   turns, queue fallback, two-forward/one-defense automatic bench completion,
+   reconnect, duplicate tabs, error/loading states, and rollback.
+3. Resolve the ranking decision before any league-size scarcity change. If it
+   affects authoritative Auto-Draft, treat it as a separate Projection V11
+   compatibility slice with snapshot/hash and server/browser parity tests.
+4. Return to FF1.39's exact isolated-staging stage-100 evidence. Preserve every
+   earlier diagnostic and advance to 500 only if every unchanged threshold
+   passes.
+5. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.
-5. Complete physical iPhone/Android D1N evidence separately before a real Draft
-   or public-scale claim; do not invent samples or treat the backend ramp as a
-   substitute.
-6. Complete the Historical Replay lifecycle evidence separately; the automated
+6. Complete physical iPhone/Android D1N evidence separately before a broader
+   Draft or public-scale claim; do not invent samples or treat the backend ramp
+   as a substitute.
+7. Complete the Historical Replay lifecycle evidence separately; the automated
    six-client Draft rehearsal does not cover add/drop, waivers, IR, scoring,
    six-game ownership, Game 7, standings, or playoffs.
-7. Record the no-post-Draft-replacement or account-transfer decision.
-8. Generate and independently review the D1J season-freeze kit, exact Production
+8. Record the no-post-Draft-replacement or account-transfer decision.
+9. Generate and independently review the D1J season-freeze kit, exact Production
    Function archive record, tag, targeted rollback, incident plan, and formal
-   invitation/Draft go-no-go.
-9. After the formal FF1.16 Draft GO, begin the observed 2–4 league, 10–30
-   manager season under the post-Draft competitive freeze.
-10. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
+   residual-risk record. Do not rewrite the completed real Draft to recreate a
+   pre-Draft gate.
+10. Continue the observed 2–4 league, 10–30 manager season under the active
+   post-Draft competitive freeze.
+11. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
    pagination/starvation protection, and App Check/abuse/queue-promotion proof
    as separate reviewable work without changing Production rollout modes.
 

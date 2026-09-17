@@ -5356,8 +5356,8 @@ Continue a small test draft far enough to check these behaviors, using auto-draf
 
 - Starting LW, C, RW, D, and G slots fill before automatic bench picks.
 - A player is placed only into a compatible active slot.
-- Bench auto-draft avoids duplicating forward/defense/goalie roles until all three roles are represented.
-- A bench goalie selection cannot consume the last goalie unit needed by another team's starting G slot.
+- Bench auto-draft fills at most two forward roles and one defense role.
+- Automatic selection never drafts a second Team Goalie Unit for the bench and therefore cannot consume a goalie unit needed by another team's starting G slot.
 - No asset is drafted twice.
 - Every pick has one corresponding roster placement.
 - The number of `draftedAssetKeys` equals the number of pick documents.
@@ -6940,7 +6940,8 @@ PRIMARY CHANGES
      manipulation, commissioner draft tampering, live projection tampering, and
      commissioner edits to another manager's queue.
    - Draft-engine tests cover snake order, starter-first auto-draft behavior,
-     queue fallback, bench-role diversity, goalie reserve protection, and
+     queue fallback, the two-forward/one-defense automatic bench policy,
+     no-bench-goalie enforcement, goalie reserve protection, and
      authoritative roster placement.
 
 8. Added npm scripts
@@ -13015,3 +13016,36 @@ D1J binds the exact live build to four independent reports before the 2026–27 
 ## Operations D1J.2 — Release Evidence Repair
 
 D1J.2 stores observed due age separately from the oldest queue-eligible due age, makes Shadow observation informational, and keeps Canary/Primary backlog thresholds tied only to work that can actually dispatch. Release Readiness and the browser launch gate reject dirty or unversioned deployed source revisions before final validation, while the season-freeze CLI retains its independent clean-commit requirement. Firebase Functions and Hosting predeploy hooks verify Git cleanliness before and after builds, and legacy broad npm production deployment commands fail closed so operators use exact release selectors.
+
+## FF1.40 — First Draft-night Usability Repair
+
+The first real family-and-friends Draft produced a narrow post-Draft repair
+slice. Upcoming-pick cards replace the large hourglass with the existing
+manager avatar and allow a two-line fantasy-team name. Completed-pick cards
+retain the selecting fantasy team beneath the asset name. The mobile clock
+surface reserves independent space for the team and countdown and places a
+possible action on its own full-width row. Healthy connection and completed
+injury-refresh banners no longer repeat information; offline, reconnecting,
+running, retry, stale-tab, and error states remain visible.
+
+The player search, position filter, and sort controls now share semantic
+surface, border, and text tokens with the rest of the Draft Room across all
+four themes. The live mobile header hides redundant descriptive text while
+retaining the league identity and the manager's Auto-Draft control.
+
+The already-authoritative timeout behavior remains two consecutive missed
+turns. FF1.40 adds explicit regression coverage but does not change that
+threshold. Automatic roster completion still fills every active starter
+before the bench; after starters, it permits two forward roles and one defense
+role and never chooses a Team Goalie Unit for the bench. Manual picks remain
+unchanged, and existing/completed Draft and roster records are never rewritten.
+
+The separate league-size scarcity request is not part of FF1.40. Projection
+V11 already uses league team count, required starter depth, value above
+replacement, and a goalie starter-slot curve. Any change to flexible-bench
+replacement counts or ranking weights requires a separate decision about
+visible-only versus authoritative Auto-Draft ordering, browser/server parity,
+snapshot/hash compatibility, and rollback.
+
+Exact implementation, staging acceptance, deployment boundary, and rollback
+details are in `docs/RINKRAT_FF1_40_DRAFT_NIGHT_USABILITY_REPAIR.md`.
