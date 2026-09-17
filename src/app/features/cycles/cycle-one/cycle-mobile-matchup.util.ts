@@ -71,20 +71,32 @@ export function groupMobileMatchupPositions(
     positions: MobileMatchupSection['positions'];
   }> = [
     {
-      key: 'forwards',
-      label: 'Forwards',
-      shortLabel: 'LW · C · RW',
-      positions: ['LW', 'C', 'RW'],
+      key: 'C',
+      label: 'Centers',
+      shortLabel: 'C',
+      positions: ['C'],
     },
     {
-      key: 'defense',
-      label: 'Defense',
+      key: 'LW',
+      label: 'Left Wings',
+      shortLabel: 'LW',
+      positions: ['LW'],
+    },
+    {
+      key: 'RW',
+      label: 'Right Wings',
+      shortLabel: 'RW',
+      positions: ['RW'],
+    },
+    {
+      key: 'D',
+      label: 'Defenders',
       shortLabel: 'D',
       positions: ['D'],
     },
     {
-      key: 'goalie',
-      label: 'Goalie Unit',
+      key: 'G',
+      label: 'Goalies',
       shortLabel: 'G',
       positions: ['G'],
     },

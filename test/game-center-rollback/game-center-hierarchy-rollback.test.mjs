@@ -88,6 +88,16 @@ describe('Batch 6B.2 Game Center hierarchy rollback', () => {
     assert.match(mobileLineup, /presenter\.breakdownPositions/);
     assert.match(mobileLineup, /presenter\.getPositionCurrentTotal/);
     assert.match(mobileStyles, /\.mobile-position-comparison/);
+    assert.ok(
+      mobileLineup.indexOf('@for (section of getPositionSections(); track section.key)') <
+        mobileLineup.indexOf('Points by position'),
+      'Position totals should follow the active position blocks.',
+    );
+    assert.ok(
+      mobileLineup.indexOf('Points by position') <
+        mobileLineup.indexOf('mobile-live-bench-section'),
+      'Position totals should appear before the collapsed bench.',
+    );
     assert.match(finishStyles, /@media \(max-width: 780px\)[\s\S]*?:host \{\s*display: none;/);
     assert.doesNotMatch(teamPanel + mobileLineup + presenter, /getPendingWindowCallout|getPendingWindowTooltip/);
     assert.doesNotMatch(mobileLineup, /getActiveStatusLine/);

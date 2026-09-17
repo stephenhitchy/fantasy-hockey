@@ -227,7 +227,7 @@ test('mobile matchup views remain owner-relative for both sides', () => {
   assert.equal(getOwnerIdForMobileView('both', matchup), null);
 });
 
-test('mobile lineup grouping creates readable forward, defense, and goalie sections', () => {
+test('mobile lineup grouping creates ordered position-specific sections', () => {
   const makeGroup = (position, count) => ({
     position,
     label: position,
@@ -248,13 +248,20 @@ test('mobile lineup grouping creates readable forward, defense, and goalie secti
   ]);
 
   assert.deepEqual(sections.map((section) => section.key), [
-    'forwards',
-    'defense',
-    'goalie',
+    'C',
+    'LW',
+    'RW',
+    'D',
+    'G',
   ]);
-  assert.equal(sections[0].rows.length, 9);
-  assert.equal(sections[1].rows.length, 4);
-  assert.equal(sections[2].rows.length, 1);
+  assert.deepEqual(sections.map((section) => section.label), [
+    'Centers',
+    'Left Wings',
+    'Right Wings',
+    'Defenders',
+    'Goalies',
+  ]);
+  assert.deepEqual(sections.map((section) => section.rows.length), [3, 3, 3, 4, 1]);
 });
 
 test('six-game explanations clearly distinguish appearances, misses, live games, and pending schedules', () => {

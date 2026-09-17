@@ -200,7 +200,7 @@
   }
 
   .mobile-position-comparison {
-    margin-top: 10px;
+    margin: 0;
     padding: 10px;
     border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
     border-radius: 13px;

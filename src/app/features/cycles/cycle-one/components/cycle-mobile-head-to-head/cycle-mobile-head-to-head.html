@@ -194,65 +194,6 @@
     }
   </div>
 
-  @if (isHeadToHeadView() && matchup.teamBOwnerId) {
-    <section class="mobile-position-comparison">
-      <div class="mobile-position-comparison-heading">
-        <h3>Points by position</h3>
-        <p>Current matchup totals</p>
-      </div>
-
-      <table
-        [attr.aria-label]="
-          'Current points by position: ' +
-          presenter.getTeamName(matchup.teamAOwnerId) +
-          ' versus ' +
-          presenter.getTeamName(matchup.teamBOwnerId)
-        "
-      >
-        <thead>
-          <tr>
-            <th scope="col">Pos.</th>
-            <th scope="col">{{ presenter.getTeamName(matchup.teamAOwnerId) }}</th>
-            <th scope="col">{{ presenter.getTeamName(matchup.teamBOwnerId) }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (position of presenter.breakdownPositions; track position) {
-            <tr>
-              <th scope="row">{{ position }}</th>
-              <td
-                class="team-a"
-                [class.is-leading]="
-                  presenter.getPositionCurrentTotal(matchup.teamAOwnerId, position) >
-                  presenter.getPositionCurrentTotal(matchup.teamBOwnerId, position)
-                "
-              >
-                <strong>{{
-                  presenter.getProjectionDisplay(
-                    presenter.getPositionCurrentTotal(matchup.teamAOwnerId, position)
-                  )
-                }}</strong>
-              </td>
-              <td
-                class="team-b"
-                [class.is-leading]="
-                  presenter.getPositionCurrentTotal(matchup.teamBOwnerId, position) >
-                  presenter.getPositionCurrentTotal(matchup.teamAOwnerId, position)
-                "
-              >
-                <strong>{{
-                  presenter.getProjectionDisplay(
-                    presenter.getPositionCurrentTotal(matchup.teamBOwnerId, position)
-                  )
-                }}</strong>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-  }
-
   <div class="mobile-live-lineup">
     @if (presenter.hasRosterDisplayMetricForMatchup(matchup)) {
       <p class="mobile-roster-order-note">
@@ -497,6 +438,65 @@
           }
         </div>
       </details>
+    }
+
+    @if (isHeadToHeadView() && matchup.teamBOwnerId) {
+      <section class="mobile-position-comparison">
+        <div class="mobile-position-comparison-heading">
+          <h3>Points by position</h3>
+          <p>Current matchup totals</p>
+        </div>
+
+        <table
+          [attr.aria-label]="
+            'Current points by position: ' +
+            presenter.getTeamName(matchup.teamAOwnerId) +
+            ' versus ' +
+            presenter.getTeamName(matchup.teamBOwnerId)
+          "
+        >
+          <thead>
+            <tr>
+              <th scope="col">Pos.</th>
+              <th scope="col">{{ presenter.getTeamName(matchup.teamAOwnerId) }}</th>
+              <th scope="col">{{ presenter.getTeamName(matchup.teamBOwnerId) }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (position of presenter.breakdownPositions; track position) {
+              <tr>
+                <th scope="row">{{ position }}</th>
+                <td
+                  class="team-a"
+                  [class.is-leading]="
+                    presenter.getPositionCurrentTotal(matchup.teamAOwnerId, position) >
+                    presenter.getPositionCurrentTotal(matchup.teamBOwnerId, position)
+                  "
+                >
+                  <strong>{{
+                    presenter.getProjectionDisplay(
+                      presenter.getPositionCurrentTotal(matchup.teamAOwnerId, position)
+                    )
+                  }}</strong>
+                </td>
+                <td
+                  class="team-b"
+                  [class.is-leading]="
+                    presenter.getPositionCurrentTotal(matchup.teamBOwnerId, position) >
+                    presenter.getPositionCurrentTotal(matchup.teamAOwnerId, position)
+                  "
+                >
+                  <strong>{{
+                    presenter.getProjectionDisplay(
+                      presenter.getPositionCurrentTotal(matchup.teamBOwnerId, position)
+                    )
+                  }}</strong>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
     }
 
     <details class="mobile-live-position-section mobile-live-bench-section">

@@ -41,7 +41,7 @@ export interface MobileMatchupPositionGroup {
 }
 
 export interface MobileMatchupSection {
-  key: 'forwards' | 'defense' | 'goalie';
+  key: DraftPosition;
   label: string;
   shortLabel: string;
   positions: DraftPosition[];
