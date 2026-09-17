@@ -400,6 +400,29 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
   assert.doesNotMatch(source, /selectedDetail|DialogFocusTrapDirective|ViewportOverlayPortalDirective/);
   assert.match(styles, /@media \(max-width:\s*780px\)/);
   assert.match(styles, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(template, /<small>CUR<\/small>/);
+  assert.match(template, /<small>PROJ<\/small>/);
+  assert.match(template, /six-game details\. Current/);
+  assert.match(
+    styles,
+    /\.mobile-live-player-row-head-to-head \.mobile-live-player\s*\{[\s\S]*?grid-template-areas:[\s\S]*?'identity scores'[\s\S]*?'markers markers'/,
+  );
+  assert.match(
+    styles,
+    /\.mobile-live-player-row-head-to-head \.mobile-live-player-team-b\s*\{[\s\S]*?grid-template-areas:[\s\S]*?'scores identity'/,
+  );
+  assert.match(
+    styles,
+    /\.mobile-live-player-row-head-to-head \.mobile-window-markers\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  assert.match(
+    styles,
+    /\.mobile-live-player-row-head-to-head \.mobile-roster-rank\s*\{\s*display:\s*none;/,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 360px\)[\s\S]*?\.mobile-live-player-row-head-to-head \.mobile-live-player-topline img\s*\{\s*display:\s*none;/,
+  );
   assert.doesNotMatch(styles, /mobile-asset-sheet/);
   assert.match(styles, /prefers-reduced-motion/);
   assert.ok(Buffer.byteLength(styles) < 48_000, 'Mobile Game Center component CSS exceeds 48 kB raw.');

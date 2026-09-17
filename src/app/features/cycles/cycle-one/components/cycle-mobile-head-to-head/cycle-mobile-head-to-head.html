@@ -221,7 +221,14 @@
                     class="mobile-live-player mobile-live-player-team-a"
                     [class.mobile-live-player-status]="presenter.hasAssetStatusFlag(pick.asset)"
                     [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamAOwnerId)"
-                    [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details'"
+                    [attr.aria-label]="
+                      'Open ' +
+                      presenter.getAssetName(pick.asset) +
+                      ' six-game details. Current ' +
+                      presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) +
+                      ', projected ' +
+                      presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                    "
                     (click)="openActiveDetail(pick)"
                   >
                     <span class="mobile-live-player-topline">
@@ -248,11 +255,11 @@
                         [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
                         [attr.data-score-asset-key]="pick.asset.assetKey"
                       >
-                        Current
+                        <small>CUR</small>
                         <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
                       </span>
                       <span>
-                        Projected
+                        <small>PROJ</small>
                         <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong>
                       </span>
                     </span>
@@ -295,7 +302,14 @@
                     class="mobile-live-player mobile-live-player-team-b"
                     [class.mobile-live-player-status]="presenter.hasAssetStatusFlag(pick.asset)"
                     [ngStyle]="presenter.getOwnerThemeStyles(matchup.teamBOwnerId)"
-                    [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details'"
+                    [attr.aria-label]="
+                      'Open ' +
+                      presenter.getAssetName(pick.asset) +
+                      ' six-game details. Current ' +
+                      presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) +
+                      ', projected ' +
+                      presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                    "
                     (click)="openActiveDetail(pick)"
                   >
                     <span class="mobile-live-player-topline">
@@ -322,11 +336,11 @@
                         [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
                         [attr.data-score-asset-key]="pick.asset.assetKey"
                       >
-                        Current
+                        <small>CUR</small>
                         <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
                       </span>
                       <span>
-                        Projected
+                        <small>PROJ</small>
                         <strong>{{ presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset)) }}</strong>
                       </span>
                     </span>
