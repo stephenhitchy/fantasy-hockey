@@ -42,6 +42,16 @@ test('mobile Game Center rows navigate directly to the full Game Film route', as
   assert.match(template, /\(click\)="openActiveDetail\(pick\)"/);
 });
 
+test('route navigation always starts at the top of the destination page', async () => {
+  const appConfig = await read('src/app/app.config.ts');
+
+  assert.match(appConfig, /provideRouter,\s*withInMemoryScrolling/);
+  assert.match(
+    appConfig,
+    /withInMemoryScrolling\(\{\s*scrollPositionRestoration:\s*'top'\s*\}\)/,
+  );
+});
+
 test('client health metrics use stable viewport and interaction calculations', () => {
   assert.equal(classifyClientViewport(320), 'phone');
   assert.equal(classifyClientViewport(780), 'phone');

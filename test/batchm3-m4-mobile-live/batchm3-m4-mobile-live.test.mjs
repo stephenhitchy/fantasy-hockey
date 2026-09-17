@@ -421,7 +421,11 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
   );
   assert.match(
     styles,
-    /\.mobile-live-player-row-head-to-head \.mobile-live-player-topline img\s*\{\s*display:\s*none;/,
+    /\.mobile-live-player-row-head-to-head \.mobile-live-player-topline img\s*\{[\s\S]*?width:\s*23px;[\s\S]*?height:\s*23px;/,
+  );
+  assert.match(
+    styles,
+    /\.mobile-live-player-row-head-to-head \.mobile-live-player\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*38px;[\s\S]*?gap:\s*5px 4px;[\s\S]*?padding:\s*7px 4px;/,
   );
   assert.match(
     styles,
