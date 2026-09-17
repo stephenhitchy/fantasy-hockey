@@ -62,6 +62,12 @@ Manual drafting remains unrestricted. The existing protection that prevents a
 bench pick from consuming the last asset required for another manager's
 starting slot remains in place.
 
+The Draft Room also removes remaining Team Goalie Units from a manager's
+default player pool immediately after that manager's first goalie-unit pick is
+confirmed. This is presentation-only and manager-specific. The Goalie Units
+position filter or the explicit `Show Extra Goalie Units` control restores
+them for deliberate manual comparison or selection.
+
 ## Verification
 
 Focused verification:
@@ -70,6 +76,7 @@ Focused verification:
 npm --prefix functions run build
 npm run test:draft-authority:run
 npm test -- --watch=false --include src/app/core/draft/auto-draft-strategy.spec.ts
+npm test -- --watch=false --include src/app/features/draft/draft-room/draft-goalie-visibility.util.spec.ts
 ```
 
 The Draft Ranking V2 fixtures prove:
@@ -83,7 +90,9 @@ The Draft Ranking V2 fixtures prove:
 - Projection V11 fields are unchanged while the rank layer is versioned;
 - browser and Functions ranking utilities remain byte-for-byte aligned;
 - Auto-Draft produces two forward bench selections and one defense selection,
-  and skips a queued reserve goalie unit.
+  and skips a queued reserve goalie unit;
+- one manager's first goalie-unit pick hides only that manager's extra goalies
+  by default while preserving explicit manual access.
 
 Current inherited release verification:
 

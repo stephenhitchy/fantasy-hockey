@@ -441,7 +441,7 @@
               [class.need-open]="getRosterNeedClass(position) === 'need-open'"
               [class.need-bench]="getRosterNeedClass(position) === 'need-bench'"
               [class.need-full]="getRosterNeedClass(position) === 'need-full'"
-              (click)="positionFilter.set(position)"
+              (click)="setPositionFilter(position)"
             >
               <strong>{{ position }}</strong>
               <span>{{ getRosterNeedLabel(position) }}</span>
@@ -574,6 +574,22 @@
 <option value="TEAM">Sort: NHL Team</option>
 </select>
 </div>
+
+          @if (hasMyGoalieUnit() && positionFilter() === 'ALL') {
+            <div class="rr-toolbar" aria-label="Extra goalie-unit visibility">
+              <span class="rr-notice rr-notice--info" role="status">
+                Extra Goalie Units are {{ extraGoalieUnitsVisible() ? 'visible' : 'hidden after your starter pick' }}.
+              </span>
+              <button
+                type="button"
+                class="rr-button rr-button--quiet"
+                [attr.aria-pressed]="extraGoalieUnitsVisible()"
+                (click)="toggleExtraGoalieUnits()"
+              >
+                {{ showExtraGoalieUnits() ? 'Hide Extra Goalie Units' : 'Show Extra Goalie Units' }}
+              </button>
+            </div>
+          }
 
           @if (playerPoolLoading()) {
             <div class="pool-loading-block rr-notice rr-notice--info" role="status" aria-live="polite">

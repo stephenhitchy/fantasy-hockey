@@ -128,6 +128,11 @@ import {
   shouldReloadDraftProjectionPool,
 } from './draft-projection-pool-binding.util';
 
+import {
+  hasManagerDraftedGoalieUnit,
+  shouldShowDraftPoolAsset,
+} from './draft-goalie-visibility.util';
+
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
 const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
 
@@ -216,6 +221,7 @@ export class DraftRoom implements OnDestroy {
   searchTerm = signal('');
   positionFilter = signal<DraftFilter>('ALL');
   sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
+  showExtraGoalieUnits = signal(false);
   now = signal(Date.now());
 
   mobilePanel = signal<DraftMobilePanel>('players');
@@ -796,6 +802,14 @@ export class DraftRoom implements OnDestroy {
     return ranks;
   });
 
+  readonly hasMyGoalieUnit = computed(() =>
+    hasManagerDraftedGoalieUnit(this.picks(), this.userId),
+  );
+
+  readonly extraGoalieUnitsVisible = computed(
+    () => this.showExtraGoalieUnits() || this.positionFilter() === 'G',
+  );
+
   readonly availableAssets = computed(() => {
     const draftedAssetKeys = new Set(this.draft()?.draftedAssetKeys ?? []);
     const search = this.searchTerm();
@@ -803,6 +817,14 @@ export class DraftRoom implements OnDestroy {
 
     return this.playerPool()
       .filter((asset) => !draftedAssetKeys.has(asset.assetKey))
+      .filter((asset) =>
+        shouldShowDraftPoolAsset({
+          assetPosition: asset.position,
+          positionFilter,
+          managerHasGoalieUnit: this.hasMyGoalieUnit(),
+          showExtraGoalieUnits: this.showExtraGoalieUnits(),
+        }),
+      )
       .filter((asset) => (positionFilter === 'ALL' ? true : asset.position === positionFilter))
       .filter((asset) => matchesDraftPlayerSearch(search, [
         this.getAssetName(asset),
@@ -2674,6 +2696,10 @@ export class DraftRoom implements OnDestroy {
     if (validFilters.includes(value as DraftFilter)) {
       this.positionFilter.set(value as DraftFilter);
     }
+  }
+
+  toggleExtraGoalieUnits(): void {
+    this.showExtraGoalieUnits.update((visible) => !visible);
   }
 
   getMyAutoDraftButtonLabel(): string {
