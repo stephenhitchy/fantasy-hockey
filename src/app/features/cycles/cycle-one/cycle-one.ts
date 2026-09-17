@@ -1853,7 +1853,7 @@ export class CycleOne implements OnDestroy {
       matchupLabel: this.getMatchupNavigationTitle(matchup),
       matchupStatus: matchup.status,
       readinessLabel: this.getMatchupReadinessLabel(matchup),
-      finishLabel: this.getMobileMatchupFinishLabel(),
+      finishLabel: this.getMobileMatchupFinishLabel() ?? 'End date pending',
       savedAt: new Date().toISOString(),
       sourceReleaseLabel: BUNDLED_RELEASE_MANIFEST.releaseLabel,
       sourceScoringVersion: BUNDLED_RELEASE_MANIFEST.scoringRulesVersion,
@@ -2469,11 +2469,21 @@ export class CycleOne implements OnDestroy {
     return this.formatMatchupFinishDate(result.finishDate, true);
   }
 
-  getMobileMatchupFinishLabel(): string {
+  hasMatchupFinishDate(): boolean {
+    const result = this.matchupFinishDate();
+
+    return Boolean(
+      result.finishDate &&
+      result.confidence !== 'partial' &&
+      result.confidence !== 'unavailable'
+    );
+  }
+
+  getMobileMatchupFinishLabel(): string | null {
     const result = this.matchupFinishDate();
 
     if (!result.finishDate || result.confidence === 'partial' || result.confidence === 'unavailable') {
-      return 'End date pending';
+      return null;
     }
 
     const prefix = this.getCurrentDisplayedMatchup()?.status === 'complete' ? 'Ended' : 'Ends';
@@ -3108,6 +3118,12 @@ export class CycleOne implements OnDestroy {
     return `Top performer first by ${getRosterDisplayMetricLabel(this.rosterDisplayPhase()).toLowerCase()}`;
   }
 
+  hasRosterDisplayMetricForMatchup(matchup: FantasyMatchup): boolean {
+    return [matchup.teamAOwnerId, matchup.teamBOwnerId]
+      .flatMap((ownerId) => this.getTeamPicks(ownerId))
+      .some((pick) => typeof this.getAssetRosterDisplayMetric(pick.asset) === 'number');
+  }
+
   getAssetRosterDisplayMetric(asset: DraftableAsset): number | null {
     return getRosterDisplayMetric(
       this.getRosterDisplayAsset(asset),
@@ -3163,6 +3179,21 @@ export class CycleOne implements OnDestroy {
     );
 
     return Number(projectionTotal.toFixed(1));
+  }
+
+  hasTeamCycleProjection(ownerId: string | null): boolean {
+    return typeof this.getProjectedCycleForTeam(ownerId) === 'number';
+  }
+
+  shouldShowMatchupProjectionNote(matchup: FantasyMatchup): boolean {
+    if (this.isMatchupComplete(matchup) || !matchup.teamBOwnerId) {
+      return true;
+    }
+
+    return (
+      this.hasTeamCycleProjection(matchup.teamAOwnerId) &&
+      this.hasTeamCycleProjection(matchup.teamBOwnerId)
+    );
   }
 
   getProjectedSeasonForTeam(ownerId: string | null): number | null {

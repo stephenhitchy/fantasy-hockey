@@ -32,18 +32,6 @@
                       }}
                     </span>
 
-                    <span
-                      class="matchup-readiness-badge rr-badge"
-                      [class.readiness-complete]="presenter.isMatchupComplete(matchup)"
-                      [class.readiness-ready]="
-                        presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
-                      "
-                      [class.readiness-waiting]="
-                        !presenter.isMatchupReadyToComplete(matchup) && !presenter.isMatchupComplete(matchup)
-                      "
-                    >
-                      {{ presenter.getMatchupReadinessLabel(matchup) }}
-                    </span>
                   </div>
                 </div>
 

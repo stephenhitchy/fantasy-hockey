@@ -1,6 +1,8 @@
-                <p class="matchup-projection-note rr-notice rr-notice--info">
-                  {{ presenter.getProjectedWinnerLabel(matchup) }}
-                </p>
+                @if (presenter.shouldShowMatchupProjectionNote(matchup)) {
+                  <p class="matchup-projection-note rr-notice rr-notice--info">
+                    {{ presenter.getProjectedWinnerLabel(matchup) }}
+                  </p>
+                }
 
                 @if (presenter.isMatchupComplete(matchup)) {
                   <section class="matchup-breakdown-card rr-card rr-card--padded">

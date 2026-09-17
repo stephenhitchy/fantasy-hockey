@@ -55,15 +55,22 @@
             <span>{{ presenter.getTeamRecord(matchup.teamAOwnerId) }}</span>
           </div>
         </div>
-        <div class="mobile-matchup-team-scoreline">
+        <div
+          class="mobile-matchup-team-scoreline"
+          [class.mobile-matchup-team-scoreline-no-projection]="
+            !presenter.hasTeamCycleProjection(matchup.teamAOwnerId)
+          "
+        >
           <span>
             Current
             <strong>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, matchup.teamAOwnerId)) }}</strong>
           </span>
-          <span>
-            Projected
-            <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</strong>
-          </span>
+          @if (presenter.hasTeamCycleProjection(matchup.teamAOwnerId)) {
+            <span>
+              Projected
+              <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamAOwnerId)) }}</strong>
+            </span>
+          }
         </div>
         <div class="mobile-matchup-team-progress-copy">
           <span>{{ getTeamProgressText(matchup.teamAOwnerId) }}</span>
@@ -98,15 +105,22 @@
             <span>{{ presenter.getTeamRecord(matchup.teamBOwnerId) }}</span>
           </div>
         </div>
-        <div class="mobile-matchup-team-scoreline">
+        <div
+          class="mobile-matchup-team-scoreline"
+          [class.mobile-matchup-team-scoreline-no-projection]="
+            !presenter.hasTeamCycleProjection(matchup.teamBOwnerId)
+          "
+        >
           <span>
             Current
             <strong>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, matchup.teamBOwnerId)) }}</strong>
           </span>
-          <span>
-            Projected
-            <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</strong>
-          </span>
+          @if (presenter.hasTeamCycleProjection(matchup.teamBOwnerId)) {
+            <span>
+              Projected
+              <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(matchup.teamBOwnerId)) }}</strong>
+            </span>
+          }
         </div>
         <div class="mobile-matchup-team-progress-copy">
           <span>{{ getTeamProgressText(matchup.teamBOwnerId) }}</span>
@@ -142,15 +156,22 @@
             <span>{{ presenter.getTeamRecord(ownerId) }} · {{ getTeamProgressText(ownerId) }}</span>
           </div>
         </div>
-        <div class="mobile-matchup-team-scoreline">
+        <div
+          class="mobile-matchup-team-scoreline"
+          [class.mobile-matchup-team-scoreline-no-projection]="
+            !presenter.hasTeamCycleProjection(ownerId)
+          "
+        >
           <span>
             Current
             <strong>{{ presenter.getProjectionDisplay(presenter.getMatchupTeamCurrentScore(matchup, ownerId)) }}</strong>
           </span>
-          <span>
-            Projected
-            <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(ownerId)) }}</strong>
-          </span>
+          @if (presenter.hasTeamCycleProjection(ownerId)) {
+            <span>
+              Projected
+              <strong>{{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(ownerId)) }}</strong>
+            </span>
+          }
           <span>
             Progress
             <strong>{{ presenter.getTeamRosterProgressPercent(ownerId) }}%</strong>
@@ -174,9 +195,11 @@
   </div>
 
   <div class="mobile-live-lineup">
-    <p class="mobile-roster-order-note">
-      {{ presenter.getRosterDisplayOrderLabel() }}
-    </p>
+    @if (presenter.hasRosterDisplayMetricForMatchup(matchup)) {
+      <p class="mobile-roster-order-note">
+        {{ presenter.getRosterDisplayOrderLabel() }}
+      </p>
+    }
     @for (section of getPositionSections(); track section.key) {
       <details class="mobile-live-position-section" open>
         <summary>

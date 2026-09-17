@@ -238,6 +238,11 @@
 
 .g .matchups-section {
   margin-top: 24px;
+  padding: var(--rr-space-4);
+  border: 1px solid color-mix(in srgb, var(--rr-color-border) 78%, transparent);
+  background: color-mix(in srgb, var(--rr-color-surface) 96%, transparent);
+  color: var(--rr-color-text);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
 }
 
 .g .section-heading h2 {
@@ -2078,13 +2083,10 @@
   .g .mobile-score-team > span {
     display: block;
     width: 100%;
-    overflow: hidden;
     color: #dce9f7;
     font-size: 10px;
     font-weight: 900;
-    line-height: 1.15;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.2;
   }
 
   .g .mobile-score-team .manager-name-with-avatar {
@@ -2100,9 +2102,8 @@
 
   .g .mobile-score-team .manager-name-with-avatar > span:last-child {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .g .mobile-score-team > strong {
@@ -2161,6 +2162,10 @@
   .g .compact-auto-status {
     margin-bottom: 12px;
     padding: 10px 11px;
+  }
+
+  .g .matchup-view-selector {
+    display: none;
   }
 }
 
