@@ -359,8 +359,11 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
         'src/d1n-load-probe.service.ts',
         'src/d1n-load-probe.util.ts',
+        // D1.24 changes only league-adjusted Draft ranking and Auto-Draft selection.
+        'src/draft-pick-engine.ts',
+        'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '1e53a846c14fb3d00c4ad601b18d8265d3137003676618cb25e87399d087738b',
+    '7f9d6905ecafe9122f320def396bb66f2ea67467985575fe545bd63ea4b975b5',
   );
 });

@@ -474,7 +474,7 @@ test('the permanent roadmap converts the launch gameplan into explicit product a
   assert.match(roadmap, /Version 1\.54/);
   assert.match(roadmap, /# \[x\] D1\.20/);
   assert.match(roadmap, /\[~\] D1\.23/);
-  assert.match(roadmap, /\[ \] D1\.24/);
+  assert.match(roadmap, /\[x\] D1\.24/);
   assert.match(roadmap, /# \[x\] D1\.26/);
   assert.match(roadmap, /\[~\] D1\.27/);
   assert.match(roadmap, /# \[x\] D1\.28/);

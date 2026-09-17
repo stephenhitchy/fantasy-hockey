@@ -186,7 +186,7 @@ describe('server draft pick engine', () => {
     assert.equal(selection.selectionType, 'automatic');
   });
 
-  test('automatic bench selections preserve forward, defense, and goalie role diversity', () => {
+  test('automatic bench selection allows a second forward before filling defense', () => {
     const roster = fillAllStarters(emptyRoster());
     roster.benchSlots[0].asset = {
       ...skater('skater-300', 'LW', 40),
@@ -212,8 +212,67 @@ describe('server draft pick engine', () => {
       ],
     });
 
-    assert.equal(selection.asset.assetKey, 'skater-302');
+    assert.equal(selection.asset.assetKey, 'skater-301');
     assert.equal(selection.selectionType, 'queue');
+  });
+
+  test('automatic bench selection fills defense after two forwards', () => {
+    const roster = fillAllStarters(emptyRoster());
+    roster.benchSlots[0].asset = {
+      ...skater('skater-310', 'LW', 40),
+      rosterStatus: 'benched',
+      cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+    };
+    roster.benchSlots[1].asset = {
+      ...skater('skater-311', 'C', 40),
+      rosterStatus: 'benched',
+      cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+    };
+    const fixtureDraft = draft();
+    const selection = selectAutomaticDraftCandidate({
+      queue: {
+        ownerId: 'a',
+        assetKeys: ['skater-312', 'skater-313'],
+        autoDraftEnabled: true,
+        consecutiveClockExpirations: 0,
+        autoDraftActivatedByTimeout: false,
+      },
+      draft: fixtureDraft,
+      roster,
+      rostersByOwnerId: new Map([['a', roster], ['b', fillAllStarters(emptyRoster())]]),
+      assets: [
+        skater('skater-312', 'RW', 95),
+        skater('skater-313', 'D', 60),
+      ],
+    });
+
+    assert.equal(selection.asset.assetKey, 'skater-313');
+    assert.equal(selection.selectionType, 'queue');
+  });
+
+  test('automatic bench selection skips a queued reserve goalie unit', () => {
+    const roster = fillAllStarters(emptyRoster());
+    const fixtureDraft = draft();
+    const selection = selectAutomaticDraftCandidate({
+      queue: {
+        ownerId: 'a',
+        assetKeys: ['goalie-unit-320'],
+        autoDraftEnabled: true,
+        consecutiveClockExpirations: 0,
+        autoDraftActivatedByTimeout: false,
+      },
+      draft: fixtureDraft,
+      roster,
+      rostersByOwnerId: new Map([['a', roster], ['b', fillAllStarters(emptyRoster())]]),
+      assets: [
+        goalie('goalie-unit-320', 99),
+        skater('skater-321', 'LW', 60),
+        skater('skater-322', 'D', 55),
+      ],
+    });
+
+    assert.equal(selection.asset.assetKey, 'skater-321');
+    assert.equal(selection.selectionType, 'automatic');
   });
 
   test('bench selection cannot consume the last goalie needed for another starting slot', () => {

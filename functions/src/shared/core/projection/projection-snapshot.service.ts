@@ -36,6 +36,7 @@ import {
 } from '../player/draft-availability-attestation-write.service';
 import {
   assertSharedProjectionPoolHealthy,
+  DRAFT_RANKING_MODEL_VERSION,
   rankSharedProjectionAssets,
 } from './projection-ranking.util';
 import {
@@ -80,6 +81,7 @@ export interface SharedProjectionSnapshotMetadata {
   activeSnapshotId: string;
   status: SharedProjectionSnapshotStatus;
   projectionVersion: number;
+  draftRankingVersion?: number;
   scoringRulesVersion: number;
   generatedAt: string;
   generatedBy: string;
@@ -198,6 +200,7 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     !value.activeSnapshotId ||
     value.status !== 'ready' ||
     value.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    value.draftRankingVersion !== DRAFT_RANKING_MODEL_VERSION ||
     scoringRulesVersion === null
   ) {
     return null;
@@ -211,6 +214,7 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     activeSnapshotId: value.activeSnapshotId,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
     scoringRulesVersion,
     generatedAt: typeof value.generatedAt === 'string' ? value.generatedAt : '',
     generatedBy: typeof value.generatedBy === 'string' ? value.generatedBy : 'server',
@@ -1294,6 +1298,7 @@ async function generateSnapshotInternal(
     activeSnapshotId: snapshotId,
     status: 'building' as const,
     projectionVersion: SHARED_PROJECTION_VERSION,
+    draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
     scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     generatedAt,
     generatedAtServer: serverTimestamp(),
@@ -1418,6 +1423,7 @@ async function generateSnapshotInternal(
       activeSnapshotId: snapshotId,
       status: 'ready',
       projectionVersion: SHARED_PROJECTION_VERSION,
+      draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
       scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
       generatedAt,
       generatedBy: input.requestedBy
@@ -1730,45 +1736,6 @@ function buildEmergencyProjectionValues(
   };
 }
 
-function applyEmergencyRanks(assets: DraftableAsset[]): DraftableAsset[] {
-  const overall = [...assets].sort((first, second) =>
-    (second.draftScore ?? 0) - (first.draftScore ?? 0) ||
-    first.assetKey.localeCompare(second.assetKey),
-  );
-  const overallRank = new Map(
-    overall.map((asset, index) => [asset.assetKey, index + 1]),
-  );
-  const positionRanks = new Map<string, number>();
-
-  for (const position of ['LW', 'C', 'RW', 'D', 'G'] as DraftPosition[]) {
-    const positionAssets = assets
-      .filter((asset) => asset.position === position)
-      .sort((first, second) =>
-        (second.draftScore ?? 0) - (first.draftScore ?? 0) ||
-        first.assetKey.localeCompare(second.assetKey),
-      );
-
-    positionAssets.forEach((asset, index) => {
-      positionRanks.set(asset.assetKey, index + 1);
-    });
-  }
-
-  return assets
-    .map((asset) => ({
-      ...asset,
-      draftRank: overallRank.get(asset.assetKey) ?? null,
-      balancedRank: overallRank.get(asset.assetKey) ?? null,
-      cycleRank: overallRank.get(asset.assetKey) ?? null,
-      draftPositionRank: positionRanks.get(asset.assetKey) ?? null,
-      positionRank: positionRanks.get(asset.assetKey) ?? null,
-      cyclePositionRank: positionRanks.get(asset.assetKey) ?? null,
-    }))
-    .sort((first, second) =>
-      (first.draftRank ?? Number.MAX_SAFE_INTEGER) -
-        (second.draftRank ?? Number.MAX_SAFE_INTEGER),
-    );
-}
-
 /**
  * Last-resort scheduled-draft safety net. Normal draft setup writes the full
  * current shared projection snapshot. This only runs when that snapshot is missing, so a
@@ -1905,7 +1872,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     });
   }
 
-  const rankedAssets = applyEmergencyRanks(assets);
+  const rankedAssets = rankSharedProjectionAssets(assets, teamCount);
   const catalog = await ensureCanonicalProjectionAssetCatalog();
   const catalogValidation = validateProjectionAssetsAgainstCatalog(
     rankedAssets,
@@ -1953,6 +1920,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     activeSnapshotId: snapshotId,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
     scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     generatedAt,
     generatedBy: 'server:draft-automation',

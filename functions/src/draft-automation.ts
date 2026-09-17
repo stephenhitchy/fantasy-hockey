@@ -59,6 +59,7 @@ import {
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
+import { DRAFT_RANKING_MODEL_VERSION } from './shared/core/projection/projection-ranking.util';
 import {
   hasCompleteTeamScheduleInputAttestation,
 } from './shared/core/projection/team-schedule-input-completeness.util';
@@ -376,6 +377,7 @@ function asTimestampDate(value: unknown): Date | null {
 
 
 type VerifiedDraftProjectionMetadata = SharedProjectionSnapshot['metadata'] & {
+  draftRankingVersion: typeof DRAFT_RANKING_MODEL_VERSION;
   assetDocumentCount: number;
   generatedByAuthority: 'server';
   authoritySchemaVersion: typeof PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION;
@@ -417,6 +419,7 @@ function isVerifiedDraftProjection(
     snapshot.assets.length > 0 &&
     metadata?.status === 'ready' &&
     metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+    metadata.draftRankingVersion === DRAFT_RANKING_MODEL_VERSION &&
     metadata.scoringRulesVersion === expectedScoringRulesVersion &&
     metadata.generationReason !== 'server-emergency' &&
     metadata.generatedByAuthority === 'server' &&
@@ -599,6 +602,7 @@ async function loadVerifiedDraftProjectionSnapshot(
     .filter(({ document, data }) =>
       data.status === 'ready' &&
       data.projectionVersion === SHARED_PROJECTION_VERSION &&
+      data.draftRankingVersion === DRAFT_RANKING_MODEL_VERSION &&
       normalizeLeagueScoringRulesVersion(data.scoringRulesVersion) ===
         expectedScoringRulesVersion &&
       data.generationReason !== 'server-emergency' &&

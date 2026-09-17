@@ -16,6 +16,7 @@ import {
   CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
 } from '../scoring/scoring-rules';
+import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
@@ -60,6 +61,7 @@ export interface SharedProjectionSnapshotMetadata {
   activeSnapshotId: string;
   status: SharedProjectionSnapshotStatus;
   projectionVersion: number;
+  draftRankingVersion?: number;
   scoringRulesVersion: number;
   generatedAt: string;
   generatedBy: string;
@@ -179,6 +181,7 @@ function normalizeMetadata(
     typeof data.activeSnapshotId !== 'string' ||
     !data.activeSnapshotId ||
     data.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    data.draftRankingVersion !== DRAFT_RANKING_MODEL_VERSION ||
     scoringRulesVersion === null
   ) {
     return null;
@@ -197,6 +200,7 @@ function normalizeMetadata(
     activeSnapshotId: data.activeSnapshotId,
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
+    draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
     scoringRulesVersion,
     generatedAt,
     generatedBy: typeof data.generatedBy === 'string' ? data.generatedBy : '',
@@ -435,6 +439,7 @@ export function isSharedProjectionSnapshotFreshForDraft(
     !metadata ||
     metadata.status !== 'ready' ||
     metadata.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    metadata.draftRankingVersion !== DRAFT_RANKING_MODEL_VERSION ||
     metadata.scoringRulesVersion !==
       (input.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) ||
     metadata.assetCount <= 0 ||
@@ -475,6 +480,7 @@ export function isSharedProjectionSnapshotFreshForWindow(
     !metadata ||
     metadata.status !== 'ready' ||
     metadata.projectionVersion !== SHARED_PROJECTION_VERSION ||
+    metadata.draftRankingVersion !== DRAFT_RANKING_MODEL_VERSION ||
     metadata.scoringRulesVersion !==
       (input.scoringRulesVersion ?? CURRENT_SCORING_RULES_VERSION) ||
     metadata.assetCount <= 0 ||

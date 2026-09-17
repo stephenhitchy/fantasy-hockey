@@ -466,8 +466,11 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
         'src/d1n-load-probe.service.ts',
         'src/d1n-load-probe.util.ts',
+        // D1.24 changes only league-adjusted Draft ranking and Auto-Draft selection.
+        'src/draft-pick-engine.ts',
+        'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '958f23683430f1a892ad73dd21b894580934aa62f0f2a9659747999798d80355',
+    '1e1ff372b88ce9768600938ae636079a8ae6abc1c943dde8a7a20340e0489968',
   );
 });

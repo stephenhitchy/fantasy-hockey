@@ -193,6 +193,7 @@ export interface DraftProjection {
   recentGameStandardDeviation?: number | null;
 
   /** Shared ranking fields used by the Draft Room and auto-draft. */
+  draftRankingVersion?: number | null;
   draftValueAboveReplacement?: number | null;
   draftScore?: number | null;
   draftRank?: number | null;

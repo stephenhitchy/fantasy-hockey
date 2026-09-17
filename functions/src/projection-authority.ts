@@ -42,6 +42,7 @@ import {
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
+import { DRAFT_RANKING_MODEL_VERSION } from './shared/core/projection/projection-ranking.util';
 
 const FUNCTION_REGION = 'us-central1';
 const PROJECTION_REQUEST_SCHEMA_VERSION = 1;
@@ -207,6 +208,7 @@ function isIntegrityVerifiedSnapshot(
     snapshot.assets.length > 0 &&
     metadata?.status === 'ready' &&
     metadata.projectionVersion === SHARED_PROJECTION_VERSION &&
+    metadata.draftRankingVersion === DRAFT_RANKING_MODEL_VERSION &&
     metadata.scoringRulesVersion === expectedScoringRulesVersion &&
     metadata.generatedByAuthority === 'server' &&
     metadata.authoritySchemaVersion === PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
@@ -459,6 +461,7 @@ function isReusableProjectionPointer(
   if (
     data['status'] !== 'ready' ||
     data['projectionVersion'] !== SHARED_PROJECTION_VERSION ||
+    data['draftRankingVersion'] !== DRAFT_RANKING_MODEL_VERSION ||
     data['scoringRulesVersion'] !== CURRENT_SCORING_RULES_VERSION ||
     data['generatedByAuthority'] !== 'server' ||
     data['authoritySchemaVersion'] !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||

@@ -474,9 +474,12 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // D1N-C-B adds isolated staging-only load-probe parsing and persistence.
     'd1n-load-probe.service.ts',
     'd1n-load-probe.util.ts',
+    // D1.24 changes only league-adjusted Draft ranking and Auto-Draft selection.
+    'draft-pick-engine.ts',
+    'shared/core/projection/projection-ranking.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 28,
-    digest: '35988ef958838b9b8d0cc1c8b5a1bb2b82fee4010a3391c7995759410e15aff7',
+    count: 26,
+    digest: '4712d41d1ee97ba6ecd3709a602ce2d28b589ca904227bff41231e3f3708aaee',
   });
 });
