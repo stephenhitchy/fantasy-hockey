@@ -22,7 +22,7 @@
 
     <app-cycle-page-header [presenter]="presenter"></app-cycle-page-header>
 
-    @if (getCurrentDisplayedMatchup() && hasMatchupFinishDate()) {
+    @if (getCurrentDisplayedMatchup()) {
       <app-cycle-matchup-finish-card [presenter]="presenter"></app-cycle-matchup-finish-card>
     }
 

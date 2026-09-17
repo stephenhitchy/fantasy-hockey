@@ -1853,7 +1853,7 @@ export class CycleOne implements OnDestroy {
       matchupLabel: this.getMatchupNavigationTitle(matchup),
       matchupStatus: matchup.status,
       readinessLabel: this.getMatchupReadinessLabel(matchup),
-      finishLabel: this.getMobileMatchupFinishLabel() ?? 'End date pending',
+      finishLabel: this.getMobileMatchupFinishLabel(),
       savedAt: new Date().toISOString(),
       sourceReleaseLabel: BUNDLED_RELEASE_MANIFEST.releaseLabel,
       sourceScoringVersion: BUNDLED_RELEASE_MANIFEST.scoringRulesVersion,
@@ -2469,21 +2469,13 @@ export class CycleOne implements OnDestroy {
     return this.formatMatchupFinishDate(result.finishDate, true);
   }
 
-  hasMatchupFinishDate(): boolean {
-    const result = this.matchupFinishDate();
-
-    return Boolean(
-      result.finishDate &&
-      result.confidence !== 'partial' &&
-      result.confidence !== 'unavailable'
-    );
-  }
-
-  getMobileMatchupFinishLabel(): string | null {
+  getMobileMatchupFinishLabel(): string {
     const result = this.matchupFinishDate();
 
     if (!result.finishDate || result.confidence === 'partial' || result.confidence === 'unavailable') {
-      return null;
+      return this.scheduleProjectionLoading()
+        ? 'Calculating end date…'
+        : 'End date pending';
     }
 
     const prefix = this.getCurrentDisplayedMatchup()?.status === 'complete' ? 'Ended' : 'Ends';

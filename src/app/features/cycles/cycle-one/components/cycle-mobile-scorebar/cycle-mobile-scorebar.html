@@ -22,9 +22,7 @@
         <div class="mobile-score-center">
           <span>{{ presenter.getCycleLabel() }}</span>
           <strong>VS</strong>
-          @if (presenter.getMobileMatchupFinishLabel(); as finishLabel) {
-            <small class="mobile-score-finish">{{ finishLabel }}</small>
-          }
+          <small class="mobile-score-finish">{{ presenter.getMobileMatchupFinishLabel() }}</small>
         </div>
 
         <article class="mobile-score-team mobile-score-team-b" [ngStyle]="presenter.getOwnerThemeStyles(mobileMatchup.teamBOwnerId)">

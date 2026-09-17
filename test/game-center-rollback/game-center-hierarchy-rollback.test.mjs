@@ -51,24 +51,35 @@ describe('Batch 6B.2 Game Center hierarchy rollback', () => {
     assert.match(template, /Current matchup score/);
     assert.match(template, /Proj\./);
     assert.doesNotMatch(template, /getMatchupReadinessLabel/);
-    assert.match(template, /getMobileMatchupFinishLabel\(\); as finishLabel/);
+    assert.match(template, /mobile-score-finish.*getMobileMatchupFinishLabel\(\)/s);
     assert.doesNotMatch(template, /role="progressbar"/);
     assert.doesNotMatch(template, /Games Counted|counted starter games/i);
   });
 
-  test('keeps pending timing and unavailable projections out of the calm matchup surface', async () => {
-    const [page, matchup, teamPanel, breakdown, mobileLineup, mobileStyles, styles, presenter] = await Promise.all([
+  test('keeps finish timing useful without duplicating it across mobile surfaces', async () => {
+    const [
+      page,
+      matchup,
+      teamPanel,
+      breakdown,
+      mobileLineup,
+      mobileStyles,
+      finishStyles,
+      styles,
+      presenter,
+    ] = await Promise.all([
       read('src/app/features/cycles/cycle-one/cycle-one.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-matchup-card/cycle-matchup-card.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-matchup-breakdown/cycle-matchup-breakdown.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html'),
       read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.css'),
+      read('src/app/features/cycles/cycle-one/components/cycle-matchup-finish-card/cycle-matchup-finish-card.css'),
       read('src/app/features/cycles/cycle-one/cycle-one.css'),
       read('src/app/features/cycles/cycle-one/cycle-one.ts'),
     ]);
 
-    assert.match(page, /getCurrentDisplayedMatchup\(\) && hasMatchupFinishDate\(\)/);
+    assert.match(page, /@if \(getCurrentDisplayedMatchup\(\)\)/);
     assert.doesNotMatch(matchup, /matchup-readiness-badge|getMatchupReadinessLabel/);
     assert.match(breakdown, /shouldShowMatchupProjectionNote\(matchup\)/);
     assert.match(mobileLineup, /hasRosterDisplayMetricForMatchup\(matchup\)/);
@@ -77,11 +88,12 @@ describe('Batch 6B.2 Game Center hierarchy rollback', () => {
     assert.match(mobileLineup, /presenter\.breakdownPositions/);
     assert.match(mobileLineup, /presenter\.getPositionCurrentTotal/);
     assert.match(mobileStyles, /\.mobile-position-comparison/);
+    assert.match(finishStyles, /@media \(max-width: 780px\)[\s\S]*?:host \{\s*display: none;/);
     assert.doesNotMatch(teamPanel + mobileLineup + presenter, /getPendingWindowCallout|getPendingWindowTooltip/);
     assert.doesNotMatch(mobileLineup, /getActiveStatusLine/);
     assert.match(styles, /\.g \.matchup-view-selector \{\s*display: none;/);
-    assert.match(presenter, /getMobileMatchupFinishLabel\(\): string \| null/);
-    assert.match(presenter, /return null;/);
+    assert.match(presenter, /getMobileMatchupFinishLabel\(\): string/);
+    assert.match(presenter, /'End date pending'/);
   });
 
   test('retains the original per-team roster progress display', async () => {
