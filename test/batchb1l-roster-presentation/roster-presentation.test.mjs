@@ -211,6 +211,24 @@ test('Coach glossary definitions render above the Coach modal on desktop and mob
   assert.match(termTemplate, /aria-label="Close definition"/);
 });
 
+test('Draft order preserves pick ownership and opens the shared roster scout', async () => {
+  const [source, template, styles] = await Promise.all([
+    read('src/app/features/draft/draft-room/draft-room.ts'),
+    read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-room.css'),
+  ]);
+
+  assert.match(template, /<span>Rosters<\/span>/);
+  assert.match(template, /\(click\)="scoutTeam\(entry\.preview\.ownerId\)"/);
+  assert.match(template, /class="draft-pick-owner"[\s\S]*getTeamName\(entry\.preview\.ownerId\)/);
+  assert.match(template, /<select[\s\S]*\[ngModel\]="displayedRosterOwnerId\(\)"/);
+  assert.match(template, /pick of getViewedPicks\(position\)/);
+  assert.match(source, /resolveDraftRosterOwnerId\(/);
+  assert.match(source, /this\.mobilePanel\.set\('roster'\)/);
+  assert.match(styles, /\.draft-pick-track-copy strong[\s\S]*white-space: normal/);
+  assert.match(styles, /flex-basis: 184px/);
+});
+
 test('B1L adds a focused gate on top of the inherited staging gate', async () => {
   const packageJson = JSON.parse(await read('package.json'));
 
