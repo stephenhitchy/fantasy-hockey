@@ -491,10 +491,10 @@
                 }
 
                 <div class="draft-pick-track-copy">
-                  <strong [attr.title]="getAssetName(completedPick.asset)">
+                  <strong class="draft-pick-wrap" [attr.title]="getAssetName(completedPick.asset)">
                     {{ getAssetName(completedPick.asset) }}
                   </strong>
-                  <small class="draft-pick-owner" [attr.title]="getTeamName(entry.preview.ownerId)">
+                  <small class="draft-pick-owner" [class.draft-pick-wrap]="true" [attr.title]="getTeamName(entry.preview.ownerId)">
                     {{ getTeamName(entry.preview.ownerId) }}
                   </small>
                   <small>
@@ -507,7 +507,7 @@
                 <app-manager-avatar [profileIconId]="getTeamProfileIconId(entry.preview.ownerId)" [label]="getTeamManagerLabel(entry.preview.ownerId)" size="xs" />
 
                 <div class="draft-pick-track-copy">
-                    <strong [attr.title]="getTeamName(entry.preview.ownerId)">
+                    <strong class="draft-pick-wrap" [attr.title]="getTeamName(entry.preview.ownerId)">
                       {{ getTeamName(entry.preview.ownerId) }}
                     </strong>
                   <small>
@@ -582,21 +582,20 @@
 </select>
 </div>
 
-          @if (hasMyGoalieUnit() && positionFilter() === 'ALL') {
-            <div class="rr-toolbar" aria-label="Extra goalie-unit visibility">
-              <span class="rr-notice rr-notice--info" role="status">
-                Extra Goalie Units are {{ extraGoalieUnitsVisible() ? 'visible' : 'hidden after your starter pick' }}.
-              </span>
-              <button
-                type="button"
-                class="rr-button rr-button--quiet"
-                [attr.aria-pressed]="extraGoalieUnitsVisible()"
-                (click)="toggleExtraGoalieUnits()"
-              >
-                {{ showExtraGoalieUnits() ? 'Hide Extra Goalie Units' : 'Show Extra Goalie Units' }}
-              </button>
-            </div>
-          }
+          <div
+            class="rr-toolbar"
+            aria-label="Extra goalie-unit visibility"
+            [hidden]="!hasMyGoalieUnit() || positionFilter() !== 'ALL'"
+          >
+            <button
+              type="button"
+              class="rr-button rr-button--quiet"
+              [attr.aria-pressed]="extraGoalieUnitsVisible()"
+              (click)="toggleExtraGoalieUnits()"
+            >
+              {{ showExtraGoalieUnits() ? 'Hide goalies' : 'Show goalies' }}
+            </button>
+          </div>
 
           @if (playerPoolLoading()) {
             <div class="pool-loading-block rr-notice rr-notice--info" role="status" aria-live="polite">

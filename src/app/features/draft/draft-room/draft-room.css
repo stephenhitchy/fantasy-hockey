@@ -942,7 +942,6 @@
 .draft-pick-track-copy strong {
   color: var(--rr-draft-room-migration-color-09);
   font-size: 12px;
-  white-space: normal;
 }
 .draft-pick-track-copy small {
   margin-top: 4px;
@@ -950,7 +949,7 @@
   font-size: 10px;
   font-weight: 800;
 }
-.draft-pick-track-copy .draft-pick-owner {
+.draft-pick-wrap {
   white-space: normal;
 }
 .roster-scout-picker {
