@@ -93,6 +93,12 @@ the sticky clock exposes a `Players` recovery action that returns to the pool
 and focuses search. An active pick submission or confirmation is never
 interrupted.
 
+The Draft Room keeps healthy background state quiet: the decorative medical
+ticker is removed, and a confirmed connection no longer renders a banner or
+mobile status label. Connecting, reconnecting, stale, and offline states still
+surface the existing warning and retry controls. Injury preparation and its
+server-owned readiness gates remain unchanged.
+
 ## Verification
 
 Focused verification:
@@ -126,6 +132,8 @@ The Draft Ranking V2 fixtures prove:
 - turn sound is opt-in, volume-bounded, and fires only for a new live turn.
 - an idle manager returns to Available Players on a new turn, while an active
   pick confirmation is preserved and a sticky recovery action remains available.
+- healthy injury and connection state add no passive notice, while degraded
+  connection states retain visible recovery controls.
 
 Current inherited release verification:
 

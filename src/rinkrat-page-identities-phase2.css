@@ -557,24 +557,6 @@ app-draft-room .draft-state-badge {
   box-shadow: 3px 3px 0 rgba(0,0,0,.42);
 }
 
-app-draft-room .draft-injury-sync-banner {
-  position: relative;
-  border: 3px solid var(--border-strong) !important;
-  border-radius: 0 !important;
-  background: var(--surface-1) !important;
-  box-shadow: 4px 4px 0 color-mix(in srgb, var(--rr-scoreboard) 38%, transparent);
-}
-
-app-draft-room .draft-injury-sync-banner::before {
-  content: 'MEDICAL TICKER';
-  margin-right: 10px;
-  padding: 3px 7px;
-  background: var(--rr-danger);
-  color: #ffffff;
-  font-family: var(--rr-font-micro);
-  font-size: 0.48rem;
-}
-
 app-draft-room .draft-clock-bar {
   position: relative;
   min-height: 126px;
@@ -760,7 +742,7 @@ app-draft-room :is(.your-turn-badge, .waiting-turn-badge, .bench-need-pill, .ran
   font-family: var(--rr-font-micro);
 }
 
-html[data-background-theme='light-ice'] app-draft-room :is(.draft-injury-sync-banner, .draft-roster-needs, .draft-pick-track-card, .player-pool-panel, .turn-card, .sidebar-card, .queue-card, .roster-card, .waiting-card) {
+html[data-background-theme='light-ice'] app-draft-room :is(.draft-roster-needs, .draft-pick-track-card, .player-pool-panel, .turn-card, .sidebar-card, .queue-card, .roster-card, .waiting-card) {
   box-shadow: 5px 5px 0 rgba(62, 79, 98, 0.24) !important;
 }
 

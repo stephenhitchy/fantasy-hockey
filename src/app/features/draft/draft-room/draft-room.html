@@ -187,16 +187,9 @@
       }
 
       <section
-        class="draft-injury-sync-banner rr-notice rr-notice--info"
-        [class.sync-success]="injurySyncState()?.status === 'success'"
-        [class.sync-warning]="injurySyncState()?.status === 'error'"
-      >
-        <strong>Injury Report</strong>
-        <span>{{ getDraftInjurySyncTimeLabel() }}</span>
-      </section>
-
-      <section
         [class]="'draft-connection-banner rr-notice ' + getRealtimeConnectionClass()"
+        [hidden]="!shouldShowRealtimeConnectionWarning()"
+        [style.display]="shouldShowRealtimeConnectionWarning() ? null : 'none'"
         role="status"
         aria-live="polite"
       >
@@ -207,16 +200,14 @@
           <small>{{ getLastServerConfirmationLabel() }}</small>
         </div>
 
-        @if (realtimeConnectionState() !== 'connected') {
-          <button
-            type="button"
-            class="draft-connection-retry rr-button rr-button--secondary"
-            (click)="retryRealtimeConnection()"
-            [disabled]="realtimeConnectionState() === 'offline'"
-          >
-            Retry Connection
-          </button>
-        }
+        <button
+          type="button"
+          class="draft-connection-retry rr-button rr-button--secondary"
+          (click)="retryRealtimeConnection()"
+          [disabled]="realtimeConnectionState() === 'offline'"
+        >
+          Retry Connection
+        </button>
       </section>
 
       @if (draft()?.status === 'live') {
@@ -348,7 +339,11 @@
             {{ compactDraftTurnDistanceLabel() }}
           </span>
           <strong>{{ getCurrentPickTeamName() }}</strong>
-          <small [class]="'draft-mobile-command-connection ' + getRealtimeConnectionClass()">
+          <small
+            [class]="'draft-mobile-command-connection ' + getRealtimeConnectionClass()"
+            [hidden]="!shouldShowRealtimeConnectionWarning()"
+            [style.display]="shouldShowRealtimeConnectionWarning() ? null : 'none'"
+          >
             <i aria-hidden="true"></i>
             {{ getRealtimeConnectionLabel() }}
           </small>

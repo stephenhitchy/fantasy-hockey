@@ -13,6 +13,7 @@ import {
   getDraftConnectionStatusLabel,
   getLatestUndismissedAutoPick,
   resolveDraftRealtimeConnectionState,
+  shouldShowDraftConnectionWarning,
 } from '../../src/app/features/draft/draft-room/draft-mobile-resilience.util.ts';
 import {
   getMobileGameMarkerExplanation,
@@ -144,6 +145,11 @@ test('draft connection state blocks actions until every critical listener is ser
   );
 
   assert.equal(getDraftConnectionStatusLabel('connected'), 'Connected');
+  assert.equal(shouldShowDraftConnectionWarning('connected'), false);
+  assert.equal(shouldShowDraftConnectionWarning('connecting'), true);
+  assert.equal(shouldShowDraftConnectionWarning('reconnecting'), true);
+  assert.equal(shouldShowDraftConnectionWarning('stale'), true);
+  assert.equal(shouldShowDraftConnectionWarning('offline'), true);
   assert.match(getDraftConnectionStatusDetail('offline'), /actions are paused/i);
   assert.match(
     getDraftConnectionStatusDetail('connected', 'lobby'),

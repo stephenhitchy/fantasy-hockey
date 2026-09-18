@@ -8563,8 +8563,9 @@ VISUAL SYSTEM PHASE 2A — PAGE IDENTITIES (JULY 2026)
 =====================================================================
 - Dashboard: arcade league-select and save-file/cartridge presentation.
 - Current League: franchise front-office presentation.
-- Draft Room: arena jumbotron, medical ticker, lineup board, pick ticker,
-  scouting terminal, and general-manager desk presentation.
+- Draft Room: arena jumbotron, lineup board, pick ticker, scouting terminal,
+  and general-manager desk presentation. The later D1.24 cleanup removed the
+  passive medical ticker and healthy connection notices.
 - Implemented in src/rinkrat-page-identities-phase2.css and loaded after Phase 1.
 - Presentation only; no fantasy logic or Firebase behavior changed.
 - Mobile and Light Ice refinements included.
@@ -9721,7 +9722,8 @@ CURRENT LEAGUE — FRANCHISE FRONT OFFICE
 
 DRAFT ROOM — ARENA JUMBOTRON
 - The league/draft header and active clock now resemble an arena jumbotron.
-- Injury status is treated as a medical ticker.
+- Server injury readiness remains visible when it blocks Draft opening; the
+  passive medical ticker is omitted from the live Draft Room.
 - Roster requirements look like a bench-and-lineup board.
 - Recent/upcoming picks look like a pick ticker.
 - The player pool is a scouting terminal and the sidebar is a GM desk.

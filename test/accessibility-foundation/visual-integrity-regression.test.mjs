@@ -115,8 +115,8 @@ test('Playoff and Draft text follows the surface it is actually rendered on', as
   assert.match(playoffs, /\.seed-card div small\s*\{[\s\S]*color:\s*var\(--accent-cyan\)/);
 
   assert.match(draft, /\.back-link\s*\{[\s\S]*color:\s*var\(--rr-color-link\)/);
-  assert.match(draft, /\.draft-injury-sync-banner strong\s*\{\s*color:\s*var\(--text-primary\)/);
-  assert.match(draft, /\.draft-injury-sync-banner span\s*\{\s*color:\s*var\(--text-secondary\)/);
+  assert.doesNotMatch(draft, /\.draft-injury-sync-banner/);
+  assert.doesNotMatch(phaseTwo, /\.draft-injury-sync-banner/);
   assert.match(globalCss, /\.turn-clock-summary:not\(\.turn-clock-urgent\) strong\s*\{\s*color:\s*var\(--text-primary\)/);
   assert.doesNotMatch(globalCss, /draft-clock-bar:is\(\.clock-urgent, \.clock-paused, \.clock-stopped\)/);
   assert.doesNotMatch(globalCss, /turn-clock-summary\.turn-clock-urgent strong/);

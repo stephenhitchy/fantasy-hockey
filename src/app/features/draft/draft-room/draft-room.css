@@ -784,45 +784,6 @@
   color: #496782;
   font-weight: 800;
 }
-.draft-injury-sync-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 9px 12px;
-  border: 1px solid #c7d3df;
-  border-radius: 10px;
-  background: #f7f9fc;
-}
-.draft-injury-sync-banner strong {
-  color: var(--text-primary);
-  font-size: 13px;
-}
-.draft-injury-sync-banner span {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 800;
-  text-align: right;
-}
-.draft-injury-sync-banner.sync-success {
-  border-color: #a9cfb2;
-  background: #f1faf3;
-}
-.draft-injury-sync-banner.sync-warning {
-  border-color: #d9b777;
-  background: #fff8e8;
-}
-@media (max-width: 620px) {
-  .draft-injury-sync-banner {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .draft-injury-sync-banner span {
-    text-align: left;
-  }
-}
 .draft-pick-track-card {
   margin-bottom: 16px;
   padding: 13px 14px 12px;
@@ -1434,7 +1395,6 @@
   .asset-metric strong,
   .drafted-player-row span,
   .draft-player-availability,
-  .draft-injury-sync-banner span,
   .draft-pick-track-heading > span,
   .draft-pick-number,
   .draft-pick-track-copy small,

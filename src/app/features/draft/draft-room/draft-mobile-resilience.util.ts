@@ -145,6 +145,12 @@ export function getDraftConnectionStatusLabel(
   }
 }
 
+export function shouldShowDraftConnectionWarning(
+  state: DraftRealtimeConnectionState,
+): boolean {
+  return state !== 'connected';
+}
+
 export function getDraftConnectionStatusDetail(
   state: DraftRealtimeConnectionState,
   phase: DraftConnectionPhase = 'live',

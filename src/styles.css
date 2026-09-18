@@ -1892,7 +1892,6 @@ body .draft-room-page :where(
 body .draft-room-page :where(
   .draft-pick-track-card,
   .draft-clock-bar:not(.clock-urgent):not(.clock-paused):not(.clock-stopped),
-  .draft-injury-sync-banner:not(.sync-success):not(.sync-warning),
   .draft-asset-card,
   .drafted-player-row,
   .queue-row,

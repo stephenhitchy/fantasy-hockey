@@ -100,6 +100,7 @@ import {
   getDraftConnectionStatusDetail,
   getDraftConnectionStatusLabel,
   resolveDraftRealtimeConnectionState,
+  shouldShowDraftConnectionWarning,
 } from './draft-mobile-resilience.util';
 
 import {
@@ -711,6 +712,10 @@ export class DraftRoom implements OnDestroy {
       reconnectReason: this.realtimeReconnectReason(),
       now: this.now(),
     }),
+  );
+
+  readonly shouldShowRealtimeConnectionWarning = computed(() =>
+    shouldShowDraftConnectionWarning(this.realtimeConnectionState()),
   );
 
   readonly canUseDraftBoardActions = computed(

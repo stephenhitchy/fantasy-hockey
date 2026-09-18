@@ -271,6 +271,22 @@ test('Draft turn awareness counts down and provides an adjustable opt-in sound',
   assert.match(awarenessStyles, /@media \(max-width: 620px\)/);
 });
 
+test('Draft Room omits passive medical and connected notices while retaining connection recovery', async () => {
+  const [source, template, styles, phaseTwoStyles] = await Promise.all([
+    read('src/app/features/draft/draft-room/draft-room.ts'),
+    read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-room.css'),
+    read('src/rinkrat-page-identities-phase2.css'),
+  ]);
+
+  assert.doesNotMatch(template, /draft-injury-sync-banner/);
+  assert.doesNotMatch(styles, /draft-injury-sync-banner/);
+  assert.doesNotMatch(phaseTwoStyles, /draft-injury-sync-banner/);
+  assert.match(source, /shouldShowRealtimeConnectionWarning[\s\S]*shouldShowDraftConnectionWarning/);
+  assert.match(template, /draft-connection-banner[\s\S]*\[hidden\]="!shouldShowRealtimeConnectionWarning\(\)"[\s\S]*\[style\.display\]="shouldShowRealtimeConnectionWarning\(\) \? null : 'none'"/);
+  assert.match(template, /draft-connection-retry[\s\S]*Retry Connection/);
+});
+
 test('B1L adds a focused gate on top of the inherited staging gate', async () => {
   const packageJson = JSON.parse(await read('package.json'));
 
