@@ -229,6 +229,20 @@ test('Draft order preserves pick ownership and opens the shared roster scout', a
   assert.match(styles, /flex-basis: 184px/);
 });
 
+test('mobile Draft choices expose and preserve the bench destination', async () => {
+  const [source, template, styles] = await Promise.all([
+    read('src/app/features/draft/draft-room/draft-room.ts'),
+    read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-room.css'),
+  ]);
+
+  assert.match(source, /resolveDraftMobileSelectionLabel\(/);
+  assert.match(template, /getMobileSelectButtonLabel\(asset\)/);
+  assert.match(template, /getDraftButtonLabel\(selectedAsset\)/);
+  assert.match(styles, /\.draft-mobile-selection-bar > div > \*[\s\S]*white-space: nowrap/);
+  assert.match(styles, /grid-template-columns: 34px minmax\(0, 1fr\) 132px/);
+});
+
 test('B1L adds a focused gate on top of the inherited staging gate', async () => {
   const packageJson = JSON.parse(await read('package.json'));
 

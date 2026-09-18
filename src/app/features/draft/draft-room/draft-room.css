@@ -1832,7 +1832,7 @@
     bottom: calc(68px + env(safe-area-inset-bottom));
     left: 8px;
     display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) minmax(108px, auto);
+    grid-template-columns: 38px minmax(0, 1fr) minmax(132px, auto);
     align-items: center;
     gap: 8px;
     padding: 8px;
@@ -1859,8 +1859,7 @@
   .draft-mobile-selection-bar > div {
     min-width: 0;
   }
-  .draft-mobile-selection-bar strong,
-  .draft-mobile-selection-bar span {
+  .draft-mobile-selection-bar > div > * {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1902,7 +1901,7 @@
     justify-content: flex-end;
   }
   .draft-mobile-selection-bar {
-    grid-template-columns: 34px minmax(0, 1fr) 104px;
+    grid-template-columns: 34px minmax(0, 1fr) 132px;
     gap: 6px;
   }
   .draft-mobile-selection-close {

@@ -132,6 +132,7 @@ import {
   getDraftRosterPicksByPosition,
   resolveDraftRosterOwnerId,
 } from './draft-roster-scouting.util';
+import { resolveDraftMobileSelectionLabel } from './draft-mobile-selection.util';
 
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
 const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
@@ -1820,6 +1821,13 @@ export class DraftRoom implements OnDestroy {
     this.selectedAssetKey.set(
       this.selectedAssetKey() === asset.assetKey ? null : asset.assetKey,
     );
+  }
+
+  getMobileSelectButtonLabel(asset: DraftableAsset): string {
+    return resolveDraftMobileSelectionLabel({
+      selected: this.selectedAssetKey() === asset.assetKey,
+      destination: this.getDraftDestinationForAsset(this.userId, asset),
+    });
   }
 
   clearSelectedAsset(): void {

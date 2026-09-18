@@ -784,7 +784,7 @@
                       (click)="selectAssetForMobile(asset)"
                       [disabled]="draft()?.status === 'complete'"
                     >
-                      {{ selectedAssetKey() === asset.assetKey ? 'Selected' : 'Select' }}
+                      {{ getMobileSelectButtonLabel(asset) }}
                     </button>
 
                     <button

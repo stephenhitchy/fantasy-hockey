@@ -73,6 +73,9 @@ well as upcoming picks. Its mobile cards provide more room for team names, and
 each card opens that manager's roster in the existing Rosters panel. The panel
 defaults to the signed-in manager and can switch among every Draft team using
 the already-loaded team and pick data; it adds no Firestore read or listener.
+On mobile, the player-card selection control identifies bench-bound choices,
+and the wider confirmation action keeps `Draft to Bench` visible before the
+manager commits the pick.
 
 ## Verification
 
@@ -84,6 +87,7 @@ npm run test:draft-authority:run
 npm test -- --watch=false --include src/app/core/draft/auto-draft-strategy.spec.ts
 npm test -- --watch=false --include src/app/features/draft/draft-room/draft-goalie-visibility.util.spec.ts
 npm test -- --watch=false --include src/app/features/draft/draft-room/draft-roster-scouting.util.spec.ts
+npm test -- --watch=false --include src/app/features/draft/draft-room/draft-mobile-selection.util.spec.ts
 ```
 
 The Draft Ranking V2 fixtures prove:
