@@ -766,7 +766,7 @@
                         [attr.aria-label]="'Select ' + getAssetName(asset) + ' for Draft confirmation'"
                         (click)="selectAssetForMobile(asset)"
                       >
-                        {{ selectedAssetKey() === asset.assetKey ? 'Selected' : 'Select' }}
+                        {{ getMobileSelectButtonLabel(asset) }}
                       </button>
 
                       <button
