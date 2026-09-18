@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, HostListener, OnDestroy, signal, ViewChild } from '@angular/core';
+import { Component, computed, effect, ElementRef, HostListener, OnDestroy, signal, ViewChild } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -138,6 +138,14 @@ import {
   resolveDraftRosterOwnerId,
 } from './draft-roster-scouting.util';
 import { resolveDraftMobileSelectionLabel } from './draft-mobile-selection.util';
+import {
+  getCompactDraftTurnDistanceLabel,
+  getDraftTurnDistanceLabel,
+  getPicksUntilManagerTurn,
+  normalizeDraftTurnSoundVolume,
+  shouldPlayDraftTurnAlert,
+  type DraftTurnAwarenessStatus,
+} from './draft-turn-awareness.util';
 
 const DRAFT_INITIAL_LOAD_RECOVERY_DELAY_MILLISECONDS = 8_000;
 const DRAFT_PROJECTION_LOAD_SLOW_DELAY_MILLISECONDS = 4_000;
@@ -189,7 +197,11 @@ interface PendingPickConfirmation extends PendingDraftPickIdentity {
   selector: 'app-draft-room',
   imports: [FormsModule, RouterLink, ManagerAvatar],
   templateUrl: './draft-room.html',
-  styleUrls: ['./draft-room.css', './draft-room-recovery.css'],
+  styleUrls: [
+    './draft-room.css',
+    './draft-room-recovery.css',
+    './draft-turn-awareness.css',
+  ],
 })
 export class DraftRoom implements OnDestroy {
   @ViewChild('draftTimelineScroller')
@@ -228,6 +240,9 @@ export class DraftRoom implements OnDestroy {
   positionFilter = signal<DraftFilter>('ALL');
   sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
   showExtraGoalieUnits = signal(false);
+  draftTurnSoundEnabled = signal(false);
+  draftTurnSoundUnavailable = signal(false);
+  draftTurnSoundVolume = signal(60);
   now = signal(Date.now());
 
   mobilePanel = signal<DraftMobilePanel>('players');
@@ -555,6 +570,10 @@ export class DraftRoom implements OnDestroy {
   private lastObservedDraftStatus: FantasyDraft['status'] | null = null;
   private lastObservedProjectionPoolBindingKey: string | null = null;
   private hasObservedDraftSnapshot = false;
+  private hasObservedTurnAwareness = false;
+  private previousTurnDistance: number | null = null;
+  private previousTurnStatus: DraftTurnAwarenessStatus | null = null;
+  private draftTurnAudioContext: AudioContext | null = null;
 
   private readonly clockTimer = setInterval(() => {
     if (this.destroyed) {
@@ -569,6 +588,37 @@ export class DraftRoom implements OnDestroy {
   }, 5000);
 
   readonly currentPick = computed<DraftPickPreview | null>(() => getCurrentDraftPick(this.draft()));
+
+  readonly picksUntilMyTurn = computed(() =>
+    getPicksUntilManagerTurn(this.draft(), this.userId),
+  );
+
+  readonly draftTurnDistanceLabel = computed(() =>
+    getDraftTurnDistanceLabel(
+      this.picksUntilMyTurn(),
+      this.draft()?.status ?? null,
+    ),
+  );
+
+  readonly compactDraftTurnDistanceLabel = computed(() =>
+    getCompactDraftTurnDistanceLabel(this.picksUntilMyTurn()),
+  );
+
+  readonly draftTurnHeadingLabel = computed(() =>
+    this.draft()?.status === 'scheduled' ? 'Your first turn' : 'Your next turn',
+  );
+
+  readonly draftTurnSoundButtonLabel = computed(() => {
+    if (this.draftTurnSoundUnavailable()) {
+      return 'Sound unavailable';
+    }
+
+    return this.draftTurnSoundEnabled() ? 'Sound on' : 'Sound off';
+  });
+
+  readonly draftTurnSoundVolumeLabel = computed(
+    () => `${this.draftTurnSoundVolume()}%`,
+  );
 
   readonly myQueue = computed<DraftQueue>(() => this.getQueueForOwner(this.userId));
 
@@ -936,6 +986,32 @@ export class DraftRoom implements OnDestroy {
     private readonly actionMonitor: CompetitiveActionMonitorService,
     private readonly releaseUpdate: ReleaseUpdateService,
   ) {
+    effect(() => {
+      const draft = this.draft();
+
+      if (!draft) {
+        return;
+      }
+
+      const currentDistance = this.picksUntilMyTurn();
+      const currentStatus = draft.status;
+      const shouldAlert = shouldPlayDraftTurnAlert({
+        hasPreviousObservation: this.hasObservedTurnAwareness,
+        previousDistance: this.previousTurnDistance,
+        previousStatus: this.previousTurnStatus,
+        currentDistance,
+        currentStatus,
+      });
+
+      this.hasObservedTurnAwareness = true;
+      this.previousTurnDistance = currentDistance;
+      this.previousTurnStatus = currentStatus;
+
+      if (shouldAlert) {
+        void this.playDraftTurnSound();
+      }
+    });
+
     if (typeof window !== 'undefined') {
       window.addEventListener('online', this.handleBrowserOnline);
       window.addEventListener('offline', this.handleBrowserOffline);
@@ -1001,6 +1077,8 @@ export class DraftRoom implements OnDestroy {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     }
 
+    void this.closeDraftTurnAudioContext();
+
     this.stopDraftListener?.();
     this.stopPickListener?.();
     this.stopInjurySyncListener?.();
@@ -1015,6 +1093,175 @@ export class DraftRoom implements OnDestroy {
 
     this.draftLoadRecoveryVisible.set(false);
     void this.loadDraftRoom();
+  }
+
+  async toggleDraftTurnSound(): Promise<void> {
+    if (this.draftTurnSoundEnabled()) {
+      this.draftTurnSoundEnabled.set(false);
+      await this.closeDraftTurnAudioContext();
+      return;
+    }
+
+    this.draftTurnSoundUnavailable.set(false);
+    this.draftTurnSoundEnabled.set(true);
+
+    const played = await this.playDraftTurnSound();
+
+    if (!played) {
+      this.draftTurnSoundEnabled.set(false);
+    }
+  }
+
+  setDraftTurnSoundVolume(value: unknown): void {
+    const volume = normalizeDraftTurnSoundVolume(value);
+
+    this.draftTurnSoundVolume.set(volume);
+    this.saveDraftTurnSoundVolume(volume);
+  }
+
+  previewDraftTurnSound(): void {
+    if (this.draftTurnSoundEnabled()) {
+      void this.playDraftTurnSound();
+    }
+  }
+
+  private getDraftTurnSoundVolumeStorageKey(): string {
+    return `rinkrat:draft-turn-sound-volume:${this.userId}`;
+  }
+
+  private loadDraftTurnSoundVolume(): void {
+    if (typeof localStorage === 'undefined' || !this.userId) {
+      return;
+    }
+
+    try {
+      this.draftTurnSoundVolume.set(
+        normalizeDraftTurnSoundVolume(
+          localStorage.getItem(this.getDraftTurnSoundVolumeStorageKey()),
+        ),
+      );
+    } catch {
+      // Storage can be unavailable in private browsing. The in-memory default
+      // remains usable for this Draft Room visit.
+    }
+  }
+
+  private saveDraftTurnSoundVolume(volume: number): void {
+    if (typeof localStorage === 'undefined' || !this.userId) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        this.getDraftTurnSoundVolumeStorageKey(),
+        String(volume),
+      );
+    } catch {
+      // The sound remains usable even when a browser refuses local storage.
+    }
+  }
+
+  private getDraftTurnAudioContext(): AudioContext | null {
+    if (this.draftTurnAudioContext?.state !== 'closed') {
+      return this.draftTurnAudioContext;
+    }
+
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const browserWindow = window as typeof window & {
+      webkitAudioContext?: typeof AudioContext;
+    };
+    const AudioContextConstructor =
+      browserWindow.AudioContext ?? browserWindow.webkitAudioContext;
+
+    if (!AudioContextConstructor) {
+      this.draftTurnSoundUnavailable.set(true);
+      return null;
+    }
+
+    try {
+      this.draftTurnAudioContext = new AudioContextConstructor();
+      return this.draftTurnAudioContext;
+    } catch {
+      this.draftTurnSoundUnavailable.set(true);
+      return null;
+    }
+  }
+
+  private async playDraftTurnSound(): Promise<boolean> {
+    if (
+      this.destroyed ||
+      !this.draftTurnSoundEnabled() ||
+      this.draftTurnSoundUnavailable()
+    ) {
+      return false;
+    }
+
+    const audioContext = this.getDraftTurnAudioContext();
+
+    if (!audioContext) {
+      return false;
+    }
+
+    try {
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+
+      if (audioContext.state !== 'running') {
+        return false;
+      }
+
+      const volume = this.draftTurnSoundVolume() / 100;
+
+      if (volume === 0) {
+        return true;
+      }
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const startsAt = audioContext.currentTime;
+      const peakGain = Math.max(0.0001, volume * 0.24);
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(659.25, startsAt);
+      oscillator.frequency.setValueAtTime(880, startsAt + 0.16);
+      gain.gain.setValueAtTime(0.0001, startsAt);
+      gain.gain.exponentialRampToValueAtTime(peakGain, startsAt + 0.02);
+      gain.gain.setValueAtTime(peakGain, startsAt + 0.24);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.42);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.addEventListener('ended', () => {
+        oscillator.disconnect();
+        gain.disconnect();
+      }, { once: true });
+      oscillator.start(startsAt);
+      oscillator.stop(startsAt + 0.44);
+      return true;
+    } catch {
+      // Browsers may suspend audio after backgrounding. The visual counter
+      // remains authoritative and a later manager click can re-enable sound.
+      return false;
+    }
+  }
+
+  private async closeDraftTurnAudioContext(): Promise<void> {
+    const audioContext = this.draftTurnAudioContext;
+
+    this.draftTurnAudioContext = null;
+
+    if (!audioContext || audioContext.state === 'closed') {
+      return;
+    }
+
+    try {
+      await audioContext.close();
+    } catch {
+      // Audio cleanup is best-effort and has no effect on Draft state.
+    }
   }
 
   canLeaveDraftRoom(): boolean {
@@ -1062,6 +1309,7 @@ export class DraftRoom implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
+    this.loadDraftTurnSoundVolume();
 
     try {
       const [league, teams, myTeam] = await Promise.all([

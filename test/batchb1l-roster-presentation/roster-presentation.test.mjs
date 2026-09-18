@@ -243,6 +243,29 @@ test('mobile Draft choices expose and preserve the bench destination', async () 
   assert.match(styles, /grid-template-columns: 34px minmax\(0, 1fr\) 132px/);
 });
 
+test('Draft turn awareness counts down and provides an adjustable opt-in sound', async () => {
+  const [source, template, awarenessSource, awarenessStyles] = await Promise.all([
+    read('src/app/features/draft/draft-room/draft-room.ts'),
+    read('src/app/features/draft/draft-room/draft-room.html'),
+    read('src/app/features/draft/draft-room/draft-turn-awareness.util.ts'),
+    read('src/app/features/draft/draft-room/draft-turn-awareness.css'),
+  ]);
+
+  assert.match(awarenessSource, /getPicksUntilManagerTurn/);
+  assert.match(awarenessSource, /zeroBasedRound % 2 === 0/);
+  assert.match(awarenessSource, /shouldPlayDraftTurnAlert/);
+  assert.match(source, /effect\(\(\) => \{[\s\S]*shouldPlayDraftTurnAlert/);
+  assert.match(source, /AudioContext/);
+  assert.match(source, /rinkrat:draft-turn-sound-volume/);
+  assert.doesNotMatch(source, /listenTo.*Turn|new Audio\(/);
+  assert.match(template, /compactDraftTurnDistanceLabel\(\)/);
+  assert.match(template, /type="range"[\s\S]*aria-label="Draft turn alert volume"/);
+  assert.match(template, /\[attr\.aria-pressed\]="draftTurnSoundEnabled\(\)"/);
+  assert.match(template, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(awarenessStyles, /min-height: var\(--rr-mobile-control-min-height\)/);
+  assert.match(awarenessStyles, /@media \(max-width: 620px\)/);
+});
+
 test('B1L adds a focused gate on top of the inherited staging gate', async () => {
   const packageJson = JSON.parse(await read('package.json'));
 

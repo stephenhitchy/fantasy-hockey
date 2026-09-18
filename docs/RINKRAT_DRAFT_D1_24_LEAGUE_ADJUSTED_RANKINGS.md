@@ -77,6 +77,15 @@ On mobile, the player-card selection control identifies bench-bound choices,
 and the wider confirmation action keeps `Draft to Bench` visible before the
 manager commits the pick.
 
+The Draft Room also shows the signed-in manager's exact number of picks until
+their next snake-order turn. The compact count remains in the mobile command
+bar. A manager may opt into a short browser-generated turn sound for the
+current Draft Room visit and adjust its volume from zero to 100 percent; the
+volume is remembered per manager on that browser. Listener refreshes and
+duplicate delivery do not replay the sound because only a new transition onto
+that manager's authoritative live pick is eligible. No audio asset, listener,
+write path, or Draft authority is added.
+
 ## Verification
 
 Focused verification:
@@ -88,6 +97,8 @@ npm test -- --watch=false --include src/app/core/draft/auto-draft-strategy.spec.
 npm test -- --watch=false --include src/app/features/draft/draft-room/draft-goalie-visibility.util.spec.ts
 npm test -- --watch=false --include src/app/features/draft/draft-room/draft-roster-scouting.util.spec.ts
 npm test -- --watch=false --include src/app/features/draft/draft-room/draft-mobile-selection.util.spec.ts
+npm test -- --watch=false --include src/app/features/draft/draft-room/draft-turn-awareness.util.spec.ts
+npm run test:batchb1l:run
 ```
 
 The Draft Ranking V2 fixtures prove:
@@ -104,6 +115,8 @@ The Draft Ranking V2 fixtures prove:
   and skips a queued reserve goalie unit;
 - one manager's first goalie-unit pick hides only that manager's extra goalies
   by default while preserving explicit manual access.
+- the snake-order counter handles ordinary picks and round-turn double picks;
+- turn sound is opt-in, volume-bounded, and fires only for a new live turn.
 
 Current inherited release verification:
 
