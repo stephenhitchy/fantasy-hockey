@@ -3,6 +3,7 @@ import {
   NhlScoreGame,
   getNhlScoreNow,
 } from '../../../core/nhl/nhl-api.service';
+import type { DashboardNhlTeamRosterCount } from '../../../core/league/dashboard-league-activity.models';
 import {
   formatNhlGameStatus,
   formatNhlScoreboardHeading,
@@ -21,6 +22,7 @@ import {
 })
 export class NhlScoreboard implements OnDestroy {
   readonly favoriteTeamAbbreviation = input('');
+  readonly rosteredTeamCounts = input<readonly DashboardNhlTeamRosterCount[]>([]);
 
   readonly games = signal<NhlScoreGame[]>([]);
   readonly focusedDate = signal('');
@@ -39,6 +41,20 @@ export class NhlScoreboard implements OnDestroy {
 
   readonly hasLiveGames = computed(() =>
     this.games().some(isNhlScoreGameLive),
+  );
+
+  readonly rosteredCountByTeam = computed(() => new Map(
+    this.rosteredTeamCounts().map((entry) => [
+      entry.teamAbbreviation.trim().toUpperCase(),
+      entry.count,
+    ]),
+  ));
+
+  readonly hasVisibleRosterPresence = computed(() =>
+    this.visibleGames().some((game) =>
+      this.getRosteredTeamCount(game.awayTeam.abbrev) > 0 ||
+      this.getRosteredTeamCount(game.homeTeam.abbrev) > 0,
+    ),
   );
 
   private refreshTimer: number | null = null;
@@ -79,6 +95,16 @@ export class NhlScoreboard implements OnDestroy {
       : game.homeTeam.score;
 
     return typeof score === 'number' ? String(score) : '–';
+  }
+
+  getRosteredTeamCount(teamAbbreviation: string): number {
+    return this.rosteredCountByTeam().get(teamAbbreviation.trim().toUpperCase()) ?? 0;
+  }
+
+  getRosteredTeamCountLabel(teamAbbreviation: string): string {
+    const count = this.getRosteredTeamCount(teamAbbreviation);
+    const rosterSpotLabel = count === 1 ? 'roster spot' : 'roster spots';
+    return `${count} ${teamAbbreviation} ${rosterSpotLabel} across your leagues`;
   }
 
   getBroadcastLabel(game: NhlScoreGame): string {

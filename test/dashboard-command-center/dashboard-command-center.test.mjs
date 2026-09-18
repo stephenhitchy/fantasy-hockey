@@ -176,6 +176,43 @@ test('Batch 8A dashboard command center behavior', async (suite) => {
     assert.equal(activity.queuedMoveCount, 1);
   });
 
+  await suite.test('counts distinct skaters and goalie units by NHL team across every roster area', () => {
+    const vgkSkater = {
+      assetType: 'skater',
+      assetKey: 'skater-1',
+      player: { id: 1, nhlTeamAbbreviation: 'vgk' },
+    };
+    const activity = buildDashboardLeagueActivity(
+      makeBaseInput({
+        draft: makeDraft('complete'),
+        roster: {
+          activeSlots: [
+            { asset: vgkSkater },
+            {
+              asset: {
+                assetType: 'team-goalie-unit',
+                assetKey: 'goalie-unit-VGK',
+                teamAbbreviation: 'VGK',
+              },
+            },
+          ],
+          benchSlots: [
+            { asset: { assetType: 'skater', assetKey: 'skater-2', player: { id: 2, nhlTeamAbbreviation: 'VGK' } } },
+            { asset: vgkSkater },
+          ],
+          irSlots: [
+            { asset: { assetType: 'skater', assetKey: 'skater-3', player: { id: 3, nhlTeamAbbreviation: 'CHI' } } },
+          ],
+        },
+      }),
+    );
+
+    assert.deepEqual(activity.nhlTeamRosterCounts, [
+      { teamAbbreviation: 'CHI', count: 1 },
+      { teamAbbreviation: 'VGK', count: 3 },
+    ]);
+  });
+
   await suite.test('uses the latest completed period as a useful fallback', () => {
     const activity = buildDashboardLeagueActivity(
       makeBaseInput({
@@ -215,6 +252,12 @@ test('Batch 8A source contracts', async (suite) => {
     );
     assert.match(leagueService, /options:\s*\{ includeDashboardActivity\?: boolean \}/);
     assert.match(leagueService, /options\.includeDashboardActivity/);
+  });
+
+  await suite.test('passes aggregated roster presence to the NHL scoreboard and invalidates old cache data', () => {
+    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 7/);
+    assert.match(dashboard, /combineDashboardNhlTeamRosterCounts/);
+    assert.match(template, /\[rosteredTeamCounts\]="nhlTeamRosterCounts\(\)"/);
   });
 
   await suite.test('replaces the duplicate club stat with record and one next-action panel', () => {

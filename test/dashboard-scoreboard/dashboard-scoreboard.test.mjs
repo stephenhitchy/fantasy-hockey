@@ -79,11 +79,26 @@ function makeGame(overrides = {}) {
 
 test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
   const {
+    combineDashboardNhlTeamRosterCounts,
     formatNhlGameStatus,
     formatNhlScoreboardHeading,
     getNhlScoreboardRefreshDelay,
     selectDashboardNhlGames,
   } = await loadUtility();
+
+  await suite.test('combines roster spots across leagues by NHL team', () => {
+    assert.deepEqual(
+      combineDashboardNhlTeamRosterCounts([
+        [{ teamAbbreviation: 'VGK', count: 2 }],
+        [{ teamAbbreviation: 'vgk', count: 1 }, { teamAbbreviation: 'CHI', count: 1 }],
+        [{ teamAbbreviation: 'VGK', count: 1 }],
+      ]),
+      [
+        { teamAbbreviation: 'CHI', count: 1 },
+        { teamAbbreviation: 'VGK', count: 4 },
+      ],
+    );
+  });
 
   await suite.test('orders live games first and then prioritizes the favorite team', () => {
     const games = [
@@ -179,6 +194,14 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(template, /visibleGames\(\)/);
     assert.match(template, /favorite-team games first/);
     assert.match(component, /selectDashboardNhlGames/);
+  });
+
+  await suite.test('shows compact per-team roster badges without loading fantasy data in the panel', () => {
+    assert.match(component, /rosteredTeamCounts = input/);
+    assert.match(component, /getRosteredTeamCountLabel/);
+    assert.match(template, /class="nhl-roster-presence"/);
+    assert.match(template, /icon-players/);
+    assert.match(template, /including goalie units/);
   });
 
   await suite.test('gives league names the full card width and up to two readable lines', () => {

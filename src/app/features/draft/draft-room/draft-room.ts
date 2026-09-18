@@ -140,13 +140,11 @@ import {
 } from './draft-roster-scouting.util';
 import { resolveDraftMobileSelectionLabel } from './draft-mobile-selection.util';
 import {
+  didEnterManagerDraftTurn,
   getCompactDraftTurnDistanceLabel,
   getDraftTurnDistanceLabel,
   getPicksUntilManagerTurn,
-  normalizeDraftTurnSoundEnabled,
-  normalizeDraftTurnSoundVolume,
   shouldAutoOpenAvailablePlayersForTurn,
-  shouldPlayDraftTurnAlert,
   type DraftTurnAwarenessStatus,
 } from './draft-turn-awareness.util';
 
@@ -246,9 +244,6 @@ export class DraftRoom implements OnDestroy {
   positionFilter = signal<DraftFilter>('ALL');
   sortMode = signal<PlayerPoolSort>('DRAFT_VALUE');
   showExtraGoalieUnits = signal(false);
-  draftTurnSoundEnabled = signal(true);
-  draftTurnSoundUnavailable = signal(false);
-  draftTurnSoundVolume = signal(60);
   now = signal(Date.now());
 
   mobilePanel = signal<DraftMobilePanel>('players');
@@ -569,11 +564,6 @@ export class DraftRoom implements OnDestroy {
       this.requestRealtimeConfirmation('resume');
     }
   };
-  private readonly handleDraftTurnAudioInteraction = () => {
-    if (this.draftTurnSoundEnabled() && !this.draftTurnSoundUnavailable()) {
-      void this.prepareDraftTurnAudio();
-    }
-  };
   private scheduledDraftCheckInProgress = false;
   private destroyed = false;
   private activationFailureCount = 0;
@@ -584,7 +574,6 @@ export class DraftRoom implements OnDestroy {
   private hasObservedTurnAwareness = false;
   private previousTurnDistance: number | null = null;
   private previousTurnStatus: DraftTurnAwarenessStatus | null = null;
-  private draftTurnAudioContext: AudioContext | null = null;
 
   private readonly clockTimer = setInterval(() => {
     if (this.destroyed) {
@@ -617,18 +606,6 @@ export class DraftRoom implements OnDestroy {
 
   readonly draftTurnHeadingLabel = computed(() =>
     this.draft()?.status === 'scheduled' ? 'Your first turn' : 'Your next turn',
-  );
-
-  readonly draftTurnSoundButtonLabel = computed(() => {
-    if (this.draftTurnSoundUnavailable()) {
-      return 'Turn alert unavailable';
-    }
-
-    return this.draftTurnSoundEnabled() ? 'Alerts are: ON' : 'Alerts are: OFF';
-  });
-
-  readonly draftTurnSoundVolumeLabel = computed(
-    () => `${this.draftTurnSoundVolume()}%`,
   );
 
   readonly shouldOfferAvailablePlayersReturn = computed(
@@ -1018,7 +995,7 @@ export class DraftRoom implements OnDestroy {
 
       const currentDistance = this.picksUntilMyTurn();
       const currentStatus = draft.status;
-      const shouldAlert = shouldPlayDraftTurnAlert({
+      const enteredManagerTurn = didEnterManagerDraftTurn({
         hasPreviousObservation: this.hasObservedTurnAwareness,
         previousDistance: this.previousTurnDistance,
         previousStatus: this.previousTurnStatus,
@@ -1030,15 +1007,13 @@ export class DraftRoom implements OnDestroy {
       this.previousTurnDistance = currentDistance;
       this.previousTurnStatus = currentStatus;
 
-      if (shouldAlert) {
+      if (enteredManagerTurn) {
         if (shouldAutoOpenAvailablePlayersForTurn({
-          enteredManagerTurn: shouldAlert,
+          enteredManagerTurn,
           pickSubmissionPhase: this.pickSubmissionPhase(),
         })) {
           this.openAvailablePlayersForTurn(false);
         }
-
-        void this.playDraftTurnSound();
       }
     });
 
@@ -1049,10 +1024,6 @@ export class DraftRoom implements OnDestroy {
 
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
-      document.addEventListener('pointerdown', this.handleDraftTurnAudioInteraction, {
-        passive: true,
-      });
-      document.addEventListener('keydown', this.handleDraftTurnAudioInteraction);
     }
 
     this.initialLoadRecoveryTimer = setTimeout(() => {
@@ -1109,11 +1080,7 @@ export class DraftRoom implements OnDestroy {
 
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-      document.removeEventListener('pointerdown', this.handleDraftTurnAudioInteraction);
-      document.removeEventListener('keydown', this.handleDraftTurnAudioInteraction);
     }
-
-    void this.closeDraftTurnAudioContext();
 
     this.stopDraftListener?.();
     this.stopPickListener?.();
@@ -1129,230 +1096,6 @@ export class DraftRoom implements OnDestroy {
 
     this.draftLoadRecoveryVisible.set(false);
     void this.loadDraftRoom();
-  }
-
-  toggleDraftTurnSound(): void {
-    if (this.draftTurnSoundEnabled()) {
-      this.draftTurnSoundEnabled.set(false);
-      this.saveDraftTurnSoundEnabled(false);
-      void this.closeDraftTurnAudioContext();
-      return;
-    }
-
-    this.draftTurnSoundUnavailable.set(false);
-    this.draftTurnSoundEnabled.set(true);
-    this.saveDraftTurnSoundEnabled(true);
-    void this.playDraftTurnSound();
-  }
-
-  setDraftTurnSoundVolume(value: unknown): void {
-    const volume = normalizeDraftTurnSoundVolume(value);
-
-    this.draftTurnSoundVolume.set(volume);
-    this.saveDraftTurnSoundVolume(volume);
-  }
-
-  previewDraftTurnSound(): void {
-    if (this.draftTurnSoundEnabled()) {
-      void this.playDraftTurnSound();
-    }
-  }
-
-  private getDraftTurnSoundVolumeStorageKey(): string {
-    return `rinkrat:draft-turn-sound-volume:${this.userId}`;
-  }
-
-  private getDraftTurnSoundEnabledStorageKey(): string {
-    return `rinkrat:draft-turn-sound-enabled:${this.userId}`;
-  }
-
-  private loadDraftTurnSoundEnabled(): void {
-    if (typeof localStorage === 'undefined' || !this.userId) {
-      return;
-    }
-
-    try {
-      this.draftTurnSoundEnabled.set(
-        normalizeDraftTurnSoundEnabled(
-          localStorage.getItem(this.getDraftTurnSoundEnabledStorageKey()),
-        ),
-      );
-    } catch {
-      // Storage can be unavailable in private browsing. The first-visit
-      // default remains enabled for this Draft Room visit.
-    }
-  }
-
-  private saveDraftTurnSoundEnabled(enabled: boolean): void {
-    if (typeof localStorage === 'undefined' || !this.userId) {
-      return;
-    }
-
-    try {
-      localStorage.setItem(
-        this.getDraftTurnSoundEnabledStorageKey(),
-        enabled ? 'enabled' : 'disabled',
-      );
-    } catch {
-      // The in-memory preference remains usable for this Draft Room visit.
-    }
-  }
-
-  private loadDraftTurnSoundVolume(): void {
-    if (typeof localStorage === 'undefined' || !this.userId) {
-      return;
-    }
-
-    try {
-      this.draftTurnSoundVolume.set(
-        normalizeDraftTurnSoundVolume(
-          localStorage.getItem(this.getDraftTurnSoundVolumeStorageKey()),
-        ),
-      );
-    } catch {
-      // Storage can be unavailable in private browsing. The in-memory default
-      // remains usable for this Draft Room visit.
-    }
-  }
-
-  private saveDraftTurnSoundVolume(volume: number): void {
-    if (typeof localStorage === 'undefined' || !this.userId) {
-      return;
-    }
-
-    try {
-      localStorage.setItem(
-        this.getDraftTurnSoundVolumeStorageKey(),
-        String(volume),
-      );
-    } catch {
-      // The sound remains usable even when a browser refuses local storage.
-    }
-  }
-
-  private getDraftTurnAudioContext(): AudioContext | null {
-    if (this.draftTurnAudioContext?.state !== 'closed') {
-      return this.draftTurnAudioContext;
-    }
-
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    const browserWindow = window as typeof window & {
-      webkitAudioContext?: typeof AudioContext;
-    };
-    const AudioContextConstructor =
-      browserWindow.AudioContext ?? browserWindow.webkitAudioContext;
-
-    if (!AudioContextConstructor) {
-      this.draftTurnSoundUnavailable.set(true);
-      return null;
-    }
-
-    try {
-      this.draftTurnAudioContext = new AudioContextConstructor();
-      return this.draftTurnAudioContext;
-    } catch {
-      this.draftTurnSoundUnavailable.set(true);
-      return null;
-    }
-  }
-
-  private async playDraftTurnSound(): Promise<boolean> {
-    if (
-      this.destroyed ||
-      !this.draftTurnSoundEnabled() ||
-      this.draftTurnSoundUnavailable()
-    ) {
-      return false;
-    }
-
-    if (!(await this.prepareDraftTurnAudio())) {
-      return false;
-    }
-
-    const audioContext = this.draftTurnAudioContext;
-
-    if (!audioContext) {
-      return false;
-    }
-
-    try {
-      const volume = this.draftTurnSoundVolume() / 100;
-
-      if (volume === 0) {
-        return true;
-      }
-
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      const startsAt = audioContext.currentTime;
-      const peakGain = Math.max(0.0001, volume * 0.24);
-
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(659.25, startsAt);
-      oscillator.frequency.setValueAtTime(880, startsAt + 0.16);
-      gain.gain.setValueAtTime(0.0001, startsAt);
-      gain.gain.exponentialRampToValueAtTime(peakGain, startsAt + 0.02);
-      gain.gain.setValueAtTime(peakGain, startsAt + 0.24);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.42);
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.addEventListener('ended', () => {
-        oscillator.disconnect();
-        gain.disconnect();
-      }, { once: true });
-      oscillator.start(startsAt);
-      oscillator.stop(startsAt + 0.44);
-      return true;
-    } catch {
-      // Browsers may suspend audio after backgrounding. The visual counter
-      // remains authoritative and a later manager click can re-enable sound.
-      return false;
-    }
-  }
-
-  private async prepareDraftTurnAudio(): Promise<boolean> {
-    if (
-      this.destroyed ||
-      !this.draftTurnSoundEnabled() ||
-      this.draftTurnSoundUnavailable()
-    ) {
-      return false;
-    }
-
-    const audioContext = this.getDraftTurnAudioContext();
-
-    if (!audioContext) {
-      return false;
-    }
-
-    try {
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
-
-      return audioContext.state === 'running';
-    } catch {
-      return false;
-    }
-  }
-
-  private async closeDraftTurnAudioContext(): Promise<void> {
-    const audioContext = this.draftTurnAudioContext;
-
-    this.draftTurnAudioContext = null;
-
-    if (!audioContext || audioContext.state === 'closed') {
-      return;
-    }
-
-    try {
-      await audioContext.close();
-    } catch {
-      // Audio cleanup is best-effort and has no effect on Draft state.
-    }
   }
 
   canLeaveDraftRoom(): boolean {
@@ -1400,8 +1143,6 @@ export class DraftRoom implements OnDestroy {
 
     this.leagueId = leagueId;
     this.userId = user.uid;
-    this.loadDraftTurnSoundEnabled();
-    this.loadDraftTurnSoundVolume();
 
     try {
       const [league, teams, myTeam] = await Promise.all([

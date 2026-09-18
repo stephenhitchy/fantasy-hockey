@@ -2,7 +2,7 @@ import type { FantasyDraft } from '../../../core/draft/draft.models';
 
 export type DraftTurnAwarenessStatus = Pick<FantasyDraft, 'status'>['status'];
 
-export interface DraftTurnAlertTransition {
+export interface DraftTurnTransition {
   hasPreviousObservation: boolean;
   previousDistance: number | null;
   previousStatus: DraftTurnAwarenessStatus | null;
@@ -102,7 +102,7 @@ export function getCompactDraftTurnDistanceLabel(distance: number | null): strin
   return distance === 1 ? '· 1 pick away' : `· ${distance} picks away`;
 }
 
-export function shouldPlayDraftTurnAlert(input: DraftTurnAlertTransition): boolean {
+export function didEnterManagerDraftTurn(input: DraftTurnTransition): boolean {
   return (
     input.hasPreviousObservation &&
     input.currentStatus === 'live' &&
@@ -115,40 +115,4 @@ export function shouldAutoOpenAvailablePlayersForTurn(
   input: DraftTurnPlayerReturnState,
 ): boolean {
   return input.enteredManagerTurn && input.pickSubmissionPhase === 'idle';
-}
-
-export function normalizeDraftTurnSoundVolume(
-  value: unknown,
-  fallback = 60,
-): number {
-  const normalizedFallback = Number.isFinite(fallback)
-    ? Math.min(100, Math.max(0, Math.round(fallback)))
-    : 60;
-
-  if (value === null || value === undefined || value === '') {
-    return normalizedFallback;
-  }
-
-  const numericValue = typeof value === 'number' ? value : Number(value);
-
-  if (!Number.isFinite(numericValue)) {
-    return normalizedFallback;
-  }
-
-  return Math.min(100, Math.max(0, Math.round(numericValue)));
-}
-
-export function normalizeDraftTurnSoundEnabled(
-  value: unknown,
-  fallback = true,
-): boolean {
-  if (value === 'enabled' || value === true) {
-    return true;
-  }
-
-  if (value === 'disabled' || value === false) {
-    return false;
-  }
-
-  return fallback;
 }

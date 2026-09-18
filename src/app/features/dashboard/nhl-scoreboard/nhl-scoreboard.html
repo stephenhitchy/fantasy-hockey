@@ -4,7 +4,9 @@
       <span class="nhl-panel-eyebrow">Around the NHL</span>
       <h2 id="nhl-scoreboard-title">{{ heading() }}</h2>
       <p class="rr-guidance-new-only">
-        @if (hasLiveGames()) {
+        @if (hasVisibleRosterPresence()) {
+          Player badges total your roster spots across every league, including goalie units.
+        } @else if (hasLiveGames()) {
           Live scores update automatically.
         } @else {
           Scores and upcoming puck drops from around the league.
@@ -62,20 +64,44 @@
 
           <div class="nhl-team-row">
             <img [src]="game.awayTeam.logo || ''" alt="" width="34" height="34" decoding="async" />
-            <div>
-              <strong>{{ game.awayTeam.abbrev }}</strong>
-              <span>{{ game.awayTeam.record || 'Away' }}</span>
+            <div class="nhl-team-copy">
+              <div class="nhl-team-name-line">
+                <strong>{{ game.awayTeam.abbrev }}</strong>
+                @if (getRosteredTeamCount(game.awayTeam.abbrev); as rosteredCount) {
+                  <span
+                    class="nhl-roster-presence"
+                    [attr.aria-label]="getRosteredTeamCountLabel(game.awayTeam.abbrev)"
+                    [title]="getRosteredTeamCountLabel(game.awayTeam.abbrev)"
+                  >
+                    <span class="pixel-icon icon-players" aria-hidden="true"></span>
+                    <b aria-hidden="true">×{{ rosteredCount }}</b>
+                  </span>
+                }
+              </div>
+              <span class="nhl-team-record">{{ game.awayTeam.record || 'Away' }}</span>
             </div>
-            <b>{{ getTeamScore(game, 'away') }}</b>
+            <b class="nhl-team-score">{{ getTeamScore(game, 'away') }}</b>
           </div>
 
           <div class="nhl-team-row">
             <img [src]="game.homeTeam.logo || ''" alt="" width="34" height="34" decoding="async" />
-            <div>
-              <strong>{{ game.homeTeam.abbrev }}</strong>
-              <span>{{ game.homeTeam.record || 'Home' }}</span>
+            <div class="nhl-team-copy">
+              <div class="nhl-team-name-line">
+                <strong>{{ game.homeTeam.abbrev }}</strong>
+                @if (getRosteredTeamCount(game.homeTeam.abbrev); as rosteredCount) {
+                  <span
+                    class="nhl-roster-presence"
+                    [attr.aria-label]="getRosteredTeamCountLabel(game.homeTeam.abbrev)"
+                    [title]="getRosteredTeamCountLabel(game.homeTeam.abbrev)"
+                  >
+                    <span class="pixel-icon icon-players" aria-hidden="true"></span>
+                    <b aria-hidden="true">×{{ rosteredCount }}</b>
+                  </span>
+                }
+              </div>
+              <span class="nhl-team-record">{{ game.homeTeam.record || 'Home' }}</span>
             </div>
-            <b>{{ getTeamScore(game, 'home') }}</b>
+            <b class="nhl-team-score">{{ getTeamScore(game, 'home') }}</b>
           </div>
         </article>
       }

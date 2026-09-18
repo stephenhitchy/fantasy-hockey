@@ -36,6 +36,11 @@ export interface DashboardRecentWaiverOutcome {
   occurredAt: Date | string | null;
 }
 
+export interface DashboardNhlTeamRosterCount {
+  teamAbbreviation: string;
+  count: number;
+}
+
 export interface DashboardLeagueActivity {
   stage: DashboardLeagueActivityStage;
   statusLabel: string;
@@ -47,6 +52,7 @@ export interface DashboardLeagueActivity {
   injuredStarterCount: number;
   queuedMoveCount: number;
   boundarySlotCount: number;
+  nhlTeamRosterCounts: DashboardNhlTeamRosterCount[];
   recentWaiverOutcome: DashboardRecentWaiverOutcome | null;
   matchup: DashboardLeagueMatchupSummary | null;
 }

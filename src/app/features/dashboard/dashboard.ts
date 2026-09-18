@@ -12,6 +12,7 @@ import { applyUserTheme, loadStoredUserTheme } from '../../core/user/user-theme.
 import { getLeagueLogoAssetPath } from '../../shared/league-logo/league-logo.data';
 import { getPixelTeamTheme } from '../../shared/pixel-theme/pixel-theme.data';
 import { NhlScoreboard } from './nhl-scoreboard/nhl-scoreboard';
+import { combineDashboardNhlTeamRosterCounts } from './nhl-scoreboard/nhl-scoreboard.util';
 
 interface DashboardCache {
   userId: string;
@@ -20,7 +21,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 6;
+const DASHBOARD_CACHE_VERSION = 7;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 
@@ -100,6 +101,14 @@ export class Dashboard {
     this.leagueSummaries(),
     { maximumItems: 3 },
   ));
+
+  readonly nhlTeamRosterCounts = computed(() =>
+    combineDashboardNhlTeamRosterCounts(
+      this.leagueSummaries().map((league) =>
+        league.dashboardActivity?.nhlTeamRosterCounts ?? [],
+      ),
+    ),
+  );
 
   readonly displayName = computed(() => {
     const profile = this.profile();

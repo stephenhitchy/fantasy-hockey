@@ -1,10 +1,34 @@
 import type { NhlScoreGame } from '../../../core/nhl/nhl-api.service';
+import type { DashboardNhlTeamRosterCount } from '../../../core/league/dashboard-league-activity.models';
 
 const LIVE_GAME_STATES = new Set(['LIVE', 'CRIT']);
 const FINAL_GAME_STATES = new Set(['OFF', 'FINAL']);
 
 function normalizeTeamAbbreviation(value: string | null | undefined): string {
   return value?.trim().toUpperCase() ?? '';
+}
+
+export function combineDashboardNhlTeamRosterCounts(
+  groups: readonly (readonly DashboardNhlTeamRosterCount[])[],
+): DashboardNhlTeamRosterCount[] {
+  const countByTeam = new Map<string, number>();
+
+  for (const group of groups) {
+    for (const entry of group) {
+      const teamAbbreviation = normalizeTeamAbbreviation(entry.teamAbbreviation);
+      const count = Number.isFinite(entry.count) ? Math.max(0, Math.floor(entry.count)) : 0;
+
+      if (!teamAbbreviation || count === 0) {
+        continue;
+      }
+
+      countByTeam.set(teamAbbreviation, (countByTeam.get(teamAbbreviation) ?? 0) + count);
+    }
+  }
+
+  return [...countByTeam.entries()]
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([teamAbbreviation, count]) => ({ teamAbbreviation, count }));
 }
 
 function parseScoreboardDate(value: string): Date | null {

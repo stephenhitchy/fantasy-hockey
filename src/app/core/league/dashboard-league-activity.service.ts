@@ -152,6 +152,7 @@ export async function getDashboardLeagueActivity(
       injuredStarterCount: 0,
       queuedMoveCount: 0,
       boundarySlotCount: 0,
+      nhlTeamRosterCounts: [],
       recentWaiverOutcome: null,
       matchup: null,
     };

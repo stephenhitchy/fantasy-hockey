@@ -243,7 +243,7 @@ test('mobile Draft choices expose and preserve the bench destination', async () 
   assert.match(styles, /grid-template-columns: 34px minmax\(0, 1fr\) 132px/);
 });
 
-test('Draft turn awareness counts down and provides a clear default-on sound control', async () => {
+test('Draft turn awareness counts down and returns an idle manager to available players', async () => {
   const [source, template, awarenessSource, awarenessStyles] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
     read('src/app/features/draft/draft-room/draft-room.html'),
@@ -253,30 +253,18 @@ test('Draft turn awareness counts down and provides a clear default-on sound con
 
   assert.match(awarenessSource, /getPicksUntilManagerTurn/);
   assert.match(awarenessSource, /zeroBasedRound % 2 === 0/);
-  assert.match(awarenessSource, /shouldPlayDraftTurnAlert/);
+  assert.match(awarenessSource, /didEnterManagerDraftTurn/);
   assert.match(awarenessSource, /shouldAutoOpenAvailablePlayersForTurn/);
-  assert.match(source, /effect\(\(\) => \{[\s\S]*shouldPlayDraftTurnAlert/);
+  assert.match(source, /effect\(\(\) => \{[\s\S]*didEnterManagerDraftTurn/);
   assert.match(source, /shouldAutoOpenAvailablePlayersForTurn\([\s\S]*openAvailablePlayersForTurn\(false\)/);
   assert.match(source, /returnToAvailablePlayers\(\)[\s\S]*openAvailablePlayersForTurn\(true\)/);
-  assert.match(source, /AudioContext/);
-  assert.match(source, /rinkrat:draft-turn-sound-volume/);
-  assert.match(source, /rinkrat:draft-turn-sound-enabled/);
-  assert.match(source, /draftTurnSoundEnabled = signal\(true\)/);
-  assert.match(source, /handleDraftTurnAudioInteraction/);
-  assert.match(source, /'Alerts are: ON' : 'Alerts are: OFF'/);
-  assert.match(source, /toggleDraftTurnSound\(\): void[\s\S]*this\.draftTurnSoundEnabled\.set\(true\);[\s\S]*this\.saveDraftTurnSoundEnabled\(true\);[\s\S]*void this\.playDraftTurnSound\(\)/);
-  assert.doesNotMatch(source, /if \(!played\)[\s\S]*this\.draftTurnSoundEnabled\.set\(false\)/);
-  assert.doesNotMatch(source, /listenTo.*Turn|new Audio\(/);
+  assert.doesNotMatch(source, /AudioContext|draftTurnSound|playDraftTurnSound/);
   assert.match(template, /compactDraftTurnDistanceLabel\(\)/);
   assert.match(template, /aria-label="Switch to available players"[\s\S]*\[hidden\]="!shouldOfferAvailablePlayersReturn\(\)"[\s\S]*\[style\.display\]="shouldOfferAvailablePlayersReturn\(\) \? null : 'none'"/);
   assert.match(template, /#playerSearchInput[\s\S]*type="search"/);
-  assert.match(template, /type="range"[\s\S]*aria-label="Draft turn alert volume"/);
-  assert.match(template, /\[attr\.aria-pressed\]="draftTurnSoundEnabled\(\)"/);
-  assert.match(template, /\[class\.sound-disabled\]="!draftTurnSoundEnabled\(\)"/);
+  assert.doesNotMatch(template, /Draft turn sound|draft-turn-sound|draft-turn-volume/);
   assert.match(template, /role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(awarenessStyles, /min-height: var\(--rr-mobile-control-min-height\)/);
-  assert.match(awarenessStyles, /sound-enabled[\s\S]*var\(--rr-success\)/);
-  assert.match(awarenessStyles, /draft-turn-sound-button[\s\S]*var\(--rr-danger\)/);
+  assert.doesNotMatch(awarenessStyles, /sound|volume/);
   assert.match(awarenessStyles, /@media \(max-width: 620px\)/);
 });
 

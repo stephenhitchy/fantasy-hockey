@@ -10130,6 +10130,8 @@ Give league names enough room to remain recognizable and add a lightweight NHL-w
 - The scoreboard uses RinkRat's existing server-side NHL proxy and the NHL web score feed at `/v1/score/now`; no browser request is sent directly to the upstream service.
 - Live games appear first, followed by the user's favorite-team game, then the remaining games by puck-drop time.
 - The panel shows up to six games in a horizontally scrollable strip, including team logos, records, scores, game state, time/period, and available broadcast label.
+- Each NHL team row can show a compact roster badge with the manager's total roster spots for that club across every league. Active, bench, and IR skaters count, and each team-goalie unit counts once.
+- The roster totals reuse the Dashboard's existing bounded roster reads and add no Firestore listener or additional request.
 - During live games the panel refreshes every 30 seconds. Outside live games it refreshes every five minutes.
 - NHL scoreboard failures remain isolated from fantasy league loading and never block Dashboard or league actions.
 - The proxy caches the shared score response for 15 seconds to prevent every dashboard visitor from creating a separate upstream request.
@@ -10161,6 +10163,7 @@ npm run verify:batch8a1
 6. Confirm Refresh updates only the NHL panel and does not reload league summaries.
 7. Confirm the panel scrolls horizontally without causing page-level horizontal overflow on mobile.
 8. Confirm a temporarily unavailable NHL feed leaves all fantasy tools usable.
+9. Confirm roster badges combine the same NHL team across leagues and include goalie units without exposing individual league details.
 
 ### Deployment
 

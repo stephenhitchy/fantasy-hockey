@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { FantasyDraft } from '../../../core/draft/draft.models';
 import {
+  didEnterManagerDraftTurn,
   getCompactDraftTurnDistanceLabel,
   getDraftTurnDistanceLabel,
   getPicksUntilManagerTurn,
-  normalizeDraftTurnSoundEnabled,
-  normalizeDraftTurnSoundVolume,
   shouldAutoOpenAvailablePlayersForTurn,
-  shouldPlayDraftTurnAlert,
 } from './draft-turn-awareness.util';
 
 function createDraft(
@@ -50,8 +48,8 @@ describe('Draft turn awareness', () => {
     expect(getCompactDraftTurnDistanceLabel(4)).toBe('· 4 picks away');
   });
 
-  it('alerts only on a new transition onto the manager clock', () => {
-    expect(shouldPlayDraftTurnAlert({
+  it('detects only a new transition onto the manager clock', () => {
+    expect(didEnterManagerDraftTurn({
       hasPreviousObservation: false,
       previousDistance: null,
       previousStatus: null,
@@ -59,7 +57,7 @@ describe('Draft turn awareness', () => {
       currentStatus: 'live',
     })).toBe(false);
 
-    expect(shouldPlayDraftTurnAlert({
+    expect(didEnterManagerDraftTurn({
       hasPreviousObservation: true,
       previousDistance: 1,
       previousStatus: 'live',
@@ -67,7 +65,7 @@ describe('Draft turn awareness', () => {
       currentStatus: 'live',
     })).toBe(true);
 
-    expect(shouldPlayDraftTurnAlert({
+    expect(didEnterManagerDraftTurn({
       hasPreviousObservation: true,
       previousDistance: 0,
       previousStatus: 'live',
@@ -91,18 +89,4 @@ describe('Draft turn awareness', () => {
     })).toBe(false);
   });
 
-  it('keeps user-controlled volume inside the browser-safe range', () => {
-    expect(normalizeDraftTurnSoundVolume(-20)).toBe(0);
-    expect(normalizeDraftTurnSoundVolume('47.6')).toBe(48);
-    expect(normalizeDraftTurnSoundVolume(140)).toBe(100);
-    expect(normalizeDraftTurnSoundVolume('not-a-number')).toBe(60);
-    expect(normalizeDraftTurnSoundVolume(null)).toBe(60);
-  });
-
-  it('enables turn sound by default while preserving an explicit preference', () => {
-    expect(normalizeDraftTurnSoundEnabled(null)).toBe(true);
-    expect(normalizeDraftTurnSoundEnabled('enabled')).toBe(true);
-    expect(normalizeDraftTurnSoundEnabled('disabled')).toBe(false);
-    expect(normalizeDraftTurnSoundEnabled('unexpected', false)).toBe(false);
-  });
 });

@@ -1,8 +1,5 @@
 .draft-turn-awareness {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
+  display: block;
   margin: 10px 0;
   padding: 10px 12px;
   border-color: color-mix(in srgb, var(--rr-info) 34%, var(--border-strong));
@@ -41,88 +38,8 @@
   font-size: 15px;
 }
 
-.draft-turn-sound-controls,
-.draft-turn-volume-control {
-  display: flex;
-  align-items: center;
-}
-
-.draft-turn-sound-controls {
-  gap: 9px;
-}
-
-.draft-turn-sound-button {
-  gap: 7px;
-  min-height: var(--rr-mobile-control-min-height);
-  border-color: color-mix(in srgb, var(--rr-danger) 62%, var(--border-strong));
-  background: color-mix(in srgb, var(--rr-danger) 12%, var(--surface-1));
-  color: color-mix(in srgb, var(--rr-danger) 72%, var(--text-primary));
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.draft-turn-sound-button.sound-enabled {
-  border-color: color-mix(in srgb, var(--rr-success) 72%, var(--border-strong));
-  background: color-mix(in srgb, var(--rr-success) 18%, var(--surface-1));
-  color: color-mix(in srgb, var(--rr-success) 76%, var(--text-primary));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rr-success) 30%, transparent);
-}
-
-.draft-turn-sound-button:focus-visible {
-  outline-color: currentColor;
-}
-
-.draft-turn-sound-indicator {
-  width: 9px;
-  height: 9px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  opacity: 0.72;
-}
-
-.draft-turn-sound-button.sound-enabled .draft-turn-sound-indicator {
-  background: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
-  opacity: 1;
-}
-
-.draft-turn-sound-button.sound-disabled .draft-turn-sound-indicator {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
-}
-
-.draft-turn-volume-control {
-  gap: 7px;
-}
-
-.draft-turn-volume-control input {
-  width: clamp(86px, 13vw, 144px);
-  min-height: var(--rr-mobile-control-min-height);
-  accent-color: var(--rr-info);
-}
-
-.draft-turn-volume-control output {
-  min-width: 3ch;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  text-align: right;
-}
-
 @media (max-width: 620px) {
   .draft-turn-awareness {
-    grid-template-columns: 1fr;
-    gap: 8px;
     padding: 9px 10px;
-  }
-
-  .draft-turn-sound-controls {
-    display: grid;
-    grid-template-columns: minmax(118px, auto) minmax(0, 1fr);
-  }
-
-  .draft-turn-volume-control input {
-    width: 100%;
   }
 }

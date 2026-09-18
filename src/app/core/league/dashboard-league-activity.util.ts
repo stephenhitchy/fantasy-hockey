@@ -5,10 +5,11 @@ import type {
   FantasyMatchup,
   FantasyTeamCycleWindows,
 } from '../cycle/cycle.models';
-import type { FantasyRoster } from '../team/roster.models';
+import type { FantasyRoster, RosterAsset } from '../team/roster.models';
 import type { FantasyTeam } from '../team/team.service';
 import type {
   DashboardLeagueActivity,
+  DashboardNhlTeamRosterCount,
   DashboardRecentWaiverOutcome,
 } from './dashboard-league-activity.models';
 
@@ -181,6 +182,64 @@ function countRosterAttention(roster: FantasyRoster | null): {
   );
 }
 
+function getRosterAssetIdentity(asset: RosterAsset): string {
+  const storedKey = asset.assetKey?.trim();
+
+  if (storedKey) {
+    return storedKey;
+  }
+
+  return asset.assetType === 'team-goalie-unit'
+    ? `goalie-unit-${asset.teamAbbreviation.trim().toUpperCase()}`
+    : `skater-${asset.player.id}`;
+}
+
+function getRosterAssetTeamAbbreviation(asset: RosterAsset): string {
+  return (
+    asset.assetType === 'team-goalie-unit'
+      ? asset.teamAbbreviation
+      : asset.player.nhlTeamAbbreviation
+  ).trim().toUpperCase();
+}
+
+export function summarizeRosterNhlTeamCounts(
+  roster: FantasyRoster | null,
+): DashboardNhlTeamRosterCount[] {
+  if (!roster) {
+    return [];
+  }
+
+  const slots = [
+    ...(Array.isArray(roster.activeSlots) ? roster.activeSlots : []),
+    ...(Array.isArray(roster.benchSlots) ? roster.benchSlots : []),
+    ...(Array.isArray(roster.irSlots) ? roster.irSlots : []),
+  ];
+  const seenAssetKeys = new Set<string>();
+  const countByTeam = new Map<string, number>();
+
+  for (const slot of slots) {
+    const asset = slot.asset;
+
+    if (!asset || (asset.assetType !== 'skater' && asset.assetType !== 'team-goalie-unit')) {
+      continue;
+    }
+
+    const assetKey = getRosterAssetIdentity(asset);
+    const teamAbbreviation = getRosterAssetTeamAbbreviation(asset);
+
+    if (!teamAbbreviation || seenAssetKeys.has(assetKey)) {
+      continue;
+    }
+
+    seenAssetKeys.add(assetKey);
+    countByTeam.set(teamAbbreviation, (countByTeam.get(teamAbbreviation) ?? 0) + 1);
+  }
+
+  return [...countByTeam.entries()]
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([teamAbbreviation, count]) => ({ teamAbbreviation, count }));
+}
+
 function getAssetName(claim: FantasyWaiverClaim): string {
   const asset = claim.waiverAsset;
 
@@ -285,6 +344,7 @@ export function buildDashboardLeagueActivity(
   const attention = {
     ...countRosterAttention(input.roster),
     boundarySlotCount: countBoundarySlots(input.myWindows),
+    nhlTeamRosterCounts: summarizeRosterNhlTeamCounts(input.roster),
     recentWaiverOutcome: getMostRecentWaiverOutcome(input.waiverClaims),
   };
   const leagueRoute: Array<string | number> = ['/leagues', input.leagueId];

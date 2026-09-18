@@ -95,7 +95,10 @@
         </section>
       }
 
-      <app-nhl-scoreboard [favoriteTeamAbbreviation]="favoriteTeam().abbreviation" />
+      <app-nhl-scoreboard
+        [favoriteTeamAbbreviation]="favoriteTeam().abbreviation"
+        [rosteredTeamCounts]="nhlTeamRosterCounts()"
+      />
 
       @if (managerBriefing().length > 0) {
         <section class="manager-briefing rr-card rr-card--padded" aria-labelledby="manager-briefing-title">

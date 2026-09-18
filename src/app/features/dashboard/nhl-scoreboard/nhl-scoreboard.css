@@ -158,21 +158,24 @@
   object-fit: contain;
 }
 
-.nhl-team-row div {
+.nhl-team-copy {
   min-width: 0;
 }
 
-.nhl-team-row strong,
-.nhl-team-row span {
-  display: block;
+.nhl-team-name-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
 }
 
-.nhl-team-row strong {
+.nhl-team-name-line > strong {
   color: var(--text-primary);
   font-size: 14px;
 }
 
-.nhl-team-row span {
+.nhl-team-record {
+  display: block;
   margin-top: 2px;
   overflow: hidden;
   color: var(--text-muted);
@@ -181,7 +184,34 @@
   white-space: nowrap;
 }
 
-.nhl-team-row b {
+.nhl-roster-presence {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--user-team-accent) 62%, var(--border-strong));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--user-team-accent) 14%, var(--surface-1));
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--user-team-accent) 12%, transparent);
+}
+
+.nhl-roster-presence .pixel-icon {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+}
+
+.nhl-roster-presence b {
+  color: inherit;
+  font-family: var(--rr-font-numeric);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.nhl-team-score {
   min-width: 25px;
   color: var(--text-primary);
   font-family: var(--rr-font-numeric);

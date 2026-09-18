@@ -436,43 +436,13 @@
         class="draft-turn-awareness rr-card"
         [class.manager-turn-active]="picksUntilMyTurn() === 0 && draft()?.status === 'live'"
         [hidden]="draftTurnDistanceLabel() === null"
-        aria-label="Draft turn alert controls"
+        aria-label="Draft turn status"
       >
         <div class="draft-turn-distance" role="status" aria-live="polite" aria-atomic="true">
           <span>{{ draftTurnHeadingLabel() }}</span>
           <strong>{{ draftTurnDistanceLabel() }}</strong>
         </div>
 
-        <div class="draft-turn-sound-controls" role="group" aria-label="Draft turn sound">
-          <button
-            type="button"
-            class="draft-turn-sound-button rr-button rr-button--secondary"
-            [class.sound-enabled]="draftTurnSoundEnabled()"
-            [class.sound-disabled]="!draftTurnSoundEnabled()"
-            [attr.aria-pressed]="draftTurnSoundEnabled()"
-            [attr.aria-label]="draftTurnSoundEnabled() ? 'Turn draft alert sound off' : 'Turn draft alert sound on'"
-            [disabled]="draftTurnSoundUnavailable()"
-            (click)="toggleDraftTurnSound()"
-          >
-            <span class="draft-turn-sound-indicator" aria-hidden="true"></span>
-            <span>{{ draftTurnSoundButtonLabel() }}</span>
-          </button>
-
-          <label class="draft-turn-volume-control">
-            <input
-              id="draft-turn-volume"
-              type="range"
-              min="0"
-              max="100"
-              step="10"
-              [ngModel]="draftTurnSoundVolume()"
-              (ngModelChange)="setDraftTurnSoundVolume($event)"
-              (change)="previewDraftTurnSound()"
-              aria-label="Draft turn alert volume"
-            />
-            <output for="draft-turn-volume">{{ draftTurnSoundVolumeLabel() }}</output>
-          </label>
-        </div>
       </section>
 
       <section class="draft-roster-needs rr-card rr-card--padded" aria-label="Your draft roster needs">
