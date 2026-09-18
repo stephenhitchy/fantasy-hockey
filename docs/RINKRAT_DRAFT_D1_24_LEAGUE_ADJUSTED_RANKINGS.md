@@ -82,10 +82,12 @@ their next snake-order turn. The compact count remains in the mobile command
 bar. A short browser-generated turn sound is enabled by default, and the
 manager's explicit on/off choice and zero-to-100-percent volume are remembered
 per manager on that browser. The first Draft Room interaction primes mobile
-browser audio without playing an extra sound. Listener refreshes and duplicate
-delivery do not replay the sound because only a new transition onto that
-manager's authoritative live pick is eligible. No audio asset, Firestore
-listener, write path, or Draft authority is added.
+browser audio without playing an extra sound. Enabling the alert remains an
+immediate saved preference even when the browser needs a later interaction to
+resume audio; a delayed preview can no longer switch the control back off.
+Listener refreshes and duplicate delivery do not replay the sound because only
+a new transition onto that manager's authoritative live pick is eligible. No
+audio asset, Firestore listener, write path, or Draft authority is added.
 
 When that transition occurs on mobile, the Draft Room returns an idle manager
 to Available Players and scrolls the search control into view without stealing

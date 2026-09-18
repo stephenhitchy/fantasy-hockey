@@ -263,6 +263,9 @@ test('Draft turn awareness counts down and provides a clear default-on sound con
   assert.match(source, /rinkrat:draft-turn-sound-enabled/);
   assert.match(source, /draftTurnSoundEnabled = signal\(true\)/);
   assert.match(source, /handleDraftTurnAudioInteraction/);
+  assert.match(source, /'Alerts are: ON' : 'Alerts are: OFF'/);
+  assert.match(source, /toggleDraftTurnSound\(\): void[\s\S]*this\.draftTurnSoundEnabled\.set\(true\);[\s\S]*this\.saveDraftTurnSoundEnabled\(true\);[\s\S]*void this\.playDraftTurnSound\(\)/);
+  assert.doesNotMatch(source, /if \(!played\)[\s\S]*this\.draftTurnSoundEnabled\.set\(false\)/);
   assert.doesNotMatch(source, /listenTo.*Turn|new Audio\(/);
   assert.match(template, /compactDraftTurnDistanceLabel\(\)/);
   assert.match(template, /aria-label="Switch to available players"[\s\S]*\[hidden\]="!shouldOfferAvailablePlayersReturn\(\)"[\s\S]*\[style\.display\]="shouldOfferAvailablePlayersReturn\(\) \? null : 'none'"/);

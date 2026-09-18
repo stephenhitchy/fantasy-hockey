@@ -624,7 +624,7 @@ export class DraftRoom implements OnDestroy {
       return 'Turn alert unavailable';
     }
 
-    return this.draftTurnSoundEnabled() ? 'Turn alert: ON' : 'Turn alert: OFF';
+    return this.draftTurnSoundEnabled() ? 'Alerts are: ON' : 'Alerts are: OFF';
   });
 
   readonly draftTurnSoundVolumeLabel = computed(
@@ -1131,24 +1131,18 @@ export class DraftRoom implements OnDestroy {
     void this.loadDraftRoom();
   }
 
-  async toggleDraftTurnSound(): Promise<void> {
+  toggleDraftTurnSound(): void {
     if (this.draftTurnSoundEnabled()) {
       this.draftTurnSoundEnabled.set(false);
       this.saveDraftTurnSoundEnabled(false);
-      await this.closeDraftTurnAudioContext();
+      void this.closeDraftTurnAudioContext();
       return;
     }
 
     this.draftTurnSoundUnavailable.set(false);
     this.draftTurnSoundEnabled.set(true);
     this.saveDraftTurnSoundEnabled(true);
-
-    const played = await this.playDraftTurnSound();
-
-    if (!played) {
-      this.draftTurnSoundEnabled.set(false);
-      this.saveDraftTurnSoundEnabled(false);
-    }
+    void this.playDraftTurnSound();
   }
 
   setDraftTurnSoundVolume(value: unknown): void {
