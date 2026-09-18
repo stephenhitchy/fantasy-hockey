@@ -89,13 +89,78 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
   await suite.test('combines roster spots across leagues by NHL team', () => {
     assert.deepEqual(
       combineDashboardNhlTeamRosterCounts([
-        [{ teamAbbreviation: 'VGK', count: 2 }],
-        [{ teamAbbreviation: 'vgk', count: 1 }, { teamAbbreviation: 'CHI', count: 1 }],
-        [{ teamAbbreviation: 'VGK', count: 1 }],
+        {
+          leagueId: 'league-b',
+          leagueName: 'Second League',
+          rosterCounts: [{
+            teamAbbreviation: 'VGK',
+            count: 2,
+            assets: [
+              { assetKey: 'skater-2', assetName: 'Second Wing', position: 'RW', rosterLocation: 'bench' },
+              { assetKey: 'skater-1', assetName: 'First Wing', position: 'LW', rosterLocation: 'active' },
+            ],
+          }],
+        },
+        {
+          leagueId: 'league-a',
+          leagueName: 'First League',
+          rosterCounts: [
+            {
+              teamAbbreviation: 'vgk',
+              count: 1,
+              assets: [{ assetKey: 'goalie-unit-VGK', assetName: 'Vegas Goalie Unit', position: 'G', rosterLocation: 'active' }],
+            },
+            {
+              teamAbbreviation: 'CHI',
+              count: 1,
+              assets: [{ assetKey: 'skater-3', assetName: 'Chicago Center', position: 'C', rosterLocation: 'ir' }],
+            },
+          ],
+        },
       ]),
       [
-        { teamAbbreviation: 'CHI', count: 1 },
-        { teamAbbreviation: 'VGK', count: 4 },
+        {
+          teamAbbreviation: 'CHI',
+          count: 1,
+          entries: [{
+            assetKey: 'skater-3',
+            assetName: 'Chicago Center',
+            position: 'C',
+            rosterLocation: 'ir',
+            leagueId: 'league-a',
+            leagueName: 'First League',
+          }],
+        },
+        {
+          teamAbbreviation: 'VGK',
+          count: 3,
+          entries: [
+            {
+              assetKey: 'goalie-unit-VGK',
+              assetName: 'Vegas Goalie Unit',
+              position: 'G',
+              rosterLocation: 'active',
+              leagueId: 'league-a',
+              leagueName: 'First League',
+            },
+            {
+              assetKey: 'skater-1',
+              assetName: 'First Wing',
+              position: 'LW',
+              rosterLocation: 'active',
+              leagueId: 'league-b',
+              leagueName: 'Second League',
+            },
+            {
+              assetKey: 'skater-2',
+              assetName: 'Second Wing',
+              position: 'RW',
+              rosterLocation: 'bench',
+              leagueId: 'league-b',
+              leagueName: 'Second League',
+            },
+          ],
+        },
       ],
     );
   });
@@ -202,6 +267,17 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(template, /class="nhl-roster-presence"/);
     assert.match(template, /icon-players/);
     assert.match(template, /including goalie units/);
+  });
+
+  await suite.test('opens an accessible roster breakdown with direct player links', () => {
+    assert.match(component, /selectedRosterPresence/);
+    assert.match(component, /showModal\(\)/);
+    assert.match(component, /rosterTrigger\?\.focus\(\)/);
+    assert.match(template, /<dialog/);
+    assert.match(template, /autofocus/);
+    assert.match(template, /entry\.leagueName/);
+    assert.match(template, /entry\.rosterLocation/);
+    assert.match(template, /'players', entry\.assetKey/);
   });
 
   await suite.test('gives league names the full card width and up to two readable lines', () => {

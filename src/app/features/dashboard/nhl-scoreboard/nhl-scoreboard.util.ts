@@ -1,5 +1,8 @@
 import type { NhlScoreGame } from '../../../core/nhl/nhl-api.service';
-import type { DashboardNhlTeamRosterCount } from '../../../core/league/dashboard-league-activity.models';
+import type {
+  DashboardNhlTeamRosterCount,
+  DashboardNhlTeamRosterPresence,
+} from '../../../core/league/dashboard-league-activity.models';
 
 const LIVE_GAME_STATES = new Set(['LIVE', 'CRIT']);
 const FINAL_GAME_STATES = new Set(['OFF', 'FINAL']);
@@ -9,26 +12,48 @@ function normalizeTeamAbbreviation(value: string | null | undefined): string {
 }
 
 export function combineDashboardNhlTeamRosterCounts(
-  groups: readonly (readonly DashboardNhlTeamRosterCount[])[],
-): DashboardNhlTeamRosterCount[] {
-  const countByTeam = new Map<string, number>();
+  groups: readonly {
+    leagueId: string;
+    leagueName: string;
+    rosterCounts: readonly DashboardNhlTeamRosterCount[];
+  }[],
+): DashboardNhlTeamRosterPresence[] {
+  const entriesByTeam = new Map<string, DashboardNhlTeamRosterPresence['entries']>();
+  const locationOrder = { active: 0, bench: 1, ir: 2 } as const;
 
   for (const group of groups) {
-    for (const entry of group) {
-      const teamAbbreviation = normalizeTeamAbbreviation(entry.teamAbbreviation);
-      const count = Number.isFinite(entry.count) ? Math.max(0, Math.floor(entry.count)) : 0;
+    for (const team of group.rosterCounts) {
+      const teamAbbreviation = normalizeTeamAbbreviation(team.teamAbbreviation);
 
-      if (!teamAbbreviation || count === 0) {
+      if (!teamAbbreviation || !Array.isArray(team.assets) || team.assets.length === 0) {
         continue;
       }
 
-      countByTeam.set(teamAbbreviation, (countByTeam.get(teamAbbreviation) ?? 0) + count);
+      const entries = entriesByTeam.get(teamAbbreviation) ?? [];
+
+      for (const asset of team.assets) {
+        entries.push({
+          ...asset,
+          leagueId: group.leagueId,
+          leagueName: group.leagueName,
+        });
+      }
+
+      entriesByTeam.set(teamAbbreviation, entries);
     }
   }
 
-  return [...countByTeam.entries()]
+  return [...entriesByTeam.entries()]
     .sort(([first], [second]) => first.localeCompare(second))
-    .map(([teamAbbreviation, count]) => ({ teamAbbreviation, count }));
+    .map(([teamAbbreviation, entries]) => ({
+      teamAbbreviation,
+      count: entries.length,
+      entries: [...entries].sort((first, second) =>
+        first.leagueName.localeCompare(second.leagueName) ||
+        locationOrder[first.rosterLocation] - locationOrder[second.rosterLocation] ||
+        first.assetName.localeCompare(second.assetName),
+      ),
+    }));
 }
 
 function parseScoreboardDate(value: string): Date | null {

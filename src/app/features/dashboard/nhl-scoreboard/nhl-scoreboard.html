@@ -68,14 +68,16 @@
               <div class="nhl-team-name-line">
                 <strong>{{ game.awayTeam.abbrev }}</strong>
                 @if (getRosteredTeamCount(game.awayTeam.abbrev); as rosteredCount) {
-                  <span
+                  <button
+                    type="button"
                     class="nhl-roster-presence"
                     [attr.aria-label]="getRosteredTeamCountLabel(game.awayTeam.abbrev)"
                     [title]="getRosteredTeamCountLabel(game.awayTeam.abbrev)"
+                    (click)="openRosterBreakdown(game.awayTeam.abbrev, $event)"
                   >
                     <span class="pixel-icon icon-players" aria-hidden="true"></span>
                     <b aria-hidden="true">×{{ rosteredCount }}</b>
-                  </span>
+                  </button>
                 }
               </div>
               <span class="nhl-team-record">{{ game.awayTeam.record || 'Away' }}</span>
@@ -89,14 +91,16 @@
               <div class="nhl-team-name-line">
                 <strong>{{ game.homeTeam.abbrev }}</strong>
                 @if (getRosteredTeamCount(game.homeTeam.abbrev); as rosteredCount) {
-                  <span
+                  <button
+                    type="button"
                     class="nhl-roster-presence"
                     [attr.aria-label]="getRosteredTeamCountLabel(game.homeTeam.abbrev)"
                     [title]="getRosteredTeamCountLabel(game.homeTeam.abbrev)"
+                    (click)="openRosterBreakdown(game.homeTeam.abbrev, $event)"
                   >
                     <span class="pixel-icon icon-players" aria-hidden="true"></span>
                     <b aria-hidden="true">×{{ rosteredCount }}</b>
-                  </span>
+                  </button>
                 }
               </div>
               <span class="nhl-team-record">{{ game.homeTeam.record || 'Home' }}</span>
@@ -114,3 +118,51 @@
     }
   }
 </section>
+
+<dialog
+  #rosterDialog
+  class="nhl-roster-dialog"
+  aria-labelledby="nhl-roster-dialog-title"
+  (close)="finishRosterBreakdownClose()"
+>
+  @if (selectedRosterPresence(); as selected) {
+    <header class="nhl-roster-dialog-header">
+      <div>
+        <span>Your players</span>
+        <h3 id="nhl-roster-dialog-title">
+          {{ selected.teamAbbreviation }} roster {{ selected.count === 1 ? 'spot' : 'spots' }}
+        </h3>
+        <p>Across all of your RinkRat leagues</p>
+      </div>
+
+      <button
+        type="button"
+        class="nhl-roster-dialog-close"
+        aria-label="Close roster breakdown"
+        autofocus
+        (click)="closeRosterBreakdown()"
+      >
+        Close
+      </button>
+    </header>
+
+    <ul class="nhl-roster-dialog-list">
+      @for (entry of selected.entries; track entry.leagueId + ':' + entry.assetKey) {
+        <li>
+          <a
+            class="nhl-roster-dialog-entry"
+            [routerLink]="['/leagues', entry.leagueId, 'players', entry.assetKey]"
+            (click)="closeRosterBreakdown(false)"
+          >
+            <span class="nhl-roster-dialog-icon pixel-icon icon-players" aria-hidden="true"></span>
+            <span class="nhl-roster-dialog-copy">
+              <strong>{{ entry.assetName }}</strong>
+              <small>{{ entry.leagueName }} · {{ entry.position }} · {{ getRosterLocationLabel(entry.rosterLocation) }}</small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </a>
+        </li>
+      }
+    </ul>
+  }
+</dialog>

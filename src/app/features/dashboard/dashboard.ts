@@ -21,7 +21,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 7;
+const DASHBOARD_CACHE_VERSION = 8;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 
@@ -105,7 +105,11 @@ export class Dashboard {
   readonly nhlTeamRosterCounts = computed(() =>
     combineDashboardNhlTeamRosterCounts(
       this.leagueSummaries().map((league) =>
-        league.dashboardActivity?.nhlTeamRosterCounts ?? [],
+        ({
+          leagueId: league.leagueId,
+          leagueName: league.leagueName,
+          rosterCounts: league.dashboardActivity?.nhlTeamRosterCounts ?? [],
+        }),
       ),
     ),
   );
@@ -283,5 +287,19 @@ export class Dashboard {
   getBriefingLeagueLogoPath(item: ManagerBriefingItem): string {
     const league = this.leagueSummaries().find((entry) => entry.leagueId === item.leagueId);
     return league ? this.getLeagueLogoPath(league) : '/assets/branding/rinkrat-headshot.png';
+  }
+
+  openLeagueHqFromCard(event: MouseEvent, leagueId: string): void {
+    const target = event.target;
+
+    if (
+      event.defaultPrevented ||
+      !(target instanceof Element) ||
+      target.closest('a, button, input, select, textarea, [role="button"]')
+    ) {
+      return;
+    }
+
+    void this.router.navigate(['/leagues', leagueId]);
   }
 }

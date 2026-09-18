@@ -180,7 +180,8 @@ test('Batch 8A dashboard command center behavior', async (suite) => {
     const vgkSkater = {
       assetType: 'skater',
       assetKey: 'skater-1',
-      player: { id: 1, nhlTeamAbbreviation: 'vgk' },
+      position: 'LW',
+      player: { id: 1, fullName: 'Vegas Wing', nhlTeamAbbreviation: 'vgk' },
     };
     const activity = buildDashboardLeagueActivity(
       makeBaseInput({
@@ -192,24 +193,58 @@ test('Batch 8A dashboard command center behavior', async (suite) => {
               asset: {
                 assetType: 'team-goalie-unit',
                 assetKey: 'goalie-unit-VGK',
+                position: 'G',
+                teamName: 'Vegas Golden Knights',
                 teamAbbreviation: 'VGK',
               },
             },
           ],
           benchSlots: [
-            { asset: { assetType: 'skater', assetKey: 'skater-2', player: { id: 2, nhlTeamAbbreviation: 'VGK' } } },
+            { asset: { assetType: 'skater', assetKey: 'skater-2', position: 'D', player: { id: 2, fullName: 'Vegas Defender', nhlTeamAbbreviation: 'VGK' } } },
             { asset: vgkSkater },
           ],
           irSlots: [
-            { asset: { assetType: 'skater', assetKey: 'skater-3', player: { id: 3, nhlTeamAbbreviation: 'CHI' } } },
+            { asset: { assetType: 'skater', assetKey: 'skater-3', position: 'C', player: { id: 3, fullName: 'Chicago Center', nhlTeamAbbreviation: 'CHI' } } },
           ],
         },
       }),
     );
 
     assert.deepEqual(activity.nhlTeamRosterCounts, [
-      { teamAbbreviation: 'CHI', count: 1 },
-      { teamAbbreviation: 'VGK', count: 3 },
+      {
+        teamAbbreviation: 'CHI',
+        count: 1,
+        assets: [{
+          assetKey: 'skater-3',
+          assetName: 'Chicago Center',
+          position: 'C',
+          rosterLocation: 'ir',
+        }],
+      },
+      {
+        teamAbbreviation: 'VGK',
+        count: 3,
+        assets: [
+          {
+            assetKey: 'goalie-unit-VGK',
+            assetName: 'Vegas Golden Knights Goalie Unit',
+            position: 'G',
+            rosterLocation: 'active',
+          },
+          {
+            assetKey: 'skater-1',
+            assetName: 'Vegas Wing',
+            position: 'LW',
+            rosterLocation: 'active',
+          },
+          {
+            assetKey: 'skater-2',
+            assetName: 'Vegas Defender',
+            position: 'D',
+            rosterLocation: 'bench',
+          },
+        ],
+      },
     ]);
   });
 
@@ -255,9 +290,24 @@ test('Batch 8A source contracts', async (suite) => {
   });
 
   await suite.test('passes aggregated roster presence to the NHL scoreboard and invalidates old cache data', () => {
-    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 7/);
+    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 8/);
     assert.match(dashboard, /combineDashboardNhlTeamRosterCounts/);
     assert.match(template, /\[rosteredTeamCounts\]="nhlTeamRosterCounts\(\)"/);
+  });
+
+  await suite.test('makes the league-card surface open League HQ without covering its content or direct actions', async () => {
+    const styles = await readFile(
+      join(projectRoot, 'src/app/features/dashboard/dashboard.css'),
+      'utf8',
+    );
+
+    assert.match(template, /openLeagueHqFromCard\(\$event, league\.leagueId\)/);
+    assert.match(template, /class="league-title-anchor"/);
+    assert.match(template, /class="league-actions"/);
+    assert.match(dashboard, /target\.closest\('a, button, input, select, textarea, \[role="button"\]'\)/);
+    assert.match(dashboard, /this\.router\.navigate\(\['\/leagues', leagueId\]\)/);
+    assert.doesNotMatch(template, /class="league-card-hq-link"/);
+    assert.match(styles, /\.league-card\s*\{[^}]*cursor:\s*pointer/s);
   });
 
   await suite.test('replaces the duplicate club stat with record and one next-action panel', () => {

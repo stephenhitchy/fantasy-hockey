@@ -185,6 +185,7 @@
 }
 
 .nhl-roster-presence {
+  position: relative;
   display: inline-flex;
   min-width: 0;
   align-items: center;
@@ -194,7 +195,25 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--user-team-accent) 14%, var(--surface-1));
   color: var(--text-primary);
+  font: inherit;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--user-team-accent) 12%, transparent);
+  cursor: pointer;
+}
+
+.nhl-roster-presence::after {
+  position: absolute;
+  inset: -8px -6px;
+  content: '';
+}
+
+.nhl-roster-presence:hover {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-accent) 24%, var(--surface-1));
+}
+
+.nhl-roster-presence:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: 3px;
 }
 
 .nhl-roster-presence .pixel-icon {
@@ -227,6 +246,141 @@
   text-align: right;
 }
 
+.nhl-roster-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: min(640px, calc(100dvh - 32px));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 3px solid var(--user-team-accent);
+  border-radius: 0;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--surface-1) 55%, white 45%),
+    8px 8px 0 color-mix(in srgb, var(--page-bg) 72%, black 28%);
+}
+
+.nhl-roster-dialog::backdrop {
+  background: rgba(2, 7, 14, 0.78);
+  backdrop-filter: blur(2px);
+}
+
+.nhl-roster-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-bottom: 2px solid var(--border-strong);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--user-team-primary) 15%, transparent), transparent 70%),
+    var(--surface-2);
+}
+
+.nhl-roster-dialog-header > div {
+  min-width: 0;
+}
+
+.nhl-roster-dialog-header span {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.nhl-roster-dialog-header h3 {
+  margin: 5px 0 0;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.nhl-roster-dialog-header p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.nhl-roster-dialog-close {
+  min-width: 58px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nhl-roster-dialog-close:hover,
+.nhl-roster-dialog-close:focus-visible {
+  border-color: var(--user-team-accent);
+  outline: none;
+}
+
+.nhl-roster-dialog-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(440px, calc(100dvh - 170px));
+  margin: 0;
+  padding: 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.nhl-roster-dialog-entry {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  min-height: 56px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nhl-roster-dialog-entry:hover,
+.nhl-roster-dialog-entry:focus-visible {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-accent) 10%, var(--surface-2));
+  outline: none;
+}
+
+.nhl-roster-dialog-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.nhl-roster-dialog-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.nhl-roster-dialog-copy strong,
+.nhl-roster-dialog-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nhl-roster-dialog-copy strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.nhl-roster-dialog-copy small {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
 @media (min-width: 1100px) {
   .nhl-game-strip {
     grid-auto-columns: minmax(210px, calc((100% - 30px) / 4));
@@ -252,6 +406,24 @@
 
   .nhl-game-strip {
     grid-auto-columns: minmax(205px, 82%);
+  }
+
+  .nhl-roster-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: min(76dvh, 640px);
+    margin: auto 0 0;
+    border-width: 3px 0 0;
+    box-shadow: 0 -8px 0 color-mix(in srgb, var(--page-bg) 72%, black 28%);
+  }
+
+  .nhl-roster-dialog-header {
+    padding: 15px 16px;
+  }
+
+  .nhl-roster-dialog-list {
+    max-height: calc(76dvh - 130px);
+    padding: 10px 12px max(14px, env(safe-area-inset-bottom));
   }
 }
 

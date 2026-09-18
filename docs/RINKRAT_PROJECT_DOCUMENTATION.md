@@ -10131,7 +10131,10 @@ Give league names enough room to remain recognizable and add a lightweight NHL-w
 - Live games appear first, followed by the user's favorite-team game, then the remaining games by puck-drop time.
 - The panel shows up to six games in a horizontally scrollable strip, including team logos, records, scores, game state, time/period, and available broadcast label.
 - Each NHL team row can show a compact roster badge with the manager's total roster spots for that club across every league. Active, bench, and IR skaters count, and each team-goalie unit counts once.
+- Each roster badge is an interactive control. It opens a keyboard-safe desktop dialog or mobile bottom sheet listing the exact player or goalie unit, league, position, and active/bench/IR location, with a direct link to that league's player detail.
 - The roster totals reuse the Dashboard's existing bounded roster reads and add no Firestore listener or additional request.
+- The open area of every Dashboard league card now links to League HQ. The state-specific primary action and **My Team** remain independent controls above that card-wide link.
+- Dashboard cache version 8 prevents the earlier count-only roster summary from mixing with the new interactive asset details.
 - During live games the panel refreshes every 30 seconds. Outside live games it refreshes every five minutes.
 - NHL scoreboard failures remain isolated from fantasy league loading and never block Dashboard or league actions.
 - The proxy caches the shared score response for 15 seconds to prevent every dashboard visitor from creating a separate upstream request.
@@ -10163,7 +10166,10 @@ npm run verify:batch8a1
 6. Confirm Refresh updates only the NHL panel and does not reload league summaries.
 7. Confirm the panel scrolls horizontally without causing page-level horizontal overflow on mobile.
 8. Confirm a temporarily unavailable NHL feed leaves all fantasy tools usable.
-9. Confirm roster badges combine the same NHL team across leagues and include goalie units without exposing individual league details.
+9. Confirm roster badges combine the same NHL team across leagues and include goalie units.
+10. Open a roster badge with touch, mouse, and keyboard. Confirm the dialog identifies each asset's league and roster location, Escape closes it, and focus returns to the badge.
+11. Follow one player link and confirm it opens the correct league player detail.
+12. Tap the non-button area of a league card and confirm it opens League HQ. Confirm the primary action and **My Team** still open their existing destinations.
 
 ### Deployment
 

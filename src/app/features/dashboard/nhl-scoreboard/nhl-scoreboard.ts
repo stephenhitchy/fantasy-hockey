@@ -1,9 +1,21 @@
-import { Component, OnDestroy, computed, input, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  computed,
+  input,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { RouterLink } from '@angular/router';
 import {
   NhlScoreGame,
   getNhlScoreNow,
 } from '../../../core/nhl/nhl-api.service';
-import type { DashboardNhlTeamRosterCount } from '../../../core/league/dashboard-league-activity.models';
+import type {
+  DashboardNhlRosterLocation,
+  DashboardNhlTeamRosterPresence,
+} from '../../../core/league/dashboard-league-activity.models';
 import {
   formatNhlGameStatus,
   formatNhlScoreboardHeading,
@@ -16,13 +28,13 @@ import {
 
 @Component({
   selector: 'app-nhl-scoreboard',
-  imports: [],
+  imports: [RouterLink],
   templateUrl: './nhl-scoreboard.html',
   styleUrl: './nhl-scoreboard.css',
 })
 export class NhlScoreboard implements OnDestroy {
   readonly favoriteTeamAbbreviation = input('');
-  readonly rosteredTeamCounts = input<readonly DashboardNhlTeamRosterCount[]>([]);
+  readonly rosteredTeamCounts = input<readonly DashboardNhlTeamRosterPresence[]>([]);
 
   readonly games = signal<NhlScoreGame[]>([]);
   readonly focusedDate = signal('');
@@ -30,6 +42,8 @@ export class NhlScoreboard implements OnDestroy {
   readonly refreshing = signal(false);
   readonly errorMessage = signal('');
   readonly lastUpdatedAt = signal<Date | null>(null);
+  readonly selectedRosterTeam = signal('');
+  readonly rosterDialog = viewChild<ElementRef<HTMLDialogElement>>('rosterDialog');
 
   readonly visibleGames = computed(() =>
     selectDashboardNhlGames(this.games(), this.favoriteTeamAbbreviation()),
@@ -43,12 +57,16 @@ export class NhlScoreboard implements OnDestroy {
     this.games().some(isNhlScoreGameLive),
   );
 
-  readonly rosteredCountByTeam = computed(() => new Map(
+  readonly rosteredPresenceByTeam = computed(() => new Map(
     this.rosteredTeamCounts().map((entry) => [
       entry.teamAbbreviation.trim().toUpperCase(),
-      entry.count,
+      entry,
     ]),
   ));
+
+  readonly selectedRosterPresence = computed(() =>
+    this.rosteredPresenceByTeam().get(this.selectedRosterTeam()) ?? null,
+  );
 
   readonly hasVisibleRosterPresence = computed(() =>
     this.visibleGames().some((game) =>
@@ -59,6 +77,8 @@ export class NhlScoreboard implements OnDestroy {
 
   private refreshTimer: number | null = null;
   private requestGeneration = 0;
+  private rosterTrigger: HTMLElement | null = null;
+  private restoreRosterTriggerFocus = true;
 
   constructor() {
     void this.loadScores();
@@ -67,6 +87,12 @@ export class NhlScoreboard implements OnDestroy {
   ngOnDestroy(): void {
     this.requestGeneration += 1;
     this.clearRefreshTimer();
+
+    const dialog = this.rosterDialog()?.nativeElement;
+
+    if (dialog?.open) {
+      dialog.close();
+    }
   }
 
   async refreshScores(): Promise<void> {
@@ -98,13 +124,67 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   getRosteredTeamCount(teamAbbreviation: string): number {
-    return this.rosteredCountByTeam().get(teamAbbreviation.trim().toUpperCase()) ?? 0;
+    return this.rosteredPresenceByTeam().get(teamAbbreviation.trim().toUpperCase())?.count ?? 0;
   }
 
   getRosteredTeamCountLabel(teamAbbreviation: string): string {
     const count = this.getRosteredTeamCount(teamAbbreviation);
     const rosterSpotLabel = count === 1 ? 'roster spot' : 'roster spots';
-    return `${count} ${teamAbbreviation} ${rosterSpotLabel} across your leagues`;
+    return `View ${count} ${teamAbbreviation} ${rosterSpotLabel} across your leagues`;
+  }
+
+  getRosterLocationLabel(location: DashboardNhlRosterLocation): string {
+    switch (location) {
+      case 'bench':
+        return 'Bench';
+      case 'ir':
+        return 'IR';
+      default:
+        return 'Active lineup';
+    }
+  }
+
+  openRosterBreakdown(teamAbbreviation: string, event: Event): void {
+    const team = teamAbbreviation.trim().toUpperCase();
+
+    if (!this.rosteredPresenceByTeam().has(team)) {
+      return;
+    }
+
+    this.selectedRosterTeam.set(team);
+    this.rosterTrigger = event.currentTarget instanceof HTMLElement
+      ? event.currentTarget
+      : null;
+    this.restoreRosterTriggerFocus = true;
+
+    const dialog = this.rosterDialog()?.nativeElement;
+
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+    }
+  }
+
+  closeRosterBreakdown(restoreFocus: boolean = true): void {
+    this.restoreRosterTriggerFocus = restoreFocus;
+    const dialog = this.rosterDialog()?.nativeElement;
+
+    if (dialog?.open) {
+      dialog.close();
+      return;
+    }
+
+    this.finishRosterBreakdownClose();
+  }
+
+  finishRosterBreakdownClose(): void {
+    this.selectedRosterTeam.set('');
+
+    if (this.restoreRosterTriggerFocus) {
+      this.rosterTrigger?.focus();
+    }
+
+    this.rosterTrigger = null;
+    this.restoreRosterTriggerFocus = true;
   }
 
   getBroadcastLabel(game: NhlScoreGame): string {

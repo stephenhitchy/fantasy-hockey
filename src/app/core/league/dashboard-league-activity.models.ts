@@ -39,6 +39,27 @@ export interface DashboardRecentWaiverOutcome {
 export interface DashboardNhlTeamRosterCount {
   teamAbbreviation: string;
   count: number;
+  assets: DashboardNhlRosterAssetSummary[];
+}
+
+export type DashboardNhlRosterLocation = 'active' | 'bench' | 'ir';
+
+export interface DashboardNhlRosterAssetSummary {
+  assetKey: string;
+  assetName: string;
+  position: string;
+  rosterLocation: DashboardNhlRosterLocation;
+}
+
+export interface DashboardNhlRosterEntry extends DashboardNhlRosterAssetSummary {
+  leagueId: string;
+  leagueName: string;
+}
+
+export interface DashboardNhlTeamRosterPresence {
+  teamAbbreviation: string;
+  count: number;
+  entries: DashboardNhlRosterEntry[];
 }
 
 export interface DashboardLeagueActivity {

@@ -185,7 +185,10 @@
         } @else {
           <div class="league-grid">
             @for (league of leagueSummaries(); track league.leagueId) {
-              <article class="league-card rr-card rr-card--padded">
+              <article
+                class="league-card rr-card rr-card--padded"
+                (click)="openLeagueHqFromCard($event, league.leagueId)"
+              >
                 <div class="league-card-top">
                   <div class="league-identity">
                     <span class="league-icon" aria-hidden="true">
