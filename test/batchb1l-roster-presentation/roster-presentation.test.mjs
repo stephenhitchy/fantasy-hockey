@@ -243,7 +243,7 @@ test('mobile Draft choices expose and preserve the bench destination', async () 
   assert.match(styles, /grid-template-columns: 34px minmax\(0, 1fr\) 132px/);
 });
 
-test('Draft turn awareness counts down and provides an adjustable opt-in sound', async () => {
+test('Draft turn awareness counts down and provides a clear default-on sound control', async () => {
   const [source, template, awarenessSource, awarenessStyles] = await Promise.all([
     read('src/app/features/draft/draft-room/draft-room.ts'),
     read('src/app/features/draft/draft-room/draft-room.html'),
@@ -260,14 +260,20 @@ test('Draft turn awareness counts down and provides an adjustable opt-in sound',
   assert.match(source, /returnToAvailablePlayers\(\)[\s\S]*openAvailablePlayersForTurn\(true\)/);
   assert.match(source, /AudioContext/);
   assert.match(source, /rinkrat:draft-turn-sound-volume/);
+  assert.match(source, /rinkrat:draft-turn-sound-enabled/);
+  assert.match(source, /draftTurnSoundEnabled = signal\(true\)/);
+  assert.match(source, /handleDraftTurnAudioInteraction/);
   assert.doesNotMatch(source, /listenTo.*Turn|new Audio\(/);
   assert.match(template, /compactDraftTurnDistanceLabel\(\)/);
   assert.match(template, /aria-label="Switch to available players"[\s\S]*\[hidden\]="!shouldOfferAvailablePlayersReturn\(\)"[\s\S]*\[style\.display\]="shouldOfferAvailablePlayersReturn\(\) \? null : 'none'"/);
   assert.match(template, /#playerSearchInput[\s\S]*type="search"/);
   assert.match(template, /type="range"[\s\S]*aria-label="Draft turn alert volume"/);
   assert.match(template, /\[attr\.aria-pressed\]="draftTurnSoundEnabled\(\)"/);
+  assert.match(template, /\[class\.sound-disabled\]="!draftTurnSoundEnabled\(\)"/);
   assert.match(template, /role="status" aria-live="polite" aria-atomic="true"/);
   assert.match(awarenessStyles, /min-height: var\(--rr-mobile-control-min-height\)/);
+  assert.match(awarenessStyles, /sound-enabled[\s\S]*var\(--rr-success\)/);
+  assert.match(awarenessStyles, /draft-turn-sound-button[\s\S]*var\(--rr-danger\)/);
   assert.match(awarenessStyles, /@media \(max-width: 620px\)/);
 });
 

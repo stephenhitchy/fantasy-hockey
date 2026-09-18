@@ -5,6 +5,7 @@ import {
   getCompactDraftTurnDistanceLabel,
   getDraftTurnDistanceLabel,
   getPicksUntilManagerTurn,
+  normalizeDraftTurnSoundEnabled,
   normalizeDraftTurnSoundVolume,
   shouldAutoOpenAvailablePlayersForTurn,
   shouldPlayDraftTurnAlert,
@@ -96,5 +97,12 @@ describe('Draft turn awareness', () => {
     expect(normalizeDraftTurnSoundVolume(140)).toBe(100);
     expect(normalizeDraftTurnSoundVolume('not-a-number')).toBe(60);
     expect(normalizeDraftTurnSoundVolume(null)).toBe(60);
+  });
+
+  it('enables turn sound by default while preserving an explicit preference', () => {
+    expect(normalizeDraftTurnSoundEnabled(null)).toBe(true);
+    expect(normalizeDraftTurnSoundEnabled('enabled')).toBe(true);
+    expect(normalizeDraftTurnSoundEnabled('disabled')).toBe(false);
+    expect(normalizeDraftTurnSoundEnabled('unexpected', false)).toBe(false);
   });
 });

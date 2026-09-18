@@ -79,12 +79,13 @@ manager commits the pick.
 
 The Draft Room also shows the signed-in manager's exact number of picks until
 their next snake-order turn. The compact count remains in the mobile command
-bar. A manager may opt into a short browser-generated turn sound for the
-current Draft Room visit and adjust its volume from zero to 100 percent; the
-volume is remembered per manager on that browser. Listener refreshes and
-duplicate delivery do not replay the sound because only a new transition onto
-that manager's authoritative live pick is eligible. No audio asset, listener,
-write path, or Draft authority is added.
+bar. A short browser-generated turn sound is enabled by default, and the
+manager's explicit on/off choice and zero-to-100-percent volume are remembered
+per manager on that browser. The first Draft Room interaction primes mobile
+browser audio without playing an extra sound. Listener refreshes and duplicate
+delivery do not replay the sound because only a new transition onto that
+manager's authoritative live pick is eligible. No audio asset, Firestore
+listener, write path, or Draft authority is added.
 
 When that transition occurs on mobile, the Draft Room returns an idle manager
 to Available Players and scrolls the search control into view without stealing
@@ -129,7 +130,8 @@ The Draft Ranking V2 fixtures prove:
 - one manager's first goalie-unit pick hides only that manager's extra goalies
   by default while preserving explicit manual access.
 - the snake-order counter handles ordinary picks and round-turn double picks;
-- turn sound is opt-in, volume-bounded, and fires only for a new live turn.
+- turn sound defaults on, remembers an explicit preference, is volume-bounded,
+  and fires only for a new live turn.
 - an idle manager returns to Available Players on a new turn, while an active
   pick confirmation is preserved and a sticky recovery action remains available.
 - healthy injury and connection state add no passive notice, while degraded

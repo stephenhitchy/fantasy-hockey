@@ -137,3 +137,18 @@ export function normalizeDraftTurnSoundVolume(
 
   return Math.min(100, Math.max(0, Math.round(numericValue)));
 }
+
+export function normalizeDraftTurnSoundEnabled(
+  value: unknown,
+  fallback = true,
+): boolean {
+  if (value === 'enabled' || value === true) {
+    return true;
+  }
+
+  if (value === 'disabled' || value === false) {
+    return false;
+  }
+
+  return fallback;
+}

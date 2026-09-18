@@ -54,7 +54,22 @@
 .draft-turn-sound-button {
   gap: 7px;
   min-height: var(--rr-mobile-control-min-height);
+  border-color: color-mix(in srgb, var(--rr-danger) 62%, var(--border-strong));
+  background: color-mix(in srgb, var(--rr-danger) 12%, var(--surface-1));
+  color: color-mix(in srgb, var(--rr-danger) 72%, var(--text-primary));
+  font-weight: 900;
   white-space: nowrap;
+}
+
+.draft-turn-sound-button.sound-enabled {
+  border-color: color-mix(in srgb, var(--rr-success) 72%, var(--border-strong));
+  background: color-mix(in srgb, var(--rr-success) 18%, var(--surface-1));
+  color: color-mix(in srgb, var(--rr-success) 76%, var(--text-primary));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rr-success) 30%, transparent);
+}
+
+.draft-turn-sound-button:focus-visible {
+  outline-color: currentColor;
 }
 
 .draft-turn-sound-indicator {
@@ -69,6 +84,11 @@
   background: currentColor;
   box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
   opacity: 1;
+}
+
+.draft-turn-sound-button.sound-disabled .draft-turn-sound-indicator {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
 }
 
 .draft-turn-volume-control {

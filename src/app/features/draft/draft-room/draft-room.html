@@ -448,13 +448,14 @@
             type="button"
             class="draft-turn-sound-button rr-button rr-button--secondary"
             [class.sound-enabled]="draftTurnSoundEnabled()"
+            [class.sound-disabled]="!draftTurnSoundEnabled()"
             [attr.aria-pressed]="draftTurnSoundEnabled()"
             [attr.aria-label]="draftTurnSoundEnabled() ? 'Turn draft alert sound off' : 'Turn draft alert sound on'"
             [disabled]="draftTurnSoundUnavailable()"
             (click)="toggleDraftTurnSound()"
           >
             <span class="draft-turn-sound-indicator" aria-hidden="true"></span>
-            {{ draftTurnSoundButtonLabel() }}
+            <span>{{ draftTurnSoundButtonLabel() }}</span>
           </button>
 
           <label class="draft-turn-volume-control">
