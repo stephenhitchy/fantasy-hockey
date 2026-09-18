@@ -11,14 +11,14 @@
   box-shadow: var(--rr-shadow-card);
 }
 
-.nhl-scoreboard-heading {
+.nhl-panel-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
 }
 
-.nhl-scoreboard-eyebrow {
+.nhl-panel-eyebrow {
   display: block;
   margin-bottom: 5px;
   color: var(--text-muted);
@@ -35,14 +35,14 @@
   line-height: 1.05;
 }
 
-.nhl-scoreboard-heading p {
+.nhl-panel-heading p {
   margin: 7px 0 0;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.nhl-scoreboard-status {
+.nhl-panel-status {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -52,7 +52,7 @@
   font-weight: 850;
 }
 
-.nhl-scoreboard-refresh {
+.nhl-panel-refresh {
   min-height: 38px;
   padding: 7px 11px;
   border: 2px solid var(--border-strong);
@@ -61,13 +61,13 @@
   font-size: 11px;
 }
 
-.nhl-scoreboard-refresh:disabled {
+.nhl-panel-refresh:disabled {
   opacity: 0.55;
   cursor: wait;
 }
 
-.nhl-scoreboard-loading,
-.nhl-scoreboard-empty {
+.nhl-panel-loading,
+.nhl-panel-empty {
   display: flex;
   min-height: 92px;
   align-items: center;
@@ -80,7 +80,7 @@
   font-weight: 850;
 }
 
-.nhl-scoreboard-error {
+.nhl-panel-error {
   display: grid;
   gap: 4px;
   margin-top: 16px;
@@ -190,7 +190,7 @@
   text-align: right;
 }
 
-.nhl-scoreboard-count {
+.nhl-panel-count {
   margin: 9px 0 0;
   color: var(--text-muted);
   font-size: 10px;
@@ -212,11 +212,11 @@
     padding: 14px;
   }
 
-  .nhl-scoreboard-heading {
+  .nhl-panel-heading {
     display: grid;
   }
 
-  .nhl-scoreboard-status {
+  .nhl-panel-status {
     justify-content: space-between;
   }
 

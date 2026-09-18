@@ -185,9 +185,29 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(dashboardStyles, /\.league-card-top\s*\{[^}]*flex-direction:\s*column/s);
     assert.match(dashboardStyles, /-webkit-line-clamp:\s*2/);
     assert.match(dashboardStyles, /\.league-card-badges\s*\{[^}]*width:\s*100%/s);
+    assert.match(dashboardTemplate, /class="league-title-anchor"/);
+    assert.doesNotMatch(dashboardTemplate, /class="league-title-link"/);
     assert.doesNotMatch(
       dashboardStyles,
       /\.league-identity h3,\s*\.league-identity p\s*\{[^}]*white-space:\s*nowrap/s,
+    );
+  });
+
+  await suite.test('keeps NHL panel children out of the global scoreboard-panel selector', () => {
+    assert.match(template, /class="nhl-scoreboard rr-card"/);
+    assert.doesNotMatch(template, /class="[^"]*nhl-scoreboard-(?!title)[^"]*"/);
+    assert.match(template, /class="nhl-panel-heading"/);
+    assert.match(template, /class="nhl-panel-status"/);
+  });
+
+  await suite.test('collapses decorative manager-profile artwork on narrow screens', () => {
+    assert.match(
+      dashboardStyles,
+      /@media \(max-width: 640px\)[\s\S]*?\.mascot-rink,[\s\S]*?\.mascot-team-copy\s*\{[^}]*display:\s*none/s,
+    );
+    assert.match(
+      dashboardStyles,
+      /@media \(max-width: 640px\)[\s\S]*?\.favorite-team-logo-panel\s*\{[^}]*min-height:\s*0[^}]*height:\s*104px/s,
     );
   });
 });

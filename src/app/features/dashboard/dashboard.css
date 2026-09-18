@@ -751,19 +751,20 @@
 }
 
 /* Batch 8A: compact per-league command center. */
-.league-title-link {
+.league-title-anchor {
   display: block;
   width: fit-content;
   max-width: 100%;
+  padding-block: 2px;
   color: inherit;
   text-decoration: none;
 }
 
-.league-title-link:hover h3 {
+.league-title-anchor:hover h3 {
   color: var(--user-team-accent);
 }
 
-.league-title-link:focus-visible {
+.league-title-anchor:focus-visible {
   outline: 3px solid var(--user-team-accent);
   outline-offset: 4px;
 }
@@ -944,6 +945,14 @@
     padding: 14px;
   }
 
+  .league-identity {
+    gap: 8px;
+  }
+
+  .league-identity h3 {
+    line-height: 1.2;
+  }
+
   .league-command {
     gap: 10px;
     padding: 10px;
@@ -983,6 +992,23 @@
   .league-attention-chip {
     min-height: 32px;
     padding: 5px 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-mascot-card {
+    gap: 10px;
+  }
+
+  .favorite-team-logo-panel {
+    min-height: 0;
+    height: 104px;
+    padding: 8px;
+  }
+
+  .mascot-rink,
+  .mascot-team-copy {
+    display: none;
   }
 }
 
