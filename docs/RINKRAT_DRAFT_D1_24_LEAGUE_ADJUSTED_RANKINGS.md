@@ -108,7 +108,7 @@ The Draft Ranking V2 fixtures prove:
 Current inherited release verification:
 
 ```bash
-npm run verify:batchd1m
+npm run verify:batchd1ncb
 npm run build:all
 git diff --check
 npm run release:verify-clean-deploy-source
