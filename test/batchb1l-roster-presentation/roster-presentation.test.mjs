@@ -254,11 +254,16 @@ test('Draft turn awareness counts down and provides an adjustable opt-in sound',
   assert.match(awarenessSource, /getPicksUntilManagerTurn/);
   assert.match(awarenessSource, /zeroBasedRound % 2 === 0/);
   assert.match(awarenessSource, /shouldPlayDraftTurnAlert/);
+  assert.match(awarenessSource, /shouldAutoOpenAvailablePlayersForTurn/);
   assert.match(source, /effect\(\(\) => \{[\s\S]*shouldPlayDraftTurnAlert/);
+  assert.match(source, /shouldAutoOpenAvailablePlayersForTurn\([\s\S]*openAvailablePlayersForTurn\(false\)/);
+  assert.match(source, /returnToAvailablePlayers\(\)[\s\S]*openAvailablePlayersForTurn\(true\)/);
   assert.match(source, /AudioContext/);
   assert.match(source, /rinkrat:draft-turn-sound-volume/);
   assert.doesNotMatch(source, /listenTo.*Turn|new Audio\(/);
   assert.match(template, /compactDraftTurnDistanceLabel\(\)/);
+  assert.match(template, /aria-label="Switch to available players"[\s\S]*\[hidden\]="!shouldOfferAvailablePlayersReturn\(\)"[\s\S]*\[style\.display\]="shouldOfferAvailablePlayersReturn\(\) \? null : 'none'"/);
+  assert.match(template, /#playerSearchInput[\s\S]*type="search"/);
   assert.match(template, /type="range"[\s\S]*aria-label="Draft turn alert volume"/);
   assert.match(template, /\[attr\.aria-pressed\]="draftTurnSoundEnabled\(\)"/);
   assert.match(template, /role="status" aria-live="polite" aria-atomic="true"/);

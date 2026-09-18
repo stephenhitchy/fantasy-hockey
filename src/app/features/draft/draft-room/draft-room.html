@@ -377,6 +377,8 @@
           <button
             type="button"
             class="draft-mobile-command-action rr-button rr-button--secondary"
+            [hidden]="shouldOfferAvailablePlayersReturn()"
+            [style.display]="shouldOfferAvailablePlayersReturn() ? 'none' : null"
             (click)="toggleDraftClockPause()"
             [disabled]="clockActionInProgress() || !canUseLiveDraftActions()"
           >
@@ -389,6 +391,16 @@
             }}
           </button>
         }
+        <button
+          type="button"
+          class="draft-mobile-command-action rr-button rr-button--primary"
+          aria-label="Switch to available players"
+          [hidden]="!shouldOfferAvailablePlayersReturn()"
+          [style.display]="shouldOfferAvailablePlayersReturn() ? null : 'none'"
+          (click)="returnToAvailablePlayers()"
+        >
+          {{ 'Players' }}
+        </button>
       </section>
       }
 
@@ -593,6 +605,7 @@
 
           <div class="pool-controls rr-toolbar">
   <input
+    #playerSearchInput
     type="search"
     class="rr-field"
     placeholder="Search player or NHL team..."

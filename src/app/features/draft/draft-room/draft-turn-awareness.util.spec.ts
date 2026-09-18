@@ -6,6 +6,7 @@ import {
   getDraftTurnDistanceLabel,
   getPicksUntilManagerTurn,
   normalizeDraftTurnSoundVolume,
+  shouldAutoOpenAvailablePlayersForTurn,
   shouldPlayDraftTurnAlert,
 } from './draft-turn-awareness.util';
 
@@ -71,6 +72,21 @@ describe('Draft turn awareness', () => {
       previousStatus: 'live',
       currentDistance: 0,
       currentStatus: 'live',
+    })).toBe(false);
+  });
+
+  it('returns to available players only for a new idle manager turn', () => {
+    expect(shouldAutoOpenAvailablePlayersForTurn({
+      enteredManagerTurn: true,
+      pickSubmissionPhase: 'idle',
+    })).toBe(true);
+    expect(shouldAutoOpenAvailablePlayersForTurn({
+      enteredManagerTurn: false,
+      pickSubmissionPhase: 'idle',
+    })).toBe(false);
+    expect(shouldAutoOpenAvailablePlayersForTurn({
+      enteredManagerTurn: true,
+      pickSubmissionPhase: 'confirming',
     })).toBe(false);
   });
 

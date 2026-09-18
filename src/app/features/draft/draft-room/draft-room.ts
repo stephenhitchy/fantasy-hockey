@@ -143,6 +143,7 @@ import {
   getDraftTurnDistanceLabel,
   getPicksUntilManagerTurn,
   normalizeDraftTurnSoundVolume,
+  shouldAutoOpenAvailablePlayersForTurn,
   shouldPlayDraftTurnAlert,
   type DraftTurnAwarenessStatus,
 } from './draft-turn-awareness.util';
@@ -206,6 +207,9 @@ interface PendingPickConfirmation extends PendingDraftPickIdentity {
 export class DraftRoom implements OnDestroy {
   @ViewChild('draftTimelineScroller')
   private draftTimelineElement?: ElementRef<HTMLElement>;
+
+  @ViewChild('playerSearchInput')
+  private playerSearchInput?: ElementRef<HTMLInputElement>;
 
   leagueId = '';
   userId = '';
@@ -620,6 +624,14 @@ export class DraftRoom implements OnDestroy {
     () => `${this.draftTurnSoundVolume()}%`,
   );
 
+  readonly shouldOfferAvailablePlayersReturn = computed(
+    () =>
+      this.draft()?.status === 'live' &&
+      this.isMyTurn() &&
+      this.draft()?.clockStatus !== 'stopped' &&
+      this.mobilePanel() !== 'players',
+  );
+
   readonly myQueue = computed<DraftQueue>(() => this.getQueueForOwner(this.userId));
 
   readonly queueEntries = computed<DraftQueueEntryView[]>(() => {
@@ -1008,6 +1020,13 @@ export class DraftRoom implements OnDestroy {
       this.previousTurnStatus = currentStatus;
 
       if (shouldAlert) {
+        if (shouldAutoOpenAvailablePlayersForTurn({
+          enteredManagerTurn: shouldAlert,
+          pickSubmissionPhase: this.pickSubmissionPhase(),
+        })) {
+          this.openAvailablePlayersForTurn(false);
+        }
+
         void this.playDraftTurnSound();
       }
     });
@@ -1863,6 +1882,32 @@ export class DraftRoom implements OnDestroy {
 
   setMobilePanel(panel: DraftMobilePanel): void {
     this.mobilePanel.set(panel);
+  }
+
+  returnToAvailablePlayers(): void {
+    this.openAvailablePlayersForTurn(true);
+  }
+
+  private openAvailablePlayersForTurn(moveFocusToSearch: boolean): void {
+    this.mobilePanel.set('players');
+
+    if (typeof window === 'undefined' || window.innerWidth > 780) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const searchInput = this.playerSearchInput?.nativeElement;
+
+      if (!searchInput) {
+        return;
+      }
+
+      searchInput.scrollIntoView({ block: 'center', behavior: 'auto' });
+
+      if (moveFocusToSearch) {
+        searchInput.focus({ preventScroll: true });
+      }
+    });
   }
 
   scoutTeam(ownerId: string): void {

@@ -10,6 +10,11 @@ export interface DraftTurnAlertTransition {
   currentStatus: DraftTurnAwarenessStatus | null;
 }
 
+export interface DraftTurnPlayerReturnState {
+  enteredManagerTurn: boolean;
+  pickSubmissionPhase: 'idle' | 'submitting' | 'confirming';
+}
+
 export function getPicksUntilManagerTurn(
   draft: FantasyDraft | null,
   managerId: string,
@@ -104,6 +109,12 @@ export function shouldPlayDraftTurnAlert(input: DraftTurnAlertTransition): boole
     input.currentDistance === 0 &&
     (input.previousStatus !== 'live' || input.previousDistance !== 0)
   );
+}
+
+export function shouldAutoOpenAvailablePlayersForTurn(
+  input: DraftTurnPlayerReturnState,
+): boolean {
+  return input.enteredManagerTurn && input.pickSubmissionPhase === 'idle';
 }
 
 export function normalizeDraftTurnSoundVolume(

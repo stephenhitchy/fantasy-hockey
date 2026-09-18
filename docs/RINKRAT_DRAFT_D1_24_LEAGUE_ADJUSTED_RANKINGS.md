@@ -86,6 +86,13 @@ duplicate delivery do not replay the sound because only a new transition onto
 that manager's authoritative live pick is eligible. No audio asset, listener,
 write path, or Draft authority is added.
 
+When that transition occurs on mobile, the Draft Room returns an idle manager
+to Available Players and scrolls the search control into view without stealing
+keyboard focus. If the manager scouts a roster again while still on the clock,
+the sticky clock exposes a `Players` recovery action that returns to the pool
+and focuses search. An active pick submission or confirmation is never
+interrupted.
+
 ## Verification
 
 Focused verification:
@@ -117,6 +124,8 @@ The Draft Ranking V2 fixtures prove:
   by default while preserving explicit manual access.
 - the snake-order counter handles ordinary picks and round-turn double picks;
 - turn sound is opt-in, volume-bounded, and fires only for a new live turn.
+- an idle manager returns to Available Players on a new turn, while an active
+  pick confirmation is preserved and a sticky recovery action remains available.
 
 Current inherited release verification:
 
