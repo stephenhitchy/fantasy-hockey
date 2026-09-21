@@ -92,9 +92,11 @@ function makeGame(overrides = {}) {
 test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
   const {
     combineDashboardNhlTeamRosterCounts,
+    formatNhlGameDate,
     formatNhlGameStatus,
     formatNhlScoreboardHeading,
     getDashboardNhlRosterGamePointDisplay,
+    getDashboardNhlRosterEntryRoute,
     getNhlScoreboardRefreshDelay,
     selectDashboardNhlGames,
   } = await loadUtility();
@@ -200,6 +202,50 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     );
   });
 
+  await suite.test('keeps the same NHL player separate in each league and routes each row independently', () => {
+    const sharedPlayer = {
+      assetKey: 'skater-99',
+      assetName: 'Shared Player',
+      position: 'C',
+      rosterLocation: 'active',
+      scheduledGameIds: [22],
+      gameScores: { '22': 3.5 },
+    };
+    const [team] = combineDashboardNhlTeamRosterCounts([
+      {
+        leagueId: 'league-a',
+        leagueName: 'Alpha League',
+        ownerId: 'owner-1',
+        rosterCounts: [{
+          teamAbbreviation: 'VGK',
+          count: 1,
+          assets: [{ ...sharedPlayer, matchupCycleNumber: 2, matchupId: 'matchup-1' }],
+        }],
+      },
+      {
+        leagueId: 'league-b',
+        leagueName: 'Beta League',
+        ownerId: 'owner-1',
+        rosterCounts: [{
+          teamAbbreviation: 'VGK',
+          count: 1,
+          assets: [{ ...sharedPlayer, matchupCycleNumber: 4, matchupId: 'matchup-3' }],
+        }],
+      },
+    ]);
+
+    assert.equal(team.count, 2);
+    assert.deepEqual(team.entries.map((entry) => entry.leagueId), ['league-a', 'league-b']);
+    assert.deepEqual(
+      getDashboardNhlRosterEntryRoute(team.entries[0]),
+      ['/leagues', 'league-a', 'cycles', 2, 'matchups', 'matchup-1'],
+    );
+    assert.deepEqual(
+      getDashboardNhlRosterEntryRoute(team.entries[1]),
+      ['/leagues', 'league-b', 'cycles', 4, 'matchups', 'matchup-3'],
+    );
+  });
+
   await suite.test('orders live games first and then prioritizes the favorite team', () => {
     const games = [
       makeGame({ id: 1, awayTeam: { abbrev: 'ANA' }, homeTeam: { abbrev: 'LAK' } }),
@@ -252,6 +298,8 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     assert.equal(formatNhlScoreboardHeading('2026-10-09', now), "Yesterday's NHL Games");
     assert.equal(formatNhlScoreboardHeading('2026-10-11', now), "Tomorrow's NHL Games");
     assert.match(formatNhlScoreboardHeading('2026-10-12', now), /^NHL Games · /);
+    assert.match(formatNhlGameDate(makeGame()), /Oct 10/);
+    assert.equal(formatNhlGameDate(makeGame({ gameDate: 'not-a-date' })), 'Date unavailable');
   });
 
   await suite.test('distinguishes saved zero points from pending and non-counting roster spots', () => {
@@ -333,6 +381,8 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(component, /!this\.viewingToday\(\)/);
     assert.match(component, /strip\.scrollLeft = 0/);
     assert.match(template, /This NHL date could not update/);
+    assert.match(template, /<time \[attr\.datetime\]="game\.gameDate"/);
+    assert.match(template, /getGameDateLabel\(game\)/);
   });
 
   await suite.test('keeps live and favorite-team games prominent without showing every game card', () => {
@@ -357,11 +407,14 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(template, /<dialog/);
     assert.match(template, /autofocus/);
     assert.match(template, /entry\.leagueName/);
+    assert.match(template, /nhl-roster-dialog-league/);
     assert.match(template, /entry\.rosterLocation/);
     assert.match(template, /getRosterEntryPointLabel/);
     assert.match(template, /getRosterEntryRoute/);
+    assert.match(template, /getRosterEntryLinkLabel/);
     assert.match(component, /refreshDashboardNhlRosterGameContexts/);
-    assert.match(component, /'matchups'/);
+    assert.match(component, /getDashboardNhlRosterEntryRoute/);
+    assert.match(component, /entry\.assetName.*entry\.leagueName.*destination/s);
     assert.doesNotMatch(template, /'players', entry\.assetKey/);
   });
 

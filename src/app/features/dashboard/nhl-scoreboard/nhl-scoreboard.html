@@ -98,9 +98,12 @@
         >
           <div class="nhl-game-meta">
             <span [class.nhl-game-live-label]="isLive(game)">{{ getGameStatus(game) }}</span>
-            @if (getBroadcastLabel(game); as broadcast) {
-              <small>{{ broadcast }}</small>
-            }
+            <span class="nhl-game-meta-secondary">
+              <time [attr.datetime]="game.gameDate">{{ getGameDateLabel(game) }}</time>
+              @if (getBroadcastLabel(game); as broadcast) {
+                <small>{{ broadcast }}</small>
+              }
+            </span>
           </div>
 
           <div class="nhl-team-row">
@@ -217,12 +220,14 @@
           <a
             class="nhl-roster-dialog-entry"
             [routerLink]="getRosterEntryRoute(entry)"
+            [attr.aria-label]="getRosterEntryLinkLabel(entry)"
             (click)="closeRosterBreakdown(false)"
           >
             <span class="nhl-roster-dialog-icon pixel-icon icon-players" aria-hidden="true"></span>
             <span class="nhl-roster-dialog-copy">
               <strong>{{ entry.assetName }}</strong>
-              <small>{{ entry.leagueName }} · {{ entry.position }} · {{ getRosterLocationLabel(entry.rosterLocation) }}</small>
+              <small class="nhl-roster-dialog-league">{{ entry.leagueName }}</small>
+              <small>{{ entry.position }} · {{ getRosterLocationLabel(entry.rosterLocation) }}</small>
               <span
                 class="nhl-roster-dialog-points"
                 [class.nhl-roster-dialog-points--scored]="getRosterEntryPointTone(entry) === 'scored'"

@@ -21,9 +21,11 @@ import type {
   DashboardNhlTeamRosterPresence,
 } from '../../../core/league/dashboard-league-activity.models';
 import {
+  formatNhlGameDate,
   formatNhlGameStatus,
   formatNhlScoreboardHeading,
   getDashboardNhlRosterGamePointDisplay,
+  getDashboardNhlRosterEntryRoute,
   getNhlScoreboardRefreshDelay,
   isNhlScoreboardDateToday,
   isFavoriteTeamGame,
@@ -133,6 +135,10 @@ export class NhlScoreboard implements OnDestroy {
 
   getGameStatus(game: NhlScoreGame): string {
     return formatNhlGameStatus(game);
+  }
+
+  getGameDateLabel(game: NhlScoreGame): string {
+    return formatNhlGameDate(game);
   }
 
   isLive(game: NhlScoreGame): boolean {
@@ -282,18 +288,14 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   getRosterEntryRoute(entry: DashboardNhlRosterEntry): Array<string | number> {
-    if (entry.matchupCycleNumber !== null && entry.matchupId) {
-      return [
-        '/leagues',
-        entry.leagueId,
-        'cycles',
-        entry.matchupCycleNumber,
-        'matchups',
-        entry.matchupId,
-      ];
-    }
+    return getDashboardNhlRosterEntryRoute(entry);
+  }
 
-    return ['/leagues', entry.leagueId];
+  getRosterEntryLinkLabel(entry: DashboardNhlRosterEntry): string {
+    const destination = entry.matchupCycleNumber !== null && entry.matchupId
+      ? 'matchup'
+      : 'league';
+    return `Open ${entry.assetName} in ${entry.leagueName} ${destination}`;
   }
 
   getRosterEntryPointLabel(entry: DashboardNhlRosterEntry): string {

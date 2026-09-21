@@ -156,7 +156,7 @@
 
 .nhl-game-meta {
   display: flex;
-  min-height: 24px;
+  min-height: 30px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -166,6 +166,22 @@
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.nhl-game-meta-secondary {
+  display: grid;
+  min-width: 0;
+  justify-items: end;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.nhl-game-meta time {
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .nhl-game-meta small {
@@ -442,6 +458,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nhl-roster-dialog-copy .nhl-roster-dialog-league {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
+  white-space: normal;
 }
 
 .nhl-roster-dialog-copy strong {

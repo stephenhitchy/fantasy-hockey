@@ -1,5 +1,6 @@
 import type { NhlScoreGame } from '../../../core/nhl/nhl-api.service';
 import type {
+  DashboardNhlRosterEntry,
   DashboardNhlRosterLocation,
   DashboardNhlTeamRosterCount,
   DashboardNhlTeamRosterPresence,
@@ -57,6 +58,23 @@ export function combineDashboardNhlTeamRosterCounts(
         first.assetName.localeCompare(second.assetName),
       ),
     }));
+}
+
+export function getDashboardNhlRosterEntryRoute(
+  entry: DashboardNhlRosterEntry,
+): Array<string | number> {
+  if (entry.matchupCycleNumber !== null && entry.matchupId) {
+    return [
+      '/leagues',
+      entry.leagueId,
+      'cycles',
+      entry.matchupCycleNumber,
+      'matchups',
+      entry.matchupId,
+    ];
+  }
+
+  return ['/leagues', entry.leagueId];
 }
 
 function parseScoreboardDate(value: string): Date | null {
@@ -222,6 +240,20 @@ export function formatNhlScoreboardHeading(
   }).format(date);
 
   return `NHL Games · ${formatted}`;
+}
+
+export function formatNhlGameDate(game: NhlScoreGame): string {
+  const date = parseScoreboardDate(game.gameDate);
+
+  if (!date) {
+    return 'Date unavailable';
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
 }
 
 export type DashboardNhlRosterGamePointTone = 'scored' | 'pending' | 'not-counting';

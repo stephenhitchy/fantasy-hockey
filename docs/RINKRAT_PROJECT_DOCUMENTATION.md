@@ -10130,11 +10130,12 @@ Give league names enough room to remain recognizable and add a lightweight NHL-w
 - The scoreboard uses RinkRat's existing server-side NHL proxy and the NHL web score feeds at `/v1/score/now` and the strictly validated `/v1/score/YYYY-MM-DD`; no browser request is sent directly to the upstream service.
 - Previous, Today, and Next controls let managers move between past and future NHL dates without reloading the Dashboard. Only the current date auto-refreshes.
 - Live games appear first, followed by the user's favorite-team game, then the remaining games by puck-drop time.
-- The panel shows up to six games in a horizontally scrollable strip, including team logos, records, scores, game state, time/period, and available broadcast label.
+- The panel shows up to six games in a horizontally scrollable strip, including the explicit game date, team logos, records, scores, game state, time/period, and available broadcast label.
 - Each NHL team row can show a compact roster badge with the manager's total roster spots for that club across every league. Active, bench, and IR skaters count, and each team-goalie unit counts once.
 - Each roster badge is an interactive control. It opens a keyboard-safe desktop dialog or mobile bottom sheet listing the exact player or goalie unit, league, position, active/bench/IR location, and the authoritative saved fantasy points for that exact NHL game.
 - A legitimate saved zero displays as `0.0 fantasy points`; missing live or final evidence displays a visible syncing state instead of silently substituting zero. Bench and IR assets are explicitly labeled **Not scoring in this matchup**.
 - Each player/unit row links to the exact league head-to-head for its active matchup, with League HQ as the safe fallback before a matchup exists.
+- If the same NHL player is rostered in multiple leagues, the breakdown keeps one independently labeled row per league; each row uses that league's own saved game points and exact Head-to-Head route.
 - Opening the breakdown performs at most one bounded team-window read per represented league/cycle to refresh the point value. Partial failures retain the last saved value with a visible retry message. No Firestore listener or competitive write is added.
 - The open area of every Dashboard league card now links to League HQ. The state-specific primary action and **My Team** remain independent controls above that card-wide link.
 - Dashboard cache version 9 prevents earlier count-only or player-detail-only roster summaries from mixing with matchup and per-game score context.
@@ -10172,12 +10173,13 @@ npm run verify:batch8a1
 8. Confirm a temporarily unavailable NHL feed leaves all fantasy tools usable.
 9. Confirm roster badges combine the same NHL team across leagues and include goalie units.
 10. Open a roster badge with touch, mouse, and keyboard. Confirm the dialog identifies each asset's league and roster location, Escape closes it, and focus returns to the badge.
-11. Follow one player link and confirm it opens the correct league player detail.
+11. Follow one player/unit row and confirm it opens the correct league Head-to-Head, or League HQ when no matchup exists yet.
 12. Tap the non-button area of a league card and confirm it opens League HQ. Confirm the primary action and **My Team** still open their existing destinations.
 13. Move to the previous and next NHL date, return with Today, and confirm only the NHL panel changes.
 14. Open a roster badge for a live, final, and future game. Confirm saved zero remains `0.0`, unavailable evidence says it is syncing, and bench/IR entries say they are not scoring.
-15. Follow a player/unit row and confirm it opens that league's exact Head-to-Head route.
+15. Confirm every NHL game card displays its date, then follow a player/unit row and confirm it opens that league's exact Head-to-Head route.
 16. In Game Center, confirm the season period remains `Matchup N` while the individual contest is labeled `Head-to-Head N` in the page heading, navigation, and card.
+17. Roster the same NHL player in two leagues, open the team badge, and confirm two league-labeled rows appear and each opens its own Head-to-Head.
 
 ### Deployment
 
