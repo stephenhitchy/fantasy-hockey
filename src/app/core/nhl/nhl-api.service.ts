@@ -253,6 +253,41 @@ export async function getNhlScoreNow(
   );
 }
 
+function isValidNhlScoreDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+export async function getNhlScoreForDate(
+  date: string,
+  forceRefresh: boolean = false
+): Promise<NhlScoreNowResponse> {
+  if (!isValidNhlScoreDate(date)) {
+    throw new Error('The NHL scoreboard date is invalid.');
+  }
+
+  return getCachedApiJson<NhlScoreNowResponse>(
+    `${NHL_API_BASE_URL}/score/${date}`,
+    NHL_SCOREBOARD_CACHE_MILLISECONDS,
+    'NHL scoreboard request failed',
+    forceRefresh
+  );
+}
+
 export interface NhlPlayerGameLogEntry {
   gameId: number;
   teamAbbrev: string;
@@ -1152,4 +1187,3 @@ export async function getGoalieGameSummaryStats(
     cayenneExp: `seasonId=${season} and gameTypeId=2`
   });
 }
-

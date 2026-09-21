@@ -203,6 +203,21 @@ test('NHL proxy accepts only exact routes and bounded canonical query parameters
   const queryOnSchedule = resolveNhlProxyRequest('/v1/club-schedule-season/vgk/20252026?extra=1');
   assert.equal(isNhlProxyResolutionFailure(queryOnSchedule), true);
 
+  const datedScoreboard = resolveNhlProxyRequest('/v1/score/2026-10-10');
+  assert.equal(isNhlProxyResolutionFailure(datedScoreboard), false);
+  if (!isNhlProxyResolutionFailure(datedScoreboard)) {
+    assert.equal(datedScoreboard.routeClass, 'scoreboard');
+    assert.equal(datedScoreboard.targetUrl, 'https://api-web.nhle.com/v1/score/2026-10-10');
+  }
+
+  for (const invalidScoreboard of [
+    '/v1/score/2026-02-30',
+    '/v1/score/1999-12-31',
+    '/v1/score/2026-10-10?extra=1',
+  ]) {
+    assert.equal(isNhlProxyResolutionFailure(resolveNhlProxyRequest(invalidScoreboard)), true);
+  }
+
   const unknownRoute = resolveNhlProxyRequest('/v1/arbitrary/fetch');
   assert.equal(isNhlProxyResolutionFailure(unknownRoute), true);
   if (isNhlProxyResolutionFailure(unknownRoute)) {

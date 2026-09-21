@@ -38,6 +38,31 @@ function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function isValidScoreboardCachePath(path: string): boolean {
+  if (path === '/v1/score/now') {
+    return true;
+  }
+
+  const match = /^\/v1\/score\/(\d{4})-(\d{2})-(\d{2})$/.exec(path);
+
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    year >= 2000 &&
+    year <= 2100 &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 export function classifyNhlSharedCacheRoute(
   url: URL,
 ): NhlSharedCacheRouteClass | null {
@@ -70,7 +95,7 @@ export function classifyNhlSharedCacheRoute(
     return 'roster';
   }
 
-  if (path === '/v1/score/now') {
+  if (isValidScoreboardCachePath(path)) {
     return 'scoreboard';
   }
 

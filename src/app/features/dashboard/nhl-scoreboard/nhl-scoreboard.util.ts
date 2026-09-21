@@ -1,5 +1,6 @@
 import type { NhlScoreGame } from '../../../core/nhl/nhl-api.service';
 import type {
+  DashboardNhlRosterLocation,
   DashboardNhlTeamRosterCount,
   DashboardNhlTeamRosterPresence,
 } from '../../../core/league/dashboard-league-activity.models';
@@ -15,6 +16,7 @@ export function combineDashboardNhlTeamRosterCounts(
   groups: readonly {
     leagueId: string;
     leagueName: string;
+    ownerId: string;
     rosterCounts: readonly DashboardNhlTeamRosterCount[];
   }[],
 ): DashboardNhlTeamRosterPresence[] {
@@ -36,6 +38,7 @@ export function combineDashboardNhlTeamRosterCounts(
           ...asset,
           leagueId: group.leagueId,
           leagueName: group.leagueName,
+          ownerId: group.ownerId,
         });
       }
 
@@ -79,6 +82,13 @@ function getLocalDateKey(value: Date): string {
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+export function isNhlScoreboardDateToday(
+  focusedDate: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  return Boolean(focusedDate && focusedDate === getLocalDateKey(now));
 }
 
 function getOrdinalPeriod(period: number): string {
@@ -180,7 +190,9 @@ export function formatNhlScoreboardHeading(
     return 'NHL Scoreboard';
   }
 
-  if (focusedDate === getLocalDateKey(now)) {
+  const today = getLocalDateKey(now);
+
+  if (focusedDate === today) {
     return "Today's NHL Games";
   }
 
@@ -190,12 +202,76 @@ export function formatNhlScoreboardHeading(
     return 'NHL Scoreboard';
   }
 
+  const todayDate = parseScoreboardDate(today);
+  const dayDifference = todayDate
+    ? Math.round((date.getTime() - todayDate.getTime()) / (24 * 60 * 60 * 1000))
+    : 0;
+
+  if (dayDifference === -1) {
+    return "Yesterday's NHL Games";
+  }
+
+  if (dayDifference === 1) {
+    return "Tomorrow's NHL Games";
+  }
+
   const formatted = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
   }).format(date);
 
-  return `Next NHL Games · ${formatted}`;
+  return `NHL Games · ${formatted}`;
+}
+
+export type DashboardNhlRosterGamePointTone = 'scored' | 'pending' | 'not-counting';
+
+export interface DashboardNhlRosterGamePointDisplay {
+  label: string;
+  tone: DashboardNhlRosterGamePointTone;
+}
+
+export function getDashboardNhlRosterGamePointDisplay(input: {
+  rosterLocation: DashboardNhlRosterLocation;
+  gameId: number;
+  gameState: string;
+  scheduledGameIds: readonly number[];
+  gameScores: Readonly<Record<string, number>>;
+}): DashboardNhlRosterGamePointDisplay {
+  if (input.rosterLocation === 'bench') {
+    return { label: 'Not scoring in this matchup', tone: 'not-counting' };
+  }
+
+  if (input.rosterLocation === 'ir') {
+    return { label: 'Not scoring in this matchup', tone: 'not-counting' };
+  }
+
+  const gameKey = String(input.gameId);
+  const hasSavedScore = Object.prototype.hasOwnProperty.call(input.gameScores, gameKey);
+  const savedScore = input.gameScores[gameKey];
+
+  if (hasSavedScore && typeof savedScore === 'number' && Number.isFinite(savedScore)) {
+    return {
+      label: `${savedScore.toFixed(1)} fantasy points`,
+      tone: 'scored',
+    };
+  }
+
+  if (!input.scheduledGameIds.includes(input.gameId)) {
+    return { label: 'Not counting in this matchup', tone: 'not-counting' };
+  }
+
+  const gameState = input.gameState.trim().toUpperCase();
+
+  if (LIVE_GAME_STATES.has(gameState)) {
+    return { label: 'Fantasy points syncing', tone: 'pending' };
+  }
+
+  if (FINAL_GAME_STATES.has(gameState)) {
+    return { label: 'Final score still syncing', tone: 'pending' };
+  }
+
+  return { label: 'Scheduled · points pending', tone: 'pending' };
 }
 
 export function formatNhlGameStatus(

@@ -219,6 +219,10 @@ test('Batch 8A dashboard command center behavior', async (suite) => {
           assetName: 'Chicago Center',
           position: 'C',
           rosterLocation: 'ir',
+          matchupCycleNumber: null,
+          matchupId: null,
+          scheduledGameIds: [],
+          gameScores: {},
         }],
       },
       {
@@ -230,22 +234,84 @@ test('Batch 8A dashboard command center behavior', async (suite) => {
             assetName: 'Vegas Golden Knights Goalie Unit',
             position: 'G',
             rosterLocation: 'active',
+            matchupCycleNumber: null,
+            matchupId: null,
+            scheduledGameIds: [],
+            gameScores: {},
           },
           {
             assetKey: 'skater-1',
             assetName: 'Vegas Wing',
             position: 'LW',
             rosterLocation: 'active',
+            matchupCycleNumber: null,
+            matchupId: null,
+            scheduledGameIds: [],
+            gameScores: {},
           },
           {
             assetKey: 'skater-2',
             assetName: 'Vegas Defender',
             position: 'D',
             rosterLocation: 'bench',
+            matchupCycleNumber: null,
+            matchupId: null,
+            scheduledGameIds: [],
+            gameScores: {},
           },
         ],
       },
     ]);
+  });
+
+  await suite.test('carries exact saved game scores and matchup identity for active roster assets', () => {
+    const activity = buildDashboardLeagueActivity(
+      makeBaseInput({
+        draft: makeDraft('complete'),
+        matchup: {
+          id: 'matchup-3',
+          cycleNumber: 2,
+          teamAOwnerId: 'owner-a',
+          teamBOwnerId: 'owner-b',
+          teamAScore: 0,
+          teamBScore: 0,
+          status: 'active',
+        },
+        roster: {
+          activeSlots: [{
+            asset: {
+              assetType: 'skater',
+              assetKey: 'skater-44',
+              position: 'RW',
+              player: { id: 44, fullName: 'Saved Zero Wing', nhlTeamAbbreviation: 'SEA' },
+            },
+          }],
+          benchSlots: [],
+          irSlots: [],
+        },
+        myWindows: {
+          ownerId: 'owner-a',
+          windows: [{
+            assetKey: 'skater-44',
+            scheduledGameIds: [2026020001],
+            gameScores: { '2026020001': 0 },
+            gamesPlayed: 1,
+            gamesLeft: 5,
+          }],
+        },
+      }),
+    );
+
+    assert.deepEqual(activity.nhlTeamRosterCounts[0].assets[0], {
+      assetKey: 'skater-44',
+      assetName: 'Saved Zero Wing',
+      position: 'RW',
+      rosterLocation: 'active',
+      matchupCycleNumber: 2,
+      matchupId: 'matchup-3',
+      scheduledGameIds: [2026020001],
+      gameScores: { '2026020001': 0 },
+    });
   });
 
   await suite.test('uses the latest completed period as a useful fallback', () => {
@@ -290,9 +356,16 @@ test('Batch 8A source contracts', async (suite) => {
   });
 
   await suite.test('passes aggregated roster presence to the NHL scoreboard and invalidates old cache data', () => {
-    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 8/);
+    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 9/);
     assert.match(dashboard, /combineDashboardNhlTeamRosterCounts/);
     assert.match(template, /\[rosteredTeamCounts\]="nhlTeamRosterCounts\(\)"/);
+  });
+
+  await suite.test('refreshes game points with bounded reads and no added listener', () => {
+    assert.match(service, /refreshDashboardNhlRosterGameContexts/);
+    assert.match(service, /getTeamWindows/);
+    assert.match(service, /Promise\.all/);
+    assert.doesNotMatch(service, /onSnapshot/);
   });
 
   await suite.test('makes the league-card surface open League HQ without covering its content or direct actions', async () => {

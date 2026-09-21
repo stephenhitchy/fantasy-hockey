@@ -42,6 +42,7 @@ test('only approved public NHL and ESPN data routes are eligible for shared obse
     ['https://api-web.nhle.com/v1/player/8478402/game-log/20262027/2', 'player-log'],
     ['https://api-web.nhle.com/v1/roster/vgk/current', 'roster'],
     ['https://api-web.nhle.com/v1/score/now', 'scoreboard'],
+    ['https://api-web.nhle.com/v1/score/2026-10-10', 'scoreboard'],
     ['https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries', 'injuries'],
   ]);
 
@@ -50,6 +51,7 @@ test('only approved public NHL and ESPN data routes are eligible for shared obse
   }
 
   assert.equal(getNhlSharedCacheDescriptor('https://evil.example/v1/score/now'), null);
+  assert.equal(getNhlSharedCacheDescriptor('https://api-web.nhle.com/v1/score/2026-02-30'), null);
   assert.equal(getNhlSharedCacheDescriptor('https://api-web.nhle.com/v1/arbitrary'), null);
   assert.equal(normalizeNhlSharedCacheUrl('not a URL'), null);
 });

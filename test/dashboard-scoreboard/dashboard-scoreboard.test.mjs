@@ -33,6 +33,18 @@ const nhlServicePath = join(
   'src/app/core/nhl/nhl-api.service.ts',
 );
 const functionsPath = join(projectRoot, 'functions/src/index.ts');
+const matchupSourcePath = join(
+  projectRoot,
+  'src/app/features/cycles/cycle-one/cycle-one.ts',
+);
+const matchupToolbarPath = join(
+  projectRoot,
+  'src/app/features/cycles/cycle-one/components/cycle-matchup-toolbar/cycle-matchup-toolbar.html',
+);
+const matchupCardPath = join(
+  projectRoot,
+  'src/app/features/cycles/cycle-one/components/cycle-matchup-card/cycle-matchup-card.html',
+);
 
 async function loadTypescript() {
   const localRequire = createRequire(join(projectRoot, 'package.json'));
@@ -82,6 +94,7 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     combineDashboardNhlTeamRosterCounts,
     formatNhlGameStatus,
     formatNhlScoreboardHeading,
+    getDashboardNhlRosterGamePointDisplay,
     getNhlScoreboardRefreshDelay,
     selectDashboardNhlGames,
   } = await loadUtility();
@@ -92,28 +105,30 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
         {
           leagueId: 'league-b',
           leagueName: 'Second League',
+          ownerId: 'owner-1',
           rosterCounts: [{
             teamAbbreviation: 'VGK',
             count: 2,
             assets: [
-              { assetKey: 'skater-2', assetName: 'Second Wing', position: 'RW', rosterLocation: 'bench' },
-              { assetKey: 'skater-1', assetName: 'First Wing', position: 'LW', rosterLocation: 'active' },
+              { assetKey: 'skater-2', assetName: 'Second Wing', position: 'RW', rosterLocation: 'bench', matchupCycleNumber: 2, matchupId: 'matchup-2', scheduledGameIds: [], gameScores: {} },
+              { assetKey: 'skater-1', assetName: 'First Wing', position: 'LW', rosterLocation: 'active', matchupCycleNumber: 2, matchupId: 'matchup-2', scheduledGameIds: [22], gameScores: { '22': 4.5 } },
             ],
           }],
         },
         {
           leagueId: 'league-a',
           leagueName: 'First League',
+          ownerId: 'owner-1',
           rosterCounts: [
             {
               teamAbbreviation: 'vgk',
               count: 1,
-              assets: [{ assetKey: 'goalie-unit-VGK', assetName: 'Vegas Goalie Unit', position: 'G', rosterLocation: 'active' }],
+              assets: [{ assetKey: 'goalie-unit-VGK', assetName: 'Vegas Goalie Unit', position: 'G', rosterLocation: 'active', matchupCycleNumber: 1, matchupId: 'matchup-1', scheduledGameIds: [22], gameScores: { '22': 0 } }],
             },
             {
               teamAbbreviation: 'CHI',
               count: 1,
-              assets: [{ assetKey: 'skater-3', assetName: 'Chicago Center', position: 'C', rosterLocation: 'ir' }],
+              assets: [{ assetKey: 'skater-3', assetName: 'Chicago Center', position: 'C', rosterLocation: 'ir', matchupCycleNumber: 1, matchupId: 'matchup-1', scheduledGameIds: [], gameScores: {} }],
             },
           ],
         },
@@ -127,8 +142,13 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
             assetName: 'Chicago Center',
             position: 'C',
             rosterLocation: 'ir',
+            matchupCycleNumber: 1,
+            matchupId: 'matchup-1',
+            scheduledGameIds: [],
+            gameScores: {},
             leagueId: 'league-a',
             leagueName: 'First League',
+            ownerId: 'owner-1',
           }],
         },
         {
@@ -140,24 +160,39 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
               assetName: 'Vegas Goalie Unit',
               position: 'G',
               rosterLocation: 'active',
+              matchupCycleNumber: 1,
+              matchupId: 'matchup-1',
+              scheduledGameIds: [22],
+              gameScores: { '22': 0 },
               leagueId: 'league-a',
               leagueName: 'First League',
+              ownerId: 'owner-1',
             },
             {
               assetKey: 'skater-1',
               assetName: 'First Wing',
               position: 'LW',
               rosterLocation: 'active',
+              matchupCycleNumber: 2,
+              matchupId: 'matchup-2',
+              scheduledGameIds: [22],
+              gameScores: { '22': 4.5 },
               leagueId: 'league-b',
               leagueName: 'Second League',
+              ownerId: 'owner-1',
             },
             {
               assetKey: 'skater-2',
               assetName: 'Second Wing',
               position: 'RW',
               rosterLocation: 'bench',
+              matchupCycleNumber: 2,
+              matchupId: 'matchup-2',
+              scheduledGameIds: [],
+              gameScores: {},
               leagueId: 'league-b',
               leagueName: 'Second League',
+              ownerId: 'owner-1',
             },
           ],
         },
@@ -211,10 +246,38 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     );
   });
 
-  await suite.test('labels today separately from the next available NHL slate', () => {
+  await suite.test('labels today, adjacent dates, and other NHL slates clearly', () => {
     const now = new Date(2026, 9, 10, 12, 0, 0);
     assert.equal(formatNhlScoreboardHeading('2026-10-10', now), "Today's NHL Games");
-    assert.match(formatNhlScoreboardHeading('2026-10-12', now), /^Next NHL Games · /);
+    assert.equal(formatNhlScoreboardHeading('2026-10-09', now), "Yesterday's NHL Games");
+    assert.equal(formatNhlScoreboardHeading('2026-10-11', now), "Tomorrow's NHL Games");
+    assert.match(formatNhlScoreboardHeading('2026-10-12', now), /^NHL Games · /);
+  });
+
+  await suite.test('distinguishes saved zero points from pending and non-counting roster spots', () => {
+    assert.deepEqual(getDashboardNhlRosterGamePointDisplay({
+      rosterLocation: 'active',
+      gameId: 22,
+      gameState: 'LIVE',
+      scheduledGameIds: [22],
+      gameScores: { '22': 0 },
+    }), { label: '0.0 fantasy points', tone: 'scored' });
+
+    assert.deepEqual(getDashboardNhlRosterGamePointDisplay({
+      rosterLocation: 'active',
+      gameId: 22,
+      gameState: 'LIVE',
+      scheduledGameIds: [22],
+      gameScores: {},
+    }), { label: 'Fantasy points syncing', tone: 'pending' });
+
+    assert.deepEqual(getDashboardNhlRosterGamePointDisplay({
+      rosterLocation: 'bench',
+      gameId: 22,
+      gameState: 'LIVE',
+      scheduledGameIds: [],
+      gameScores: {},
+    }), { label: 'Not scoring in this matchup', tone: 'not-counting' });
   });
 
   await suite.test('uses a faster refresh only while at least one game is live', () => {
@@ -232,6 +295,9 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     nhlService,
     functions,
     nhlProxySecurity,
+    matchupSource,
+    matchupToolbar,
+    matchupCard,
   ] = await Promise.all([
     readFile(componentPath, 'utf8'),
     readFile(templatePath, 'utf8'),
@@ -240,18 +306,33 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     readFile(nhlServicePath, 'utf8'),
     readFile(functionsPath, 'utf8'),
     readFile(new URL('../../functions/src/shared/security/nhl-proxy-security.util.ts', import.meta.url), 'utf8'),
+    readFile(matchupSourcePath, 'utf8'),
+    readFile(matchupToolbarPath, 'utf8'),
+    readFile(matchupCardPath, 'utf8'),
   ]);
 
   await suite.test('loads the NHL feed independently from fantasy league data', () => {
     assert.match(dashboardTemplate, /<app-nhl-scoreboard/);
     assert.match(component, /getNhlScoreNow/);
-    assert.doesNotMatch(component, /Firestore|LeagueSummary|matchup/i);
+    assert.doesNotMatch(component, /onSnapshot|LeagueSummary/);
   });
 
   await suite.test('uses the existing protected NHL proxy with a short live-score cache', () => {
     assert.match(nhlService, /`\$\{NHL_API_BASE_URL\}\/score\/now`/);
-    assert.match(nhlProxySecurity, /path === '\/v1\/score\/now'/);
+    assert.match(nhlService, /`\$\{NHL_API_BASE_URL\}\/score\/\$\{date\}`/);
+    assert.match(nhlProxySecurity, /isValidScoreboardPath/);
     assert.match(functions, /max-age=15, s-maxage=20/);
+  });
+
+  await suite.test('provides bounded previous, today, and next date navigation', () => {
+    assert.match(template, /aria-label="NHL scoreboard dates"/);
+    assert.match(template, /openPreviousScoreDate/);
+    assert.match(template, /openTodayScoreDate/);
+    assert.match(template, /openNextScoreDate/);
+    assert.match(component, /getNhlScoreForDate/);
+    assert.match(component, /!this\.viewingToday\(\)/);
+    assert.match(component, /strip\.scrollLeft = 0/);
+    assert.match(template, /This NHL date could not update/);
   });
 
   await suite.test('keeps live and favorite-team games prominent without showing every game card', () => {
@@ -266,10 +347,10 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(component, /getRosteredTeamCountLabel/);
     assert.match(template, /class="nhl-roster-presence"/);
     assert.match(template, /icon-players/);
-    assert.match(template, /including goalie units/);
+    assert.match(template, /players\/units/);
   });
 
-  await suite.test('opens an accessible roster breakdown with direct player links', () => {
+  await suite.test('opens an accessible roster breakdown with exact-game points and matchup links', () => {
     assert.match(component, /selectedRosterPresence/);
     assert.match(component, /showModal\(\)/);
     assert.match(component, /rosterTrigger\?\.focus\(\)/);
@@ -277,7 +358,20 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(template, /autofocus/);
     assert.match(template, /entry\.leagueName/);
     assert.match(template, /entry\.rosterLocation/);
-    assert.match(template, /'players', entry\.assetKey/);
+    assert.match(template, /getRosterEntryPointLabel/);
+    assert.match(template, /getRosterEntryRoute/);
+    assert.match(component, /refreshDashboardNhlRosterGameContexts/);
+    assert.match(component, /'matchups'/);
+    assert.doesNotMatch(template, /'players', entry\.assetKey/);
+  });
+
+  await suite.test('calls individual league contests head-to-heads instead of repeating matchup', () => {
+    assert.match(matchupSource, /Head-to-Head/);
+    assert.match(matchupSource, /getDetailedMatchupHeading/);
+    assert.match(matchupToolbar, /getHeadToHeadLabel/);
+    assert.match(matchupToolbar, /Head-to-head navigation/);
+    assert.match(matchupCard, /getHeadToHeadLabel/);
+    assert.doesNotMatch(matchupCard, /\{\{ matchup\.id \}\}/);
   });
 
   await suite.test('gives league names the full card width and up to two readable lines', () => {

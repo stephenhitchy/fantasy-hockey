@@ -296,6 +296,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/security/firestore-document-id-policies.ts',
 
         'src/shared/security/nhl-proxy-security.util.ts',
+        // Dashboard scoreboard date browsing reuses the bounded NHL proxy cache.
+        'src/shared/core/nhl/nhl-shared-cache.util.ts',
         // S3E adds isolated monitor-only App Check readiness aggregation.
         'src/shared/security/app-check-enforcement-readiness.util.ts',
         // S3F adds guarded exact-league selected-callable App Check canary controls.
@@ -364,6 +366,6 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '7f9d6905ecafe9122f320def396bb66f2ea67467985575fe545bd63ea4b975b5',
+    '1bc33d5b7537e46bd0c863d03bad5fa4a8e83d2c73f01c9cc84dd3b42646db27',
   );
 });

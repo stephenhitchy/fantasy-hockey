@@ -10,16 +10,22 @@ import {
 import { RouterLink } from '@angular/router';
 import {
   NhlScoreGame,
+  getNhlScoreForDate,
   getNhlScoreNow,
 } from '../../../core/nhl/nhl-api.service';
+import { refreshDashboardNhlRosterGameContexts } from '../../../core/league/dashboard-league-activity.service';
 import type {
+  DashboardNhlRosterEntry,
+  DashboardNhlRosterGameContext,
   DashboardNhlRosterLocation,
   DashboardNhlTeamRosterPresence,
 } from '../../../core/league/dashboard-league-activity.models';
 import {
   formatNhlGameStatus,
   formatNhlScoreboardHeading,
+  getDashboardNhlRosterGamePointDisplay,
   getNhlScoreboardRefreshDelay,
+  isNhlScoreboardDateToday,
   isFavoriteTeamGame,
   isNhlScoreGameFinal,
   isNhlScoreGameLive,
@@ -38,12 +44,20 @@ export class NhlScoreboard implements OnDestroy {
 
   readonly games = signal<NhlScoreGame[]>([]);
   readonly focusedDate = signal('');
+  readonly previousDate = signal('');
+  readonly nextDate = signal('');
+  readonly requestedDate = signal<string | null>(null);
   readonly loading = signal(true);
   readonly refreshing = signal(false);
   readonly errorMessage = signal('');
   readonly lastUpdatedAt = signal<Date | null>(null);
   readonly selectedRosterTeam = signal('');
+  readonly selectedRosterGame = signal<NhlScoreGame | null>(null);
+  readonly rosterGameContexts = signal<DashboardNhlRosterGameContext[]>([]);
+  readonly rosterPointsLoading = signal(false);
+  readonly rosterPointsError = signal('');
   readonly rosterDialog = viewChild<ElementRef<HTMLDialogElement>>('rosterDialog');
+  readonly gameStrip = viewChild<ElementRef<HTMLDivElement>>('gameStrip');
 
   readonly visibleGames = computed(() =>
     selectDashboardNhlGames(this.games(), this.favoriteTeamAbbreviation()),
@@ -51,6 +65,10 @@ export class NhlScoreboard implements OnDestroy {
 
   readonly heading = computed(() =>
     formatNhlScoreboardHeading(this.focusedDate()),
+  );
+
+  readonly viewingToday = computed(() =>
+    isNhlScoreboardDateToday(this.focusedDate()),
   );
 
   readonly hasLiveGames = computed(() =>
@@ -77,6 +95,7 @@ export class NhlScoreboard implements OnDestroy {
 
   private refreshTimer: number | null = null;
   private requestGeneration = 0;
+  private rosterRefreshGeneration = 0;
   private rosterTrigger: HTMLElement | null = null;
   private restoreRosterTriggerFocus = true;
 
@@ -86,6 +105,7 @@ export class NhlScoreboard implements OnDestroy {
 
   ngOnDestroy(): void {
     this.requestGeneration += 1;
+    this.rosterRefreshGeneration += 1;
     this.clearRefreshTimer();
 
     const dialog = this.rosterDialog()?.nativeElement;
@@ -96,7 +116,19 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   async refreshScores(): Promise<void> {
-    await this.loadScores(true);
+    await this.loadScores(true, this.requestedDate());
+  }
+
+  async openPreviousScoreDate(): Promise<void> {
+    await this.openScoreDate(this.previousDate());
+  }
+
+  async openNextScoreDate(): Promise<void> {
+    await this.openScoreDate(this.nextDate());
+  }
+
+  async openTodayScoreDate(): Promise<void> {
+    await this.loadScores(false, null);
   }
 
   getGameStatus(game: NhlScoreGame): string {
@@ -144,7 +176,7 @@ export class NhlScoreboard implements OnDestroy {
     }
   }
 
-  openRosterBreakdown(teamAbbreviation: string, event: Event): void {
+  openRosterBreakdown(teamAbbreviation: string, game: NhlScoreGame, event: Event): void {
     const team = teamAbbreviation.trim().toUpperCase();
 
     if (!this.rosteredPresenceByTeam().has(team)) {
@@ -152,6 +184,8 @@ export class NhlScoreboard implements OnDestroy {
     }
 
     this.selectedRosterTeam.set(team);
+    this.selectedRosterGame.set(game);
+    this.rosterPointsError.set('');
     this.rosterTrigger = event.currentTarget instanceof HTMLElement
       ? event.currentTarget
       : null;
@@ -161,6 +195,62 @@ export class NhlScoreboard implements OnDestroy {
 
     if (dialog && !dialog.open) {
       dialog.showModal();
+    }
+
+    void this.refreshRosterGamePoints();
+  }
+
+  async refreshRosterGamePoints(): Promise<void> {
+    const selected = this.selectedRosterPresence();
+
+    if (!selected) {
+      return;
+    }
+
+    const generation = ++this.rosterRefreshGeneration;
+    this.rosterPointsLoading.set(true);
+    this.rosterPointsError.set('');
+
+    let result;
+
+    try {
+      result = await refreshDashboardNhlRosterGameContexts(selected.entries);
+    } catch {
+      if (generation === this.rosterRefreshGeneration && this.selectedRosterGame()) {
+        this.rosterPointsLoading.set(false);
+        this.rosterPointsError.set(
+          'Fantasy points could not refresh. The last saved values are still shown.',
+        );
+      }
+
+      return;
+    }
+
+    if (generation !== this.rosterRefreshGeneration || !this.selectedRosterGame()) {
+      return;
+    }
+
+    const updatedKeys = new Set(result.contexts.map((context) => this.getRosterGameContextKey(
+      context.leagueId,
+      context.cycleNumber,
+      context.assetKey,
+    )));
+    this.rosterGameContexts.update((current) => [
+      ...current.filter((context) => !updatedKeys.has(this.getRosterGameContextKey(
+        context.leagueId,
+        context.cycleNumber,
+        context.assetKey,
+      ))),
+      ...result.contexts,
+    ]);
+    this.rosterPointsLoading.set(false);
+
+    if (result.failedLeagueIds.length > 0) {
+      this.rosterPointsError.set(
+        result.failedLeagueIds.length === 1
+          ? 'One league score could not refresh. The last saved value is still shown.'
+          : 'Some league scores could not refresh. Their last saved values are still shown.',
+      );
     }
   }
 
@@ -177,7 +267,11 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   finishRosterBreakdownClose(): void {
+    this.rosterRefreshGeneration += 1;
     this.selectedRosterTeam.set('');
+    this.selectedRosterGame.set(null);
+    this.rosterPointsLoading.set(false);
+    this.rosterPointsError.set('');
 
     if (this.restoreRosterTriggerFocus) {
       this.rosterTrigger?.focus();
@@ -185,6 +279,51 @@ export class NhlScoreboard implements OnDestroy {
 
     this.rosterTrigger = null;
     this.restoreRosterTriggerFocus = true;
+  }
+
+  getRosterEntryRoute(entry: DashboardNhlRosterEntry): Array<string | number> {
+    if (entry.matchupCycleNumber !== null && entry.matchupId) {
+      return [
+        '/leagues',
+        entry.leagueId,
+        'cycles',
+        entry.matchupCycleNumber,
+        'matchups',
+        entry.matchupId,
+      ];
+    }
+
+    return ['/leagues', entry.leagueId];
+  }
+
+  getRosterEntryPointLabel(entry: DashboardNhlRosterEntry): string {
+    const game = this.selectedRosterGame();
+
+    if (!game) {
+      return 'Fantasy points unavailable';
+    }
+
+    return getDashboardNhlRosterGamePointDisplay({
+      rosterLocation: entry.rosterLocation,
+      gameId: game.id,
+      gameState: game.gameState,
+      ...this.getRosterEntryGameContext(entry),
+    }).label;
+  }
+
+  getRosterEntryPointTone(entry: DashboardNhlRosterEntry): string {
+    const game = this.selectedRosterGame();
+
+    if (!game) {
+      return 'pending';
+    }
+
+    return getDashboardNhlRosterGamePointDisplay({
+      rosterLocation: entry.rosterLocation,
+      gameId: game.id,
+      gameState: game.gameState,
+      ...this.getRosterEntryGameContext(entry),
+    }).tone;
   }
 
   getBroadcastLabel(game: NhlScoreGame): string {
@@ -205,7 +344,18 @@ export class NhlScoreboard implements OnDestroy {
     }).format(value);
   }
 
-  private async loadScores(forceRefresh: boolean = false): Promise<void> {
+  private async openScoreDate(date: string): Promise<void> {
+    if (!date) {
+      return;
+    }
+
+    await this.loadScores(false, isNhlScoreboardDateToday(date) ? null : date);
+  }
+
+  private async loadScores(
+    forceRefresh: boolean = false,
+    targetDate: string | null = this.requestedDate(),
+  ): Promise<void> {
     const generation = ++this.requestGeneration;
     this.clearRefreshTimer();
 
@@ -218,15 +368,25 @@ export class NhlScoreboard implements OnDestroy {
     this.errorMessage.set('');
 
     try {
-      const response = await getNhlScoreNow(forceRefresh);
+      const response = targetDate
+        ? await getNhlScoreForDate(targetDate, forceRefresh)
+        : await getNhlScoreNow(forceRefresh);
 
       if (generation !== this.requestGeneration) {
         return;
       }
 
+      const dateChanged = response.currentDate !== this.focusedDate();
       this.games.set(Array.isArray(response.games) ? response.games : []);
       this.focusedDate.set(response.currentDate ?? '');
+      this.previousDate.set(response.prevDate ?? '');
+      this.nextDate.set(response.nextDate ?? '');
+      this.requestedDate.set(targetDate);
       this.lastUpdatedAt.set(new Date());
+
+      if (dateChanged) {
+        this.resetGameStripScroll();
+      }
     } catch (error: unknown) {
       if (generation !== this.requestGeneration) {
         return;
@@ -249,7 +409,7 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   private scheduleRefresh(): void {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !this.viewingToday()) {
       return;
     }
 
@@ -265,5 +425,45 @@ export class NhlScoreboard implements OnDestroy {
 
     window.clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
+  }
+
+  private getRosterEntryGameContext(entry: DashboardNhlRosterEntry): {
+    scheduledGameIds: readonly number[];
+    gameScores: Readonly<Record<string, number>>;
+  } {
+    const refreshed = entry.matchupCycleNumber === null
+      ? null
+      : this.rosterGameContexts().find((context) =>
+        context.leagueId === entry.leagueId &&
+        context.cycleNumber === entry.matchupCycleNumber &&
+        context.assetKey === entry.assetKey,
+      );
+
+    return {
+      scheduledGameIds: refreshed?.scheduledGameIds ?? entry.scheduledGameIds,
+      gameScores: refreshed?.gameScores ?? entry.gameScores,
+    };
+  }
+
+  private getRosterGameContextKey(
+    leagueId: string,
+    cycleNumber: number,
+    assetKey: string,
+  ): string {
+    return `${leagueId}\u0000${cycleNumber}\u0000${assetKey}`;
+  }
+
+  private resetGameStripScroll(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const strip = this.gameStrip()?.nativeElement;
+
+      if (strip) {
+        strip.scrollLeft = 0;
+      }
+    });
   }
 }

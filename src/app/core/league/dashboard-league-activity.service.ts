@@ -16,7 +16,11 @@ import {
 import type { FantasyCycle, FantasyMatchup, FantasyTeamCycleWindows } from '../cycle/cycle.models';
 import { getFantasyRosterOnce } from '../team/roster.service';
 import type { FantasyTeam } from '../team/team.service';
-import type { DashboardLeagueActivity } from './dashboard-league-activity.models';
+import type {
+  DashboardLeagueActivity,
+  DashboardNhlRosterEntry,
+  DashboardNhlRosterGameContextRefresh,
+} from './dashboard-league-activity.models';
 import { buildDashboardLeagueActivity } from './dashboard-league-activity.util';
 
 export interface DashboardLeagueActivityRequest {
@@ -83,6 +87,87 @@ async function getTeamWindows(
   }
 
   return normalizeFantasyTeamCycleWindows(ownerId, cycleNumber, snapshot.data());
+}
+
+export async function refreshDashboardNhlRosterGameContexts(
+  entries: readonly DashboardNhlRosterEntry[],
+): Promise<DashboardNhlRosterGameContextRefresh> {
+  const requests = new Map<string, {
+    leagueId: string;
+    ownerId: string;
+    cycleNumber: number;
+    entries: DashboardNhlRosterEntry[];
+  }>();
+
+  for (const entry of entries) {
+    const cycleNumber = entry.matchupCycleNumber;
+
+    if (!entry.ownerId || cycleNumber === null) {
+      continue;
+    }
+
+    const key = `${entry.leagueId}\u0000${entry.ownerId}\u0000${cycleNumber}`;
+    const request = requests.get(key) ?? {
+      leagueId: entry.leagueId,
+      ownerId: entry.ownerId,
+      cycleNumber,
+      entries: [],
+    };
+    request.entries.push(entry);
+    requests.set(key, request);
+  }
+
+  const results = await Promise.all(
+    [...requests.values()].map(async (request) => {
+      try {
+        const windows = await getTeamWindows(
+          request.leagueId,
+          request.cycleNumber,
+          request.ownerId,
+        );
+
+        return {
+          request,
+          windows,
+          failed: false,
+        } as const;
+      } catch {
+        return {
+          request,
+          windows: null,
+          failed: true,
+        } as const;
+      }
+    }),
+  );
+  const failedLeagueIds = new Set<string>();
+  const contexts: DashboardNhlRosterGameContextRefresh['contexts'] = [];
+
+  for (const result of results) {
+    if (result.failed) {
+      failedLeagueIds.add(result.request.leagueId);
+      continue;
+    }
+
+    for (const entry of result.request.entries) {
+      const assetWindow = result.windows?.windows.find(
+        (window) => window.assetKey === entry.assetKey,
+      );
+
+      contexts.push({
+        leagueId: entry.leagueId,
+        cycleNumber: result.request.cycleNumber,
+        assetKey: entry.assetKey,
+        scheduledGameIds: assetWindow?.scheduledGameIds ?? [],
+        gameScores: assetWindow?.gameScores ?? {},
+      });
+    }
+  }
+
+  return {
+    contexts,
+    failedLeagueIds: [...failedLeagueIds].sort(),
+  };
 }
 
 export async function getDashboardLeagueActivity(

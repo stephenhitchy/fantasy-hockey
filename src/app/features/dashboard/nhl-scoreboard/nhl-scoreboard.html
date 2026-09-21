@@ -5,7 +5,7 @@
       <h2 id="nhl-scoreboard-title">{{ heading() }}</h2>
       <p class="rr-guidance-new-only">
         @if (hasVisibleRosterPresence()) {
-          Player badges total your roster spots across every league, including goalie units.
+          Open a player badge to see who you have, their game points, and the matching fantasy matchup.
         } @else if (hasLiveGames()) {
           Live scores update automatically.
         } @else {
@@ -32,6 +32,47 @@
     </div>
   </div>
 
+  <nav class="nhl-date-navigation" aria-label="NHL scoreboard dates">
+    <button
+      type="button"
+      class="rr-button rr-button--quiet"
+      [disabled]="loading() || refreshing() || !previousDate()"
+      [attr.aria-label]="'Previous NHL games: ' + previousDate()"
+      (click)="openPreviousScoreDate()"
+    >
+      <span aria-hidden="true">←</span>
+      Previous
+    </button>
+
+    @if (!viewingToday()) {
+      <button
+        type="button"
+        class="rr-button rr-button--secondary nhl-date-today"
+        [disabled]="loading() || refreshing()"
+        (click)="openTodayScoreDate()"
+      >
+        Today
+      </button>
+    }
+
+    <button
+      type="button"
+      class="rr-button rr-button--quiet"
+      [disabled]="loading() || refreshing() || !nextDate()"
+      [attr.aria-label]="'Next NHL games: ' + nextDate()"
+      (click)="openNextScoreDate()"
+    >
+      Next
+      <span aria-hidden="true">→</span>
+    </button>
+  </nav>
+
+  @if (errorMessage() && games().length > 0) {
+    <div class="nhl-panel-inline-error rr-notice rr-notice--warning" role="status">
+      This NHL date could not update. The games already on screen are unchanged; use the date button to try again.
+    </div>
+  }
+
   @if (loading()) {
     <div class="nhl-panel-loading" aria-live="polite">
       <span class="pixel-icon icon-loading icon-sm" aria-hidden="true"></span>
@@ -47,7 +88,7 @@
       No NHL games are available on the current scoreboard.
     </div>
   } @else {
-    <div class="nhl-game-strip" [attr.aria-label]="heading()">
+    <div #gameStrip class="nhl-game-strip" [attr.aria-label]="heading()">
       @for (game of visibleGames(); track game.id) {
         <article
           class="nhl-game-card"
@@ -73,7 +114,7 @@
                     class="nhl-roster-presence"
                     [attr.aria-label]="getRosteredTeamCountLabel(game.awayTeam.abbrev)"
                     [title]="getRosteredTeamCountLabel(game.awayTeam.abbrev)"
-                    (click)="openRosterBreakdown(game.awayTeam.abbrev, $event)"
+                    (click)="openRosterBreakdown(game.awayTeam.abbrev, game, $event)"
                   >
                     <span class="pixel-icon icon-players" aria-hidden="true"></span>
                     <b aria-hidden="true">×{{ rosteredCount }}</b>
@@ -96,7 +137,7 @@
                     class="nhl-roster-presence"
                     [attr.aria-label]="getRosteredTeamCountLabel(game.homeTeam.abbrev)"
                     [title]="getRosteredTeamCountLabel(game.homeTeam.abbrev)"
-                    (click)="openRosterBreakdown(game.homeTeam.abbrev, $event)"
+                    (click)="openRosterBreakdown(game.homeTeam.abbrev, game, $event)"
                   >
                     <span class="pixel-icon icon-players" aria-hidden="true"></span>
                     <b aria-hidden="true">×{{ rosteredCount }}</b>
@@ -128,11 +169,13 @@
   @if (selectedRosterPresence(); as selected) {
     <header class="nhl-roster-dialog-header">
       <div>
-        <span>Your players</span>
+        <span>Your players in this NHL game</span>
         <h3 id="nhl-roster-dialog-title">
-          {{ selected.teamAbbreviation }} roster {{ selected.count === 1 ? 'spot' : 'spots' }}
+          {{ selected.teamAbbreviation }} · {{ selected.count }} {{ selected.count === 1 ? 'player/unit' : 'players/units' }}
         </h3>
-        <p>Across all of your RinkRat leagues</p>
+        @if (selectedRosterGame(); as game) {
+          <p>{{ game.awayTeam.abbrev }} at {{ game.homeTeam.abbrev }} · {{ getGameStatus(game) }}</p>
+        }
       </div>
 
       <button
@@ -146,20 +189,49 @@
       </button>
     </header>
 
+    <div class="nhl-roster-dialog-score-status" aria-live="polite">
+      @if (rosterPointsLoading()) {
+        <span>Checking current fantasy points…</span>
+      } @else {
+        <span>Fantasy points come from the saved league matchup score.</span>
+      }
+
+      <button
+        type="button"
+        [disabled]="rosterPointsLoading()"
+        (click)="refreshRosterGamePoints()"
+      >
+        Update points
+      </button>
+    </div>
+
+    @if (rosterPointsError()) {
+      <div class="nhl-roster-dialog-error rr-notice rr-notice--warning" role="status">
+        {{ rosterPointsError() }}
+      </div>
+    }
+
     <ul class="nhl-roster-dialog-list">
       @for (entry of selected.entries; track entry.leagueId + ':' + entry.assetKey) {
         <li>
           <a
             class="nhl-roster-dialog-entry"
-            [routerLink]="['/leagues', entry.leagueId, 'players', entry.assetKey]"
+            [routerLink]="getRosterEntryRoute(entry)"
             (click)="closeRosterBreakdown(false)"
           >
             <span class="nhl-roster-dialog-icon pixel-icon icon-players" aria-hidden="true"></span>
             <span class="nhl-roster-dialog-copy">
               <strong>{{ entry.assetName }}</strong>
               <small>{{ entry.leagueName }} · {{ entry.position }} · {{ getRosterLocationLabel(entry.rosterLocation) }}</small>
+              <span
+                class="nhl-roster-dialog-points"
+                [class.nhl-roster-dialog-points--scored]="getRosterEntryPointTone(entry) === 'scored'"
+                [class.nhl-roster-dialog-points--not-counting]="getRosterEntryPointTone(entry) === 'not-counting'"
+              >
+                {{ getRosterEntryPointLabel(entry) }}
+              </span>
             </span>
-            <span aria-hidden="true">→</span>
+            <span class="nhl-roster-dialog-arrow" aria-hidden="true">→</span>
           </a>
         </li>
       }

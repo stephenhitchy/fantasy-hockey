@@ -49,17 +49,35 @@ export interface DashboardNhlRosterAssetSummary {
   assetName: string;
   position: string;
   rosterLocation: DashboardNhlRosterLocation;
+  matchupCycleNumber: number | null;
+  matchupId: string | null;
+  scheduledGameIds: number[];
+  gameScores: Record<string, number>;
 }
 
 export interface DashboardNhlRosterEntry extends DashboardNhlRosterAssetSummary {
   leagueId: string;
   leagueName: string;
+  ownerId: string;
 }
 
 export interface DashboardNhlTeamRosterPresence {
   teamAbbreviation: string;
   count: number;
   entries: DashboardNhlRosterEntry[];
+}
+
+export interface DashboardNhlRosterGameContext {
+  leagueId: string;
+  cycleNumber: number;
+  assetKey: string;
+  scheduledGameIds: number[];
+  gameScores: Record<string, number>;
+}
+
+export interface DashboardNhlRosterGameContextRefresh {
+  contexts: DashboardNhlRosterGameContext[];
+  failedLeagueIds: string[];
 }
 
 export interface DashboardLeagueActivity {

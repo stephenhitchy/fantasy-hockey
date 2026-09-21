@@ -182,9 +182,9 @@ test('B1I preserves scoring, projections, rules, and server authority', async ()
   );
   assert.equal(
     await sha256FunctionsIndexBeforeD1M(),
-    // D1M and L1B add only their reviewed exports; every other Function export
-    // remains byte-for-byte pinned here.
-    '447079dbdf40ca5854d8c6c7f00b9ec00f0244026a40b78a75411defbae98307',
+    // D1M and L1B add reviewed exports; the dashboard also extends only the
+    // existing NHL proxy's scoreboard cache to exact dated score routes.
+    '408d5813121495adc0cf94c0d2d8bc49f8ffd4d6e88c0e83d40ec38ae540ac40',
   );
 });
 

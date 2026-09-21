@@ -2531,6 +2531,13 @@ export class CycleOne implements OnDestroy {
     return `${this.getTeamName(matchup.teamAOwnerId)} vs ${this.getTeamName(matchup.teamBOwnerId)}`;
   }
 
+  getHeadToHeadLabel(matchup: FantasyMatchup | string | null): string {
+    const matchupId = typeof matchup === 'string' ? matchup : matchup?.id ?? '';
+    const match = /^matchup-(\d+)$/i.exec(matchupId.trim());
+
+    return match ? `Head-to-Head ${Number(match[1])}` : 'Head-to-Head';
+  }
+
   openMatchup(matchup: FantasyMatchup | null): void {
     if (!matchup) {
       return;
@@ -2604,7 +2611,7 @@ export class CycleOne implements OnDestroy {
 
   getDetailedMatchupHeading(): string {
     if (this.matchupId) {
-      return `${this.getCycleLabel()} · ${this.matchupId}`;
+      return `${this.getCycleLabel()} · ${this.getHeadToHeadLabel(this.matchupId)}`;
     }
 
     if (this.myMatchup()) {

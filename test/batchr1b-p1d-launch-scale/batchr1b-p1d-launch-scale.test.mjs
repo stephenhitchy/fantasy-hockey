@@ -403,6 +403,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/security/firestore-document-id-policies.ts',
 
         'src/shared/security/nhl-proxy-security.util.ts',
+        // Dashboard scoreboard date browsing reuses the bounded NHL proxy cache.
+        'src/shared/core/nhl/nhl-shared-cache.util.ts',
         // S3E adds isolated monitor-only App Check readiness aggregation.
         'src/shared/security/app-check-enforcement-readiness.util.ts',
         // S3F adds guarded exact-league selected-callable App Check canary controls.
@@ -471,6 +473,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '1e1ff372b88ce9768600938ae636079a8ae6abc1c943dde8a7a20340e0489968',
+    '15b49efaabcf014cbffa8e1942f587f30d8d2703a57f934be63750a3f67ea302',
   );
 });

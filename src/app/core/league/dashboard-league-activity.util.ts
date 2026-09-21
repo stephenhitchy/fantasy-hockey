@@ -228,6 +228,8 @@ function getRosterAssetName(asset: RosterAsset): string {
 
 export function summarizeRosterNhlTeamCounts(
   roster: FantasyRoster | null,
+  myWindows: FantasyTeamCycleWindows | null = null,
+  matchup: FantasyMatchup | null = null,
 ): DashboardNhlTeamRosterCount[] {
   if (!roster) {
     return [];
@@ -265,12 +267,17 @@ export function summarizeRosterNhlTeamCounts(
     }
 
     seenAssetKeys.add(assetKey);
+    const assetWindow = myWindows?.windows.find((window) => window.assetKey === assetKey) ?? null;
     const assets = assetsByTeam.get(teamAbbreviation) ?? [];
     assets.push({
       assetKey,
       assetName: getRosterAssetName(asset),
       position: asset.position,
       rosterLocation: slot.rosterLocation,
+      matchupCycleNumber: matchup?.cycleNumber ?? null,
+      matchupId: matchup?.id ?? null,
+      scheduledGameIds: assetWindow?.scheduledGameIds ?? [],
+      gameScores: assetWindow?.gameScores ?? {},
     });
     assetsByTeam.set(teamAbbreviation, assets);
   }
@@ -397,7 +404,11 @@ export function buildDashboardLeagueActivity(
   const attention = {
     ...countRosterAttention(input.roster),
     boundarySlotCount: countBoundarySlots(input.myWindows),
-    nhlTeamRosterCounts: summarizeRosterNhlTeamCounts(input.roster),
+    nhlTeamRosterCounts: summarizeRosterNhlTeamCounts(
+      input.roster,
+      input.myWindows,
+      input.matchup,
+    ),
     recentWaiverOutcome: getMostRecentWaiverOutcome(input.waiverClaims),
   };
   const leagueRoute: Array<string | number> = ['/leagues', input.leagueId];

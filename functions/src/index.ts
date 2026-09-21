@@ -336,7 +336,7 @@ async function readNhlProxyResponseBody(
 }
 
 function getNhlProxyCacheControl(path: string): string {
-  if (path === '/v1/score/now') {
+  if (/^\/v1\/score\/(now|\d{4}-\d{2}-\d{2})$/.test(path)) {
     return 'public, max-age=15, s-maxage=20';
   }
 
@@ -360,7 +360,7 @@ function getNhlProxyCacheControl(path: string): string {
 }
 
 function getNhlProxyFreshCacheMilliseconds(path: string): number {
-  if (path === '/v1/score/now') {
+  if (/^\/v1\/score\/(now|\d{4}-\d{2}-\d{2})$/.test(path)) {
     return 15_000;
   }
 
@@ -384,7 +384,7 @@ function getNhlProxyFreshCacheMilliseconds(path: string): number {
 }
 
 function getNhlProxyStaleCacheMilliseconds(path: string): number {
-  if (path === '/v1/score/now') {
+  if (/^\/v1\/score\/(now|\d{4}-\d{2}-\d{2})$/.test(path)) {
     return 2 * 60 * 1000;
   }
 
@@ -1761,7 +1761,7 @@ export const nhlApiProxy = onRequest(
         resolution.maximumResponseBytes,
       );
       const responseBody =
-        upstreamResponse.ok && target.pathname === '/v1/score/now'
+        upstreamResponse.ok && /^\/v1\/score\/(now|\d{4}-\d{2}-\d{2})$/.test(target.pathname)
           ? compactNhlScoreNowBody(upstreamBody)
           : upstreamBody;
       const contentType =

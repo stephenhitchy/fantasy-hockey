@@ -197,9 +197,9 @@ test('B1J changes no protected scoring, projection formula, Rules, or Function a
   assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(
     await sha256FunctionsIndexBeforeD1M(),
-    // D1M adds only the reviewed getFinalScoreReconciliationPage export; the
-    // complete post-FF1.31 Functions index remains byte-for-byte pinned here.
-    '447079dbdf40ca5854d8c6c7f00b9ec00f0244026a40b78a75411defbae98307',
+    // D1M adds a reviewed export; the dashboard also extends only the existing
+    // NHL proxy's scoreboard cache to exact dated score routes.
+    '408d5813121495adc0cf94c0d2d8bc49f8ffd4d6e88c0e83d40ec38ae540ac40',
   );
 });
 

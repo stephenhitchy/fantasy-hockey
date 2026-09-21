@@ -21,7 +21,7 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 8;
+const DASHBOARD_CACHE_VERSION = 9;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 
@@ -108,6 +108,7 @@ export class Dashboard {
         ({
           leagueId: league.leagueId,
           leagueName: league.leagueName,
+          ownerId: this.userId,
           rosterCounts: league.dashboardActivity?.nhlTeamRosterCounts ?? [],
         }),
       ),
