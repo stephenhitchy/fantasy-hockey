@@ -15,13 +15,15 @@ Before modifying anything:
 
 1. Read this file.
 2. Read `docs/RINKRAT_CODEX_HANDOFF.md`.
-3. Read the documentation closest to the subsystem being changed.
-4. Run:
+3. Read `docs/RINKRAT_CODEBASE_GUIDE.md` for the current architecture and
+   authority map.
+4. Read the documentation closest to the subsystem being changed.
+5. Run:
    - `git status --short`
    - `git branch --show-current`
    - `git log -1 --oneline`
-5. Stop and report any unrelated or unexplained working-tree changes.
-6. Never assume local source matches production. Treat the live release
+6. Stop and report any unrelated or unexplained working-tree changes.
+7. Never assume local source matches production. Treat the live release
    manifest and deployed Firebase evidence as separate states.
 
 ## Required toolchain

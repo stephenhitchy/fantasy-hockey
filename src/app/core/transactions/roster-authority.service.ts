@@ -2,6 +2,12 @@ import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '../firebase-functions';
 
+/**
+ * Browser transport for server-authoritative roster, waiver, bench, and IR
+ * mutations. Client eligibility previews improve UX but cannot authorize a
+ * move; the callable revalidates current state and callers confirm the result
+ * through committed Firestore data.
+ */
 export type SecureRosterAction =
   | 'add-drop'
   | 'add-open-slot'

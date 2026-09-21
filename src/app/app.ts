@@ -55,6 +55,12 @@ function scheduleAfterPaint(task: () => void, delayMilliseconds: number): () => 
   };
 }
 
+/**
+ * Root-lifetime coordinator for concerns that must survive route changes:
+ * release/PWA updates, observability, user theme/profile refresh, challenge
+ * state, and league-context cleanup. Feature data belongs in feature services,
+ * and every listener or timer started here must be stopped in ngOnDestroy.
+ */
 @Component({
   selector: 'app-root',
   imports: [RouterLink, RouterOutlet],

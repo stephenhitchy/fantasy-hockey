@@ -4,6 +4,11 @@ import { User } from 'firebase/auth';
 
 import { waitForAuthState } from '../auth/auth-session.service';
 
+/**
+ * Wait for Firebase's first resolved auth state so a page refresh does not
+ * redirect a valid session before persistence has restored it. This guard is
+ * navigation UX; Firebase Auth, Rules, and server checks remain authoritative.
+ */
 export function waitForAuthenticatedUser(): Promise<User | null> {
   return waitForAuthState(undefined, 10_000);
 }

@@ -49,6 +49,8 @@ class LeagueAccessLookupService {
 
     const existingPromise = this.pending.get(key);
 
+    // Coalesce guards triggered by the same navigation so nested routes do not
+    // issue duplicate league/member/team reads while the first lookup is open.
     if (existingPromise) {
       return existingPromise;
     }
@@ -124,6 +126,11 @@ export const leagueMemberGuard: CanActivateFn = async (route) => {
   }
 };
 
+/**
+ * Commissioner routing is a convenience boundary only. Every commissioner
+ * callable must independently re-read and validate the current server-owned
+ * role because this bounded client cache can be stale for up to 30 seconds.
+ */
 export const commissionerGuard: CanActivateFn = async (route) => {
   const router = inject(Router);
   const lookup = inject(LeagueAccessLookupService);

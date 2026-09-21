@@ -10,7 +10,14 @@ import {
   leagueMemberGuard,
 } from './core/guards/league-access.guard';
 
+/**
+ * Route-level access checks prevent confusing navigation, while Firestore
+ * Rules and Cloud Functions remain authoritative for reads and mutations.
+ * Screens stay lazy loaded so authenticated features do not inflate the public
+ * entry bundle.
+ */
 export const routes: Routes = [
+  // Public entry points do not use the authenticated application shell.
   {
     path: '',
     title: 'RinkRat Fantasy',
@@ -103,6 +110,7 @@ export const routes: Routes = [
       },
     ],
   },
+  // All remaining product routes share authentication and the main layout.
   {
     path: '',
     canActivate: [authGuard],
@@ -464,6 +472,8 @@ export const routes: Routes = [
           ),
       },
       {
+        // The authenticated wildcard intentionally lands on a usable home
+        // screen instead of exposing an empty or partially initialized shell.
         path: '**',
         redirectTo: 'dashboard',
       },

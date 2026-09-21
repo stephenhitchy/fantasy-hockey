@@ -70,10 +70,58 @@ test('FF1 keeps invitation authorization separate from Draft authorization', asy
 
 test('combined documentation and root README are present', async () => {
   assert.equal(await exists('docs/RINKRAT_PROJECT_DOCUMENTATION.md'), true);
+  assert.equal(await exists('docs/RINKRAT_CODEBASE_GUIDE.md'), true);
   assert.equal(await exists('README.md'), true);
 
   const readme = await readFile(path.join(root, 'README.md'), 'utf8');
+  assert.match(readme, /docs\/RINKRAT_CODEBASE_GUIDE\.md/);
   assert.match(readme, /docs\/RINKRAT_PROJECT_DOCUMENTATION\.md/);
+});
+
+test('current architecture guide preserves authority and competitive boundaries', async () => {
+  const [guide, agents, handoff, projectDocumentation] = await Promise.all([
+    readFile(path.join(root, 'docs/RINKRAT_CODEBASE_GUIDE.md'), 'utf8'),
+    readFile(path.join(root, 'AGENTS.md'), 'utf8'),
+    readFile(path.join(root, 'docs/RINKRAT_CODEX_HANDOFF.md'), 'utf8'),
+    readFile(path.join(root, 'docs/RINKRAT_PROJECT_DOCUMENTATION.md'), 'utf8'),
+  ]);
+
+  assert.match(guide, /## Protected competitive contracts/);
+  assert.match(guide, /Production Scoring V4/);
+  assert.match(guide, /Projection V11/);
+  assert.match(guide, /seventh eligible NHL game belongs to that slot's next fantasy matchup/i);
+  assert.match(guide, /server-authoritative/i);
+  assert.match(guide, /Route guards and client-side validation are defense-in-depth/i);
+  assert.match(guide, /## Commenting standard/);
+  assert.match(guide, /## How to trace an unfamiliar behavior/);
+  assert.match(guide, /Codex prepares and reports deployment selectors but does not deploy/i);
+
+  for (const source of [agents, handoff, projectDocumentation]) {
+    assert.match(source, /docs\/RINKRAT_CODEBASE_GUIDE\.md/);
+  }
+});
+
+test('architectural entry points explain browser and server responsibilities', async () => {
+  const [routes, authGuard, draftAuthority, rosterAuthority, projectionSnapshots] =
+    await Promise.all([
+      readFile(path.join(root, 'src/app/app.routes.ts'), 'utf8'),
+      readFile(path.join(root, 'src/app/core/guards/auth.guard.ts'), 'utf8'),
+      readFile(path.join(root, 'src/app/core/draft/draft-authority.service.ts'), 'utf8'),
+      readFile(path.join(root, 'src/app/core/transactions/roster-authority.service.ts'), 'utf8'),
+      readFile(path.join(root, 'src/app/core/projection/projection-snapshot.service.ts'), 'utf8'),
+    ]);
+
+  assert.match(routes, /Firestore\s+\* Rules and Cloud Functions remain authoritative/s);
+  assert.match(
+    authGuard,
+    /navigation UX; Firebase Auth, Rules, and server checks remain authoritative/,
+  );
+  assert.match(draftAuthority, /server-authoritative Draft commands/);
+  assert.match(rosterAuthority, /server-authoritative roster, waiver, bench, and IR/);
+  assert.match(
+    projectionSnapshots,
+    /must not invent\s+\* a competitive fallback projection in the browser/s,
+  );
 });
 
 test('documentation consolidation command remains available', async () => {

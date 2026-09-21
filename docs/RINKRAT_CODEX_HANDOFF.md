@@ -2,6 +2,11 @@
 
 Last updated: 2026-09-16
 
+For the current repository map, browser/server authority boundaries, workflow
+traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
+handoff records operational state; it is not a substitute for that architecture
+map or for inspecting current source.
+
 ## Repository
 
 Local path:

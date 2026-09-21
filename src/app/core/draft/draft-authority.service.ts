@@ -3,6 +3,12 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase-functions';
 import { DraftPick, FantasyDraft } from './draft.models';
 
+/**
+ * Thin browser transport for server-authoritative Draft commands. Keep rules,
+ * turn advancement, auto-draft decisions, and idempotency in Cloud Functions;
+ * callers reconcile ambiguous transport outcomes against committed draft and
+ * pick documents.
+ */
 export type DraftCommandAction =
   | 'save-settings'
   | 'activate-scheduled'

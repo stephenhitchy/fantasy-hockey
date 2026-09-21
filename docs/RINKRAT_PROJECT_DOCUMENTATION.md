@@ -1,3 +1,17 @@
+# Codebase Documentation Foundation
+
+The repository now has a durable current-state architecture and authority map
+in `docs/RINKRAT_CODEBASE_GUIDE.md`. It explains the browser/Cloud
+Function/Firestore boundaries, protected competitive contracts, major domain
+locations, canonical league paths, end-to-end workflow traces, listener and
+retry expectations, and the standard for high-value source comments.
+
+This is a documentation-only foundation. It does not change Production Scoring
+V4, Projection V11, six-game ownership, Draft or transaction authority,
+Firestore Rules, indexes, TTLs, queue mode, or any deployed resource.
+
+---
+
 # Draft Batch D1.24 — League-Adjusted Rankings and Auto-Draft Bench Depth
 
 **Candidate:** RC65 / D1.24

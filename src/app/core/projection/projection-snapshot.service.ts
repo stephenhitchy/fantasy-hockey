@@ -18,6 +18,12 @@ import {
 } from '../scoring/scoring-rules';
 import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
 
+/**
+ * Client boundary for server-published projection snapshots. It accepts only
+ * compatible Projection V11/ranking/scoring metadata, verifies snapshot
+ * evidence, and requests server generation when necessary; it must not invent
+ * a competitive fallback projection in the browser.
+ */
 export const SHARED_PROJECTION_VERSION = 11;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
 export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2;
