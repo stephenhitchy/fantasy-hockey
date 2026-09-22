@@ -117,10 +117,6 @@ export class NhlScoreboard implements OnDestroy {
     }
   }
 
-  async refreshScores(): Promise<void> {
-    await this.loadScores(true, this.requestedDate());
-  }
-
   async openPreviousScoreDate(): Promise<void> {
     await this.openScoreDate(this.previousDate());
   }
@@ -206,7 +202,7 @@ export class NhlScoreboard implements OnDestroy {
     void this.refreshRosterGamePoints();
   }
 
-  async refreshRosterGamePoints(): Promise<void> {
+  private async refreshRosterGamePoints(): Promise<void> {
     const selected = this.selectedRosterPresence();
 
     if (!selected) {
@@ -360,6 +356,7 @@ export class NhlScoreboard implements OnDestroy {
   ): Promise<void> {
     const generation = ++this.requestGeneration;
     this.clearRefreshTimer();
+    this.requestedDate.set(targetDate);
 
     if (this.games().length === 0) {
       this.loading.set(true);
@@ -383,7 +380,6 @@ export class NhlScoreboard implements OnDestroy {
       this.focusedDate.set(response.currentDate ?? '');
       this.previousDate.set(response.prevDate ?? '');
       this.nextDate.set(response.nextDate ?? '');
-      this.requestedDate.set(targetDate);
       this.lastUpdatedAt.set(new Date());
 
       if (dateChanged) {
@@ -411,13 +407,15 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   private scheduleRefresh(): void {
-    if (typeof window === 'undefined' || !this.viewingToday()) {
+    const retryingError = Boolean(this.errorMessage());
+
+    if (typeof window === 'undefined' || (!this.viewingToday() && !retryingError)) {
       return;
     }
 
     this.refreshTimer = window.setTimeout(() => {
-      void this.loadScores(true);
-    }, getNhlScoreboardRefreshDelay(this.games()));
+      void this.loadScores(true, this.requestedDate());
+    }, retryingError ? 60_000 : getNhlScoreboardRefreshDelay(this.games()));
   }
 
   private clearRefreshTimer(): void {

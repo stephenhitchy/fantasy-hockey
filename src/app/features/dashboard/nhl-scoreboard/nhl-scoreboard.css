@@ -52,20 +52,6 @@
   font-weight: 850;
 }
 
-.nhl-panel-refresh {
-  min-height: 38px;
-  padding: 7px 11px;
-  border: 2px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text-primary);
-  font-size: 11px;
-}
-
-.nhl-panel-refresh:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-
 .nhl-date-navigation {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -82,11 +68,13 @@
   font-size: 10px;
 }
 
-.nhl-date-navigation button:first-child {
+.nhl-date-previous {
+  grid-column: 1;
   justify-self: start;
 }
 
-.nhl-date-navigation button:last-child {
+.nhl-date-next {
+  grid-column: 3;
   justify-self: end;
 }
 
@@ -96,6 +84,7 @@
 }
 
 .nhl-date-today {
+  grid-column: 2;
   background: color-mix(in srgb, var(--user-team-accent) 18%, var(--surface-2)) !important;
 }
 
@@ -429,23 +418,6 @@
   color: var(--text-secondary);
   font-size: 10px;
   line-height: 1.35;
-}
-
-.nhl-roster-dialog-score-status button {
-  min-height: 34px;
-  flex: 0 0 auto;
-  padding: 6px 8px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text-primary);
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.nhl-roster-dialog-score-status button:disabled {
-  opacity: 0.55;
-  cursor: wait;
 }
 
 .nhl-roster-dialog-error {

@@ -20,22 +20,13 @@
       } @else if (lastUpdatedAt()) {
         <span>Updated {{ getUpdatedLabel() }}</span>
       }
-
-      <button
-        type="button"
-        class="rr-button rr-button--quiet nhl-panel-refresh"
-        [disabled]="loading() || refreshing()"
-        (click)="refreshScores()"
-      >
-        Refresh
-      </button>
     </div>
   </div>
 
   <nav class="nhl-date-navigation" aria-label="NHL scoreboard dates">
     <button
       type="button"
-      class="rr-button rr-button--quiet"
+      class="rr-button rr-button--quiet nhl-date-previous"
       [disabled]="loading() || refreshing() || !previousDate()"
       [attr.aria-label]="'Previous NHL games: ' + previousDate()"
       (click)="openPreviousScoreDate()"
@@ -57,7 +48,7 @@
 
     <button
       type="button"
-      class="rr-button rr-button--quiet"
+      class="rr-button rr-button--quiet nhl-date-next"
       [disabled]="loading() || refreshing() || !nextDate()"
       [attr.aria-label]="'Next NHL games: ' + nextDate()"
       (click)="openNextScoreDate()"
@@ -81,7 +72,7 @@
   } @else if (errorMessage() && games().length === 0) {
     <div class="nhl-panel-error rr-notice rr-notice--warning" role="status">
       <strong>Scoreboard unavailable</strong>
-      <span>Fantasy league tools are unaffected. Try refreshing this panel in a moment.</span>
+      <span>Fantasy league tools are unaffected. Scores will retry automatically.</span>
     </div>
   } @else if (visibleGames().length === 0) {
     <div class="nhl-panel-empty rr-state">
@@ -198,14 +189,6 @@
       } @else {
         <span>Fantasy points come from the saved league matchup score.</span>
       }
-
-      <button
-        type="button"
-        [disabled]="rosterPointsLoading()"
-        (click)="refreshRosterGamePoints()"
-      >
-        Update points
-      </button>
     </div>
 
     @if (rosterPointsError()) {

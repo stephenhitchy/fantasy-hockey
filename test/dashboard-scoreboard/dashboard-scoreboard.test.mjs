@@ -20,6 +20,10 @@ const templatePath = join(
   projectRoot,
   'src/app/features/dashboard/nhl-scoreboard/nhl-scoreboard.html',
 );
+const scoreboardStylesPath = join(
+  projectRoot,
+  'src/app/features/dashboard/nhl-scoreboard/nhl-scoreboard.css',
+);
 const dashboardTemplatePath = join(
   projectRoot,
   'src/app/features/dashboard/dashboard.html',
@@ -338,6 +342,7 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
   const [
     component,
     template,
+    scoreboardStyles,
     dashboardTemplate,
     dashboardStyles,
     nhlService,
@@ -349,6 +354,7 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
   ] = await Promise.all([
     readFile(componentPath, 'utf8'),
     readFile(templatePath, 'utf8'),
+    readFile(scoreboardStylesPath, 'utf8'),
     readFile(dashboardTemplatePath, 'utf8'),
     readFile(dashboardStylesPath, 'utf8'),
     readFile(nhlServicePath, 'utf8'),
@@ -383,6 +389,20 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(template, /This NHL date could not update/);
     assert.match(template, /<time \[attr\.datetime\]="game\.gameDate"/);
     assert.match(template, /getGameDateLabel\(game\)/);
+  });
+
+  await suite.test('keeps date arrows on the outer edges and relies on automatic score refreshes', () => {
+    assert.match(template, /class="rr-button rr-button--quiet nhl-date-previous"/);
+    assert.match(template, /class="rr-button rr-button--quiet nhl-date-next"/);
+    assert.match(scoreboardStyles, /\.nhl-date-previous\s*\{[^}]*grid-column:\s*1[^}]*justify-self:\s*start/s);
+    assert.match(scoreboardStyles, /\.nhl-date-next\s*\{[^}]*grid-column:\s*3[^}]*justify-self:\s*end/s);
+    assert.doesNotMatch(template, /\(click\)="refreshScores\(\)"/);
+    assert.doesNotMatch(template, />\s*Update points\s*</);
+    assert.doesNotMatch(component, /refreshScores\(\)/);
+    assert.match(component, /void this\.refreshRosterGamePoints\(\)/);
+    assert.match(component, /this\.scheduleRefresh\(\)/);
+    assert.match(component, /retryingError \? 60_000 : getNhlScoreboardRefreshDelay/);
+    assert.match(component, /this\.loadScores\(true, this\.requestedDate\(\)\)/);
   });
 
   await suite.test('keeps live and favorite-team games prominent without showing every game card', () => {
