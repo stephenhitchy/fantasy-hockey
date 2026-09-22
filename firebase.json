@@ -120,6 +120,23 @@
         ]
       },
       {
+        "source": "/verify-email",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, private"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow, noarchive"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          }
+        ]
+      },
+      {
         "source": "/release-manifest.json",
         "headers": [
           {

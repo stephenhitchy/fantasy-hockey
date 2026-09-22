@@ -103,7 +103,7 @@ export class TrainingCamp implements OnDestroy {
       return this.inviteContinuationActive() ? 'Return to Invitation' : 'Exit Training Camp';
     }
 
-    return 'Finish Later';
+    return this.inviteContinuationActive() ? 'Join League First' : 'Finish Later';
   });
   readonly verificationSendButtonLabel = computed(() =>
     getVerificationSendButtonLabel({
@@ -369,7 +369,11 @@ export class TrainingCamp implements OnDestroy {
     this.sendingVerification.set(true);
 
     try {
-      const result = await requestVerificationEmail();
+      const result = await requestVerificationEmail({
+        inviteCode: this.inviteContinuationActive()
+          ? this.pendingInviteCode()
+          : undefined,
+      });
 
       if (result.alreadyVerified) {
         await this.finishVerificationStep();
@@ -388,7 +392,7 @@ export class TrainingCamp implements OnDestroy {
         );
       } else {
         this.verificationStatusMessage.set(
-          `${result.firstSend ? 'Verification email sent.' : 'Another verification email sent.'} Check your inbox and spam folder, open the link, then return here.`,
+          `${result.firstSend ? 'Verification email sent.' : 'Another verification email sent.'} Open the email button to verify your account${this.inviteContinuationActive() ? ' and finish joining your league' : ''}.`,
         );
       }
     } catch (error: unknown) {

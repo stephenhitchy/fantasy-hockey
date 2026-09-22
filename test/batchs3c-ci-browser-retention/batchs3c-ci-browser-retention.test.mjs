@@ -250,7 +250,8 @@ test('S3C runbook, commands, release label, and permanent roadmap remain synchro
   assert.match(runbook, /SEV-1/);
   assert.match(runbook, /Post-incident review template/);
   assert.match(runbook, /never stores script samples, raw IP addresses, requester hashes, or user-agent strings/i);
-  assert.match(privacy, /Last updated: August 2026/);
+  assert.match(privacy, /Last updated: September 2026/);
+  assert.match(privacy, /First and last name are shown only to authenticated managers who share a league with you/i);
   assert.match(privacy, /reCAPTCHA Enterprise assessment/);
   assert.match(privacy, /Content Security Policy reports/);
   assert.match(privacy, /Temporary technical records use defined expiration periods/);

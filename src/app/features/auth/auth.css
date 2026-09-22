@@ -189,6 +189,88 @@
   outline-offset: 1px;
 }
 
+.registration-name-section {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 2px solid #2b3b4e;
+  background: #121d2a;
+}
+
+.registration-name-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.registration-personalization {
+  border: 2px solid #2b3b4e;
+  background: #121d2a;
+}
+
+.registration-personalization > summary {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  color: #c0ccd8;
+  cursor: pointer;
+  list-style: none;
+}
+
+.registration-personalization > summary::-webkit-details-marker {
+  display: none;
+}
+
+.registration-personalization > summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.registration-personalization > summary strong {
+  font-size: 12px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.registration-personalization > summary small {
+  color: #8293a6;
+  font-size: 10px;
+}
+
+.registration-personalization > summary b {
+  color: var(--user-team-accent);
+  transition: transform 160ms ease;
+}
+
+.registration-personalization[open] > summary b {
+  transform: rotate(180deg);
+}
+
+.registration-personalization-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.registration-personalization .registration-team-picker {
+  border-width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .registration-personalization > summary b {
+    transition: none;
+  }
+}
+
+@media (max-width: 460px) {
+  .registration-name-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .registration-team-picker {
   display: grid;
   gap: 11px;

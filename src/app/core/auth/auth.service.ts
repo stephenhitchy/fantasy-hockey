@@ -21,6 +21,8 @@ export async function registerUser(
   email: string,
   password: string,
   username: string,
+  firstName: string,
+  lastName: string,
   favoriteTeamAbbreviation: string,
   hockeyExperience: HockeyExperienceLevel,
 ): Promise<User> {
@@ -37,6 +39,8 @@ export async function registerUser(
     await withTimeout(
       initializeManagerProfile({
         username,
+        firstName,
+        lastName,
         favoriteTeamAbbreviation: normalizedFavoriteTeam,
         favoriteTeamVariantId: 'current-home',
         hockeyExperience,
@@ -61,6 +65,8 @@ export async function registerUser(
         uid: user.uid,
         email: user.email,
         username,
+        firstName,
+        lastName,
         createdAt: serverTimestamp(),
         favoriteTeamAbbreviation: normalizedFavoriteTeam,
         favoriteTeamVariantId: 'current-home',

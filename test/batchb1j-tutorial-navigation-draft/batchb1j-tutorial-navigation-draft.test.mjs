@@ -197,9 +197,9 @@ test('B1J changes no protected scoring, projection formula, Rules, or Function a
   assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(
     await sha256FunctionsIndexBeforeD1M(),
-    // D1M adds a reviewed export; the dashboard also extends only the existing
-    // NHL proxy's scoreboard cache to exact dated score routes.
-    '408d5813121495adc0cf94c0d2d8bc49f8ffd4d6e88c0e83d40ec38ae540ac40',
+    // D1M adds a reviewed export; league onboarding also extends the existing
+    // membership-authorized profile lookup with private league names.
+    'b3a95b5b259de04b092d88a298daa0f2adfa1dd2c9970da28ba584437744031e',
   );
 });
 

@@ -6,6 +6,8 @@ import type { HockeyExperienceLevel } from '../../shared/hockey-terms/hockey-ter
 
 export interface InitializeManagerProfileInput {
   username: string;
+  firstName: string;
+  lastName: string;
   favoriteTeamAbbreviation: string;
   favoriteTeamVariantId: string;
   hockeyExperience: HockeyExperienceLevel;
@@ -18,6 +20,8 @@ export interface SaveManagerIdentityInput {
 
 export interface SaveManagerAccountSettingsInput extends SaveManagerIdentityInput {
   username: string;
+  firstName: string;
+  lastName: string;
   teamIdentityUnlocks: TeamIdentityUnlockRequirement[];
   reducedMotion: boolean;
   defaultLandingPage: 'dashboard' | 'lastLeague';
@@ -31,6 +35,8 @@ type SaveManagerProfileAction = 'initialize' | 'identity' | 'settings';
 interface SaveManagerProfileRequest {
   action: SaveManagerProfileAction;
   username?: string;
+  firstName?: string;
+  lastName?: string;
   favoriteTeamAbbreviation: string;
   favoriteTeamVariantId: string;
   teamIdentityUnlocks?: TeamIdentityUnlockRequirement[];

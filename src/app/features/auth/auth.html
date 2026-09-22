@@ -62,15 +62,56 @@
           [attr.aria-describedby]="errorMessage() ? 'auth-error-message' : successMessage() ? 'auth-success-message' : null"
         >
           @if (isRegistering()) {
+            <section class="registration-name-section" aria-label="Your name">
+              <div class="registration-name-grid">
+                <label class="form-field" for="auth-first-name">
+                  <span>First Name</span>
+                  <input
+                    #firstNameInput
+                    id="auth-first-name"
+                    name="firstName"
+                    [(ngModel)]="firstName"
+                    (ngModelChange)="clearInvalidField('firstName')"
+                    placeholder="First name"
+                    autocomplete="given-name"
+                    maxlength="50"
+                    required
+                    [attr.aria-invalid]="invalidField() === 'firstName' ? 'true' : null"
+                    [attr.aria-describedby]="invalidField() === 'firstName' ? 'auth-error-message' : null"
+                    [disabled]="loading()"
+                  />
+                </label>
+
+                <label class="form-field" for="auth-last-name">
+                  <span>Last Name</span>
+                  <input
+                    #lastNameInput
+                    id="auth-last-name"
+                    name="lastName"
+                    [(ngModel)]="lastName"
+                    (ngModelChange)="clearInvalidField('lastName')"
+                    placeholder="Last name"
+                    autocomplete="family-name"
+                    maxlength="50"
+                    required
+                    [attr.aria-invalid]="invalidField() === 'lastName' ? 'true' : null"
+                    [attr.aria-describedby]="invalidField() === 'lastName' ? 'auth-error-message' : null"
+                    [disabled]="loading()"
+                  />
+                </label>
+              </div>
+
+            </section>
+
             <label class="form-field" for="auth-username">
-              <span>Username</span>
+              <span>Display Name</span>
               <input
                 #usernameInput
                 id="auth-username"
                 name="username"
                 [(ngModel)]="username"
                 (ngModelChange)="clearInvalidField('username')"
-                placeholder="Choose a username"
+                placeholder="Choose a nickname or username"
                 autocomplete="username"
                 autocapitalize="none"
                 spellcheck="false"
@@ -82,12 +123,21 @@
               />
             </label>
 
-            <section
-              class="registration-team-picker"
-              role="group"
-              aria-labelledby="favorite-team-label"
-              aria-describedby="favorite-team-help"
-            >
+            <details class="registration-personalization">
+              <summary>
+                <span>
+                  <strong>Optional profile</strong>
+                </span>
+                <b aria-hidden="true">⌄</b>
+              </summary>
+
+              <div class="registration-personalization-body">
+                <section
+                  class="registration-team-picker"
+                  role="group"
+                  aria-labelledby="favorite-team-label"
+                  aria-describedby="favorite-team-help"
+                >
               <div class="team-picker-heading">
                 <div>
                   <span id="favorite-team-label">Favorite NHL Team</span>
@@ -145,30 +195,32 @@
                   </button>
                 }
               </div>
-            </section>
+                </section>
 
-            <section class="hockey-experience-picker" aria-labelledby="hockey-experience-label">
-              <div class="experience-picker-heading">
-                <span id="hockey-experience-label">How familiar are you with hockey?</span>
-              </div>
+                <section class="hockey-experience-picker" aria-labelledby="hockey-experience-label">
+                  <div class="experience-picker-heading">
+                    <span id="hockey-experience-label">How familiar are you with hockey?</span>
+                  </div>
 
-              <div class="experience-choice-grid" role="radiogroup" aria-label="Choose hockey familiarity">
-                @for (option of hockeyExperienceOptions; track option.value) {
-                  <button
-                    type="button"
-                    role="radio"
-                    class="experience-choice"
-                    [class.selected]="hockeyExperience() === option.value"
-                    [attr.aria-checked]="hockeyExperience() === option.value"
-                    [disabled]="loading()"
-                    (click)="selectHockeyExperience(option.value)"
-                  >
-                    <strong>{{ option.title }}</strong>
-                    <small>{{ option.description }}</small>
-                  </button>
-                }
+                  <div class="experience-choice-grid" role="radiogroup" aria-label="Choose hockey familiarity">
+                    @for (option of hockeyExperienceOptions; track option.value) {
+                      <button
+                        type="button"
+                        role="radio"
+                        class="experience-choice"
+                        [class.selected]="hockeyExperience() === option.value"
+                        [attr.aria-checked]="hockeyExperience() === option.value"
+                        [disabled]="loading()"
+                        (click)="selectHockeyExperience(option.value)"
+                      >
+                        <strong>{{ option.title }}</strong>
+                        <small>{{ option.description }}</small>
+                      </button>
+                    }
+                  </div>
+                </section>
               </div>
-            </section>
+            </details>
           }
 
           <label class="form-field" for="auth-email">

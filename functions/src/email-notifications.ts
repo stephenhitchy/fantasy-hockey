@@ -18,6 +18,10 @@ import {
   FIRESTORE_LEAGUE_ID_OPTIONS,
   FIRESTORE_PLAYER_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
+import {
+  buildVerificationContinuationUrl,
+  normalizeVerificationInviteCode,
+} from './shared/email/verification-continuation.util';
 
 const FUNCTION_REGION = 'us-central1';
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
@@ -186,6 +190,68 @@ function getFromName(): string {
 function getReplyToAddress(): string | null {
   const configured = asString(process.env['EMAIL_REPLY_TO']);
   return isValidEmail(configured) ? configured : null;
+}
+
+function buildBrandedVerificationEmailShell(options: {
+  eyebrow: string;
+  heading: string;
+  intro: string;
+  bodyHtml: string;
+  buttonLabel?: string;
+  buttonUrl?: string;
+  footer: string;
+}): string {
+  const button = options.buttonLabel && options.buttonUrl
+    ? `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:28px 0 12px;">
+        <tr>
+          <td align="center">
+            <a href="${escapeHtml(options.buttonUrl)}" style="display:inline-block;padding:15px 24px;border:2px solid #bde5ff;border-radius:10px;background:#2d6fb5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:800;letter-spacing:.02em;box-shadow:0 5px 0 #153d68;">${escapeHtml(options.buttonLabel)}</a>
+          </td>
+        </tr>
+      </table>`
+    : '';
+
+  return `<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#09121d;color:#f7f9fc;font-family:Arial,Helvetica,sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(options.intro)}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#09121d;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;border:1px solid #344b63;border-radius:18px;background:#142235;box-shadow:0 18px 45px rgba(0,0,0,.35);overflow:hidden;">
+            <tr>
+              <td style="height:7px;background:#2d6fb5;border-bottom:2px solid #9ed8ff;"></td>
+            </tr>
+            <tr>
+              <td style="padding:26px 30px 8px;">
+                <table role="presentation" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="width:48px;height:48px;border:2px solid #9ed8ff;border-radius:50%;background:#0d1723;color:#ffffff;font-size:13px;font-weight:900;text-align:center;vertical-align:middle;">RR</td>
+                    <td style="padding-left:13px;">
+                      <p style="margin:0;color:#9ed8ff;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;">RinkRat Fantasy</p>
+                      <p style="margin:4px 0 0;color:#ffffff;font-size:17px;font-weight:800;">Six games. One fair matchup.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 30px 30px;">
+                <p style="margin:0 0 8px;color:#9ed8ff;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;">${escapeHtml(options.eyebrow)}</p>
+                <h1 style="margin:0;color:#ffffff;font-size:30px;line-height:1.12;">${escapeHtml(options.heading)}</h1>
+                <p style="margin:18px 0 0;color:#c5d2df;font-size:16px;line-height:1.6;">${escapeHtml(options.intro)}</p>
+                <div style="margin-top:22px;padding:18px;border:1px solid #344b63;border-radius:12px;background:#0f1b2a;color:#e8eef5;font-size:15px;line-height:1.65;">${options.bodyHtml}</div>
+                ${button}
+                <p style="margin:28px 0 0;padding-top:18px;border-top:1px solid #34465a;color:#8fa2b5;font-size:12px;line-height:1.55;">${escapeHtml(options.footer)}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }
 
 function buildEmailShell(options: {
@@ -394,17 +460,27 @@ async function releaseRateLimit(key: string): Promise<void> {
 async function sendVerificationEmail(
   userId: string,
   email: string,
-  username: string,
+  recipientName: string,
   category: 'welcome-verification' | 'verification-resend',
+  inviteCode = '',
 ): Promise<void> {
-  const verificationLink = await getAuth().generateEmailVerificationLink(
+  const firebaseVerificationLink = await getAuth().generateEmailVerificationLink(
     email,
     buildActionCodeSettings(),
   );
-  const safeName = username || 'Manager';
+  const normalizedInviteCode = normalizeVerificationInviteCode(inviteCode);
+  const verificationLink = buildVerificationContinuationUrl({
+    appBaseUrl: getAppBaseUrl(),
+    firebaseVerificationLink,
+    inviteCode: normalizedInviteCode,
+  });
+  const safeName = recipientName || 'Manager';
   const isWelcome = category === 'welcome-verification';
-  const subject = isWelcome
-    ? 'Welcome to RinkRat Fantasy — verify your email'
+  const joinsLeague = Boolean(normalizedInviteCode);
+  const subject = joinsLeague
+    ? 'Verify your email and join your RinkRat league'
+    : isWelcome
+      ? 'Welcome to RinkRat Fantasy — verify your email'
     : 'Verify your RinkRat Fantasy email';
 
   const text = [
@@ -416,23 +492,27 @@ async function sendVerificationEmail(
     '',
     verificationLink,
     '',
-    'After verification, you can enable optional injury email alerts from Account Settings.',
+    joinsLeague
+      ? 'This link verifies your email and returns you to your saved league invitation. If you open it in a different browser, sign in once to finish joining.'
+      : 'After verification, you can enable optional injury email alerts from Account Settings.',
     '',
     'You received this transactional email because this address was used for a RinkRat Fantasy account.',
   ].join('\n');
 
-  const html = buildEmailShell({
-    eyebrow: isWelcome ? 'Account Created' : 'Email Verification',
-    heading: isWelcome ? `Welcome, ${safeName}` : 'Verify your email',
+  const html = buildBrandedVerificationEmailShell({
+    eyebrow: joinsLeague ? 'League Invitation Ready' : isWelcome ? 'Account Created' : 'Email Verification',
+    heading: joinsLeague ? `One click from your league, ${safeName}` : isWelcome ? `Welcome, ${safeName}` : 'Verify your email',
     intro: isWelcome
       ? 'Your RinkRat Fantasy account was created successfully.'
       : 'Confirm that this email address belongs to you.',
     bodyHtml: `
-      <p style="margin:0;">Verifying your address helps protect your account and unlocks optional injury alert emails.</p>
-      <p style="margin:14px 0 0;color:#aebfce;">If you did not create this account, you can safely ignore this message.</p>`,
-    buttonLabel: 'Verify Email',
+      <p style="margin:0;font-weight:700;color:#ffffff;">${joinsLeague ? 'Verify your email and RinkRat will continue the league invitation automatically.' : 'Verifying your address helps protect your account and unlocks optional injury alert emails.'}</p>
+      <p style="margin:12px 0 0;color:#aebfce;">${joinsLeague ? 'If your mail app opens a different browser, sign in to the same RinkRat account once and your invitation will still be waiting.' : 'If you did not create this account, you can safely ignore this message.'}</p>`,
+    buttonLabel: joinsLeague ? 'Verify Email & Join League' : 'Verify Email',
     buttonUrl: verificationLink,
-    footer: 'This is a transactional account message from RinkRat Fantasy. Injury alerts remain disabled until you enable them in Account Settings.',
+    footer: joinsLeague
+      ? 'You requested this message while joining a RinkRat Fantasy league. If that was not you, ignore this email.'
+      : 'This is a transactional account message from RinkRat Fantasy. Injury alerts remain disabled until you enable them in Account Settings.',
   });
 
   try {
@@ -1961,6 +2041,10 @@ export const resendVerificationEmail = onCall(
 
     const profile = profileSnapshot.data() ?? {};
     const username = asString(profile['username']) || 'Manager';
+    const recipientName = asString(profile['firstName']) || username;
+    const inviteCode = normalizeVerificationInviteCode(
+      asRecord(request.data)['inviteCode'],
+    );
     const onboardingResolved = hasReleasedOnboardingVerification(profile);
     const profileShowsEmailHistory = hasOnboardingEmailHistory(profile);
     const rateLimitKey = `verification-${userId}`;
@@ -2045,8 +2129,9 @@ export const resendVerificationEmail = onCall(
       await sendVerificationEmail(
         userId,
         user.email,
-        username,
+        recipientName,
         firstSend ? 'welcome-verification' : 'verification-resend',
+        inviteCode,
       );
     } catch (error: unknown) {
       await releaseRateLimit(rateLimitKey).catch(() => undefined);

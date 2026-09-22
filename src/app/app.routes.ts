@@ -33,6 +33,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'verify-email',
+    title: 'Verify Email',
+    loadComponent: () =>
+      import('./features/auth/verify-email/verify-email').then(
+        (module) => module.VerifyEmail,
+      ),
+  },
+  {
     path: '',
     title: 'RinkRat Resources',
     loadComponent: () =>

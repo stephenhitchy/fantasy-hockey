@@ -401,6 +401,32 @@
             <input class="rr-field" [(ngModel)]="username" placeholder="Manager name" />
           </label>
 
+          <section class="league-identity-fields" aria-label="League identity">
+            <div class="private-name-grid">
+              <label class="form-field rr-field-group">
+                <span>First Name</span>
+                <input
+                  class="rr-field"
+                  [(ngModel)]="firstName"
+                  placeholder="First name"
+                  autocomplete="given-name"
+                  maxlength="50"
+                />
+              </label>
+
+              <label class="form-field rr-field-group">
+                <span>Last Name</span>
+                <input
+                  class="rr-field"
+                  [(ngModel)]="lastName"
+                  placeholder="Last name"
+                  autocomplete="family-name"
+                  maxlength="50"
+                />
+              </label>
+            </div>
+          </section>
+
           <section class="hockey-experience-settings" aria-labelledby="hockey-experience-settings-title">
             <div class="panel-heading compact">
               <div>

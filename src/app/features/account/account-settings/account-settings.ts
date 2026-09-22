@@ -117,6 +117,8 @@ export class AccountSettings {
   >([]);
 
   username = '';
+  firstName = '';
+  lastName = '';
   favoriteTeamAbbreviation = RINKRAT_NEUTRAL_ABBREVIATION;
   favoriteTeamVariantId = DEFAULT_TEAM_IDENTITY_VARIANT_ID;
   hockeyExperience: HockeyExperienceLevel = DEFAULT_HOCKEY_EXPERIENCE_LEVEL;
@@ -255,6 +257,8 @@ export class AccountSettings {
 
       this.leagueSummaries.set(summaries);
       this.username = profile?.username ?? '';
+      this.firstName = profile?.firstName ?? '';
+      this.lastName = profile?.lastName ?? '';
       this.favoriteTeamAbbreviation =
         profile?.favoriteTeamAbbreviation || RINKRAT_NEUTRAL_ABBREVIATION;
       this.hockeyExperience = normalizeHockeyExperienceLevel(profile?.hockeyExperience);
@@ -701,6 +705,8 @@ export class AccountSettings {
 
     const user = auth.currentUser;
     const normalizedUsername = this.username.trim();
+    const normalizedFirstName = this.firstName.trim().replace(/\s+/gu, ' ');
+    const normalizedLastName = this.lastName.trim().replace(/\s+/gu, ' ');
 
     if (!user) {
       this.errorMessage.set('You must be logged in.');
@@ -712,11 +718,18 @@ export class AccountSettings {
       return;
     }
 
+    if (Boolean(normalizedFirstName) !== Boolean(normalizedLastName)) {
+      this.errorMessage.set('Enter both first and last name, or leave both blank.');
+      return;
+    }
+
     this.saving.set(true);
 
     try {
       await updateUserAccountSettings(user.uid, {
         username: normalizedUsername,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
         favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
         favoriteTeamVariantId: this.favoriteTeamVariantId,
         teamIdentityUnlocks: this.unlockedIdentityRequirements(),
@@ -734,6 +747,9 @@ export class AccountSettings {
           ? {
               ...current,
               username: normalizedUsername,
+              ...(normalizedFirstName && normalizedLastName
+                ? { firstName: normalizedFirstName, lastName: normalizedLastName }
+                : {}),
               favoriteTeamAbbreviation: this.favoriteTeamAbbreviation,
               favoriteTeamVariantId: this.favoriteTeamVariantId,
               teamIdentityUnlocks: this.unlockedIdentityRequirements(),

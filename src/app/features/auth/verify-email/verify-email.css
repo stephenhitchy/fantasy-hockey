@@ -1,0 +1,148 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+}
+
+.verification-page {
+  display: grid;
+  min-height: 100dvh;
+  padding: 24px 16px;
+  place-items: center;
+  background:
+    radial-gradient(circle at 12% 10%, color-mix(in srgb, var(--user-team-primary) 28%, transparent), transparent 36%),
+    radial-gradient(circle at 88% 90%, color-mix(in srgb, var(--user-team-accent) 18%, transparent), transparent 34%),
+    var(--rr-color-page);
+  color: var(--rr-color-text);
+}
+
+.verification-shell {
+  width: min(100%, 620px);
+}
+
+.verification-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.verification-brand img {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.verification-brand div {
+  display: grid;
+  gap: 3px;
+}
+
+.verification-brand span,
+.eyebrow {
+  color: var(--user-team-accent);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.verification-brand strong {
+  font-size: 18px;
+}
+
+.verification-card {
+  display: grid;
+  justify-items: center;
+  padding: clamp(28px, 7vw, 48px);
+  border: 2px solid var(--user-team-outline);
+  border-radius: var(--rr-radius-lg);
+  background: color-mix(in srgb, var(--rr-color-surface-raised) 97%, transparent);
+  box-shadow: var(--rr-shadow-card);
+  text-align: center;
+}
+
+.verification-card .eyebrow {
+  margin: 20px 0 0;
+}
+
+.verification-card h1 {
+  margin: 8px 0 0;
+  font-size: clamp(28px, 7vw, 42px);
+  line-height: 1.05;
+}
+
+.verification-card > p:not(.eyebrow) {
+  max-width: 470px;
+  margin: 16px 0 0;
+  color: var(--rr-color-text-muted);
+  line-height: 1.65;
+}
+
+.success-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border: 3px solid var(--rr-color-success);
+  border-radius: 50%;
+  color: var(--rr-color-success);
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.primary-action,
+.secondary-action {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24px;
+  padding: 12px 20px;
+  border-radius: var(--rr-radius-sm);
+  font: inherit;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-action {
+  border: 2px solid var(--user-team-accent);
+  background: var(--user-team-primary);
+  color: var(--user-team-on-primary);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--user-team-primary) 45%, #000000);
+}
+
+.secondary-action {
+  margin-top: 12px;
+  border: 1px solid var(--rr-color-border-strong);
+  background: transparent;
+  color: var(--rr-color-text);
+}
+
+.primary-action:focus-visible,
+.secondary-action:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .verification-page {
+    align-items: start;
+  }
+
+  .verification-card {
+    padding: 28px 20px;
+  }
+
+  .primary-action,
+  .secondary-action {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verification-card .icon-loading {
+    animation: none;
+  }
+}

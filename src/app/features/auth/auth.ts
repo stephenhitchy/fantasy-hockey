@@ -56,6 +56,8 @@ import {
   styleUrl: './auth.css',
 })
 export class Auth implements OnDestroy {
+  @ViewChild('firstNameInput') private firstNameInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('lastNameInput') private lastNameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
   @ViewChild('favoriteTeamGrid') private favoriteTeamGrid?: ElementRef<HTMLElement>;
   @ViewChild('emailInput') private emailInput?: ElementRef<HTMLInputElement>;
@@ -64,6 +66,8 @@ export class Auth implements OnDestroy {
   email = '';
   password = '';
   username = '';
+  firstName = '';
+  lastName = '';
   readonly favoriteTeamAbbreviation = signal(RINKRAT_NEUTRAL_ABBREVIATION);
   readonly hockeyExperience = signal<HockeyExperienceLevel>(
     DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
@@ -73,7 +77,9 @@ export class Auth implements OnDestroy {
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
   readonly loading = signal(false);
-  readonly invalidField = signal<'username' | 'team' | 'email' | 'password' | ''>('');
+  readonly invalidField = signal<
+    'firstName' | 'lastName' | 'username' | 'team' | 'email' | 'password' | ''
+  >('');
   readonly mascotCelebrating = signal(false);
   readonly pendingInviteCode = signal('');
   readonly inviteContinuationActive = computed(() => Boolean(this.pendingInviteCode()));
@@ -240,6 +246,8 @@ export class Auth implements OnDestroy {
             this.email,
             this.password,
             this.username,
+            this.firstName,
+            this.lastName,
             this.favoriteTeamAbbreviation(),
             this.hockeyExperience(),
           )
@@ -568,7 +576,7 @@ export class Auth implements OnDestroy {
     this.invalidField.set('');
   }
 
-  clearInvalidField(field: 'username' | 'email' | 'password'): void {
+  clearInvalidField(field: 'firstName' | 'lastName' | 'username' | 'email' | 'password'): void {
     if (this.invalidField() === field) {
       this.invalidField.set('');
       this.errorMessage.set('');
@@ -576,6 +584,24 @@ export class Auth implements OnDestroy {
   }
 
   private validateCurrentForm(): boolean {
+    if (this.isRegistering() && !this.firstName.trim()) {
+      this.setValidationError(
+        'firstName',
+        'Enter your first name so league members can identify you.',
+        this.firstNameInput?.nativeElement,
+      );
+      return false;
+    }
+
+    if (this.isRegistering() && !this.lastName.trim()) {
+      this.setValidationError(
+        'lastName',
+        'Enter your last name so league members can identify you.',
+        this.lastNameInput?.nativeElement,
+      );
+      return false;
+    }
+
     if (this.isRegistering() && this.username.trim().length < 2) {
       this.setValidationError(
         'username',
@@ -629,7 +655,7 @@ export class Auth implements OnDestroy {
   }
 
   private setValidationError(
-    field: 'username' | 'team' | 'email' | 'password',
+    field: 'firstName' | 'lastName' | 'username' | 'team' | 'email' | 'password',
     message: string,
     focusTarget?: HTMLElement,
   ): void {

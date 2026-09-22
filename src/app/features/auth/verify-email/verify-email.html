@@ -1,0 +1,83 @@
+<section class="verification-page">
+  <div class="verification-shell">
+    <header class="verification-brand">
+      <img src="/assets/branding/rinkrat-headshot.png" alt="RinkRat mascot" />
+      <div>
+        <span>RinkRat Fantasy</span>
+        <strong>Email Verification</strong>
+      </div>
+    </header>
+
+    <article
+      class="verification-card"
+      aria-live="polite"
+      [attr.aria-busy]="stage() === 'verifying' || stage() === 'continuing'"
+    >
+      @switch (stage()) {
+        @case ('verifying') {
+          <span class="pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
+          <p class="eyebrow">Securing Your Account</p>
+          <h1>Verifying your email…</h1>
+          <p>Keep this page open. This normally takes only a moment.</p>
+        }
+
+        @case ('continuing') {
+          <span class="pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
+          <p class="eyebrow">Email Verified</p>
+          <h1>Joining your league…</h1>
+          <p>Your invitation was restored. RinkRat is securely creating your team now.</p>
+        }
+
+        @case ('sign-in') {
+          <span class="pixel-icon icon-team icon-xl" aria-hidden="true"></span>
+          <p class="eyebrow">{{ inviteCode() ? 'Invitation Preserved' : 'Email Verified' }}</p>
+          <h1>{{ inviteCode() ? 'Your invitation is still waiting' : 'Sign in to your verified account' }}</h1>
+          <p>
+            Your mail app opened a browser where you are not signed in. Sign in to
+            @if (verifiedEmail()) {
+              the account for <strong>{{ verifiedEmail() }}</strong>
+            } @else {
+              the account that received this email
+            }
+            and RinkRat will confirm verification{{ inviteCode() ? ' and finish the league invitation' : '' }}.
+          </p>
+          <button type="button" class="primary-action" (click)="continueToSignIn()">
+            {{ inviteCode() ? 'Sign In & Join League' : 'Sign In to RinkRat' }}
+          </button>
+        }
+
+        @case ('account-mismatch') {
+          <span class="pixel-icon icon-warning icon-xl" aria-hidden="true"></span>
+          <p class="eyebrow">Email Verified</p>
+          <h1>Switch to the invited account</h1>
+          <p>
+            This browser is signed in to a different RinkRat account. Your invitation is safe;
+            switch accounts to finish joining it.
+          </p>
+          <button type="button" class="primary-action" (click)="continueToSignIn()">
+            {{ inviteCode() ? 'Switch Account & Join' : 'Switch Account & Continue' }}
+          </button>
+        }
+
+        @case ('verified') {
+          <span class="success-mark" aria-hidden="true">✓</span>
+          <p class="eyebrow">Account Ready</p>
+          <h1>Email verified</h1>
+          <p>Your RinkRat account is protected and ready for the next faceoff.</p>
+          <button type="button" class="primary-action" (click)="openVerifiedAccount()">
+            Open RinkRat
+          </button>
+        }
+
+        @case ('error') {
+          <span class="pixel-icon icon-warning icon-xl" aria-hidden="true"></span>
+          <p class="eyebrow">Link Needs Attention</p>
+          <h1>Verification could not finish</h1>
+          <p role="alert">{{ errorMessage() }}</p>
+          <a class="primary-action link-action" routerLink="/">Return to RinkRat</a>
+          <a class="secondary-action" routerLink="/support">Get Help</a>
+        }
+      }
+    </article>
+  </div>
+</section>

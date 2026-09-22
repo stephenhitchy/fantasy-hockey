@@ -141,6 +141,7 @@
               <div>
                 <span>League Team</span>
                 <strong>{{ currentTeam.teamName }}</strong>
+                <small class="team-manager-name">{{ getTeamManagerLabel(currentTeam.ownerId) }}</small>
               </div>
             </div>
 
@@ -528,7 +529,10 @@
             <div class="team-card-heading">
               <span class="manager-name-with-avatar">
                 <app-manager-avatar [profileIconId]="getTeamProfileIconId(team.ownerId)" [label]="getTeamManagerLabel(team.ownerId)" size="sm" />
-                <h3>{{ team.teamName }}</h3>
+                <div class="team-name-stack">
+                  <h3>{{ team.teamName }}</h3>
+                  <small>{{ getTeamManagerLabel(team.ownerId) }}</small>
+                </div>
               </span>
               <span>{{ getWinPercentage(team) }}</span>
             </div>

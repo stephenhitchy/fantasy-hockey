@@ -94,11 +94,12 @@ test('verification refresh re-enters the reconciler instead of bypassing Trainin
   assert.doesNotMatch(refreshBlock, /await this\.joinLeague\(user\);/);
 });
 
-test('manager-facing copy explains that Training Camp unlocks a manual verification send', async () => {
+test('manager-facing copy explains that verification continues the saved invitation', async () => {
   const template = await read('src/app/features/leagues/invite-link/invite-link.html');
 
   assert.match(template, /send the first verification email yourself/);
-  assert.match(template, /Click below to send the first verification email/);
+  assert.match(template, /Verify Email &amp; Join League/);
+  assert.match(template, /finish automatically/);
   assert.doesNotMatch(template, /released the verification email/);
 });
 

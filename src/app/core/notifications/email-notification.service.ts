@@ -29,6 +29,10 @@ interface TestInjuryEmailResponse {
   message: string;
 }
 
+export interface VerificationEmailRequestOptions {
+  inviteCode?: string;
+}
+
 export async function requestPasswordResetEmail(email: string): Promise<void> {
   const callable = httpsCallable<{ email: string }, PasswordResetResponse>(
     functions,
@@ -41,16 +45,21 @@ export async function requestPasswordResetEmail(email: string): Promise<void> {
 
 async function callVerificationEmail(
   action: 'status' | 'send',
+  options: VerificationEmailRequestOptions = {},
 ): Promise<VerificationEmailResponse> {
   const callable = httpsCallable<
-    { action: 'status' | 'send' },
+    { action: 'status' | 'send'; inviteCode?: string },
     VerificationEmailResponse
   >(
     functions,
     'resendVerificationEmail',
     { timeout: 35_000 },
   );
-  const result = await callable({ action });
+  const inviteCode = options.inviteCode?.trim().toUpperCase();
+  const result = await callable({
+    action,
+    ...(inviteCode ? { inviteCode } : {}),
+  });
   return result.data;
 }
 
@@ -58,8 +67,10 @@ export async function getVerificationEmailState(): Promise<VerificationEmailResp
   return callVerificationEmail('status');
 }
 
-export async function requestVerificationEmail(): Promise<VerificationEmailResponse> {
-  return callVerificationEmail('send');
+export async function requestVerificationEmail(
+  options: VerificationEmailRequestOptions = {},
+): Promise<VerificationEmailResponse> {
+  return callVerificationEmail('send', options);
 }
 
 

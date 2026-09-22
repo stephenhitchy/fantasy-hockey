@@ -119,9 +119,11 @@
               <p>
                 Training Camp is saved.
                 @if (verificationEmailPreviouslySent()) {
-                  Open the latest verification email sent to <b>{{ verificationEmail() }}</b>, then return here.
+                  Open the latest email sent to <b>{{ verificationEmail() }}</b> and press
+                  <b>Verify Email &amp; Join League</b>. RinkRat will finish the join automatically.
                 } @else {
-                  Click below to send the first verification email to <b>{{ verificationEmail() }}</b>, open the link, then return here.
+                  Send the first email to <b>{{ verificationEmail() }}</b>, then press
+                  <b>Verify Email &amp; Join League</b> in that message. This invitation will finish automatically.
                 }
               </p>
             </div>

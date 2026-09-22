@@ -403,6 +403,10 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
 
     'manager-profile-authority.ts',
 
+    // League onboarding adds an isolated verification-link continuation helper.
+
+    'shared/email/verification-continuation.util.ts',
+
     'roster-authority.ts',
 
     'roster-moves.ts',

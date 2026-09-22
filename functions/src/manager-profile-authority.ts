@@ -46,6 +46,8 @@ export type ManagerProfileAction = 'initialize' | 'identity' | 'settings';
 interface SaveManagerProfileRequest {
   action?: unknown;
   username?: unknown;
+  firstName?: unknown;
+  lastName?: unknown;
   favoriteTeamAbbreviation?: unknown;
   favoriteTeamVariantId?: unknown;
   teamIdentityUnlocks?: unknown;
@@ -111,6 +113,23 @@ function requireUsername(value: unknown): string {
   }
 
   return username;
+}
+
+function requirePersonName(value: unknown, label: string): string {
+  const name = asString(value).replace(/\s+/gu, ' ');
+
+  if (
+    name.length < 1 ||
+    name.length > 50 ||
+    /[\u0000-\u001F\u007F]/u.test(name)
+  ) {
+    throw new HttpsError(
+      'invalid-argument',
+      `${label} must be between 1 and 50 characters.`,
+    );
+  }
+
+  return name;
 }
 
 function requireFavoriteTeamAbbreviation(value: unknown): string {
@@ -250,6 +269,15 @@ export const saveManagerProfile = onCall(
 
       if (action === 'initialize') {
         const username = requireUsername(input.username);
+        const requestedFirstName = asString(input.firstName);
+        const requestedLastName = asString(input.lastName);
+        const shouldSavePersonName = Boolean(requestedFirstName || requestedLastName);
+        const firstName = shouldSavePersonName
+          ? requirePersonName(requestedFirstName, 'First name')
+          : '';
+        const lastName = shouldSavePersonName
+          ? requirePersonName(requestedLastName, 'Last name')
+          : '';
         const hockeyExperience = requireHockeyExperience(input.hockeyExperience);
         const timestamp = FieldValue.serverTimestamp();
 
@@ -259,6 +287,7 @@ export const saveManagerProfile = onCall(
             uid: userId,
             email,
             username,
+            ...(shouldSavePersonName ? { firstName, lastName } : {}),
             favoriteTeamAbbreviation,
             favoriteTeamVariantId,
             hockeyExperience,
@@ -336,6 +365,19 @@ export const saveManagerProfile = onCall(
       }
 
       const username = requireUsername(input.username);
+      const requestedFirstName = asString(input.firstName);
+      const requestedLastName = asString(input.lastName);
+      const existingFirstName = asString(existingData['firstName']);
+      const existingLastName = asString(existingData['lastName']);
+      const shouldSavePersonName = Boolean(
+        requestedFirstName || requestedLastName || existingFirstName || existingLastName,
+      );
+      const firstName = shouldSavePersonName
+        ? requirePersonName(requestedFirstName || existingFirstName, 'First name')
+        : '';
+      const lastName = shouldSavePersonName
+        ? requirePersonName(requestedLastName || existingLastName, 'Last name')
+        : '';
       const teamIdentityUnlocks = requireTeamIdentityUnlocks(
         existingData['teamIdentityUnlocks'] ?? [],
       );
@@ -371,6 +413,7 @@ export const saveManagerProfile = onCall(
         userRef,
         {
           username,
+          ...(shouldSavePersonName ? { firstName, lastName } : {}),
           favoriteTeamAbbreviation,
           favoriteTeamVariantId,
           teamIdentityUnlocks,

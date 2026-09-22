@@ -391,6 +391,10 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
 
         'src/manager-profile-authority.ts',
 
+        // League onboarding adds an isolated verification-link continuation helper.
+
+        'src/shared/email/verification-continuation.util.ts',
+
         'src/roster-authority.ts',
 
         'src/roster-moves.ts',

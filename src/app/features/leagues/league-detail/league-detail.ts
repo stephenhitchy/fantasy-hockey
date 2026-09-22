@@ -60,6 +60,10 @@ import { FantasyTeam, listenToLeagueTeams, updateTeamName } from '../../../core/
 
 import { startPlayerAvailabilityListenerForLeague } from '../../../core/player/player-availability.service';
 import { forgetRememberedLastLeagueId } from '../../../core/user/user-theme.service';
+import {
+  getPublicManagerProfilesForLeague,
+  type LeagueManagerProfile,
+} from '../../../core/user/user.service';
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
@@ -123,6 +127,7 @@ export class LeagueDetail implements OnDestroy {
 
   league = signal<League | null>(null);
   teams = signal<FantasyTeam[]>([]);
+  leagueManagerProfiles = signal<Record<string, LeagueManagerProfile>>({});
   draft = signal<FantasyDraft | null>(null);
   cycle = signal<FantasyCycle | null>(null);
   matchups = signal<FantasyMatchup[]>([]);
@@ -182,6 +187,7 @@ export class LeagueDetail implements OnDestroy {
   private draftEntryRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
   private hasEnteredDraftRoom = false;
   private memberRemovalReturnFocus: HTMLElement | null = null;
+  private loadedManagerOwnerKey = '';
 
   private readonly countdownTimer = setInterval(() => {
     if (!this.destroyed) {
@@ -507,6 +513,7 @@ export class LeagueDetail implements OnDestroy {
 
       this.stopTeamListener = listenToLeagueTeams(leagueId, (teams) => {
         this.teams.set(teams);
+        void this.loadLeagueManagerProfiles(teams);
 
         if (!this.renameTeamOpen()) {
           this.teamNameDraft = this.myTeam()?.teamName ?? '';
@@ -1603,10 +1610,52 @@ export class LeagueDetail implements OnDestroy {
   }
 
   getTeamManagerLabel(ownerId: string | null | undefined): string {
+    const profile = ownerId ? this.leagueManagerProfiles()[ownerId] : null;
+    const fullName = [profile?.firstName, profile?.lastName]
+      .map((value) => value?.trim() ?? '')
+      .filter(Boolean)
+      .join(' ');
+
+    if (fullName) {
+      return fullName;
+    }
+
     const team = ownerId
       ? this.teams().find((candidate) => candidate.ownerId === ownerId)
       : null;
     return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
+  }
+
+  private async loadLeagueManagerProfiles(teams: FantasyTeam[]): Promise<void> {
+    const ownerIds = [...new Set(teams.map((team) => team.ownerId).filter(Boolean))].sort();
+    const ownerKey = ownerIds.join('|');
+
+    if (!this.leagueId || ownerKey === this.loadedManagerOwnerKey) {
+      return;
+    }
+
+    this.loadedManagerOwnerKey = ownerKey;
+
+    if (ownerIds.length === 0) {
+      this.leagueManagerProfiles.set({});
+      return;
+    }
+
+    try {
+      const profiles = await getPublicManagerProfilesForLeague(this.leagueId, ownerIds);
+
+      if (this.destroyed || ownerKey !== this.loadedManagerOwnerKey) {
+        return;
+      }
+
+      this.leagueManagerProfiles.set(Object.fromEntries(profiles));
+    } catch (error: unknown) {
+      if (ownerKey === this.loadedManagerOwnerKey) {
+        this.loadedManagerOwnerKey = '';
+      }
+
+      console.warn('Unable to load league-scoped manager names.', error);
+    }
   }
 
 }

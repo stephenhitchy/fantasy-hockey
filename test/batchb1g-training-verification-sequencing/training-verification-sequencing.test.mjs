@@ -74,7 +74,10 @@ test('Training Camp completion and explicit exit both unlock a manual first veri
   assert.match(component, /markPendingLeagueInviteTrainingCampComplete/);
   assert.match(component, /getVerificationEmailState/);
   assert.match(component, /verificationSendButtonLabel/);
-  assert.match(component, /return 'Finish Later'/);
+  assert.match(
+    component,
+    /this\.inviteContinuationActive\(\) \? 'Join League First' : 'Finish Later'/,
+  );
   assert.doesNotMatch(component, /RinkRat is sending the verification email now/);
   assert.doesNotMatch(template, /Finish Later &amp; Verify/);
   assert.match(template, /I Verified — Continue/);

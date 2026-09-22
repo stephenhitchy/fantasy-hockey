@@ -100,11 +100,14 @@ test('completion, deferral, verification, and invite continuation authority rema
   assert.match(source, /completeTrainingCamp\(this\.userId\)/);
   assert.match(source, /deferTrainingCamp\(this\.userId\)/);
   assert.match(source, /markPendingLeagueInviteTrainingCampComplete/);
-  assert.match(source, /requestVerificationEmail\(\)/);
+  assert.match(
+    source,
+    /requestVerificationEmail\(\{[\s\S]*?inviteCode: this\.inviteContinuationActive\(\)[\s\S]*?this\.pendingInviteCode\(\)[\s\S]*?undefined,[\s\S]*?\}\)/,
+  );
   assert.match(source, /getVerificationEmailState\(\)/);
   assert.match(source, /hasResolvedTrainingCampOnboarding/);
   assert.match(source, /continueAfterTrainingCamp/);
-  assert.match(source, /return 'Finish Later'/);
+  assert.match(source, /'Join League First' : 'Finish Later'/);
   assert.doesNotMatch(template, /Later &amp; Verify/);
   assert.match(template, /I Verified — Continue/);
   assert.match(template, /verificationSendButtonLabel\(\)/);
@@ -182,9 +185,9 @@ test('B1I preserves scoring, projections, rules, and server authority', async ()
   );
   assert.equal(
     await sha256FunctionsIndexBeforeD1M(),
-    // D1M and L1B add reviewed exports; the dashboard also extends only the
-    // existing NHL proxy's scoreboard cache to exact dated score routes.
-    '408d5813121495adc0cf94c0d2d8bc49f8ffd4d6e88c0e83d40ec38ae540ac40',
+    // D1M and L1B add reviewed exports; league onboarding also extends the
+    // existing membership-authorized profile lookup with private league names.
+    'b3a95b5b259de04b092d88a298daa0f2adfa1dd2c9970da28ba584437744031e',
   );
 });
 

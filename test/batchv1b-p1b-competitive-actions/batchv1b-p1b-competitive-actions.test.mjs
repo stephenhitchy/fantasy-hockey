@@ -284,6 +284,10 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
 
         'src/manager-profile-authority.ts',
 
+        // League onboarding adds an isolated verification-link continuation helper.
+
+        'src/shared/email/verification-continuation.util.ts',
+
         'src/roster-authority.ts',
 
         'src/roster-moves.ts',

@@ -23,6 +23,8 @@ export interface UserProfile {
   uid: string;
   email: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
   createdAt?: unknown;
   favoriteTeamAbbreviation?: string;
   favoriteTeamVariantId?: string;
@@ -51,8 +53,15 @@ export interface PublicUserProfile {
   updatedAt?: unknown;
 }
 
+export interface LeagueManagerProfile extends PublicUserProfile {
+  firstName?: string;
+  lastName?: string;
+}
+
 export interface UserAccountSettingsUpdate {
   username: string;
+  firstName: string;
+  lastName: string;
   favoriteTeamAbbreviation: string;
   favoriteTeamVariantId: string;
   teamIdentityUnlocks: TeamIdentityUnlockRequirement[];
@@ -69,7 +78,7 @@ interface PublicManagerProfilesRequest {
 }
 
 interface PublicManagerProfilesResponse {
-  profiles: PublicUserProfile[];
+  profiles: LeagueManagerProfile[];
 }
 
 const PUBLIC_PROFILE_TEAM_ABBREVIATIONS = new Set([
@@ -104,6 +113,24 @@ function normalizePublicProfile(
         ? profile.favoriteTeamVariantId.trim()
         : 'current-home',
     updatedAt: 'updatedAt' in profile ? profile.updatedAt : undefined,
+  };
+}
+
+function normalizeLeagueManagerProfile(
+  uid: string,
+  profile: Partial<UserProfile | LeagueManagerProfile>,
+): LeagueManagerProfile {
+  const publicProfile = normalizePublicProfile(uid, profile);
+  const firstName = typeof profile.firstName === 'string'
+    ? profile.firstName.trim().replace(/\s+/gu, ' ')
+    : '';
+  const lastName = typeof profile.lastName === 'string'
+    ? profile.lastName.trim().replace(/\s+/gu, ' ')
+    : '';
+
+  return {
+    ...publicProfile,
+    ...(firstName && lastName ? { firstName, lastName } : {}),
   };
 }
 
@@ -189,7 +216,7 @@ export async function getPublicUserProfile(uid: string): Promise<PublicUserProfi
 export async function getPublicManagerProfilesForLeague(
   leagueId: string,
   userIds: string[],
-): Promise<ReadonlyMap<string, PublicUserProfile>> {
+): Promise<ReadonlyMap<string, LeagueManagerProfile>> {
   const uniqueUserIds = [...new Set(userIds.map((value) => value.trim()).filter(Boolean))];
 
   if (!leagueId.trim() || uniqueUserIds.length === 0) {
@@ -203,14 +230,14 @@ export async function getPublicManagerProfilesForLeague(
   );
   const response = await callable({ leagueId: leagueId.trim(), userIds: uniqueUserIds });
   const profiles = Array.isArray(response.data.profiles) ? response.data.profiles : [];
-  const result = new Map<string, PublicUserProfile>();
+  const result = new Map<string, LeagueManagerProfile>();
 
   for (const profile of profiles) {
     if (!profile || typeof profile.uid !== 'string' || !profile.uid) {
       continue;
     }
 
-    result.set(profile.uid, normalizePublicProfile(profile.uid, profile));
+    result.set(profile.uid, normalizeLeagueManagerProfile(profile.uid, profile));
   }
 
   return result;
@@ -276,6 +303,8 @@ export async function updateUserAccountSettings(
 
   await saveManagerAccountSettings({
     username: settings.username,
+    firstName: settings.firstName,
+    lastName: settings.lastName,
     favoriteTeamAbbreviation: settings.favoriteTeamAbbreviation,
     favoriteTeamVariantId: settings.favoriteTeamVariantId,
     teamIdentityUnlocks: settings.teamIdentityUnlocks,

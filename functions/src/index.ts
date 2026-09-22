@@ -2558,6 +2558,8 @@ export const refreshDailyPlayerAvailability = onCall(
 interface PublicManagerProfileResult {
   uid: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
   favoriteTeamAbbreviation: string;
   favoriteTeamVariantId: string;
 }
@@ -2580,6 +2582,12 @@ function normalizePublicManagerProfile(
   return {
     uid: userId,
     username: asString(source['username']) || 'Unknown Manager',
+    ...(asString(source['firstName']) && asString(source['lastName'])
+      ? {
+          firstName: asString(source['firstName']),
+          lastName: asString(source['lastName']),
+        }
+      : {}),
     favoriteTeamAbbreviation: PUBLIC_PROFILE_TEAM_ABBREVIATIONS.has(abbreviation)
       ? abbreviation
       : 'RR',
@@ -2681,7 +2689,10 @@ export const getPublicManagerProfiles = onCall(
         )
       ) {
         batch.set(db.doc(`publicProfiles/${userId}`), {
-          ...profile,
+          uid: profile.uid,
+          username: profile.username,
+          favoriteTeamAbbreviation: profile.favoriteTeamAbbreviation,
+          favoriteTeamVariantId: profile.favoriteTeamVariantId,
           updatedAt: FieldValue.serverTimestamp()
         });
         backfillCount += 1;

@@ -258,6 +258,8 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         // S3B intentionally hardens these public security boundaries.
         'src/email-notifications.ts',
         'src/manager-profile-authority.ts',
+        // League onboarding adds an isolated verification-link continuation helper.
+        'src/shared/email/verification-continuation.util.ts',
         'src/roster-authority.ts',
         'src/roster-moves.ts',
 

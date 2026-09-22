@@ -218,7 +218,9 @@ export class LeagueInviteLink implements OnDestroy {
     this.sendingVerification.set(true);
 
     try {
-      const result = await requestVerificationEmail();
+      const result = await requestVerificationEmail({
+        inviteCode: this.inviteCode(),
+      });
 
       if (result.alreadyVerified) {
         this.statusMessage.set('Your email is verified. Joining the league now...');
@@ -238,7 +240,7 @@ export class LeagueInviteLink implements OnDestroy {
         );
       } else {
         this.statusMessage.set(
-          `${result.firstSend ? 'Verification email sent.' : 'Another verification email sent.'} Check your inbox and spam folder, open the link, then return to this page.`,
+          `${result.firstSend ? 'Verification email sent.' : 'Another verification email sent.'} Open “Verify Email & Join League” in your inbox. RinkRat will bring you back and finish the join automatically.`,
         );
       }
     } catch (error: unknown) {

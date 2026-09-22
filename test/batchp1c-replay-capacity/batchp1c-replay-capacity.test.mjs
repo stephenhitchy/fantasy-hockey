@@ -190,6 +190,10 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
     'src/manager-profile-authority.ts',
 
+    // League onboarding adds an isolated verification-link continuation helper.
+
+    'src/shared/email/verification-continuation.util.ts',
+
     'src/roster-authority.ts',
 
     'src/roster-moves.ts',
