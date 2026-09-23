@@ -3,10 +3,12 @@
 Status: source implementation, focused regression coverage, the complete
 inherited gate, both builds, final diff review, exact isolated-staging
 deployment, and one finalized stage-100 pass are complete at `a462006d`.
-Later client-only releases advanced `main` and staging Hosting, so the retained
-pass cannot satisfy the same-revision prerequisite for stage 500. A fresh
-stage-100 pass on the exact current revision remains required. Stage 500 is
-blocked.
+Exact `ce28fdf1` later completed a same-revision stage-100 repeat with excellent
+latency but exposed an evidence gap: four recovered transaction callbacks from
+intentional duplicate Draft deliveries were absent from the raw contention
+total. That run is retained as a failed diagnostic, its evidence must not be
+finalized as passing, and stage 500 remains blocked until the corrected
+operation-level counter passes a fresh exact-revision stage 100.
 
 ## Evidence-driven problem
 
@@ -91,6 +93,15 @@ the source-controlled same-revision gate correctly refuses to use this file as
 the prerequisite for stage 500. Preserve it without relabeling and repeat
 stage 100 after the current clean `main` is bound to site-pinned staging
 Hosting and both worker archives pass byte verification again.
+
+The later `ce28fdf1` repeat completed 100/100 operations and 10/10 intentional
+duplicates with zero terminal error, while recording Draft p95/p99 of 7/7
+milliseconds and scoring p95/p99 of 316/1,109 milliseconds. Monitoring and
+worker logs proved that four duplicate Draft transactions each recovered one
+Firestore callback retry. Because the raw summarizer inspected only
+first-result documents, it reported zero recovered contention. The run is not
+a pass even though all operations converged; the fixed one-percent contention
+gate must be evaluated from the corrected operation-level counter.
 
 ## Exact staging boundary and rollback
 

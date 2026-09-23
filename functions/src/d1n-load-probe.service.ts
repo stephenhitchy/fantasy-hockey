@@ -165,6 +165,9 @@ export async function processD1nLoadProbeIfPresent(
           {
             deliveryCount: FieldValue.increment(1),
             duplicateDeliveryCount: FieldValue.increment(1),
+            recoveredContentionCount: FieldValue.increment(
+              Math.max(0, transactionCallbackAttempts - 1),
+            ),
             lastDuplicateDeliveryAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
           },
@@ -219,6 +222,7 @@ export async function processD1nLoadProbeIfPresent(
           status: 'completed',
           deliveryCount: FieldValue.increment(1),
           transactionCallbackAttempts,
+          recoveredContentionCount: Math.max(0, transactionCallbackAttempts - 1),
           completedAt: Timestamp.fromMillis(completedAtMilliseconds),
           updatedAt: FieldValue.serverTimestamp(),
         },

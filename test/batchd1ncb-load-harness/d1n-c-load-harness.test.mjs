@@ -61,6 +61,7 @@ function completedDocuments(plan) {
     status: 'completed',
     deliveryCount: operation.expectedDeliveryCount,
     duplicateDeliveryCount: operation.duplicateDeliveryPlanned ? 1 : 0,
+    recoveredContentionCount: 0,
   }));
   const results = operations.map((operation, index) => {
     const localIndex = operation.ordinal - 1;
@@ -224,6 +225,21 @@ test('raw ramp evidence records deferred device coverage without claiming broade
   assert.equal(evidence.queue.draftQueueWarmupTaskCount, 900);
   assert.equal(evidence.queue.producerMilliseconds, 1_000);
   assert.equal(evidence.queue.drainMilliseconds, 125);
+  const operationsWithDuplicateContention = structuredClone(documents.operations);
+  const contendedDuplicate = operationsWithDuplicateContention.find(
+    (entry) => entry.duplicateDeliveryPlanned,
+  );
+  contendedDuplicate.recoveredContentionCount = 2;
+  const contendedEvidence = summarizeD1ncLoadResults({
+    ...common,
+    operations: operationsWithDuplicateContention,
+  });
+  assert.equal(contendedEvidence.operations.recoveredContention, 2);
+  assert.ok(
+    evaluateRampEvidence(contendedEvidence).issues.includes(
+      'recovered contention rate exceeds 1%',
+    ),
+  );
   assert.throws(
     () => summarizeD1ncLoadResults({
       ...common,

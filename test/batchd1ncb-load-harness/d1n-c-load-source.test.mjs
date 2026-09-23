@@ -36,6 +36,8 @@ test('synthetic service writes are isolated and the runtime guard is exact', () 
   assert.doesNotMatch(service, /rosters|standings|playoffs|transactions|playerWindows/);
   assert.match(service, /transaction\.create\(resultRef/);
   assert.match(service, /duplicateDeliveryCount: FieldValue\.increment\(1\)/);
+  assert.match(service, /recoveredContentionCount: FieldValue\.increment/);
+  assert.match(harness, /entry\.recoveredContentionCount/);
   assert.match(service, /if \(operationAuthorityValidated\)/);
   assert.match(service, /maxAttempts: 5/);
   assert.match(service, /d1nLoadProbeReservationDelayMilliseconds/);

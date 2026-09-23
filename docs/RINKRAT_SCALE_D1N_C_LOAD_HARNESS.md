@@ -296,6 +296,19 @@ the new clean `main`, let preflight reverify both immutable worker archives,
 and repeat/finalize stage 100 on that same revision. Do not relabel the retained
 `a462006d` evidence or weaken the same-revision gate.
 
+Exact `ce28fdf1` was subsequently bound to staging Hosting and both worker
+archives and completed 100/100 operations plus 10/10 intentional duplicates
+without a terminal error. Draft p95/p99 was 7/7 milliseconds and scoring
+p95/p99 was 316/1,109 milliseconds. Independent Monitoring and worker-log
+review nevertheless found four recovered Firestore transaction callbacks on
+duplicate Draft deliveries. The raw summarizer had counted callback retries
+only from first-result documents, so it incorrectly reported zero recovered
+contention. Preserve that run as a failed diagnostic and do not finalize it as
+a pass. The corrected worker records recovered contention on every operation,
+including duplicate deliveries, and the summarizer reads that operation-level
+counter. Repeat stage 100 on one exact clean revision after that correction is
+reviewed and staged; stage 500 remains blocked.
+
 See
 `docs/RINKRAT_FF1_34_DRAFT_QUEUE_RAMP.md`,
 `docs/RINKRAT_FF1_35_SUSTAINED_DRAFT_QUEUE_RAMP.md`,

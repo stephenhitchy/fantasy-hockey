@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-16
+Last updated: 2026-09-23
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -265,6 +265,17 @@ authorize stage 500 under the same-revision progression rule. Bind staging
 Hosting to the next clean merged revision, reverify both immutable worker
 archives, and repeat/finalize stage 100 on that exact revision before 500.
 Physical iPhone/Android evidence remains open independently.
+
+Exact `ce28fdf1` was then bound to staging Hosting and both worker archives and
+completed a fresh stage-100 run: 100/100 operations, 10/10 intentional
+duplicates, zero terminal errors, Draft p95/p99 7/7 milliseconds, and scoring
+p95/p99 316/1,109 milliseconds. Do not finalize that raw file as a pass.
+Monitoring and worker logs exposed four recovered Firestore callback retries
+on duplicate Draft deliveries that the results-only contention summary omitted.
+The narrow follow-up records contention on every operation and sums that
+operation-level field. Stage 500 remains blocked until the correction is
+reviewed, staged on one exact clean revision, and a fresh stage 100 passes the
+unchanged one-percent recovered-contention gate.
 
 ## Current Draft-room UX posture
 
@@ -705,15 +716,16 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 
 ## Current priority order
 
-1. Merge and verify the narrow FF1.39 evidence/runbook correction on clean
-   `main`. Do not relabel the passing `a462006d` file as a later revision.
-2. Have Stephen deploy only site-pinned staging Hosting from that exact clean
-   merge. The four FF1.39 Functions are already ACTIVE from `a462006d`; do not
-   redeploy them unless the read-only archive verifier finds a real mismatch.
+1. Merge and verify the narrow D1N-C recovered-contention evidence correction
+   on clean `main`. Preserve the passing `a462006d` file and failed `ce28fdf1`
+   diagnostic without relabeling either one.
+2. Have Stephen deploy only `processDraftClockDeadline`, archive-parity
+   `processLeagueAutomationTask`, and site-pinned staging Hosting from that
+   exact clean merge. No Production deployment belongs to this slice.
 3. Verify the exact staging manifest and both immutable load-worker archives,
-   then repeat/finalize stage 100 on the same revision. Preserve the passing
-   `a462006d` evidence and every earlier diagnostic. Advance to 500 only if the
-   new revision also passes every unchanged threshold and independent review.
+   then repeat/finalize stage 100 on the same revision. Advance to 500 only if
+   the corrected contention total and every other unchanged threshold pass
+   independent review.
 4. Complete the owner's two-manager supported-UI Draft rehearsal and record
    desktop/iPhone evidence plus the explicitly accepted missing Android risk,
    if Android remains unavailable.

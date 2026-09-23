@@ -95,6 +95,7 @@ test('concurrent duplicate delivery produces one result and bounded duplicate ev
     status: 'queued',
     deliveryCount: 0,
     duplicateDeliveryCount: 0,
+    recoveredContentionCount: 0,
   });
   const envelope = {
     d1nLoadProbe: {
@@ -126,6 +127,7 @@ test('concurrent duplicate delivery produces one result and bounded duplicate ev
   assert.equal(operationSnapshot.data().status, 'completed');
   assert.equal(operationSnapshot.data().deliveryCount, 2);
   assert.equal(operationSnapshot.data().duplicateDeliveryCount, 1);
+  assert.ok(operationSnapshot.data().recoveredContentionCount >= 1);
   assert.equal(shardSnapshot.data().completedCount, 1);
   assert.equal(shardSnapshot.data().duplicateDeliveryCount, 1);
 });
@@ -145,6 +147,7 @@ test('late delivery for a terminal synthetic run is acknowledged without mutatio
     status: 'queued',
     deliveryCount: 0,
     duplicateDeliveryCount: 0,
+    recoveredContentionCount: 0,
   });
   await runRef.update({ status: 'enqueue-error' });
   assert.equal(await processD1nLoadProbeIfPresent({

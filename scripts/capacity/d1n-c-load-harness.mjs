@@ -262,6 +262,7 @@ export function buildD1ncLoadRunPlan({
         status: 'queued',
         deliveryCount: 0,
         duplicateDeliveryCount: 0,
+        recoveredContentionCount: 0,
         duplicateDeliveryPlanned: false,
         expectedDeliveryCount: 1,
         scheduledAtMilliseconds,
@@ -587,8 +588,11 @@ export function summarizeD1ncLoadResults({
   );
   const retries = operations.reduce((sum, entry) =>
     sum + Math.max(0, Number(entry.deliveryCount ?? 0) - 1 - Number(entry.duplicateDeliveryCount ?? 0)), 0);
-  const recoveredContention = results.reduce((sum, entry) =>
-    sum + Math.max(0, Number(entry.transactionCallbackAttempts ?? 1) - 1), 0);
+  // Count retry callbacks from both first-result and duplicate-delivery
+  // transactions. Result documents exist only for the first writer, so using
+  // them alone hides contention recovered by a duplicate delivery.
+  const recoveredContention = operations.reduce((sum, entry) =>
+    sum + Math.max(0, Number(entry.recoveredContentionCount ?? 0)), 0);
   const duplicateDeliveryCount = operations.reduce(
     (sum, entry) => sum + Number(entry.duplicateDeliveryCount ?? 0),
     0,
