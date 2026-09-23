@@ -335,7 +335,7 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
 
   assert.equal(createHash('sha256').update(rules).digest('hex'), '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da');
   assert.equal(createHash('sha256').update(engine).digest('hex'), '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3');
-  assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
+  assert.equal(createHash('sha256').update(projection).digest('hex'), 'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(indexes).digest('hex'), '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13');
   assert.equal(
@@ -379,6 +379,11 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-asset-catalog.util.ts',
         'src/shared/core/projection/projection-snapshot.service.ts',
         'src/shared/core/projection/projection-snapshot-hash.util.ts',
+        // FF1.18 adds the reviewed prospect adapter and its optional V11 input.
+        'src/shared/core/cycle/cycle.service.ts',
+        'src/shared/core/projection/projection-v11.util.ts',
+        'src/shared/core/projection/prospect-projection.util.ts',
+        'src/shared/core/team/roster.models.ts',
         'package.json',
         'scripts/auth-security-baseline.cjs',
         'src/security-authority.ts',
@@ -477,6 +482,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '15b49efaabcf014cbffa8e1942f587f30d8d2703a57f934be63750a3f67ea302',
+    '57df59fffa26f826f129aca1ef694d79cd7e131fe0a5959941eb207b8ea982ea',
   );
 });

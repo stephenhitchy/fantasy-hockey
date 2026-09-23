@@ -84,6 +84,11 @@ export interface SharedProjectionSnapshotMetadata {
   projectionContext?: 'live' | 'historical-replay';
   projectionSeason?: string;
   availabilityRevision?: string;
+  prospectProjectionModelVersion?: number;
+  prospectEvidenceSnapshotId?: string;
+  prospectEvidenceRevision?: string;
+  prospectEvidenceRecordCount?: number;
+  prospectEvidenceMode?: 'disabled' | 'enabled';
   authoritySchemaVersion?: number;
   generatedByAuthority?: 'server';
   catalogSnapshotId?: string;
@@ -241,6 +246,28 @@ function normalizeMetadata(
       typeof data.availabilityRevision === 'string'
         ? data.availabilityRevision
         : undefined,
+    prospectProjectionModelVersion:
+      typeof data.prospectProjectionModelVersion === 'number'
+        ? data.prospectProjectionModelVersion
+        : undefined,
+    prospectEvidenceSnapshotId:
+      typeof data.prospectEvidenceSnapshotId === 'string'
+        ? data.prospectEvidenceSnapshotId
+        : undefined,
+    prospectEvidenceRevision:
+      typeof data.prospectEvidenceRevision === 'string'
+        ? data.prospectEvidenceRevision
+        : undefined,
+    prospectEvidenceRecordCount:
+      typeof data.prospectEvidenceRecordCount === 'number'
+        ? data.prospectEvidenceRecordCount
+        : undefined,
+    prospectEvidenceMode:
+      data.prospectEvidenceMode === 'enabled'
+        ? 'enabled'
+        : data.prospectEvidenceMode === 'disabled'
+          ? 'disabled'
+          : undefined,
     authoritySchemaVersion:
       typeof data.authoritySchemaVersion === 'number'
         ? data.authoritySchemaVersion

@@ -15,6 +15,8 @@ export type ProjectionDataSource =
   | 'current-season-baseline'
   | 'previous-season-form'
   | 'previous-season-baseline'
+  | 'translated-prospect-prior'
+  | 'prospect-nhl-blend'
   | 'conservative-baseline';
 
 export type SharedProjectionAvailabilityStatus =
@@ -179,6 +181,24 @@ export interface DraftProjection {
   projectionShootingPercentage?: number | null;
   projectionCurrentSeasonWeight?: number | null;
   projectionHistoricalWeight?: number | null;
+
+  /** Separately versioned pre-NHL evidence layer blended into Projection V11. */
+  prospectProjectionModelVersion?: number | null;
+  prospectEvidenceSnapshotId?: string | null;
+  prospectEvidenceAsOf?: string | null;
+  prospectEvidenceSource?: string | null;
+  prospectEvidenceConfidence?: number | null;
+  prospectTranslationConfidence?: number | null;
+  prospectPriorWeight?: number | null;
+  prospectNhlEvidenceWeight?: number | null;
+  prospectRoleLabel?: string | null;
+  prospectRoleConfidence?: number | null;
+  prospectAppearanceProbability?: number | null;
+  prospectExpectedAppearances?: number | null;
+  prospectOpportunityAdjustment?: number | null;
+  prospectMissingCategories?: string[] | null;
+  prospectQualityFlags?: string[] | null;
+  prospectEvidenceProvisional?: boolean | null;
 
   /** Estimated goals per 82 added or removed by shooting regression. */
   projectionShootingRegressionAdjustment?: number | null;

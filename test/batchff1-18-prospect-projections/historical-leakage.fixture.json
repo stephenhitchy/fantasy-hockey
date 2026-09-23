@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "synthetic-prospect-leakage-fixture-v1",
+  "split": "synthetic-fixture",
+  "source": "Fictional test-only observations",
+  "observations": [
+    {
+      "forecastDate": "2026-10-01",
+      "evidenceAsOf": "2026-10-02",
+      "outcomeThrough": "2026-10-20",
+      "madeNhl": true,
+      "assignedGames": 6,
+      "actualAppearances": 5,
+      "projectedAppearanceProbability": 0.8,
+      "projectedWindowPoints": 45,
+      "baselineWindowPoints": 30,
+      "actualWindowPoints": 47
+    },
+    {
+      "forecastDate": "2026-10-01",
+      "evidenceAsOf": "2026-09-18",
+      "outcomeThrough": "2026-10-20",
+      "madeNhl": false,
+      "assignedGames": 6,
+      "actualAppearances": 0,
+      "projectedAppearanceProbability": 0.1,
+      "projectedWindowPoints": 3,
+      "baselineWindowPoints": 24,
+      "actualWindowPoints": 0
+    }
+  ]
+}

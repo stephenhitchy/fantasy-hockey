@@ -343,7 +343,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-v11.util.ts'),
-    'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a',
+    'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9',
   );
   assert.equal(
     await sha256('firestore.rules'),
@@ -393,6 +393,11 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-asset-catalog.util.ts',
     'shared/core/projection/projection-snapshot.service.ts',
     'shared/core/projection/projection-snapshot-hash.util.ts',
+    // FF1.18 adds the reviewed prospect adapter and its optional V11 input.
+    'shared/core/cycle/cycle.service.ts',
+    'shared/core/projection/projection-v11.util.ts',
+    'shared/core/projection/prospect-projection.util.ts',
+    'shared/core/team/roster.models.ts',
     'security-authority.ts',
     'security-operations.ts',
     'shared/security/auth-security.util.ts',
@@ -485,7 +490,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-ranking.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 25,
-    digest: 'e9d9bc3c3b096baf0718ef9c37d6da7663de60ddac7e12fc2392c44fdd4f577f',
+    count: 22,
+    digest: '5b425f543f50343dae623c865dad86427db26bfaeb45fdea39c040069a573fb0',
   });
 });

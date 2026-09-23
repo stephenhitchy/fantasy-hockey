@@ -3,7 +3,7 @@ import {
   DraftPosition,
 } from '../draft/draft.models';
 
-export const DRAFT_RANKING_MODEL_VERSION = 2;
+export const DRAFT_RANKING_MODEL_VERSION = 3;
 
 const GOALIE_UNIT_TALENT_SCALE = 0.88;
 const GOALIE_UNIT_STARTER_TALENT_WEIGHT = 0.45;
@@ -11,7 +11,9 @@ const GOALIE_UNIT_STARTER_SCARCITY_WEIGHT = 0.4;
 const GOALIE_UNIT_STARTER_SLOT_CURVE_WEIGHT = 0.15;
 const GOALIE_UNIT_WAIVER_TALENT_WEIGHT = 0.08;
 const GOALIE_UNIT_WAIVER_SLOT_CURVE_WEIGHT = 0.12;
-const SKATER_WAIVER_TALENT_WEIGHT = 0.08;
+const SKATER_EXPECTED_TALENT_WEIGHT = 0.75;
+const SKATER_EXPECTED_SCARCITY_WEIGHT = 0.25;
+const SKATER_RESERVE_TALENT_WEIGHT = 0.08;
 
 const POSITION_REQUIREMENTS: Record<DraftPosition, number> = {
   LW: 3,
@@ -206,6 +208,51 @@ function getGoalieSlotCurveScore(
   return 12 - postStarterProgress * 10;
 }
 
+/**
+ * Skater demand is a forecast, not an eligibility boundary. Fade the first
+ * team-sized reserve band gradually so one projected position-rank place does
+ * not collapse an otherwise comparable skater's overall rank. Deep reserves
+ * retain the prior low talent weight, while Team Goalie Units continue to use
+ * their separate starter/waiver curve.
+ */
+function getSkaterDemandShare(
+  positionRank: number | null | undefined,
+  expectedCount: number,
+  teamCount: number,
+): number {
+  const safeRank =
+    typeof positionRank === 'number' && positionRank > 0
+      ? positionRank
+      : Number.MAX_SAFE_INTEGER;
+
+  if (safeRank <= expectedCount) {
+    return 1;
+  }
+
+  const reserveDistance = safeRank - expectedCount;
+  const transitionSlots = Math.max(2, teamCount);
+
+  return clamp(
+    1 - reserveDistance / (transitionSlots + 1),
+    0,
+    1,
+  );
+}
+
+function getSkaterScore(
+  talentScore: number,
+  scarcityScore: number,
+  demandShare: number,
+): number {
+  const talentWeight =
+    SKATER_RESERVE_TALENT_WEIGHT +
+    (SKATER_EXPECTED_TALENT_WEIGHT - SKATER_RESERVE_TALENT_WEIGHT) *
+      demandShare;
+
+  return talentScore * talentWeight +
+    scarcityScore * SKATER_EXPECTED_SCARCITY_WEIGHT * demandShare;
+}
+
 function getRosterAwareDraftedCounts(
   assets: DraftableAsset[],
   teamCount: number,
@@ -241,6 +288,47 @@ function getRosterAwareDraftedCounts(
   }
 
   return draftedCounts;
+}
+
+/**
+ * Keeps every projected starting goalie unit inside the modeled draft pool
+ * without making position demand a hard ordering bucket for skaters. The
+ * remaining draft-pool places are the highest-scoring skaters across all
+ * positions, so the reserve transition can stay gradual.
+ */
+function orderAssetsWithGoalieStarterCoverage(
+  assets: DraftableAsset[],
+  expectedCounts: Record<DraftPosition, number>,
+  positionRank: (asset: DraftableAsset) => number | null | undefined,
+  score: (asset: DraftableAsset) => number,
+  compareProjectionOrder: (
+    first: DraftableAsset,
+    second: DraftableAsset,
+  ) => number,
+): DraftableAsset[] {
+  const compare = (first: DraftableAsset, second: DraftableAsset) =>
+    score(second) - score(first) || compareProjectionOrder(first, second);
+  const expectedPoolSize = POSITIONS.reduce(
+    (total, position) => total + expectedCounts[position],
+    0,
+  );
+  const startingGoalies = assets.filter(
+    (asset) =>
+      asset.position === 'G' &&
+      (positionRank(asset) ?? Number.MAX_SAFE_INTEGER) <= expectedCounts.G,
+  );
+  const skaterPool = assets
+    .filter((asset) => asset.position !== 'G')
+    .sort(compare)
+    .slice(0, Math.max(0, expectedPoolSize - startingGoalies.length));
+  const expectedPoolKeys = new Set(
+    [...startingGoalies, ...skaterPool].map((asset) => asset.assetKey),
+  );
+
+  return [
+    ...assets.filter((asset) => expectedPoolKeys.has(asset.assetKey)).sort(compare),
+    ...assets.filter((asset) => !expectedPoolKeys.has(asset.assetKey)).sort(compare),
+  ];
 }
 
 /**
@@ -434,12 +522,20 @@ export function rankSharedProjectionAssets(
     const isCycleGoalieStarterCandidate =
       asset.position === 'G' &&
       (asset.cyclePositionRank ?? Number.MAX_SAFE_INTEGER) <= goalieStarterCount;
-    const isExpectedDraftCandidate =
-      (asset.draftPositionRank ?? Number.MAX_SAFE_INTEGER) <=
-      draftExpectedCounts[asset.position];
-    const isExpectedCycleCandidate =
-      (asset.cyclePositionRank ?? Number.MAX_SAFE_INTEGER) <=
-      cycleExpectedCounts[asset.position];
+    const draftSkaterDemandShare = asset.position === 'G'
+      ? 0
+      : getSkaterDemandShare(
+          asset.draftPositionRank,
+          draftExpectedCounts[asset.position],
+          safeTeamCount,
+        );
+    const cycleSkaterDemandShare = asset.position === 'G'
+      ? 0
+      : getSkaterDemandShare(
+          asset.cyclePositionRank,
+          cycleExpectedCounts[asset.position],
+          safeTeamCount,
+        );
     const draftScore =
       asset.position === 'G'
         ? isGoalieStarterCandidate
@@ -448,9 +544,11 @@ export function rankSharedProjectionAssets(
             draftGoalieSlotCurve * GOALIE_UNIT_STARTER_SLOT_CURVE_WEIGHT
           : draftTalentScore * GOALIE_UNIT_WAIVER_TALENT_WEIGHT +
             draftGoalieSlotCurve * GOALIE_UNIT_WAIVER_SLOT_CURVE_WEIGHT
-        : isExpectedDraftCandidate
-          ? draftTalentScore * 0.75 + draftScarcityScore * 0.25
-          : draftTalentScore * SKATER_WAIVER_TALENT_WEIGHT;
+        : getSkaterScore(
+            draftTalentScore,
+            draftScarcityScore,
+            draftSkaterDemandShare,
+          );
     const cycleScore =
       asset.position === 'G'
         ? isCycleGoalieStarterCandidate
@@ -459,9 +557,11 @@ export function rankSharedProjectionAssets(
             cycleGoalieSlotCurve * GOALIE_UNIT_STARTER_SLOT_CURVE_WEIGHT
           : cycleTalentScore * GOALIE_UNIT_WAIVER_TALENT_WEIGHT +
             cycleGoalieSlotCurve * GOALIE_UNIT_WAIVER_SLOT_CURVE_WEIGHT
-        : isExpectedCycleCandidate
-          ? cycleTalentScore * 0.75 + cycleScarcityScore * 0.25
-          : cycleTalentScore * SKATER_WAIVER_TALENT_WEIGHT;
+        : getSkaterScore(
+            cycleTalentScore,
+            cycleScarcityScore,
+            cycleSkaterDemandShare,
+          );
 
     return {
       ...asset,
@@ -473,44 +573,22 @@ export function rankSharedProjectionAssets(
     };
   });
 
-  const draftOrdered = [...scoredAssets].sort(
-    (first, second) => {
-      const firstDemandBucket =
-        (first.draftPositionRank ?? Number.MAX_SAFE_INTEGER) <=
-        draftExpectedCounts[first.position]
-          ? 0
-          : 1;
-      const secondDemandBucket =
-        (second.draftPositionRank ?? Number.MAX_SAFE_INTEGER) <=
-        draftExpectedCounts[second.position]
-          ? 0
-          : 1;
-
-      return firstDemandBucket - secondDemandBucket ||
-        getSortNumber(second.draftScore) - getSortNumber(first.draftScore) ||
-        compareDraftProjectionOrder(first, second);
-    },
+  const draftOrdered = orderAssetsWithGoalieStarterCoverage(
+    scoredAssets,
+    draftExpectedCounts,
+    (asset) => asset.draftPositionRank,
+    (asset) => getSortNumber(asset.draftScore),
+    compareDraftProjectionOrder,
   );
   const draftRankByKey = new Map(
     draftOrdered.map((asset, index) => [asset.assetKey, index + 1]),
   );
-  const cycleOrdered = [...scoredAssets].sort(
-    (first, second) => {
-      const firstDemandBucket =
-        (first.cyclePositionRank ?? Number.MAX_SAFE_INTEGER) <=
-        cycleExpectedCounts[first.position]
-          ? 0
-          : 1;
-      const secondDemandBucket =
-        (second.cyclePositionRank ?? Number.MAX_SAFE_INTEGER) <=
-        cycleExpectedCounts[second.position]
-          ? 0
-          : 1;
-
-      return firstDemandBucket - secondDemandBucket ||
-        getSortNumber(second.cycleScore) - getSortNumber(first.cycleScore) ||
-        compareCycleProjectionOrder(first, second);
-    },
+  const cycleOrdered = orderAssetsWithGoalieStarterCoverage(
+    scoredAssets,
+    cycleExpectedCounts,
+    (asset) => asset.cyclePositionRank,
+    (asset) => getSortNumber(asset.cycleScore),
+    compareCycleProjectionOrder,
   );
   const cycleRankByKey = new Map(
     cycleOrdered.map((asset, index) => [asset.assetKey, index + 1]),

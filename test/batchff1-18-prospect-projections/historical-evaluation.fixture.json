@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "synthetic-prospect-evaluation-fixture-v1",
+  "split": "synthetic-fixture",
+  "source": "Fictional test-only observations",
+  "observations": [
+    {
+      "playerId": 9000001,
+      "forecastDate": "2026-10-01",
+      "evidenceAsOf": "2026-09-20",
+      "outcomeThrough": "2026-10-20",
+      "madeNhl": true,
+      "assignedGames": 6,
+      "actualAppearances": 5,
+      "projectedAppearanceProbability": 0.8,
+      "projectedWindowPoints": 45,
+      "baselineWindowPoints": 30,
+      "actualWindowPoints": 47
+    },
+    {
+      "playerId": 9000002,
+      "forecastDate": "2026-10-01",
+      "evidenceAsOf": "2026-09-18",
+      "outcomeThrough": "2026-10-20",
+      "madeNhl": false,
+      "assignedGames": 6,
+      "actualAppearances": 0,
+      "projectedAppearanceProbability": 0.1,
+      "projectedWindowPoints": 3,
+      "baselineWindowPoints": 24,
+      "actualWindowPoints": 0
+    }
+  ]
+}

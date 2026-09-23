@@ -15,7 +15,7 @@ Firestore Rules, indexes, TTLs, queue mode, or any deployed resource.
 # Draft Batch D1.24 — League-Adjusted Rankings and Auto-Draft Bench Depth
 
 **Candidate:** RC65 / D1.24
-**Competitive models:** Production Scoring V4, Projection V11, Draft Ranking V2
+**Competitive models:** Production Scoring V4, Projection V11, Draft Ranking V3
 
 D1.24 separates raw fantasy-point projections from league-adjusted draft
 value. The ranking layer uses the exact fantasy-team count, required starters,
@@ -32,7 +32,7 @@ hides the remaining units from that manager's default player pool; the goalie
 filter and an explicit visibility control preserve manual access.
 
 Projection V11 statistical outputs and Production Scoring V4 are unchanged.
-Fresh snapshots carry Draft Ranking V2 compatibility evidence so old ranking
+Fresh snapshots carry Draft Ranking V3 compatibility evidence so old ranking
 snapshots are not silently reused. Full design, verification, deployment, and
 rollback details are in
 `docs/RINKRAT_DRAFT_D1_24_LEAGUE_ADJUSTED_RANKINGS.md`.

@@ -284,6 +284,6 @@ test('Production Scoring V3 and Projection V11 remain byte-for-byte unchanged', 
   );
   assert.equal(
     sha256(projectionV11Source),
-    'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a',
+    'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9',
   );
 });

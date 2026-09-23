@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "prospectModelVersion": 1,
+  "mode": "disabled",
+  "snapshotId": "prospect-layer-disabled-example",
+  "evidenceAsOf": "2026-09-22",
+  "retrievedAt": "2026-09-22T12:00:00.000Z",
+  "source": "operator rollback template",
+  "translationProfiles": [],
+  "records": []
+}

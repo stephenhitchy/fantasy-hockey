@@ -36,6 +36,10 @@ export interface ProjectionV11SkaterRateResult {
   historicalWeight: number;
   modelConfidence: number;
   componentModelUsed: boolean;
+  /** Share of the final component rates still supplied by pre-NHL evidence. */
+  prospectPriorWeight: number;
+  /** Complement of prospectPriorWeight; rises continuously with NHL evidence. */
+  nhlEvidenceWeight: number;
 }
 
 export interface ProjectionV11GoalieRateResult {
@@ -205,6 +209,22 @@ function getSkaterRate(
   return value / gamesPlayed;
 }
 
+function getProspectRate(
+  stats: Partial<ProjectionSkaterStatLine> | undefined,
+  key: SkaterRateKey,
+): number | null {
+  if (!stats || typeof stats[key] !== 'number' || !Number.isFinite(stats[key])) {
+    return null;
+  }
+
+  if (key === 'averageTimeOnIceMinutes') {
+    return stats[key] > 0 ? stats[key] : null;
+  }
+
+  const gamesPlayed = normalizeGamesPlayed(stats);
+  return gamesPlayed > 0 ? stats[key] / gamesPlayed : null;
+}
+
 function weightedAverage(
   values: Array<{ value: number | null; weight: number }>,
   fallback: number,
@@ -225,6 +245,17 @@ function weightedAverage(
   );
 }
 
+function getProspectEvidenceWeight(
+  confidence: number | undefined,
+  totalNhlGames: number,
+  stabilizationGames: number,
+): number {
+  const sampleFade = stabilizationGames / (totalNhlGames + stabilizationGames);
+  const careerFade = 1 / (1 + totalNhlGames / 82);
+
+  return clamp(confidence ?? 0, 0, 100) / 100 * sampleFade * careerFade * 0.9;
+}
+
 function getHistoricalRate(input: {
   key: SkaterRateKey;
   prior: PositionRatePrior;
@@ -232,6 +263,9 @@ function getHistoricalRate(input: {
   previousCompletedStats?: Partial<ProjectionSkaterStatLine>;
   latestSeasonWeight: number;
   previousSeasonWeight: number;
+  prospectPriorStatsPer82?: Partial<ProjectionSkaterStatLine>;
+  prospectPriorConfidence?: number;
+  totalNhlGames: number;
 }): number {
   const latestGames = normalizeGamesPlayed(input.latestCompletedStats);
   const previousGames = normalizeGamesPlayed(input.previousCompletedStats);
@@ -247,6 +281,14 @@ function getHistoricalRate(input: {
     previousGames > 0 ? 0.15 : 0,
     1,
   );
+  const prospectRate = getProspectRate(input.prospectPriorStatsPer82, input.key);
+  const prospectSampleWeight = prospectRate === null
+    ? 0
+    : getProspectEvidenceWeight(
+        input.prospectPriorConfidence,
+        input.totalNhlGames,
+        stabilizationGames,
+      );
 
   return weightedAverage(
     [
@@ -257,6 +299,10 @@ function getHistoricalRate(input: {
       {
         value: getSkaterRate(input.previousCompletedStats, input.key),
         weight: input.previousSeasonWeight * previousSampleWeight,
+      },
+      {
+        value: prospectRate,
+        weight: prospectSampleWeight,
       },
       {
         value: priorValue,
@@ -289,15 +335,46 @@ function getShootingPercentage(
   return goals / shots;
 }
 
+function getProspectShootingPercentage(
+  stats: Partial<ProjectionSkaterStatLine> | undefined,
+): number | null {
+  if (
+    typeof stats?.shotsOnGoal !== 'number' ||
+    !Number.isFinite(stats.shotsOnGoal) ||
+    stats.shotsOnGoal <= 0 ||
+    typeof stats.goals !== 'number' ||
+    !Number.isFinite(stats.goals)
+  ) {
+    return null;
+  }
+
+  return stats.goals / stats.shotsOnGoal;
+}
+
 function getHistoricalShootingPercentage(input: {
   prior: PositionRatePrior;
   latestCompletedStats?: Partial<ProjectionSkaterStatLine>;
   previousCompletedStats?: Partial<ProjectionSkaterStatLine>;
   latestSeasonWeight: number;
   previousSeasonWeight: number;
+  prospectPriorStatsPer82?: Partial<ProjectionSkaterStatLine>;
+  prospectPriorConfidence?: number;
+  totalNhlGames: number;
 }): number {
   const latestShots = finiteOrZero(input.latestCompletedStats?.shotsOnGoal);
   const previousShots = finiteOrZero(input.previousCompletedStats?.shotsOnGoal);
+  const prospectShots = finiteOrZero(input.prospectPriorStatsPer82?.shotsOnGoal);
+  const prospectShootingPercentage = getProspectShootingPercentage(
+    input.prospectPriorStatsPer82,
+  );
+  const prospectWeight = prospectShootingPercentage === null
+    ? 0
+    : getProspectEvidenceWeight(
+        input.prospectPriorConfidence,
+        input.totalNhlGames,
+        38,
+      ) *
+      clamp(prospectShots / 180, 0.2, 1);
 
   return weightedAverage(
     [
@@ -308,6 +385,10 @@ function getHistoricalShootingPercentage(input: {
       {
         value: getShootingPercentage(input.previousCompletedStats),
         weight: input.previousSeasonWeight * clamp(previousShots / 180, 0, 1),
+      },
+      {
+        value: prospectShootingPercentage,
+        weight: prospectWeight,
       },
       {
         value: input.prior.shootingPercentage,
@@ -338,6 +419,8 @@ export function buildProjectionV11SkaterRates(input: {
   previousCompletedStats?: Partial<ProjectionSkaterStatLine>;
   latestSeasonWeight?: number;
   previousSeasonWeight?: number;
+  prospectPriorStatsPer82?: Partial<ProjectionSkaterStatLine>;
+  prospectPriorConfidence?: number;
 }): ProjectionV11SkaterRateResult {
   const prior = POSITION_RATE_PRIORS[input.position];
   const latestSeasonWeight = clamp(input.latestSeasonWeight ?? 0.72, 0.45, 0.92);
@@ -345,8 +428,10 @@ export function buildProjectionV11SkaterRates(input: {
   const currentGames = normalizeGamesPlayed(input.currentStats);
   const latestGames = normalizeGamesPlayed(input.latestCompletedStats);
   const previousGames = normalizeGamesPlayed(input.previousCompletedStats);
+  const totalNhlGames = currentGames + latestGames + previousGames;
   const rates = {} as Record<SkaterRateKey, number>;
   const currentWeights: number[] = [];
+  const prospectWeights: number[] = [];
 
   for (const key of SKATER_RATE_KEYS) {
     const historicalRate = getHistoricalRate({
@@ -356,6 +441,9 @@ export function buildProjectionV11SkaterRates(input: {
       previousCompletedStats: input.previousCompletedStats,
       latestSeasonWeight,
       previousSeasonWeight,
+      prospectPriorStatsPer82: input.prospectPriorStatsPer82,
+      prospectPriorConfidence: input.prospectPriorConfidence,
+      totalNhlGames,
     });
     const currentRate = getSkaterRate(input.currentStats, key);
     const currentWeight = currentRate === null
@@ -366,6 +454,36 @@ export function buildProjectionV11SkaterRates(input: {
       ? historicalRate
       : currentRate * currentWeight + historicalRate * (1 - currentWeight);
     currentWeights.push(currentWeight);
+    const prospectRate = getProspectRate(input.prospectPriorStatsPer82, key);
+    const prospectHistoricalWeight = prospectRate === null
+      ? 0
+      : getProspectEvidenceWeight(
+          input.prospectPriorConfidence,
+          totalNhlGames,
+          STABILIZATION_GAMES[key],
+        );
+    const latestHistoricalWeight = input.latestCompletedStats
+      ? latestSeasonWeight * clamp(
+          latestGames / Math.max(12, STABILIZATION_GAMES[key]),
+          latestGames > 0 ? 0.2 : 0,
+          1,
+        )
+      : 0;
+    const previousHistoricalWeight = input.previousCompletedStats
+      ? previousSeasonWeight * clamp(
+          previousGames / Math.max(12, STABILIZATION_GAMES[key]),
+          previousGames > 0 ? 0.15 : 0,
+          1,
+        )
+      : 0;
+    const totalHistoricalWeight = prospectHistoricalWeight +
+      latestHistoricalWeight + previousHistoricalWeight + 0.08;
+
+    prospectWeights.push(
+      totalHistoricalWeight > 0
+        ? (1 - currentWeight) * prospectHistoricalWeight / totalHistoricalWeight
+        : 0,
+    );
   }
 
   const historicalShootingPercentage = getHistoricalShootingPercentage({
@@ -374,6 +492,9 @@ export function buildProjectionV11SkaterRates(input: {
     previousCompletedStats: input.previousCompletedStats,
     latestSeasonWeight,
     previousSeasonWeight,
+    prospectPriorStatsPer82: input.prospectPriorStatsPer82,
+    prospectPriorConfidence: input.prospectPriorConfidence,
+    totalNhlGames,
   });
   const currentShots = finiteOrZero(input.currentStats?.shotsOnGoal);
   const currentShootingPercentage = getShootingPercentage(input.currentStats);
@@ -425,7 +546,7 @@ export function buildProjectionV11SkaterRates(input: {
     getSkaterRate(input.latestCompletedStats, key) !== null ||
     getSkaterRate(input.previousCompletedStats, key) !== null
   ).length / SKATER_RATE_KEYS.length;
-  const modelConfidence = clamp(
+  const nhlModelConfidence = clamp(
     34 +
       clamp(currentGames / 45, 0, 1) * 24 +
       clamp(historyEquivalentGames / 82, 0, 1) * 30 +
@@ -433,6 +554,14 @@ export function buildProjectionV11SkaterRates(input: {
     35,
     97,
   );
+  const prospectConfidenceContribution = input.prospectPriorStatsPer82
+    ? clamp(input.prospectPriorConfidence ?? 0, 0, 100) *
+      (1 - clamp(totalNhlGames / 82, 0, 1)) *
+      0.78
+    : 0;
+  const modelConfidence = Math.max(nhlModelConfidence, prospectConfidenceContribution);
+  const prospectPriorWeight = prospectWeights.reduce((total, weight) => total + weight, 0) /
+    Math.max(1, prospectWeights.length);
 
   return {
     expectedStatsPer82,
@@ -442,7 +571,13 @@ export function buildProjectionV11SkaterRates(input: {
     currentSeasonWeight: averageCurrentWeight,
     historicalWeight: 1 - averageCurrentWeight,
     modelConfidence,
-    componentModelUsed: currentGames + latestGames + previousGames > 0,
+    componentModelUsed:
+      currentGames + latestGames + previousGames > 0 ||
+      Boolean(input.prospectPriorStatsPer82),
+    prospectPriorWeight,
+    nhlEvidenceWeight: input.prospectPriorStatsPer82
+      ? 1 - prospectPriorWeight
+      : 1,
   };
 }
 

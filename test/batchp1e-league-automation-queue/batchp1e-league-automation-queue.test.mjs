@@ -234,7 +234,7 @@ test('competitive scoring, Projection V11, Firestore rules, and indexes remain u
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-v11.util.ts'),
-    'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a',
+    'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9',
   );
   assert.equal(
     await sha256('firestore.rules'),

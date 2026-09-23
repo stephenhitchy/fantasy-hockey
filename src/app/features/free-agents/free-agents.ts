@@ -2360,6 +2360,10 @@ export class FreeAgents implements OnDestroy {
         return 'Previous season + recent form';
       case 'previous-season-baseline':
         return 'Previous-season baseline';
+      case 'translated-prospect-prior':
+        return 'Translated pre-NHL evidence';
+      case 'prospect-nhl-blend':
+        return 'Prospect prior + NHL sample';
       case 'conservative-baseline':
         return 'Conservative position baseline';
       default:

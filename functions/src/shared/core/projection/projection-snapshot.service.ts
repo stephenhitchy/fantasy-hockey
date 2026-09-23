@@ -61,6 +61,12 @@ import {
   requiresCompleteTeamScheduleInputForGeneration,
 } from './team-schedule-input-completeness.util';
 import { isDraftAvailabilityEvidenceUsable } from '../../../draft-readiness.util';
+import {
+  buildProspectProjectionPriorMap,
+  normalizeProspectEvidenceSnapshot,
+  PROSPECT_PROJECTION_MODEL_VERSION,
+  type ProspectProjectionPrior,
+} from './prospect-projection.util';
 
 export const SHARED_PROJECTION_VERSION = 11;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -101,6 +107,12 @@ export interface SharedProjectionSnapshotMetadata {
   availabilityRevision?: string;
   /** Privacy-safe identity set used by both injury matching and this Draft pool. */
   availabilityRosterIdentityHash?: string;
+  /** Server-owned evidence layer; absent/disabled preserves legacy V11 output. */
+  prospectProjectionModelVersion?: number;
+  prospectEvidenceSnapshotId?: string;
+  prospectEvidenceRevision?: string;
+  prospectEvidenceRecordCount?: number;
+  prospectEvidenceMode?: 'disabled' | 'enabled';
   teamScheduleInputContractVersion?: number;
   teamScheduleInputCompleteness?: 'complete' | 'not-required';
   authoritySchemaVersion?: number;
@@ -249,6 +261,28 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
       typeof value.availabilityRevision === 'string'
         ? value.availabilityRevision
         : undefined,
+    prospectProjectionModelVersion:
+      typeof value.prospectProjectionModelVersion === 'number'
+        ? value.prospectProjectionModelVersion
+        : undefined,
+    prospectEvidenceSnapshotId:
+      typeof value.prospectEvidenceSnapshotId === 'string'
+        ? value.prospectEvidenceSnapshotId
+        : undefined,
+    prospectEvidenceRevision:
+      typeof value.prospectEvidenceRevision === 'string'
+        ? value.prospectEvidenceRevision
+        : undefined,
+    prospectEvidenceRecordCount:
+      typeof value.prospectEvidenceRecordCount === 'number'
+        ? value.prospectEvidenceRecordCount
+        : undefined,
+    prospectEvidenceMode:
+      value.prospectEvidenceMode === 'enabled'
+        ? 'enabled'
+        : value.prospectEvidenceMode === 'disabled'
+          ? 'disabled'
+          : undefined,
     availabilityRosterIdentityHash:
       isDraftNhlRosterIdentityHash(value.availabilityRosterIdentityHash)
         ? value.availabilityRosterIdentityHash
@@ -830,6 +864,11 @@ interface ProjectionGenerationContext {
   draftReadinessSourceAttemptId: string | null;
   availabilityRefreshAttemptId: string | null;
   draftReadinessNhlRosterIdentityHash: string | null;
+  prospectPriorByPlayerId: ReadonlyMap<number, ProspectProjectionPrior>;
+  prospectEvidenceSnapshotId: string;
+  prospectEvidenceRevision: string;
+  prospectEvidenceRecordCount: number;
+  prospectEvidenceMode: 'disabled' | 'enabled';
 }
 
 export interface ProjectionAvailabilityEvidence {
@@ -847,6 +886,14 @@ interface ProjectionAvailabilityContext extends ProjectionAvailabilityEvidence {
   records: ReadonlyMap<number, PlayerAvailabilityDatabaseRecord>;
 }
 
+interface ProspectProjectionContext {
+  priors: ReadonlyMap<number, ProspectProjectionPrior>;
+  snapshotId: string;
+  revision: string;
+  recordCount: number;
+  mode: 'disabled' | 'enabled';
+}
+
 const VALID_AVAILABILITY_STATUSES = new Set<PlayerAvailabilityStatus>([
   'active',
   'day-to-day',
@@ -857,6 +904,33 @@ const VALID_AVAILABILITY_STATUSES = new Set<PlayerAvailabilityStatus>([
   'personal-leave',
   'unknown',
 ]);
+
+async function loadProspectProjectionContext(): Promise<ProspectProjectionContext> {
+  const snapshot = await getDoc(doc(db, 'appData', 'prospectProjectionEvidence'));
+
+  if (!snapshot.exists()) {
+    return {
+      priors: new Map(),
+      snapshotId: 'absent',
+      revision: 'absent',
+      recordCount: 0,
+      mode: 'disabled',
+    };
+  }
+
+  const normalized = normalizeProspectEvidenceSnapshot(snapshot.data());
+  const revision = createHash('sha256')
+    .update(JSON.stringify(normalized))
+    .digest('hex');
+
+  return {
+    priors: buildProspectProjectionPriorMap(normalized),
+    snapshotId: normalized.snapshotId,
+    revision,
+    recordCount: normalized.records.length,
+    mode: normalized.mode,
+  };
+}
 
 function sanitizeForFirestore<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -1185,11 +1259,19 @@ async function getProjectionGenerationContext(
       draftReadinessSourceAttemptId: null,
       availabilityRefreshAttemptId: null,
       draftReadinessNhlRosterIdentityHash: null,
+      prospectPriorByPlayerId: new Map(),
+      prospectEvidenceSnapshotId: 'historical-replay:none',
+      prospectEvidenceRevision: 'historical-replay:none',
+      prospectEvidenceRecordCount: 0,
+      prospectEvidenceMode: 'disabled',
     };
   }
 
   const projectionDate = new Date();
-  const availability = await loadAvailabilityContext(leagueId);
+  const [availability, prospect] = await Promise.all([
+    loadAvailabilityContext(leagueId),
+    loadProspectProjectionContext(),
+  ]);
 
   return {
     projectionDate,
@@ -1209,6 +1291,11 @@ async function getProjectionGenerationContext(
     availabilityRefreshAttemptId: availability.refreshAttemptId,
     draftReadinessNhlRosterIdentityHash:
       availability.draftReadinessNhlRosterIdentityHash,
+    prospectPriorByPlayerId: prospect.priors,
+    prospectEvidenceSnapshotId: prospect.snapshotId,
+    prospectEvidenceRevision: prospect.revision,
+    prospectEvidenceRecordCount: prospect.recordCount,
+    prospectEvidenceMode: prospect.mode,
   };
 }
 
@@ -1319,6 +1406,11 @@ async function generateSnapshotInternal(
     projectionContext: context.projectionContext,
     projectionSeason: context.projectionSeason,
     availabilityRevision: context.availabilityRevision,
+    prospectProjectionModelVersion: PROSPECT_PROJECTION_MODEL_VERSION,
+    prospectEvidenceSnapshotId: context.prospectEvidenceSnapshotId,
+    prospectEvidenceRevision: context.prospectEvidenceRevision,
+    prospectEvidenceRecordCount: context.prospectEvidenceRecordCount,
+    prospectEvidenceMode: context.prospectEvidenceMode,
     ...(enforcedAvailabilityRosterIdentityHash
       ? {
           availabilityRosterIdentityHash: enforcedAvailabilityRosterIdentityHash,
@@ -1346,6 +1438,7 @@ async function generateSnapshotInternal(
       requireCompleteTeamScheduleInput,
       expectedNhlRosterIdentityHash:
         enforcedAvailabilityRosterIdentityHash ?? undefined,
+      prospectPriorByPlayerId: context.prospectPriorByPlayerId,
     });
 
     assertSharedProjectionPoolHealthy(localAssets);
@@ -1445,6 +1538,11 @@ async function generateSnapshotInternal(
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
       availabilityRevision: context.availabilityRevision,
+      prospectProjectionModelVersion: PROSPECT_PROJECTION_MODEL_VERSION,
+      prospectEvidenceSnapshotId: context.prospectEvidenceSnapshotId,
+      prospectEvidenceRevision: context.prospectEvidenceRevision,
+      prospectEvidenceRecordCount: context.prospectEvidenceRecordCount,
+      prospectEvidenceMode: context.prospectEvidenceMode,
       ...(enforcedAvailabilityRosterIdentityHash
         ? {
             availabilityRosterIdentityHash: enforcedAvailabilityRosterIdentityHash,

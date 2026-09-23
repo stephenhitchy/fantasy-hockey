@@ -219,7 +219,7 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-v11.util.ts'),
-    'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a',
+    'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9',
   );
   assert.equal(
     await sha256('firestore.rules'),
@@ -263,6 +263,10 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/projection/projection-asset-catalog.util.ts',
         'src/shared/core/projection/projection-snapshot.service.ts',
         'src/shared/core/projection/projection-snapshot-hash.util.ts',
+        // FF1.18 adds the reviewed prospect adapter and its optional V11 input.
+        'src/shared/core/projection/projection-v11.util.ts',
+        'src/shared/core/projection/prospect-projection.util.ts',
+        'src/shared/core/team/roster.models.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
         // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
@@ -370,6 +374,6 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '1bc33d5b7537e46bd0c863d03bad5fa4a8e83d2c73f01c9cc84dd3b42646db27',
+    '078cf7a1cabec616dbb9585632857b86472f47c6606506a9d08fda4cf4e4b935',
   );
 });

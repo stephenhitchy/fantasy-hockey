@@ -849,6 +849,12 @@ export class ProjectionLab {
       case 'previous-season-baseline':
         return `Previous-season baseline${season ? ` · ${season}` : ''}`;
 
+      case 'translated-prospect-prior':
+        return `Translated pre-NHL evidence${season ? ` · ${season}` : ''}`;
+
+      case 'prospect-nhl-blend':
+        return `Prospect prior + NHL sample${season ? ` · ${season}` : ''}`;
+
       default:
         return 'Conservative baseline';
     }

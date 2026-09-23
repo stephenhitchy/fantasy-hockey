@@ -38,6 +38,9 @@ These are product contracts, not implementation suggestions:
 
 - Production Scoring V4 is the production scoring system.
 - Projection V11 is the production projection model.
+- Prospect Projection Layer V1 is an optional, disabled-by-default evidence
+  adapter into Projection V11. Its contract and current data-source limitation
+  are documented in `docs/RINKRAT_DRAFT_FF1_18_PROSPECT_PROJECTIONS.md`.
 - Every active roster slot owns an independent six-NHL-game fantasy window.
 - A seventh eligible NHL game belongs to that slot's next fantasy matchup.
 - A started window is immutable; later data or roster changes cannot move a

@@ -72,9 +72,9 @@ function playerPool() {
   return [...forwards, ...defenders, ...goalies];
 }
 
-describe('league-adjusted Draft Ranking V2', () => {
+describe('league-adjusted Draft Ranking V3', () => {
   test('models each team bench as two forwards, one defender, and no goalie unit', () => {
-    assert.equal(DRAFT_RANKING_MODEL_VERSION, 2);
+    assert.equal(DRAFT_RANKING_MODEL_VERSION, 3);
     assert.deepEqual(DRAFT_BENCH_DEMAND_PER_TEAM, { F: 2, D: 1, G: 0 });
 
     const ranked = rankSharedProjectionAssets(playerPool(), 10);
@@ -89,26 +89,55 @@ describe('league-adjusted Draft Ranking V2', () => {
     assert.equal(positiveValueCount(['G']), 10);
   });
 
-  test('moves goalie units outside league starter demand below the drafted pool', () => {
-    const teamCount = 10;
-    const expectedDraftedAssetCount = teamCount * 17;
-    const ranked = rankSharedProjectionAssets(playerPool(), teamCount);
-    const draftedPool = ranked.filter(
-      (asset) => (asset.draftRank ?? Number.MAX_SAFE_INTEGER) <= expectedDraftedAssetCount,
+  test('moves reserve goalie units below the drafted pool for supported league sizes', () => {
+    for (const teamCount of [4, 6, 8, 10, 12]) {
+      const expectedDraftedAssetCount = teamCount * 17;
+      const ranked = rankSharedProjectionAssets(playerPool(), teamCount);
+      const draftedPool = ranked.filter(
+        (asset) => (asset.draftRank ?? Number.MAX_SAFE_INTEGER) <= expectedDraftedAssetCount,
+      );
+      const reserveGoalies = ranked.filter((asset) =>
+        asset.position === 'G' &&
+        (asset.draftPositionRank ?? 0) > teamCount
+      );
+
+      assert.equal(draftedPool.length, expectedDraftedAssetCount, `${teamCount}-team pool`);
+      assert.equal(
+        draftedPool.filter((asset) => asset.position === 'G').length,
+        teamCount,
+        `${teamCount}-team goalie demand`,
+      );
+      assert.equal(reserveGoalies.length, 32 - teamCount);
+      assert.ok(
+        reserveGoalies.every(
+          (asset) => (asset.draftRank ?? 0) > expectedDraftedAssetCount,
+        ),
+        `${teamCount}-team reserve goalie placement`,
+      );
+      assert.ok(
+        reserveGoalies.every(
+          (asset) => (asset.draftScore ?? Number.POSITIVE_INFINITY) < 12,
+        ),
+        `${teamCount}-team reserve goalie score`,
+      );
+    }
+  });
+
+  test('fades skater demand instead of creating a one-rank scoring cliff', () => {
+    const ranked = rankSharedProjectionAssets(playerPool(), 10);
+    const lastExpectedDefender = ranked.find(
+      (asset) => asset.position === 'D' && asset.draftPositionRank === 50,
     );
-    const reserveGoalies = ranked.filter((asset) =>
-      asset.position === 'G' &&
-      (asset.draftPositionRank ?? 0) > teamCount
+    const firstReserveDefender = ranked.find(
+      (asset) => asset.position === 'D' && asset.draftPositionRank === 51,
     );
 
-    assert.equal(draftedPool.length, expectedDraftedAssetCount);
-    assert.equal(draftedPool.filter((asset) => asset.position === 'G').length, teamCount);
-    assert.equal(reserveGoalies.length, 22);
+    assert.ok(lastExpectedDefender);
+    assert.ok(firstReserveDefender);
+    assert.ok((lastExpectedDefender.draftScore ?? 0) > 0);
     assert.ok(
-      reserveGoalies.every((asset) => (asset.draftRank ?? 0) > expectedDraftedAssetCount),
-    );
-    assert.ok(
-      reserveGoalies.every((asset) => (asset.draftScore ?? Number.POSITIVE_INFINITY) < 12),
+      (firstReserveDefender.draftScore ?? 0) >
+        (lastExpectedDefender.draftScore ?? 0) * 0.75,
     );
   });
 
@@ -136,7 +165,7 @@ describe('league-adjusted Draft Ranking V2', () => {
     assert.equal(pool[0].draftRankingVersion, undefined);
     assert.equal(pool[0].draftProjectedCyclePoints, originalProjection);
     assert.ok(ranked.every((asset) => asset.projectionModelVersion === 11));
-    assert.ok(ranked.every((asset) => asset.draftRankingVersion === 2));
+    assert.ok(ranked.every((asset) => asset.draftRankingVersion === 3));
   });
 
   test('browser and server ranking implementations remain byte-for-byte aligned', async () => {

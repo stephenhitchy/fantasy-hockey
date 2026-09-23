@@ -169,6 +169,10 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/shared/core/projection/projection-asset-catalog.util.ts',
     'src/shared/core/projection/projection-snapshot.service.ts',
     'src/shared/core/projection/projection-snapshot-hash.util.ts',
+    // FF1.18 adds the reviewed prospect adapter and its optional V11 input.
+    'src/shared/core/projection/projection-v11.util.ts',
+    'src/shared/core/projection/prospect-projection.util.ts',
+    'src/shared/core/team/roster.models.ts',
     'src/draft-authority.ts',
     'src/draft-automation.ts',
     // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
@@ -278,7 +282,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
     assert.equal(
       await hashFunctionsRuntimeIntegrity({ excludedPaths: exclusions }),
-      '1bc33d5b7537e46bd0c863d03bad5fa4a8e83d2c73f01c9cc84dd3b42646db27',
+      '078cf7a1cabec616dbb9585632857b86472f47c6606506a9d08fda4cf4e4b935',
     );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([
@@ -291,7 +295,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
   assert.equal(createHash('sha256').update(rules).digest('hex'), '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da');
   assert.equal(createHash('sha256').update(engine).digest('hex'), '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3');
-  assert.equal(createHash('sha256').update(projection).digest('hex'), 'e6f3111b1feccc7107e857aa24c5317451c65a84a36c71f8158947636f20d80a');
+  assert.equal(createHash('sha256').update(projection).digest('hex'), 'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(createHash('sha256').update(indexes).digest('hex'), '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13');
 });

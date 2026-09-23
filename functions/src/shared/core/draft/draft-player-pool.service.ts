@@ -59,6 +59,12 @@ import {
 } from '../projection/projection-v11.util';
 
 import {
+  getProspectAppearanceProbability,
+  PROSPECT_PROJECTION_MODEL_VERSION,
+  ProspectProjectionPrior,
+} from '../projection/prospect-projection.util';
+
+import {
   assertCompleteTeamScheduleInput
 } from '../projection/team-schedule-input-completeness.util';
 
@@ -94,6 +100,8 @@ export interface DraftPlayerPoolProjectionOptions {
   requireCompleteTeamScheduleInput?: boolean;
   /** Exact privacy-safe NHL identity set attested by the injury-source refresh. */
   expectedNhlRosterIdentityHash?: string;
+  /** Validated server-owned prospect priors. Browser callers never supply this. */
+  prospectPriorByPlayerId?: ReadonlyMap<number, ProspectProjectionPrior>;
 }
 
 export class DraftNhlRosterIdentityMismatchError extends Error {
@@ -246,6 +254,8 @@ interface ProjectionCalculationResult {
     | 'current-season-baseline'
     | 'previous-season-form'
     | 'previous-season-baseline'
+    | 'translated-prospect-prior'
+    | 'prospect-nhl-blend'
     | 'conservative-baseline';
   projectionGamesPlayed: number | null;
   recentFormSampleSize: number | null;
@@ -276,6 +286,22 @@ interface ProjectionCalculationResult {
   reliabilityRating: number | null;
   volatilityPenalty: number | null;
   floorAdjustedCyclePoints: number | null;
+  prospectProjectionModelVersion?: number | null;
+  prospectEvidenceSnapshotId?: string | null;
+  prospectEvidenceAsOf?: string | null;
+  prospectEvidenceSource?: string | null;
+  prospectEvidenceConfidence?: number | null;
+  prospectTranslationConfidence?: number | null;
+  prospectPriorWeight?: number | null;
+  prospectNhlEvidenceWeight?: number | null;
+  prospectRoleLabel?: string | null;
+  prospectRoleConfidence?: number | null;
+  prospectAppearanceProbability?: number | null;
+  prospectExpectedAppearances?: number | null;
+  prospectOpportunityAdjustment?: number | null;
+  prospectMissingCategories?: string[] | null;
+  prospectQualityFlags?: string[] | null;
+  prospectEvidenceProvisional?: boolean | null;
 }
 
 const POSITION_BASELINES: Record<DraftPosition, PositionProjectionBaseline> = {
@@ -394,6 +420,7 @@ function normalizeProjectionOptions(
       ignoreAvailability: false,
       requireCompleteTeamScheduleInput: false,
       expectedNhlRosterIdentityHash: undefined,
+      prospectPriorByPlayerId: undefined,
     };
   }
 
@@ -427,6 +454,7 @@ function normalizeProjectionOptions(
       isDraftNhlRosterIdentityHash(input.expectedNhlRosterIdentityHash)
         ? input.expectedNhlRosterIdentityHash
         : undefined,
+    prospectPriorByPlayerId: input.prospectPriorByPlayerId,
   };
 }
 
@@ -693,7 +721,8 @@ function applyAvailabilityAdjustment(
   targetCycleNumber: number | undefined,
   maxPenaltyRate: number,
   projectionAsOfDate: Date = new Date(),
-  ignoreAvailability: boolean = false
+  ignoreAvailability: boolean = false,
+  prospectPrior?: ProspectProjectionPrior,
 ): ProjectionCalculationResult {
   const effectiveAvailabilityRecord = ignoreAvailability
     ? undefined
@@ -709,22 +738,46 @@ function applyAvailabilityAdjustment(
       ? targetGames.length
       : requiredGamesPerCycle;
 
+  const prospectExpectedGames = targetGames.length > 0
+    ? targetGames.reduce(
+        (total, game) => total + (
+          prospectPrior
+            ? getProspectAppearanceProbability(prospectPrior, game.gameDate)
+            : 1
+        ),
+        0,
+      )
+    : scheduledGames * (
+        prospectPrior
+          ? getProspectAppearanceProbability(prospectPrior)
+          : 1
+      );
   const expectedGames = targetGames.length > 0
     ? targetGames.reduce(
-        (total, game) =>
-          total + getAvailabilityProbabilityForGame(
+        (total, game) => {
+          const medicalProbability = getAvailabilityProbabilityForGame(
             status,
             getGameDate(game),
             returnDate,
-            now
-          ),
-        0
+            now,
+          );
+          const opportunityProbability = prospectPrior
+            ? getProspectAppearanceProbability(prospectPrior, game.gameDate)
+            : 1;
+
+          return total + medicalProbability * opportunityProbability;
+        },
+        0,
       )
     : scheduledGames * getAvailabilityProbabilityForGame(
         status,
         null,
         returnDate,
-        now
+        now,
+      ) * (
+        prospectPrior
+          ? getProspectAppearanceProbability(prospectPrior)
+          : 1
       );
 
   const healthyProjection =
@@ -737,6 +790,21 @@ function applyAvailabilityAdjustment(
 
   const availabilityAdjustment =
     adjustedProjection - healthyProjection;
+  const prospectOpportunityMultiplier = scheduledGames > 0
+    ? clamp(prospectExpectedGames / scheduledGames, 0, 1)
+    : 1;
+  const draftProjectedCyclePoints = prospectPrior
+    ? (projection.draftProjectedCyclePoints ?? 0) * prospectOpportunityMultiplier
+    : projection.draftProjectedCyclePoints;
+  const draftProjectedSeasonPoints = prospectPrior
+    ? (projection.draftProjectedSeasonPoints ?? 0) * prospectOpportunityMultiplier
+    : projection.draftProjectedSeasonPoints;
+  const draftVolatilityPenalty = prospectPrior
+    ? (projection.draftVolatilityPenalty ?? 0) * prospectOpportunityMultiplier
+    : projection.draftVolatilityPenalty;
+  const draftFloorAdjustedCyclePoints = prospectPrior
+    ? (projection.draftFloorAdjustedCyclePoints ?? 0) * prospectOpportunityMultiplier
+    : projection.draftFloorAdjustedCyclePoints;
 
   // Missed appearances lower confidence slightly, but they never enter the
   // healthy production pace as zero-point games. Projection V11 also keeps
@@ -780,6 +848,22 @@ function applyAvailabilityAdjustment(
 
   return {
     ...projection,
+    draftProjectedSeasonPoints:
+      typeof draftProjectedSeasonPoints === 'number'
+        ? roundOneDecimal(draftProjectedSeasonPoints)
+        : null,
+    draftProjectedCyclePoints:
+      typeof draftProjectedCyclePoints === 'number'
+        ? roundOneDecimal(draftProjectedCyclePoints)
+        : null,
+    draftVolatilityPenalty:
+      typeof draftVolatilityPenalty === 'number'
+        ? roundOneDecimal(draftVolatilityPenalty)
+        : null,
+    draftFloorAdjustedCyclePoints:
+      typeof draftFloorAdjustedCyclePoints === 'number'
+        ? roundOneDecimal(draftFloorAdjustedCyclePoints)
+        : null,
     projectedCyclePoints:
       roundOneDecimal(adjustedProjection),
     healthyProjectedCyclePoints:
@@ -817,7 +901,18 @@ function applyAvailabilityAdjustment(
     floorAdjustedCyclePoints:
       roundOneDecimal(
         Math.max(0, adjustedProjection - volatilityPenalty)
-      )
+      ),
+    ...(prospectPrior
+      ? {
+          prospectAppearanceProbability: Number(
+            prospectOpportunityMultiplier.toFixed(4),
+          ),
+          prospectExpectedAppearances: roundOneDecimal(prospectExpectedGames),
+          prospectOpportunityAdjustment: roundOneDecimal(
+            healthyProjection * prospectOpportunityMultiplier - healthyProjection,
+          ),
+        }
+      : {}),
   };
 }
 
@@ -3536,6 +3631,8 @@ function buildProjectionResult(input: {
     | 'current-season-baseline'
     | 'previous-season-form'
     | 'previous-season-baseline'
+    | 'translated-prospect-prior'
+    | 'prospect-nhl-blend'
     | 'conservative-baseline';
   projectionGamesPlayed: number | null;
   recentMetrics: RecentFormMetrics | null;
@@ -3808,6 +3905,7 @@ function calculateSkaterProjection(input: {
   scheduleContext: ProjectionScheduleContext;
   birthDate?: string | null;
   projectionDate?: Date;
+  prospectPrior?: ProspectProjectionPrior;
 }): ProjectionCalculationResult {
   const position = input.position;
 
@@ -3842,8 +3940,28 @@ function calculateSkaterProjection(input: {
       input.secondPreviousStats
     );
 
-  const conservativeBaseline =
-    POSITION_BASELINES[position].conservativeSeasonPoints;
+  const prospectOnlyComponent = input.prospectPrior
+    ? buildProjectionV11SkaterRates({
+        position,
+        prospectPriorStatsPer82: input.prospectPrior.expectedStatsPer82,
+        prospectPriorConfidence: input.prospectPrior.evidenceConfidence,
+      })
+    : null;
+  const prospectBaseline = prospectOnlyComponent
+    ? calculateSkaterRawFantasyPoints(
+        position,
+        prospectOnlyComponent.expectedStatsPer82,
+        82,
+        prospectOnlyComponent.primaryAssistShare,
+      )
+    : null;
+  const conservativeBaseline = prospectBaseline !== null
+    ? clamp(
+        prospectBaseline,
+        POSITION_BASELINES[position].conservativeSeasonPoints * 0.55,
+        POSITION_BASELINES[position].highEndSeasonCap,
+      )
+    : POSITION_BASELINES[position].conservativeSeasonPoints;
 
   const trajectoryAssessment = assessDraftTrajectory({
     position,
@@ -3923,7 +4041,9 @@ function calculateSkaterProjection(input: {
     latestCompletedStats: input.previousStats,
     previousCompletedStats: input.secondPreviousStats,
     latestSeasonWeight: trajectoryAssessment.latestSeasonWeight,
-    previousSeasonWeight: trajectoryAssessment.previousSeasonWeight
+    previousSeasonWeight: trajectoryAssessment.previousSeasonWeight,
+    prospectPriorStatsPer82: input.prospectPrior?.expectedStatsPer82,
+    prospectPriorConfidence: input.prospectPrior?.evidenceConfidence,
   });
 
   const componentSeasonProjection = clamp(
@@ -4114,8 +4234,13 @@ function calculateSkaterProjection(input: {
       98
     );
 
+  const totalNhlGames = currentGamesPlayed + previousGamesPlayed + secondPreviousGamesPlayed;
   const projectionDataSource =
-    usesCurrentSeason
+    input.prospectPrior && componentProjection.prospectPriorWeight > 0.01
+      ? totalNhlGames > 0
+        ? 'prospect-nhl-blend'
+        : 'translated-prospect-prior'
+      : usesCurrentSeason
       ? selectedGames.length >= 5
         ? 'current-season-form'
         : 'current-season-baseline'
@@ -4125,7 +4250,7 @@ function calculateSkaterProjection(input: {
           : 'previous-season-baseline'
         : 'conservative-baseline';
 
-  return buildProjectionResult({
+  const projection = buildProjectionResult({
     draftProjectedSeasonPoints,
     draftProjectedCyclePoints,
     draftTrajectoryLabel:
@@ -4164,7 +4289,10 @@ function calculateSkaterProjection(input: {
     scheduleContext: input.scheduleContext,
     scheduleStrengthAdjustment,
     projectionDataSeason:
-      usesCurrentSeason
+      projectionDataSource === 'translated-prospect-prior' ||
+      projectionDataSource === 'prospect-nhl-blend'
+        ? input.prospectPrior?.latestEvidenceSeason ?? null
+        : usesCurrentSeason
         ? input.currentSeason
         : previousGamesPlayed > 0
           ? input.previousSeason
@@ -4179,6 +4307,27 @@ function calculateSkaterProjection(input: {
     maxPenaltyRate: 0.22,
     draftMaxPenaltyRate: 0.12
   });
+
+  if (!input.prospectPrior) {
+    return projection;
+  }
+
+  return {
+    ...projection,
+    prospectProjectionModelVersion: PROSPECT_PROJECTION_MODEL_VERSION,
+    prospectEvidenceSnapshotId: input.prospectPrior.evidenceSnapshotId,
+    prospectEvidenceAsOf: input.prospectPrior.evidenceAsOf,
+    prospectEvidenceSource: input.prospectPrior.evidenceSource,
+    prospectEvidenceConfidence: input.prospectPrior.evidenceConfidence,
+    prospectTranslationConfidence: input.prospectPrior.translationConfidence,
+    prospectPriorWeight: Number(componentProjection.prospectPriorWeight.toFixed(4)),
+    prospectNhlEvidenceWeight: Number(componentProjection.nhlEvidenceWeight.toFixed(4)),
+    prospectRoleLabel: input.prospectPrior.roleLabel,
+    prospectRoleConfidence: input.prospectPrior.roleConfidence,
+    prospectMissingCategories: input.prospectPrior.missingCategories,
+    prospectQualityFlags: input.prospectPrior.qualityFlags,
+    prospectEvidenceProvisional: input.prospectPrior.provisional,
+  };
 }
 
 function calculateGoalieUnitProjection(input: {
@@ -4523,7 +4672,8 @@ export async function loadDraftPlayerPool(
     options.historicalReplayAlignment ||
     options.ignoreAvailability ||
     options.requireCompleteTeamScheduleInput ||
-    options.expectedNhlRosterIdentityHash
+    options.expectedNhlRosterIdentityHash ||
+    options.prospectPriorByPlayerId
   );
 
   if (
@@ -4788,6 +4938,20 @@ export async function loadDraftPlayerPool(
         currentSkaterStatsForProjection.get(skater.id);
       const currentGames =
         currentSkaterGamesForProjection.get(skater.id) ?? [];
+      const prospectPrior = options.prospectPriorByPlayerId?.get(skater.id);
+
+      if (
+        prospectPrior &&
+        (
+          prospectPrior.position !== skater.position ||
+          prospectPrior.nhlOrganization !== skater.nhlTeamAbbreviation
+        )
+      ) {
+        throw new Error(
+          `Prospect evidence identity mismatch for NHL player ${skater.id}. The prior was not published.`,
+        );
+      }
+
       const baseProjection = calculateSkaterProjection({
         position: skater.position,
         currentStats,
@@ -4808,7 +4972,8 @@ export async function loadDraftPlayerPool(
           ) ?? [],
         scheduleContext,
         birthDate: skater.birthDate,
-        projectionDate
+        projectionDate,
+        prospectPrior,
       });
 
       const projection = applyAvailabilityAdjustment(
@@ -4820,7 +4985,8 @@ export async function loadDraftPlayerPool(
         options.targetCycleNumber,
         0.22,
         projectionDate,
-        options.ignoreAvailability
+        options.ignoreAvailability,
+        prospectPrior,
       );
       const seasonStatBreakdown = currentGames.length > 0
         ? buildSkaterSeasonBreakdownFromGames(
@@ -4946,6 +5112,38 @@ export async function loadDraftPlayerPool(
           projection.projectionCurrentSeasonWeight,
         projectionHistoricalWeight:
           projection.projectionHistoricalWeight,
+        prospectProjectionModelVersion:
+          projection.prospectProjectionModelVersion,
+        prospectEvidenceSnapshotId:
+          projection.prospectEvidenceSnapshotId,
+        prospectEvidenceAsOf:
+          projection.prospectEvidenceAsOf,
+        prospectEvidenceSource:
+          projection.prospectEvidenceSource,
+        prospectEvidenceConfidence:
+          projection.prospectEvidenceConfidence,
+        prospectTranslationConfidence:
+          projection.prospectTranslationConfidence,
+        prospectPriorWeight:
+          projection.prospectPriorWeight,
+        prospectNhlEvidenceWeight:
+          projection.prospectNhlEvidenceWeight,
+        prospectRoleLabel:
+          projection.prospectRoleLabel,
+        prospectRoleConfidence:
+          projection.prospectRoleConfidence,
+        prospectAppearanceProbability:
+          projection.prospectAppearanceProbability,
+        prospectExpectedAppearances:
+          projection.prospectExpectedAppearances,
+        prospectOpportunityAdjustment:
+          projection.prospectOpportunityAdjustment,
+        prospectMissingCategories:
+          projection.prospectMissingCategories,
+        prospectQualityFlags:
+          projection.prospectQualityFlags,
+        prospectEvidenceProvisional:
+          projection.prospectEvidenceProvisional,
         projectionFloorPoints:
           projection.projectionFloorPoints,
         projectionCeilingPoints:
