@@ -345,6 +345,22 @@ export interface FantasyDraft {
   lastPickId?: string | null;
   /** Exact client request that most recently saved commissioner settings. */
   lastSettingsSubmissionId?: string | null;
+  /** Commissioner intent; random order is finalized only at the T-40 cutoff. */
+  orderMode?: 'randomized' | 'custom' | 'legacy-custom';
+  /** Monotonic identity for schedule-bound background work. */
+  scheduleGeneration?: number;
+  /** Changes only when the participant set forces a new finalized order. */
+  orderEpoch?: number;
+  /** Explicit setup lock. Legacy drafts without this field retain old locking. */
+  membershipLockStatus?: 'open' | 'locked';
+  membershipLockedAt?: unknown | null;
+  orderFinalizedAt?: unknown | null;
+  /** Hash of the participant set represented by the preserved/final order. */
+  orderParticipantHash?: string | null;
+  finalizedScheduleGeneration?: number | null;
+  orderRandomizationSeedHash?: string | null;
+  /** Generation that owns the server readiness evidence below. */
+  serverDraftReadinessScheduleGeneration?: number | null;
 
   /** Server-owned background request preparing the verified Draft board. */
   projectionPreparationRequestId?: string | null;

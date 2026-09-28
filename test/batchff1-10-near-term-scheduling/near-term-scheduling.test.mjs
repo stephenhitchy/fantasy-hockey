@@ -41,10 +41,10 @@ function exactReadyDraft(startMilliseconds) {
   };
 }
 
-test('client and server enforce the same inclusive 25-minute unprepared boundary', () => {
+test('client and server enforce the same inclusive 40-minute scheduling boundary', () => {
   const now = Date.parse('2026-10-06T01:00:00.000Z');
 
-  assert.equal(SERVER_MINIMUM_LEAD, 25 * 60 * 1000);
+  assert.equal(SERVER_MINIMUM_LEAD, 40 * 60 * 1000);
   assert.equal(CLIENT_MINIMUM_LEAD, SERVER_MINIMUM_LEAD);
   assert.equal(getDraftNearTermScheduleGateState({
     scheduledStartMilliseconds: now + SERVER_MINIMUM_LEAD,
@@ -60,7 +60,7 @@ test('client and server enforce the same inclusive 25-minute unprepared boundary
     scheduledStartMilliseconds: now + 2 * 60 * 1000,
     nowMilliseconds: now,
     exactReadinessVerified: true,
-  }), 'exact-ready');
+  }), 'requires-exact-readiness');
   assert.equal(
     getEarliestSafeUnpreparedDraftStartMilliseconds(now),
     now + SERVER_MINIMUM_LEAD,
@@ -72,12 +72,12 @@ test('Draft Setup rounds its displayed earliest safe time up to an enterable min
   const exactMinimum = now + CLIENT_MINIMUM_LEAD;
   const displayedMinimum = getEarliestSafeDraftStartMilliseconds(now);
 
-  assert.equal(displayedMinimum, Date.parse('2026-10-06T01:26:00.000Z'));
+  assert.equal(displayedMinimum, Date.parse('2026-10-06T01:41:00.000Z'));
   assert.ok(displayedMinimum >= exactMinimum);
   assert.equal(displayedMinimum % 60_000, 0);
 });
 
-test('near-term reuse requires every exact saved readiness binding', () => {
+test('exact saved readiness remains inspectable but never bypasses the 40-minute policy', () => {
   const now = Date.parse('2026-10-06T01:00:00.000Z');
   const start = now + 2 * 60 * 1000;
   const ready = exactReadyDraft(start);
@@ -87,7 +87,7 @@ test('near-term reuse requires every exact saved readiness binding', () => {
     draft: ready,
     selectedStartMilliseconds: start,
     nowMilliseconds: now,
-  }), 'exact-ready');
+  }), 'unsafe-near-term');
   assert.equal(getDraftSetupSchedulingGateState({
     draft: ready,
     selectedStartMilliseconds: start + 60_000,
@@ -119,44 +119,37 @@ test('Draft Setup exposes the gate before save and no longer queues a browser bu
   assert.match(template, /class="preparation-gate rr-notice"/);
   assert.match(template, /aria-live="polite"/);
   assert.match(component, /getEarliestSafeStartText/);
-  assert.match(component, /NHL data is delayed or rate-limited/);
+  assert.match(component, /membership and the order can be finalized safely/);
   assert.doesNotMatch(saveBody, /queueSharedProjectionSnapshotGeneration/);
   assert.doesNotMatch(saveBody, /createSharedProjectionGenerationRequestId/);
   assert.doesNotMatch(saveBody, /generationReason: 'draft-setup'/);
   assert.doesNotMatch(serviceBody, /projectionPreparationRequestId/);
 });
 
-test('server rejects unsafe schedules before mutation and verifies exact current evidence', async () => {
+test('server rejects every changed schedule inside 40 minutes without an immediate-start exception', async () => {
   const authority = await read('functions/src/draft-authority.ts');
   const saveStart = authority.indexOf('async function saveDraftSettings(');
   const saveEnd = authority.indexOf('async function activateScheduledDraft(', saveStart);
   const saveBody = authority.slice(saveStart, saveEnd);
-  const verificationIndex = saveBody.indexOf(
-    'await loadPreparedProjectionSnapshotForScheduledDraft(',
-  );
   const transactionIndex = saveBody.indexOf('await db.runTransaction');
 
-  assert.ok(verificationIndex > 0);
-  assert.ok(transactionIndex > verificationIndex);
+  assert.ok(transactionIndex > 0);
   assert.match(saveBody, /initialNearTermGateState === 'requires-exact-readiness'/);
   assert.match(saveBody, /createUnsafeNearTermScheduleError/);
-  assert.match(saveBody, /availabilityRevision/);
-  assert.match(saveBody, /generationRequestId/);
-  assert.match(saveBody, /activeSnapshotId/);
-  assert.match(saveBody, /snapshotContentHash/);
+  assert.doesNotMatch(saveBody, /await loadPreparedProjectionSnapshotForScheduledDraft/);
   assert.match(authority, /earliest safe start:/);
   assert.match(authority, /Your existing Draft settings were not changed/);
 });
 
-test('unchanged verified schedule is preserved while changes stay stopped at zero picks', async () => {
+test('changed settings stay stopped and clear old schedule-bound readiness', async () => {
   const authority = await read('functions/src/draft-authority.ts');
   const saveStart = authority.indexOf('async function saveDraftSettings(');
   const saveEnd = authority.indexOf('async function activateScheduledDraft(', saveStart);
   const saveBody = authority.slice(saveStart, saveEnd);
 
-  assert.match(saveBody, /draftMatchesVerifiedNearTermReadiness/);
-  assert.match(saveBody, /serverDraftReadinessStatus: preserveVerifiedReadiness \? 'ready' : null/);
-  assert.match(saveBody, /projectionPreparationRequestId = preserveVerifiedReadiness/);
+  assert.match(saveBody, /serverDraftReadinessStatus: null/);
+  assert.match(saveBody, /serverDraftReadinessScheduleGeneration: null/);
+  assert.match(saveBody, /projectionPreparationRequestId: null/);
   assert.match(saveBody, /nextOverallPick: 1/);
   assert.match(saveBody, /draftedAssetKeys: \[\]/);
   assert.match(saveBody, /clockStatus: 'stopped'/);
@@ -167,13 +160,14 @@ test('unchanged verified schedule is preserved while changes stay stopped at zer
 test('duplicate saves ignore evolving server readiness but reject changed commissioner settings', async () => {
   const authority = await read('functions/src/draft-authority.ts');
   const helperStart = authority.indexOf('function draftSettingsMatchRequest(');
-  const helperEnd = authority.indexOf('function draftMatchesVerifiedNearTermReadiness(', helperStart);
+  const helperEnd = authority.indexOf('function createUnsafeNearTermScheduleError(', helperStart);
   const helper = authority.slice(helperStart, helperEnd);
 
   assert.match(helper, /lastSettingsSubmissionId/);
   assert.match(helper, /scheduledStartMilliseconds/);
   assert.match(helper, /roundOneOrder/);
   assert.match(helper, /pickSeconds/);
+  assert.match(helper, /orderMode/);
   assert.doesNotMatch(helper, /projectionPreparation/);
   assert.doesNotMatch(helper, /serverDraftReadiness/);
   assert.match(authority, /already-exists/);

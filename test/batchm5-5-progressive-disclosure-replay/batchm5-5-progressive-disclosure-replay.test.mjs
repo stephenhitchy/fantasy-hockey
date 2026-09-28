@@ -249,6 +249,8 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/draft-automation.ts',
         // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
         'src/draft-readiness.util.ts',
+        // FF1.40 adds isolated Draft membership-cutoff and schedule-generation decisions.
+        'src/draft-lifecycle.util.ts',
         // FF1.31 adds isolated server-owned Draft input attestation and writes.
         'src/shared/core/draft/draft-readiness-write.service.ts',
         'src/shared/core/player/draft-availability-source-completeness.util.ts',

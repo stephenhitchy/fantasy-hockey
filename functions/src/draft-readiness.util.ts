@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto';
 
 export const DRAFT_READINESS_WINDOW_MILLISECONDS = 20 * 60 * 1000;
-export const DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS = 25 * 60 * 1000;
-export const DRAFT_AVAILABILITY_PREPARATION_WINDOW_MILLISECONDS =
-  DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS;
+export const DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS = 40 * 60 * 1000;
+export const DRAFT_AVAILABILITY_PREPARATION_WINDOW_MILLISECONDS = 25 * 60 * 1000;
 export const DRAFT_AVAILABILITY_REFRESH_BUCKET_MILLISECONDS = 5 * 60 * 1000;
 export const DRAFT_AVAILABILITY_MAX_AGE_MILLISECONDS = 24 * 60 * 60 * 1000;
 export const DRAFT_AVAILABILITY_STANDARD_ERROR_COOLDOWN_MILLISECONDS =
@@ -173,9 +172,7 @@ export function getDraftNearTermScheduleGateState(input: {
     return 'safe-lead';
   }
 
-  return input.exactReadinessVerified
-    ? 'exact-ready'
-    : 'requires-exact-readiness';
+  return 'requires-exact-readiness';
 }
 
 export function getEarliestSafeUnpreparedDraftStartMilliseconds(
@@ -303,12 +300,14 @@ export function buildDraftReadinessRequestKey(input: {
   leagueId: string;
   scheduledStartMilliseconds: number;
   availabilityRevision: string;
+  scheduleGeneration?: number;
 }): string {
   return `draft-readiness-${createHash('sha256')
     .update([
       input.leagueId,
       String(input.scheduledStartMilliseconds),
       input.availabilityRevision,
+      String(input.scheduleGeneration ?? 0),
     ].join(':'))
     .digest('hex')
     .slice(0, 40)}`;
@@ -327,10 +326,11 @@ export function draftReadinessMatchesSchedule(input: {
 export function buildScheduledDraftStartTaskId(input: {
   leagueId: string;
   scheduledStartMilliseconds: number;
+  scheduleGeneration?: number;
 }): string {
   return createHash('sha256')
     .update(
-      `scheduled-draft-start:${input.leagueId}:${input.scheduledStartMilliseconds}`,
+      `scheduled-draft-start:${input.leagueId}:${input.scheduledStartMilliseconds}:${input.scheduleGeneration ?? 0}`,
     )
     .digest('hex')
     .slice(0, 40);
@@ -340,6 +340,7 @@ export function buildScheduledDraftQueueWarmupTaskId(input: {
   leagueId: string;
   scheduledStartMilliseconds: number;
   warmupLeadMilliseconds: number;
+  scheduleGeneration?: number;
 }): string {
   return createHash('sha256')
     .update(
@@ -348,6 +349,7 @@ export function buildScheduledDraftQueueWarmupTaskId(input: {
         input.leagueId,
         String(input.scheduledStartMilliseconds),
         String(input.warmupLeadMilliseconds),
+        String(input.scheduleGeneration ?? 0),
       ].join(':'),
     )
     .digest('hex')
@@ -399,6 +401,8 @@ export function getScheduledDraftStartTaskState(input: {
   draftStatus: string | null;
   expectedScheduledStartMilliseconds: number;
   actualScheduledStartMilliseconds: number | null;
+  expectedScheduleGeneration?: number;
+  actualScheduleGeneration?: number;
   nowMilliseconds: number;
 }): ScheduledDraftStartTaskState {
   if (
@@ -406,7 +410,11 @@ export function getScheduledDraftStartTaskState(input: {
     !Number.isFinite(input.expectedScheduledStartMilliseconds) ||
     input.actualScheduledStartMilliseconds === null ||
     !Number.isFinite(input.actualScheduledStartMilliseconds) ||
-    input.actualScheduledStartMilliseconds !== input.expectedScheduledStartMilliseconds
+    input.actualScheduledStartMilliseconds !== input.expectedScheduledStartMilliseconds ||
+    (
+      input.expectedScheduleGeneration !== undefined &&
+      input.actualScheduleGeneration !== input.expectedScheduleGeneration
+    )
   ) {
     return 'stale';
   }

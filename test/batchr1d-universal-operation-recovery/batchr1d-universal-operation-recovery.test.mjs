@@ -218,6 +218,7 @@ test('Draft Setup uses an exact submission identifier and authoritative bounded 
   assert.match(setup, /One authoritative server preparation/);
   assert.doesNotMatch(setup, /75_000/);
   assert.match(setup, /awaitDraftSettingsConfirmation/);
+  assert.match(setup, /awaitDraftScheduleCancellationConfirmation/);
   assert.match(setup, /Date\.now\(\) \+ 35_000/);
   assert.match(setup, /getFantasyDraftFromServer/);
   assert.match(setup, /4_000/);
@@ -383,6 +384,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'draft-automation.ts',
     // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
     'draft-readiness.util.ts',
+    // FF1.40 adds isolated Draft membership-cutoff and schedule-generation decisions.
+    'draft-lifecycle.util.ts',
     // FF1.31 adds isolated server-owned Draft input attestation and writes.
     'shared/core/draft/draft-readiness-write.service.ts',
     'shared/core/player/draft-availability-source-completeness.util.ts',

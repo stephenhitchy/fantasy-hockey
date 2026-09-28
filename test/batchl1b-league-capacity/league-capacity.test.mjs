@@ -149,6 +149,42 @@ test('full existing league expands with the same invite and exact-once audit', a
   assert.equal((await db.collection(`leagues/${fixture.leagueId}/teams`).get()).size, 2);
 });
 
+test('explicitly open scheduled Draft can expand at capacity without clearing its schedule or order', async () => {
+  const scheduledStartMilliseconds = Date.now() + 3 * 60 * 60 * 1000;
+  const fixture = await seed({
+    maxTeams: 2,
+    draft: {
+      status: 'scheduled',
+      membershipLockStatus: 'open',
+      orderMode: 'custom',
+      scheduleGeneration: 4,
+      roundOneOrder: [],
+      draftedAssetKeys: [],
+      nextOverallPick: 1,
+      clockStatus: 'stopped',
+      scheduledStartAt: Timestamp.fromMillis(scheduledStartMilliseconds),
+    },
+  });
+  await db.doc(`leagues/${fixture.leagueId}/draft/current`).set({
+    roundOneOrder: [fixture.commissionerId, fixture.memberId],
+  }, { merge: true });
+
+  const result = await executePreDraftLeagueCapacityUpdate({
+    commissionerId: fixture.commissionerId,
+    request: request(fixture, 4),
+  });
+  const draft = (await db.doc(`leagues/${fixture.leagueId}/draft/current`).get()).data();
+  const invite = (await db.doc(`leagueInvites/${fixture.inviteCode}`).get()).data();
+
+  assert.equal(result.maxTeams, 4);
+  assert.equal(result.rescheduleRequired, false);
+  assert.equal(draft.status, 'scheduled');
+  assert.equal(draft.scheduleGeneration, 4);
+  assert.equal(draft.scheduledStartAt.toMillis(), scheduledStartMilliseconds);
+  assert.deepEqual(draft.roundOneOrder, [fixture.commissionerId, fixture.memberId]);
+  assert.equal(invite.active, true);
+});
+
 test('shrinking to joined count closes the invite; below joined count cannot mutate', async () => {
   const fixture = await seed({ maxTeams: 4 });
   await rejectsWith(executePreDraftLeagueCapacityUpdate({

@@ -15,9 +15,11 @@ import {
 } from '../../../core/observability/competitive-action-monitor.service';
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { auth } from '../../../core/firebase';
+import { reauthenticateCurrentUserWithPassword } from '../../../core/auth/recent-auth.service';
 
 import {
   buildSnakePickPreview,
+  cancelFantasyDraftSchedule,
   createDefaultFantasyDraft,
   DEFAULT_DRAFT_BENCH_SLOTS,
   DEFAULT_DRAFT_PICK_SECONDS,
@@ -28,6 +30,7 @@ import {
   getFantasyDraftFromServer,
   getScheduledStartDate,
   isDraftStartTimeReached,
+  isDraftMembershipFinalized,
   saveFantasyDraft,
 } from '../../../core/draft/draft.service';
 
@@ -80,35 +83,57 @@ export class DraftSetup implements OnDestroy {
   teams = signal<FantasyTeam[]>([]);
   draft = signal<FantasyDraft | null>(null);
   roundOneOrder = signal<string[]>([]);
+  orderMode = signal<'randomized' | 'custom' | 'legacy-custom'>('custom');
 
   loading = signal(true);
   saving = signal(false);
   savePhase = signal<'idle' | 'saving' | 'confirming'>('idle');
   errorMessage = signal('');
   successMessage = signal('');
+  reopenPassword = '';
+  reopenConfirmed = false;
 
   draftStartInput = '';
   pickSecondsInput = DEFAULT_DRAFT_PICK_SECONDS;
   readonly pickSecondsOptions = DRAFT_PICK_SECONDS_OPTIONS;
 
-  readonly minimumStartInput = this.toDateTimeLocalValue(new Date());
+  readonly minimumStartInput = this.toDateTimeLocalValue(
+    new Date(Date.now() + DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS),
+  );
 
   readonly now = signal(Date.now());
 
   private readonly clockTimer = setInterval(() => {
     this.now.set(Date.now());
+    void this.refreshCutoffAuthorityIfNeeded();
   }, 1000);
 
   private draftSaveGeneration = 0;
   private pendingDraftSaveAction: CompetitiveActionHandle | null = null;
+  private cutoffRefreshInFlight = false;
+  private lastCutoffRefreshMilliseconds = 0;
+  private destroyed = false;
 
   readonly totalRounds = DEFAULT_DRAFT_TOTAL_ROUNDS;
 
   readonly savedStartDate = computed(() => getScheduledStartDate(this.draft()));
+  readonly membershipFinalized = computed(() =>
+    isDraftMembershipFinalized(this.draft()),
+  );
 
   readonly startTimeReached = computed(() =>
     isDraftStartTimeReached(this.draft(), new Date(this.now())),
   );
+
+  readonly cutoffTimeReached = computed(() => {
+    const draft = this.draft();
+    const startDate = this.savedStartDate();
+
+    return draft?.status === 'scheduled' && Boolean(
+      startDate &&
+      this.now() >= startDate.getTime() - DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS,
+    );
+  });
 
   readonly scheduleStatus = computed(() => {
     const draft = this.draft();
@@ -188,6 +213,7 @@ export class DraftSetup implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     clearInterval(this.clockTimer);
     this.draftSaveGeneration += 1;
     this.pendingDraftSaveAction?.finish('cancelled');
@@ -238,17 +264,13 @@ export class DraftSetup implements OnDestroy {
 
       const teamIds = teams.map((team) => team.ownerId);
 
-      const savedOrderIsValid =
-        existingDraft &&
-        existingDraft.roundOneOrder.length === teamIds.length &&
-        existingDraft.roundOneOrder.every((ownerId) => teamIds.includes(ownerId)) &&
-        teamIds.every((ownerId) => existingDraft.roundOneOrder.includes(ownerId));
-
       this.league.set(league);
       this.teams.set(teams);
       this.draft.set(existingDraft);
-
-      this.roundOneOrder.set(savedOrderIsValid ? [...existingDraft.roundOneOrder] : teamIds);
+      this.orderMode.set(existingDraft?.orderMode ?? 'custom');
+      this.roundOneOrder.set(
+        this.reconcileOrderForCurrentTeams(existingDraft?.roundOneOrder ?? [], teamIds),
+      );
 
       this.draftStartInput = this.toDateTimeLocalValue(getScheduledStartDate(existingDraft));
 
@@ -258,6 +280,24 @@ export class DraftSetup implements OnDestroy {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private reconcileOrderForCurrentTeams(
+    savedOrder: readonly string[],
+    currentTeamIds: readonly string[],
+  ): string[] {
+    const currentSet = new Set(currentTeamIds);
+    const reconciled = savedOrder.filter((ownerId, index, order) =>
+      currentSet.has(ownerId) && order.indexOf(ownerId) === index,
+    );
+    const present = new Set(reconciled);
+
+    for (const ownerId of currentTeamIds.filter((candidate) => !present.has(candidate))) {
+      const insertionIndex = Math.floor(Math.random() * (reconciled.length + 1));
+      reconciled.splice(insertionIndex, 0, ownerId);
+    }
+
+    return reconciled;
   }
 
   getTeamName(ownerId: string): string {
@@ -294,6 +334,7 @@ export class DraftSetup implements OnDestroy {
     }
 
     this.roundOneOrder.set(shuffledOrder);
+    this.orderMode.set('randomized');
     this.successMessage.set('');
   }
 
@@ -303,17 +344,29 @@ export class DraftSetup implements OnDestroy {
     }
 
     this.roundOneOrder.set(this.teams().map((team) => team.ownerId));
+    this.orderMode.set('custom');
 
     this.successMessage.set('');
   }
 
-  clearDraftStartTime(): void {
-    if (this.isDraftLocked()) {
+  async clearDraftStartTime(): Promise<void> {
+    if (this.isDraftLocked() || this.saving()) {
       return;
     }
 
-    this.draftStartInput = '';
-    this.successMessage.set('');
+    if (!this.savedStartDate()) {
+      this.draftStartInput = '';
+      this.successMessage.set('');
+      return;
+    }
+
+    try {
+      await this.cancelStoredSchedule(false);
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'The scheduled time could not be canceled.',
+      );
+    }
   }
 
   moveTeam(index: number, direction: -1 | 1): void {
@@ -331,13 +384,59 @@ export class DraftSetup implements OnDestroy {
     [currentOrder[index], currentOrder[newIndex]] = [currentOrder[newIndex], currentOrder[index]];
 
     this.roundOneOrder.set(currentOrder);
+    this.orderMode.set('custom');
     this.successMessage.set('');
   }
 
   isDraftLocked(): boolean {
     const status = this.draft()?.status;
 
-    return status === 'live' || status === 'complete' || this.startTimeReached();
+    return status === 'live' || status === 'complete' || this.cutoffTimeReached() ||
+      isDraftMembershipFinalized(this.draft());
+  }
+
+  private async refreshCutoffAuthorityIfNeeded(): Promise<void> {
+    const draft = this.draft();
+    const nowMilliseconds = this.now();
+
+    if (
+      this.destroyed || !this.leagueId || this.loading() || this.saving() ||
+      this.cutoffRefreshInFlight || !this.cutoffTimeReached() ||
+      isDraftMembershipFinalized(draft) ||
+      nowMilliseconds - this.lastCutoffRefreshMilliseconds < 15_000
+    ) {
+      return;
+    }
+
+    this.cutoffRefreshInFlight = true;
+    this.lastCutoffRefreshMilliseconds = nowMilliseconds;
+
+    try {
+      const [observedDraft, observedTeams] = await Promise.all([
+        getFantasyDraftFromServer(this.leagueId),
+        getLeagueTeams(this.leagueId),
+      ]);
+
+      if (this.destroyed || !observedDraft) {
+        return;
+      }
+
+      this.draft.set(observedDraft);
+      this.teams.set(observedTeams);
+      this.orderMode.set(observedDraft.orderMode ?? 'custom');
+      this.roundOneOrder.set(
+        this.reconcileOrderForCurrentTeams(
+          observedDraft.roundOneOrder,
+          observedTeams.map((team) => team.ownerId),
+        ),
+      );
+      this.draftStartInput = this.toDateTimeLocalValue(getScheduledStartDate(observedDraft));
+    } catch {
+      // The authoritative worker may still be finalizing. Retry the bounded
+      // server read on the next interval without unlocking local controls.
+    } finally {
+      this.cutoffRefreshInFlight = false;
+    }
   }
 
   getDraftSchedulingGateState(): DraftSetupSchedulingGateState {
@@ -381,7 +480,7 @@ export class DraftSetup implements OnDestroy {
     }
 
     if (gateState === 'unsafe-near-term') {
-      return `This start is less than ${DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS / 60_000} minutes away, but its exact injury-bound Projection V11 snapshot is not verified. Choose ${this.getEarliestSafeStartText()} or later. The server will leave the Draft stopped at zero picks if NHL data is delayed or rate-limited.`;
+      return `Choose ${this.getEarliestSafeStartText()} or later. RinkRat needs a full ${DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS / 60_000}-minute window before every new or changed schedule so membership and the order can be finalized safely.`;
     }
 
     if (gateState === 'exact-ready') {
@@ -405,10 +504,10 @@ export class DraftSetup implements OnDestroy {
         }
       }
 
-      return 'After save, the server will start one authoritative preparation inside the 20-minute readiness window. No browser-generated setup build is needed.';
+      return 'One authoritative server preparation will start inside the 20-minute readiness window after save. No browser-generated setup build is needed.';
     }
 
-    return `Choose a start at least ${DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS / 60_000} minutes away. A nearer start is allowed only when that exact saved schedule is already verified.`;
+    return `Choose a start at least ${DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS / 60_000} minutes away.`;
   }
 
   getEarliestSafeStartText(): string {
@@ -452,6 +551,159 @@ export class DraftSetup implements OnDestroy {
         : `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
 
     return `settings_${Date.now().toString(36)}_${randomPart}`.slice(0, 120);
+  }
+
+  async postponeAndReopen(): Promise<void> {
+    if (!this.reopenConfirmed || !this.reopenPassword || this.saving()) {
+      this.errorMessage.set(
+        'Confirm that you want to postpone the Draft and enter your current password.',
+      );
+      return;
+    }
+
+    try {
+      await reauthenticateCurrentUserWithPassword(this.reopenPassword);
+      this.reopenPassword = '';
+      await this.cancelStoredSchedule(true);
+      this.reopenConfirmed = false;
+    } catch (error: unknown) {
+      this.errorMessage.set(
+        error instanceof Error ? error.message : 'The Draft could not be reopened.',
+      );
+    }
+  }
+
+  private async cancelStoredSchedule(reopenFinalizedMembership: boolean): Promise<void> {
+    const existingDraft = this.draft();
+
+    if (!existingDraft) {
+      this.draftStartInput = '';
+      return;
+    }
+
+    const generation = ++this.draftSaveGeneration;
+    const submissionId = this.createDraftSettingsSubmissionId();
+    this.saving.set(true);
+    this.savePhase.set('saving');
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      const cancellationPromise = cancelFantasyDraftSchedule(
+        this.leagueId,
+        submissionId,
+        existingDraft.lastSettingsSubmissionId ?? null,
+        reopenFinalizedMembership,
+      );
+      this.savePhase.set('confirming');
+      const observedDraft = await this.awaitDraftScheduleCancellationConfirmation(
+        cancellationPromise,
+        submissionId,
+        generation,
+      );
+
+      if (generation !== this.draftSaveGeneration || !observedDraft) {
+        return;
+      }
+
+      this.draft.set(observedDraft);
+      this.draftStartInput = '';
+      this.roundOneOrder.set(
+        this.reconcileOrderForCurrentTeams(
+          observedDraft.roundOneOrder,
+          this.teams().map((team) => team.ownerId),
+        ),
+      );
+      this.successMessage.set(
+        reopenFinalizedMembership
+          ? 'Draft postponed. Membership and league size are open again; the current order is preserved unless participants change.'
+          : 'Scheduled time canceled. Membership and league size remain open.',
+      );
+    } finally {
+      if (generation === this.draftSaveGeneration) {
+        this.saving.set(false);
+        this.savePhase.set('idle');
+      }
+    }
+  }
+
+  private async awaitDraftScheduleCancellationConfirmation(
+    actionPromise: Promise<void>,
+    submissionId: string,
+    generation: number,
+  ): Promise<FantasyDraft | null> {
+    let actionSettled = false;
+    let actionRejected = false;
+    let actionError: unknown;
+
+    void actionPromise.then(
+      () => {
+        actionSettled = true;
+      },
+      (error: unknown) => {
+        actionSettled = true;
+        actionRejected = true;
+        actionError = error;
+      },
+    );
+
+    const matchesCancellation = (draft: FantasyDraft | null): draft is FantasyDraft =>
+      Boolean(
+        draft &&
+        draft.lastSettingsSubmissionId === submissionId &&
+        draft.status === 'setup' &&
+        !getScheduledStartDate(draft) &&
+        draft.membershipLockStatus === 'open',
+      );
+    const deadline = Date.now() + 35_000;
+
+    while (generation === this.draftSaveGeneration && Date.now() <= deadline) {
+      const probe = await settleOperationWithin(
+        getFantasyDraftFromServer(this.leagueId),
+        4_000,
+      );
+
+      if (generation !== this.draftSaveGeneration) {
+        return null;
+      }
+
+      if (probe.status === 'fulfilled' && matchesCancellation(probe.value)) {
+        return probe.value;
+      }
+
+      if (
+        actionSettled && actionRejected &&
+        !this.isPossiblyCommittedDraftSettingsError(actionError)
+      ) {
+        throw actionError;
+      }
+
+      await waitForOperationDelay(1_000);
+    }
+
+    const finalProbe = await settleOperationWithin(
+      getFantasyDraftFromServer(this.leagueId),
+      5_000,
+    );
+
+    if (generation !== this.draftSaveGeneration) {
+      return null;
+    }
+
+    if (finalProbe.status === 'fulfilled' && matchesCancellation(finalProbe.value)) {
+      return finalProbe.value;
+    }
+
+    if (
+      actionSettled && actionRejected &&
+      !this.isPossiblyCommittedDraftSettingsError(actionError)
+    ) {
+      throw actionError;
+    }
+
+    throw new Error(
+      'RinkRat could not confirm the schedule change within the safety window. Check Draft Setup before retrying because the server request may still have completed.',
+    );
   }
 
   async saveDraftOrder(): Promise<void> {
@@ -525,6 +777,16 @@ export class DraftSetup implements OnDestroy {
         clockUpdatedBy: null,
         lastPickId: existingDraft?.lastPickId ?? null,
         lastSettingsSubmissionId: submissionId,
+        orderMode: this.orderMode(),
+        scheduleGeneration: existingDraft?.scheduleGeneration ?? 0,
+        orderEpoch: existingDraft?.orderEpoch ?? 0,
+        membershipLockStatus: 'open',
+        membershipLockedAt: null,
+        orderFinalizedAt: null,
+        orderParticipantHash: existingDraft?.orderParticipantHash ?? null,
+        finalizedScheduleGeneration: null,
+        orderRandomizationSeedHash: existingDraft?.orderRandomizationSeedHash ?? null,
+        serverDraftReadinessScheduleGeneration: null,
         projectionPreparationRequestId: preserveExactReadiness
           ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
           : null,
@@ -571,6 +833,7 @@ export class DraftSetup implements OnDestroy {
         scheduledStartAtMilliseconds: scheduledStartDate?.getTime() ?? null,
         pickSeconds: this.pickSecondsInput,
         status: scheduledStartDate ? 'scheduled' : 'setup',
+        orderMode: this.orderMode(),
       };
 
       this.savePhase.set('saving');
@@ -578,6 +841,7 @@ export class DraftSetup implements OnDestroy {
         this.leagueId,
         draftToSave,
         submissionId,
+        existingDraft?.lastSettingsSubmissionId ?? null,
       );
       this.savePhase.set('confirming');
       const observedDraft = await this.awaitDraftSettingsConfirmation(
@@ -595,11 +859,11 @@ export class DraftSetup implements OnDestroy {
       if (scheduledStartDate) {
         this.successMessage.set(
           preserveExactReadiness
-            ? 'Draft settings saved with the exact verified injury-bound Projection V11 snapshot. The server will revalidate it before opening the Draft.'
-            : 'Draft time saved. One authoritative server preparation will begin inside the 20-minute readiness window. You may leave this page.',
+            ? 'Draft settings saved. Membership remains open until 40 minutes before the start, when the server will revalidate the Draft data.'
+            : 'Draft time saved. Membership and league size remain open until the 40-minute cutoff. You may leave this page.',
         );
       } else {
-        this.successMessage.set('Draft order saved. No start time is scheduled yet.');
+        this.successMessage.set('Draft order preference saved. Membership remains open; no start time is scheduled yet.');
       }
       outcome = 'success';
     } catch (error: unknown) {

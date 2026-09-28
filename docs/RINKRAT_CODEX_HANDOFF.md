@@ -279,6 +279,19 @@ unchanged one-percent recovered-contention gate.
 
 ## Current Draft-room UX posture
 
+FF1.40 is an unmerged, undeployed implementation candidate for the observed
+Draft scheduling lifecycle defects. It keeps membership and capacity open when
+settings are saved, rejects every new/changed schedule inside 40 minutes,
+finalizes current eligible teams and order transactionally at T-40, binds old
+tasks to a monotonic schedule generation, adds optimistic stale-tab rejection,
+and provides explicit cancel plus recent-authenticated Postpone and Reopen.
+Random order is server-generated at cutoff; custom order preserves surviving
+positions and inserts late joiners automatically. Legacy drafts remain locked
+until explicitly reopened. Immediate start remains unsupported. See
+`docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md`. Do not treat this paragraph
+as deployed state until the complete gate, clean commit, targeted release, and
+live manifest/archive evidence pass.
+
 The compact Draft cards, bounded injury/return presentation, player
 headshot-with-team-badge identity, and FF1.18 one-hour Draft lobby are merged.
 Authenticated 319px and desktop presentation, keyboard focus, hard reload,

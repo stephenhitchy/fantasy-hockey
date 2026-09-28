@@ -345,6 +345,16 @@ export interface FantasyDraft {
   lastPickId?: string | null;
   /** Exact client request that most recently saved commissioner settings. */
   lastSettingsSubmissionId?: string | null;
+  orderMode?: 'randomized' | 'custom' | 'legacy-custom';
+  scheduleGeneration?: number;
+  orderEpoch?: number;
+  membershipLockStatus?: 'open' | 'locked';
+  membershipLockedAt?: unknown | null;
+  orderFinalizedAt?: unknown | null;
+  orderParticipantHash?: string | null;
+  finalizedScheduleGeneration?: number | null;
+  orderRandomizationSeedHash?: string | null;
+  serverDraftReadinessScheduleGeneration?: number | null;
 
   /** Server-owned background request preparing the verified Draft board. */
   projectionPreparationRequestId?: string | null;

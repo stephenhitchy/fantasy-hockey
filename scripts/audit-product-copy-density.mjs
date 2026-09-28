@@ -37,7 +37,7 @@ const REMOVED_REDUNDANT_COPY = [
 ];
 
 const REQUIRED_SAFETY_COPY = [
-  ['src/app/features/draft/draft-setup/draft-setup.html', 'Saving the draft order closes league entry.'],
+  ['src/app/features/draft/draft-setup/draft-setup.html', 'League entry stays open until 40 minutes before the Draft.'],
   ['src/app/features/free-agents/free-agents.html', 'exact six-game timeline'],
   ['src/app/features/team/team-settings/team-settings.html', 'Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve'],
   ['src/app/features/leagues/league-detail/league-detail.html', 'This cannot be undone.'],

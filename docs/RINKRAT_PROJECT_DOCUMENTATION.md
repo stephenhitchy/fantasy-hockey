@@ -13077,3 +13077,18 @@ D1J binds the exact live build to four independent reports before the 2026–27 
 ## Operations D1J.2 — Release Evidence Repair
 
 D1J.2 stores observed due age separately from the oldest queue-eligible due age, makes Shadow observation informational, and keeps Canary/Primary backlog thresholds tied only to work that can actually dispatch. Release Readiness and the browser launch gate reject dirty or unversioned deployed source revisions before final validation, while the season-freeze CLI retains its independent clean-commit requirement. Firebase Functions and Hosting predeploy hooks verify Git cleanliness before and after builds, and legacy broad npm production deployment commands fail closed so operators use exact release selectors.
+
+---
+
+## Draft FF1.40 — T-40 Membership and Order Finalization
+
+FF1.40 separates saving Draft setup from freezing a league. A schedule must be
+at least 40 minutes away, membership/capacity remain editable until T-40, and
+one server transaction then locks the final eligible teams and order. Schedule
+generations invalidate old finalization, readiness, and exact-start work;
+ordinary commissioners receive the same authority without a platform-admin
+bypass. Random order is generated at cutoff, while custom order preserves
+surviving positions and inserts later joiners without commissioner repair.
+Immediate start is intentionally unsupported. Full behavior, compatibility,
+verification, deployment, and rollback guidance is in
+`docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md`.

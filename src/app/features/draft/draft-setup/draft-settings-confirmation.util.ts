@@ -6,6 +6,7 @@ export interface DraftSettingsExpectation {
   scheduledStartAtMilliseconds: number | null;
   pickSeconds: number;
   status: DraftStatus;
+  orderMode: 'randomized' | 'custom' | 'legacy-custom';
 }
 
 function toMilliseconds(value: unknown): number | null {
@@ -60,6 +61,7 @@ export function draftSettingsMatchExpectation(
   return (
     draft.lastSettingsSubmissionId === expectation.submissionId &&
     draft.status === expectation.status &&
+    draft.orderMode === expectation.orderMode &&
     sameOrder(draft.roundOneOrder ?? [], expectation.roundOneOrder) &&
     startMatches &&
     Math.round(draft.pickSeconds) === Math.round(expectation.pickSeconds)

@@ -624,6 +624,41 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
       typeof data.lastSettingsSubmissionId === 'string'
         ? data.lastSettingsSubmissionId
         : null,
+    orderMode:
+      data.orderMode === 'randomized' || data.orderMode === 'custom' ||
+      data.orderMode === 'legacy-custom'
+        ? data.orderMode
+        : 'legacy-custom',
+    scheduleGeneration:
+      typeof data.scheduleGeneration === 'number' && Number.isFinite(data.scheduleGeneration)
+        ? Math.max(0, Math.trunc(data.scheduleGeneration))
+        : 0,
+    orderEpoch:
+      typeof data.orderEpoch === 'number' && Number.isFinite(data.orderEpoch)
+        ? Math.max(0, Math.trunc(data.orderEpoch))
+        : 0,
+    membershipLockStatus:
+      data.membershipLockStatus === 'open' || data.membershipLockStatus === 'locked'
+        ? data.membershipLockStatus
+        : undefined,
+    membershipLockedAt: data.membershipLockedAt ?? null,
+    orderFinalizedAt: data.orderFinalizedAt ?? null,
+    orderParticipantHash:
+      typeof data.orderParticipantHash === 'string' ? data.orderParticipantHash : null,
+    finalizedScheduleGeneration:
+      typeof data.finalizedScheduleGeneration === 'number' &&
+      Number.isFinite(data.finalizedScheduleGeneration)
+        ? Math.max(0, Math.trunc(data.finalizedScheduleGeneration))
+        : null,
+    orderRandomizationSeedHash:
+      typeof data.orderRandomizationSeedHash === 'string'
+        ? data.orderRandomizationSeedHash
+        : null,
+    serverDraftReadinessScheduleGeneration:
+      typeof data.serverDraftReadinessScheduleGeneration === 'number' &&
+      Number.isFinite(data.serverDraftReadinessScheduleGeneration)
+        ? Math.max(0, Math.trunc(data.serverDraftReadinessScheduleGeneration))
+        : null,
     projectionPreparationRequestId:
       typeof data.projectionPreparationRequestId === 'string'
         ? data.projectionPreparationRequestId
@@ -716,6 +751,16 @@ export function createDefaultFantasyDraft(roundOneOrder: string[]): FantasyDraft
     clockUpdatedBy: null,
     lastPickId: null,
     lastSettingsSubmissionId: null,
+    orderMode: 'custom',
+    scheduleGeneration: 0,
+    orderEpoch: 0,
+    membershipLockStatus: 'open',
+    membershipLockedAt: null,
+    orderFinalizedAt: null,
+    orderParticipantHash: null,
+    finalizedScheduleGeneration: null,
+    orderRandomizationSeedHash: null,
+    serverDraftReadinessScheduleGeneration: null,
     projectionPreparationRequestId: null,
     projectionPreparationStatus: null,
     serverDraftReadinessStatus: null,
@@ -1168,6 +1213,7 @@ export async function saveFantasyDraft(
   leagueId: string,
   draft: FantasyDraft,
   submissionId?: string,
+  expectedSettingsSubmissionId?: string | null,
 ): Promise<void> {
   const scheduledStart = getScheduledStartDate(draft);
 
@@ -1175,10 +1221,44 @@ export async function saveFantasyDraft(
     leagueId,
     action: 'save-settings',
     submissionId,
+    expectedSettingsSubmissionId: expectedSettingsSubmissionId ?? null,
     roundOneOrder: [...draft.roundOneOrder],
+    orderMode: draft.orderMode ?? 'custom',
     scheduledStartAt: scheduledStart?.toISOString() ?? null,
     pickSeconds: normalizePickSeconds(draft.pickSeconds),
   });
+}
+
+export async function cancelFantasyDraftSchedule(
+  leagueId: string,
+  submissionId: string,
+  expectedSettingsSubmissionId: string | null,
+  reopenFinalizedMembership: boolean,
+): Promise<void> {
+  await executeDraftCommand({
+    leagueId,
+    action: reopenFinalizedMembership ? 'postpone-reopen' : 'cancel-schedule',
+    submissionId,
+    expectedSettingsSubmissionId,
+  });
+}
+
+/** Legacy drafts remain locked until an explicit commissioner reopen. */
+export function isDraftMembershipFinalized(draft: FantasyDraft | null): boolean {
+  if (!draft) {
+    return false;
+  }
+
+  if (draft.membershipLockStatus === 'open') {
+    return false;
+  }
+
+  if (draft.membershipLockStatus === 'locked') {
+    return true;
+  }
+
+  return draft.status === 'scheduled' || draft.status === 'live' ||
+    draft.status === 'complete' || draft.roundOneOrder.length > 0;
 }
 
 export function getScheduledStartDate(draft: FantasyDraft | null): Date | null {

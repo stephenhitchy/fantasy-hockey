@@ -11,6 +11,8 @@ import { DraftPick, FantasyDraft } from './draft.models';
  */
 export type DraftCommandAction =
   | 'save-settings'
+  | 'cancel-schedule'
+  | 'postpone-reopen'
   | 'activate-scheduled'
   | 'start-clock'
   | 'pause-clock'
@@ -20,7 +22,9 @@ export interface DraftCommandRequest {
   leagueId: string;
   action: DraftCommandAction;
   submissionId?: string;
+  expectedSettingsSubmissionId?: string | null;
   roundOneOrder?: string[];
+  orderMode?: 'randomized' | 'custom' | 'legacy-custom';
   scheduledStartAt?: string | null;
   pickSeconds?: number;
 }

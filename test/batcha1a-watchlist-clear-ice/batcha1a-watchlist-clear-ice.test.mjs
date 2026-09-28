@@ -139,7 +139,7 @@ test('Clear Ice removes repeated descriptions while retaining competitive and de
   assert.doesNotMatch(league, /The top button follows the current phase/);
   assert.doesNotMatch(wire, /Commissioner announcements, Draft picks, commissioner controls/);
   assert.doesNotMatch(freeAgents, /Only the most useful comparison numbers/);
-  assert.match(draftSetup, /Saving the draft order closes league entry/);
+  assert.match(draftSetup, /League entry stays open until 40 minutes before the Draft/);
   assert.match(freeAgents, /exact six-game timeline/);
   assert.match(team, /Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve/);
   assert.match(account, /cannot be undone/);

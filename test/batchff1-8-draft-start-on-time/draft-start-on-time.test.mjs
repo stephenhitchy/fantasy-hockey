@@ -109,8 +109,8 @@ test('schedule changes wake server preparation without recursive readiness trigg
     trigger,
     /getScheduledStartMilliseconds\(before\) !== getScheduledStartMilliseconds\(after\)/,
   );
-  assert.match(trigger, /if \(!scheduledStartChanged && !liveProgress\)/);
-  assert.match(trigger, /if \(scheduledStartChanged\) \{\s*return;/);
+  assert.match(trigger, /if \(!scheduledStartChanged && !membershipFinalized && !liveProgress\)/);
+  assert.match(trigger, /if \(scheduledStartChanged \|\| membershipFinalized\) \{\s*return;/);
 });
 
 test('browsers no longer perform long Draft preparation before requesting server activation', async () => {

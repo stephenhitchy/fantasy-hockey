@@ -315,14 +315,21 @@ path being readable by the browser does not mean the browser may write it.
 
 1. Draft screens subscribe through `src/app/core/draft/draft.service.ts` and
    load the server-published player pool/projection snapshot.
-2. `draft-authority.service.ts` sends a command or pick with the exact league,
-   asset, submission ID, and expected overall pick.
-3. `functions/src/draft-authority.ts` validates the request and delegates the
-   deterministic pick operation to the server engine.
-4. Draft automation advances clocks, scheduled starts, and auto-draft without
-   transferring authority to a browser tab.
-5. The Draft Room reconciles the callable result or ambiguous timeout against
+2. Draft Setup saves schedule and order intent with the last observed settings
+   revision. Membership and capacity remain open until the server T-40 cutoff.
+3. `draft-authority.service.ts` sends a command or pick with the exact league,
+   submission identity, expected settings/pick revision, and user intent.
+4. `functions/src/draft-authority.ts` validates commissioner authority,
+   rejects schedules under 40 minutes, and owns cancel/reopen transitions.
+5. `functions/src/draft-automation.ts` finalizes participants/order at T-40,
+   then advances readiness, scheduled starts, clocks, and auto-draft without
+   transferring authority to a browser tab. Schedule-bound work must match
+   both the timestamp and monotonic schedule generation.
+6. The Draft Room reconciles the callable result or ambiguous timeout against
    committed draft and pick documents.
+
+See `docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md` for compatibility,
+recovery, deployment, and rollback details.
 
 ### Roster, waiver, and IR
 

@@ -31,6 +31,7 @@ import { getDraftLobbyState } from '../../../core/draft/draft-lobby.util';
 import {
   activateScheduledDraftIfReady,
   getScheduledStartDate,
+  isDraftMembershipFinalized,
   isDraftStartTimeReached,
   listenToFantasyDraft,
 } from '../../../core/draft/draft.service';
@@ -211,7 +212,8 @@ export class LeagueDetail implements OnDestroy {
     const league = this.league();
     const draft = this.draft();
 
-    if (!league || !this.isCommissioner() || this.cycle() || league.joinStatus === 'locked') {
+    if (!league || !this.isCommissioner() || this.cycle() ||
+        league.joinStatus === 'locked' || isDraftMembershipFinalized(draft)) {
       return false;
     }
 
@@ -220,8 +222,8 @@ export class LeagueDetail implements OnDestroy {
     }
 
     return (
-      draft.status === 'setup' &&
-      draft.roundOneOrder.length === 0 &&
+      (draft.status === 'setup' || draft.status === 'scheduled') &&
+      draft.clockStatus === 'stopped' &&
       draft.nextOverallPick === 1 &&
       draft.draftedAssetKeys.length === 0
     );
@@ -234,6 +236,7 @@ export class LeagueDetail implements OnDestroy {
 
     return Boolean(
       league && draft && this.isCommissioner() && !this.cycle() &&
+      draft.membershipLockStatus === undefined &&
       league.joinStatus === 'locked' && league.joinLockedReason === 'draft-order-saved' &&
       draft.status === 'scheduled' && draft.clockStatus === 'stopped' &&
       draft.nextOverallPick === 1 && draft.draftedAssetKeys.length === 0 &&
@@ -549,16 +552,12 @@ export class LeagueDetail implements OnDestroy {
       return 'Competition has started. Existing teams and history must remain intact.';
     }
 
-    if (this.league()?.joinStatus === 'locked' || this.draft()?.status === 'scheduled') {
-      return 'Membership locked when Draft setup was saved. Existing teams cannot be deleted.';
+    if (this.league()?.joinStatus === 'locked' || isDraftMembershipFinalized(this.draft())) {
+      return 'Membership is finalized for the Draft. Postpone and reopen it before removing a team.';
     }
 
     if (this.draft()?.status === 'live' || this.draft()?.status === 'complete') {
       return 'The Draft has started. Existing teams, picks, and competition history must remain intact.';
-    }
-
-    if ((this.draft()?.roundOneOrder.length ?? 0) > 0) {
-      return 'Draft order has been saved. Existing teams cannot be deleted.';
     }
 
     return 'Member removal is unavailable until League HQ finishes loading current authority.';
@@ -569,10 +568,14 @@ export class LeagueDetail implements OnDestroy {
       const start = getScheduledStartDate(this.draft());
 
       if (start && start.getTime() - this.now() <= 24 * 60 * 60 * 1000) {
-        return 'League size is frozen within 24 hours of the scheduled Draft start.';
+        return 'League size is frozen after the Draft membership cutoff.';
       }
 
       return 'This scheduled Draft cannot be reopened safely. Refresh League HQ or contact support.';
+    }
+
+    if (isDraftMembershipFinalized(this.draft())) {
+      return 'League size is finalized 40 minutes before the scheduled Draft. Postpone and reopen the Draft to make changes.';
     }
 
     return this.memberRemovalAvailabilityMessage();

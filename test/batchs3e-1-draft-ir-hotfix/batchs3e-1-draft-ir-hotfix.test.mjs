@@ -26,16 +26,18 @@ test('Draft scheduling delegates exact Projection V11 preparation to server read
   assert.match(draftService, /benchSlotId,\s*\n\s*\}\);/);
 });
 
-test('Draft authority validates exact near-term readiness without accepting a generic pointer', async () => {
+test('Draft authority rejects near-term scheduling and clears stale readiness evidence', async () => {
   const source = await read('functions/src/draft-authority.ts');
 
   assert.doesNotMatch(source, /resolveDraftProjectionPreparation/);
   assert.match(source, /loadPreparedProjectionSnapshotForScheduledDraft/);
   assert.match(source, /createUnsafeNearTermScheduleError/);
-  assert.match(source, /serverDraftReadinessStatus: preserveVerifiedReadiness/);
-  assert.match(source, /serverAutomationStatus:[\s\S]*scheduled-ready/);
+  assert.match(source, /initialNearTermGateState === 'requires-exact-readiness'/);
+  assert.match(source, /serverDraftReadinessStatus: null/);
+  assert.match(source, /serverDraftReadinessScheduleGeneration: null/);
   assert.doesNotMatch(source, /loadSharedProjectionSnapshot\(/);
-  assert.match(source, /League entry is now closed/);
+  assert.match(source, /League entry and size remain open until 40 minutes before the scheduled start/);
+  assert.doesNotMatch(source, /League entry is now closed/);
 });
 
 test('Scheduled Draft automation waits safely for Projection V11 and never opens on an unverified board', async () => {

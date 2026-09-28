@@ -32,6 +32,7 @@ export async function updateScheduledDraftReadinessDocument(
   draftRef: DocumentReference<DocumentData>,
   scheduledStartMilliseconds: number,
   payload: Record<string, unknown>,
+  expectedScheduleGeneration?: number,
 ): Promise<boolean> {
   if (!Number.isFinite(scheduledStartMilliseconds)) {
     return false;
@@ -44,7 +45,11 @@ export async function updateScheduledDraftReadinessDocument(
     if (
       data?.['status'] !== 'scheduled' ||
       toTimestampMilliseconds(data?.['scheduledStartAt']) !==
-        scheduledStartMilliseconds
+        scheduledStartMilliseconds ||
+      (
+        expectedScheduleGeneration !== undefined &&
+        data?.['scheduleGeneration'] !== expectedScheduleGeneration
+      )
     ) {
       return false;
     }
@@ -55,6 +60,9 @@ export async function updateScheduledDraftReadinessDocument(
         ...payload,
         serverDraftReadinessScheduledStartAt:
           Timestamp.fromMillis(scheduledStartMilliseconds),
+        ...(expectedScheduleGeneration === undefined
+          ? {}
+          : { serverDraftReadinessScheduleGeneration: expectedScheduleGeneration }),
         serverDraftReadinessUpdatedAt: FieldValue.serverTimestamp(),
         serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),

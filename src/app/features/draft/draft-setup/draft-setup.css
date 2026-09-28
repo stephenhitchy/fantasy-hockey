@@ -795,6 +795,20 @@
   animation: rr-draft-save-spin 0.9s linear infinite;
 }
 
+.capacity-reset-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.capacity-reset-confirmation input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
 @keyframes rr-draft-save-spin {
   to { transform: rotate(360deg); }
 }

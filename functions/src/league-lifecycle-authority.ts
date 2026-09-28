@@ -1454,7 +1454,7 @@ export const joinLeagueSecure = onCall(
         if (joinStatus === 'locked' || joinStatus === 'full' || isDraftJoinLocked(draftSnapshot.data())) {
           throw new HttpsError(
             'failed-precondition',
-            'League entry closed when the draft order was saved. Ask the commissioner to create a new league if another team is needed.',
+            'League entry is closed because the Draft membership cutoff has passed.',
             { reason: 'draft-join-locked' },
           );
         }
@@ -1916,7 +1916,7 @@ export async function executePreDraftLeagueMemberRemoval(input: {
     if (blockReason) {
       throw new HttpsError(
         'failed-precondition',
-        'Members can be removed only before Draft setup is saved and before any roster or competition history exists.',
+        'Members can be removed only before the 40-minute Draft membership cutoff and before any roster or competition history exists.',
         { reason: blockReason },
       );
     }
@@ -2010,6 +2010,23 @@ export async function executePreDraftLeagueMemberRemoval(input: {
 
     if (queueSnapshot.exists) {
       transaction.delete(queueRef);
+    }
+
+    if (draftSnapshot.exists) {
+      const draftData = draftSnapshot.data() ?? {};
+      const currentOrder = Array.isArray(draftData['roundOneOrder'])
+        ? draftData['roundOneOrder'].filter(
+            (ownerId): ownerId is string =>
+              typeof ownerId === 'string' && ownerId !== request.targetOwnerId,
+          )
+        : [];
+
+      transaction.set(draftRef, {
+        roundOneOrder: currentOrder,
+        orderParticipantHash: null,
+        orderRandomizationSeedHash: null,
+        updatedAt: timestamp,
+      }, { merge: true });
     }
 
     transaction.set(
@@ -2238,7 +2255,7 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
           ? 'League size can change only more than 24 hours before the scheduled Draft starts.'
           : request.reopenScheduledDraft
             ? 'This scheduled Draft can no longer be reopened safely. Refresh League HQ.'
-            : 'League size can change only before Draft setup is saved and competition begins.',
+            : 'League size can change only before the 40-minute Draft membership cutoff and before competition begins.',
         { reason: blockReason });
     }
 

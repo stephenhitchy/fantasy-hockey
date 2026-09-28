@@ -237,6 +237,17 @@ test('pre-Draft guard fails closed for every protected history boundary', () => 
   assert.equal(getPreDraftMemberRemovalBlockReason({
     ...baseline,
     draftData: {
+      status: 'scheduled',
+      membershipLockStatus: 'open',
+      roundOneOrder: ['commissioner', 'member'],
+      draftedAssetKeys: [],
+      nextOverallPick: 1,
+      clockStatus: 'stopped',
+    },
+  }), null);
+  assert.equal(getPreDraftMemberRemovalBlockReason({
+    ...baseline,
+    draftData: {
       status: 'setup',
       roundOneOrder: [],
       draftedAssetKeys: [],
@@ -353,6 +364,38 @@ test('concurrent duplicate delivery removes once and decrements lifecycle once',
   assert.equal(auditSnapshot.get('action'), 'member-removed');
   assert.equal(auditSnapshot.get('values.targetOwnerId'), fixture.targetOwnerId);
   assert.equal(auditSnapshot.get('values.removedTeamName'), fixture.targetTeamName);
+});
+
+test('ordinary commissioner can remove a member from an explicitly open scheduled Draft', async () => {
+  const fixture = await seedLeague({
+    draft: {
+      status: 'scheduled',
+      membershipLockStatus: 'open',
+      orderMode: 'custom',
+      scheduleGeneration: 3,
+      roundOneOrder: [],
+      draftedAssetKeys: [],
+      nextOverallPick: 1,
+      clockStatus: 'stopped',
+      scheduledStartAt: Timestamp.fromMillis(Date.now() + 2 * 60 * 60 * 1000),
+    },
+  });
+  await firestore.doc(`leagues/${fixture.leagueId}/draft/current`).set({
+    roundOneOrder: [fixture.commissionerId, fixture.targetOwnerId],
+    orderParticipantHash: 'a'.repeat(64),
+  }, { merge: true });
+
+  const result = await executePreDraftLeagueMemberRemoval({
+    commissionerId: fixture.commissionerId,
+    request: removalRequest(fixture),
+  });
+  const draft = (await firestore.doc(`leagues/${fixture.leagueId}/draft/current`).get()).data();
+
+  assert.equal(result.removed, true);
+  assert.deepEqual(draft.roundOneOrder, [fixture.commissionerId]);
+  assert.equal(draft.orderParticipantHash, null);
+  assert.equal(draft.status, 'scheduled');
+  assert.equal(draft.scheduleGeneration, 3);
 });
 
 test('a completed request replays without another lifecycle decrement', async () => {

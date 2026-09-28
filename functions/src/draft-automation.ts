@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 import { getFunctions } from 'firebase-admin/functions';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -12,6 +12,7 @@ import { resolveSafeFirestoreDocumentId } from './shared/security/firestore-docu
 import {
   FIRESTORE_AUTH_USER_ID_OPTIONS,
   FIRESTORE_DRAFT_PICK_ID_OPTIONS,
+  FIRESTORE_INVITE_CODE_OPTIONS,
   FIRESTORE_LEAGUE_ID_OPTIONS,
   FIRESTORE_REQUEST_ID_OPTIONS,
 } from './shared/security/firestore-document-id-policies';
@@ -53,6 +54,13 @@ import {
   isDraftAvailabilityEvidenceUsable,
 } from './draft-readiness.util';
 import {
+  DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS,
+  buildDraftFinalizationTaskId,
+  draftFinalizationMatchesParticipants,
+  finalizeDraftOrder,
+  isDraftMembershipLocked,
+} from './draft-lifecycle.util';
+import {
   isProjectionSha256,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_HASH_ALGORITHM,
@@ -84,6 +92,10 @@ import {
   hasExactDraftOwnerSet,
   selectAutomaticDraftCandidate,
 } from './draft-pick-engine';
+import {
+  LEAGUE_AUDIT_SCHEMA_VERSION,
+  LEAGUE_AUTHORITY_SCHEMA_VERSION,
+} from './league-lifecycle-authority.util';
 
 const FUNCTION_REGION = 'us-central1';
 const SERVER_DRAFT_ACTOR = 'server:draft-automation';
@@ -201,6 +213,7 @@ interface DraftScheduledStartTaskPayload {
   taskType: 'scheduled-start';
   leagueId: string;
   expectedScheduledStartAtMilliseconds: number;
+  expectedScheduleGeneration?: number;
 }
 
 interface DraftQueueWarmupTaskPayload {
@@ -208,12 +221,21 @@ interface DraftQueueWarmupTaskPayload {
   leagueId?: string;
   expectedScheduledStartAtMilliseconds: number;
   warmupLeadMilliseconds: number;
+  expectedScheduleGeneration?: number;
+}
+
+interface DraftFinalizationTaskPayload {
+  taskType: 'draft-finalization';
+  leagueId: string;
+  expectedScheduledStartAtMilliseconds: number;
+  expectedScheduleGeneration: number;
 }
 
 type DraftClockTaskPayload =
   | DraftPickDeadlineTaskPayload
   | DraftScheduledStartTaskPayload
-  | DraftQueueWarmupTaskPayload;
+  | DraftQueueWarmupTaskPayload
+  | DraftFinalizationTaskPayload;
 
 export interface DraftTurnRepairResult {
   repaired: boolean;
@@ -764,13 +786,9 @@ async function scheduleDraftAvailabilityRefreshIfNeeded(
     if (
       draft.serverDraftReadinessStatus !== 'error' ||
       draft.serverDraftReadinessMessage !== recoveryExpiredMessage ||
-      !draftReadinessMatchesSchedule({
-        readinessScheduledStartMilliseconds:
-          getReadinessScheduledStartMilliseconds(draft),
-        scheduledStartMilliseconds,
-      })
+      !draftReadinessMatchesCurrentSchedule(draft)
     ) {
-      await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      await updateScheduledDraftReadiness(leagueId, draft, {
         serverDraftReadinessStatus: 'error',
         serverDraftReadinessProjectionRequestId: null,
         serverDraftReadinessProjectionSnapshotId: null,
@@ -813,13 +831,9 @@ async function scheduleDraftAvailabilityRefreshIfNeeded(
 
   if (
     draft.serverDraftReadinessStatus !== 'waiting-injury' ||
-    !draftReadinessMatchesSchedule({
-      readinessScheduledStartMilliseconds:
-        getReadinessScheduledStartMilliseconds(draft),
-      scheduledStartMilliseconds,
-    })
+    !draftReadinessMatchesCurrentSchedule(draft)
   ) {
-    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+    await updateScheduledDraftReadiness(leagueId, draft, {
       serverDraftReadinessStatus: 'waiting-injury',
       serverDraftReadinessAvailabilityRevision: availability.revision,
       serverDraftReadinessProjectionRequestId: null,
@@ -840,7 +854,7 @@ async function scheduleDraftAvailabilityRefreshIfNeeded(
   const expectedDailyKey = getDraftAvailabilityDailyKey(nowMilliseconds);
 
   if (!expectedDailyKey) {
-    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+    await updateScheduledDraftReadiness(leagueId, draft, {
       serverDraftReadinessStatus: 'error',
       serverDraftReadinessAvailabilityRevision: availability.revision,
       serverDraftReadinessProjectionRequestId: null,
@@ -883,7 +897,7 @@ async function scheduleDraftAvailabilityRefreshIfNeeded(
         scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
         error,
       });
-      await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      await updateScheduledDraftReadiness(leagueId, draft, {
         serverDraftReadinessStatus: 'error',
         serverDraftReadinessAvailabilityRevision: availability.revision,
         serverDraftReadinessProjectionRequestId: null,
@@ -925,6 +939,225 @@ function buildDraftPickHandoffCorrelationHash(
     .digest('hex');
 }
 
+type DraftFinalizationResult = 'finalized' | 'already-finalized' | 'early' | 'stale';
+
+export async function finalizeScheduledDraftMembership(
+  leagueId: string,
+  expectedScheduledStartMilliseconds: number,
+  expectedScheduleGeneration: number,
+  nowMilliseconds = Date.now(),
+  randomizationSeed = randomBytes(32).toString('hex'),
+): Promise<DraftFinalizationResult> {
+  const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+  const leagueRef = db.doc(`leagues/${leagueId}`);
+  const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(33);
+  const membersQuery = db.collection(`leagues/${leagueId}/members`).limit(33);
+  const auditId = `draft-membership-finalized-g${expectedScheduleGeneration}`;
+  const auditRef = db.doc(`leagues/${leagueId}/audit/${auditId}`);
+
+  return db.runTransaction(async (transaction) => {
+    const [draftSnapshot, leagueSnapshot, teamsSnapshot, membersSnapshot, auditSnapshot] =
+      await Promise.all([
+        transaction.get(draftRef),
+        transaction.get(leagueRef),
+        transaction.get(teamsQuery),
+        transaction.get(membersQuery),
+        transaction.get(auditRef),
+      ]);
+
+    if (!draftSnapshot.exists || !leagueSnapshot.exists) {
+      return 'stale';
+    }
+
+    const rawDraft = draftSnapshot.data() ?? {};
+    const draft = normalizeDraft(rawDraft as Partial<FantasyDraft>);
+    const actualStartMilliseconds = getScheduledStartMilliseconds(draft);
+
+    if (
+      draft.status !== 'scheduled' ||
+      actualStartMilliseconds !== expectedScheduledStartMilliseconds ||
+      (draft.scheduleGeneration ?? 0) !== expectedScheduleGeneration
+    ) {
+      return 'stale';
+    }
+
+    if (isDraftMembershipLocked(rawDraft)) {
+      return 'already-finalized';
+    }
+
+    const cutoffMilliseconds =
+      expectedScheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+
+    if (nowMilliseconds + 100 < cutoffMilliseconds) {
+      return 'early';
+    }
+
+    const teamOwnerIds = teamsSnapshot.docs
+      .map((document) => document.id)
+      .sort((first, second) => first.localeCompare(second));
+    const memberOwnerIds = membersSnapshot.docs
+      .map((document) => document.id)
+      .sort((first, second) => first.localeCompare(second));
+    const league = leagueSnapshot.data() ?? {};
+
+    if (
+      teamOwnerIds.length < 2 || teamOwnerIds.length > 32 ||
+      memberOwnerIds.length !== teamOwnerIds.length ||
+      memberOwnerIds.some((ownerId, index) => ownerId !== teamOwnerIds[index]) ||
+      league['teamCount'] !== teamOwnerIds.length
+    ) {
+      throw new Error(
+        'Draft membership could not be finalized because member and team authority do not match.',
+      );
+    }
+
+    const inviteCode = resolveSafeFirestoreDocumentId(
+      league['inviteCode'],
+      FIRESTORE_INVITE_CODE_OPTIONS,
+    );
+    const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
+    const inviteSnapshot = inviteRef ? await transaction.get(inviteRef) : null;
+
+    if (!inviteRef || !inviteSnapshot?.exists) {
+      throw new Error(
+        'Draft membership could not be finalized because invitation authority is incomplete.',
+      );
+    }
+
+    const finalized = finalizeDraftOrder({
+      orderMode: draft.orderMode ?? 'legacy-custom',
+      currentOrder: draft.roundOneOrder,
+      participantIds: teamOwnerIds,
+      randomizationSeed,
+      preservedParticipantHash: draft.orderParticipantHash,
+    });
+    const orderEpoch = finalized.reusedPreservedOrder
+      ? Math.max(1, draft.orderEpoch ?? 0)
+      : Math.max(0, draft.orderEpoch ?? 0) + 1;
+    const generatedSeedHash = createHash('sha256')
+      .update(`rinkrat:draft-finalization-seed:v1:${randomizationSeed}`)
+      .digest('hex');
+    const seedHash = finalized.reusedPreservedOrder && draft.orderRandomizationSeedHash
+      ? draft.orderRandomizationSeedHash
+      : generatedSeedHash;
+    const timestamp = FieldValue.serverTimestamp();
+
+    transaction.set(draftRef, {
+      roundOneOrder: finalized.order,
+      membershipLockStatus: 'locked',
+      membershipLockedAt: timestamp,
+      orderFinalizedAt: timestamp,
+      orderParticipantHash: finalized.participantHash,
+      finalizedScheduleGeneration: expectedScheduleGeneration,
+      orderEpoch,
+      orderRandomizationSeedHash: seedHash,
+      serverAutomationStatus: 'membership-finalized',
+      serverAutomationMessage:
+        'League membership and the final Draft order were finalized 40 minutes before the scheduled start.',
+      serverAutomationUpdatedAt: timestamp,
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.set(leagueRef, {
+      teamCount: teamOwnerIds.length,
+      joinStatus: 'locked',
+      joinLockedAt: timestamp,
+      joinLockedReason: 'draft-cutoff',
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.set(inviteRef, {
+      active: false,
+      joinCount: teamOwnerIds.length,
+      lockedAt: timestamp,
+      lockedReason: 'draft-cutoff',
+      updatedAt: timestamp,
+    }, { merge: true });
+
+    if (!auditSnapshot.exists) {
+      transaction.create(auditRef, {
+        schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
+        id: auditId,
+        leagueId,
+        action: 'draft-membership-finalized',
+        actorId: SERVER_DRAFT_ACTOR,
+        actorRole: 'system',
+        authority: 'cloud-function',
+        authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
+        reason: 'Server finalized eligible participants and Draft order at T-40.',
+        release: 'Draft Lifecycle T40',
+        values: {
+          scheduledStartAt: Timestamp.fromMillis(expectedScheduledStartMilliseconds),
+          scheduleGeneration: expectedScheduleGeneration,
+          orderMode: draft.orderMode ?? 'legacy-custom',
+          orderEpoch,
+          participantCount: teamOwnerIds.length,
+          participantHash: finalized.participantHash,
+          reusedPreservedOrder: finalized.reusedPreservedOrder,
+          randomizationSeedHash: seedHash,
+        },
+        createdAt: timestamp,
+      });
+    }
+
+    return 'finalized';
+  });
+}
+
+async function scheduleDraftMembershipFinalizationTask(
+  leagueId: string,
+  draft: FantasyDraft,
+  now = new Date(),
+): Promise<'not-due' | 'scheduled' | 'error'> {
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+  const scheduleGeneration = draft.scheduleGeneration ?? 0;
+
+  if (
+    draft.status !== 'scheduled' ||
+    scheduledStartMilliseconds === null ||
+    isDraftMembershipLocked(draft)
+  ) {
+    return 'not-due';
+  }
+
+  const cutoffMilliseconds =
+    scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+
+  if (cutoffMilliseconds <= now.getTime()) {
+    return 'not-due';
+  }
+
+  const payload: DraftFinalizationTaskPayload = {
+    taskType: 'draft-finalization',
+    leagueId,
+    expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
+    expectedScheduleGeneration: scheduleGeneration,
+  };
+
+  try {
+    await getDraftClockTaskQueue().enqueue(payload, {
+      id: buildDraftFinalizationTaskId({
+        leagueId,
+        scheduledStartMilliseconds,
+        scheduleGeneration,
+      }),
+      scheduleTime: new Date(cutoffMilliseconds),
+      dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
+    });
+    return 'scheduled';
+  } catch (error: unknown) {
+    if (isTaskAlreadyExistsError(error)) {
+      return 'scheduled';
+    }
+
+    console.error('Unable to schedule Draft membership finalization task.', {
+      leagueId,
+      scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+      scheduleGeneration,
+      error,
+    });
+    return 'error';
+  }
+}
+
 async function scheduleScheduledDraftStartTask(
   leagueId: string,
   draft: FantasyDraft,
@@ -948,6 +1181,7 @@ async function scheduleScheduledDraftStartTask(
     taskType: 'scheduled-start',
     leagueId,
     expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
+    expectedScheduleGeneration: draft.scheduleGeneration ?? 0,
   };
   const taskEnqueuedAtMilliseconds = Date.now();
   const taskDispatchMilliseconds = getScheduledDraftStartTaskDispatchMilliseconds({
@@ -966,6 +1200,7 @@ async function scheduleScheduledDraftStartTask(
       id: buildScheduledDraftStartTaskId({
         leagueId,
         scheduledStartMilliseconds,
+        scheduleGeneration: draft.scheduleGeneration ?? 0,
       }),
       scheduleTime: new Date(taskDispatchMilliseconds),
       dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
@@ -1000,6 +1235,7 @@ async function scheduleScheduledDraftStartTask(
       leagueId,
       expectedScheduledStartAtMilliseconds: scheduledStartMilliseconds,
       warmupLeadMilliseconds,
+      expectedScheduleGeneration: draft.scheduleGeneration ?? 0,
     };
 
     try {
@@ -1008,6 +1244,7 @@ async function scheduleScheduledDraftStartTask(
           leagueId,
           scheduledStartMilliseconds,
           warmupLeadMilliseconds,
+          scheduleGeneration: draft.scheduleGeneration ?? 0,
         }),
         scheduleTime: new Date(warmupDispatchMilliseconds),
         dispatchDeadlineSeconds: DRAFT_TASK_DISPATCH_DEADLINE_SECONDS,
@@ -1204,6 +1441,41 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     lastSettingsSubmissionId:
       typeof value.lastSettingsSubmissionId === 'string'
         ? value.lastSettingsSubmissionId
+        : null,
+    orderMode:
+      value.orderMode === 'randomized' || value.orderMode === 'custom' ||
+      value.orderMode === 'legacy-custom'
+        ? value.orderMode
+        : 'legacy-custom',
+    scheduleGeneration:
+      typeof value.scheduleGeneration === 'number' && Number.isFinite(value.scheduleGeneration)
+        ? Math.max(0, Math.trunc(value.scheduleGeneration))
+        : 0,
+    orderEpoch:
+      typeof value.orderEpoch === 'number' && Number.isFinite(value.orderEpoch)
+        ? Math.max(0, Math.trunc(value.orderEpoch))
+        : 0,
+    membershipLockStatus:
+      value.membershipLockStatus === 'open' || value.membershipLockStatus === 'locked'
+        ? value.membershipLockStatus
+        : undefined,
+    membershipLockedAt: value.membershipLockedAt ?? null,
+    orderFinalizedAt: value.orderFinalizedAt ?? null,
+    orderParticipantHash:
+      typeof value.orderParticipantHash === 'string' ? value.orderParticipantHash : null,
+    finalizedScheduleGeneration:
+      typeof value.finalizedScheduleGeneration === 'number' &&
+      Number.isFinite(value.finalizedScheduleGeneration)
+        ? Math.max(0, Math.trunc(value.finalizedScheduleGeneration))
+        : null,
+    orderRandomizationSeedHash:
+      typeof value.orderRandomizationSeedHash === 'string'
+        ? value.orderRandomizationSeedHash
+        : null,
+    serverDraftReadinessScheduleGeneration:
+      typeof value.serverDraftReadinessScheduleGeneration === 'number' &&
+      Number.isFinite(value.serverDraftReadinessScheduleGeneration)
+        ? Math.max(0, Math.trunc(value.serverDraftReadinessScheduleGeneration))
         : null,
     projectionPreparationRequestId:
       typeof value.projectionPreparationRequestId === 'string'
@@ -1506,17 +1778,45 @@ function getReadinessScheduledStartMilliseconds(
   return asTimestampDate(draft.serverDraftReadinessScheduledStartAt)?.getTime() ?? null;
 }
 
+function draftReadinessMatchesCurrentSchedule(draft: FantasyDraft): boolean {
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+  const timestampMatches = draftReadinessMatchesSchedule({
+    readinessScheduledStartMilliseconds:
+      getReadinessScheduledStartMilliseconds(draft),
+    scheduledStartMilliseconds,
+  });
+
+  if (!timestampMatches) {
+    return false;
+  }
+
+  return draft.serverDraftReadinessScheduleGeneration ===
+    (draft.scheduleGeneration ?? 0) ||
+    (
+      draft.membershipLockStatus === undefined &&
+      draft.serverDraftReadinessScheduleGeneration == null
+    );
+}
+
 async function updateScheduledDraftReadiness(
   leagueId: string,
-  scheduledStartMilliseconds: number,
+  draft: FantasyDraft,
   payload: Record<string, unknown>,
 ): Promise<boolean> {
   const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+  const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+
+  if (scheduledStartMilliseconds === null) {
+    return false;
+  }
 
   return updateScheduledDraftReadinessDocument(
     draftRef,
     scheduledStartMilliseconds,
     payload,
+    draft.membershipLockStatus === undefined
+      ? undefined
+      : draft.scheduleGeneration ?? 0,
   );
 }
 
@@ -1535,11 +1835,7 @@ async function loadPreparedProjectionFromDraftEvidence(
     scheduledStartMilliseconds === null ||
     draft.status !== 'scheduled' ||
     draft.serverDraftReadinessStatus !== 'ready' ||
-    !draftReadinessMatchesSchedule({
-      readinessScheduledStartMilliseconds:
-        getReadinessScheduledStartMilliseconds(draft),
-      scheduledStartMilliseconds,
-    })
+    !draftReadinessMatchesCurrentSchedule(draft)
   ) {
     return null;
   }
@@ -1644,7 +1940,7 @@ async function prepareScheduledDraftReadiness(
     nowMilliseconds: now.getTime(),
     requiredThroughMilliseconds: scheduledStartMilliseconds,
   })) {
-    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+    await updateScheduledDraftReadiness(leagueId, draft, {
       serverDraftReadinessStatus: 'waiting-injury',
       serverDraftReadinessAvailabilityRevision: availability.revision,
       serverDraftReadinessProjectionRequestId: null,
@@ -1662,11 +1958,8 @@ async function prepareScheduledDraftReadiness(
   }
 
   const availabilityRevision = availability.revision as string;
-  const sameReadinessInput = draftReadinessMatchesSchedule({
-    readinessScheduledStartMilliseconds:
-      getReadinessScheduledStartMilliseconds(draft),
-    scheduledStartMilliseconds,
-  }) && draft.serverDraftReadinessAvailabilityRevision === availabilityRevision;
+  const sameReadinessInput = draftReadinessMatchesCurrentSchedule(draft) &&
+    draft.serverDraftReadinessAvailabilityRevision === availabilityRevision;
   const existingRequestId = sameReadinessInput
     ? draft.serverDraftReadinessProjectionRequestId
     : null;
@@ -1730,7 +2023,7 @@ async function prepareScheduledDraftReadiness(
         snapshot.metadata.snapshotContentHash === snapshotHash &&
         hasCompleteTeamScheduleInputAttestation(snapshot.metadata)
       ) {
-        await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+        await updateScheduledDraftReadiness(leagueId, draft, {
           serverDraftReadinessStatus: 'ready',
           serverDraftReadinessProjectionSnapshotId: snapshotId,
           serverDraftReadinessProjectionSnapshotHash: snapshotHash,
@@ -1747,7 +2040,7 @@ async function prepareScheduledDraftReadiness(
     }
 
     if (requestStatus === 'queued' || requestStatus === 'processing') {
-      await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+      await updateScheduledDraftReadiness(leagueId, draft, {
         serverDraftReadinessStatus: 'preparing-projection',
         serverDraftReadinessMessage:
           'The server is building and validating Projection V11 before the scheduled start. The clock remains locked.',
@@ -1767,7 +2060,7 @@ async function prepareScheduledDraftReadiness(
         const nextRetryAt = Timestamp.fromMillis(
           now.getTime() + getDraftReadinessRetryDelayMilliseconds(attemptCount),
         );
-        await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+        await updateScheduledDraftReadiness(leagueId, draft, {
           serverDraftReadinessStatus: 'error',
           serverDraftReadinessRetryAfterAt: nextRetryAt,
           serverDraftReadinessMessage:
@@ -1794,6 +2087,7 @@ async function prepareScheduledDraftReadiness(
     leagueId,
     scheduledStartMilliseconds,
     availabilityRevision,
+    scheduleGeneration: draft.scheduleGeneration ?? 0,
   });
   let queueResult: Awaited<
     ReturnType<typeof queueServerDraftProjectionSnapshotRefresh>
@@ -1814,7 +2108,7 @@ async function prepareScheduledDraftReadiness(
       ? error.message
       : 'The Projection V11 Draft-readiness queue rejected the request.';
 
-    await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+    await updateScheduledDraftReadiness(leagueId, draft, {
       serverDraftReadinessStatus: 'error',
       serverDraftReadinessAvailabilityRevision: availabilityRevision,
       serverDraftReadinessProjectionRequestId: null,
@@ -1835,7 +2129,7 @@ async function prepareScheduledDraftReadiness(
     ? null
     : queueResult.requestId;
 
-  await updateScheduledDraftReadiness(leagueId, scheduledStartMilliseconds, {
+  await updateScheduledDraftReadiness(leagueId, draft, {
     serverDraftReadinessStatus: 'preparing-projection',
     serverDraftReadinessAvailabilityRevision: availabilityRevision,
     serverDraftReadinessProjectionRequestId: queuedRequestId,
@@ -1871,7 +2165,11 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
     initialDraftSnapshot.data() as Partial<FantasyDraft>,
   );
   const shouldOpen =
-    (initialDraft.status === 'scheduled' && isScheduledStartReached(initialDraft)) ||
+    (
+      initialDraft.status === 'scheduled' &&
+      isScheduledStartReached(initialDraft) &&
+      isDraftMembershipLocked(initialDraft)
+    ) ||
     (initialDraft.status === 'live' && initialDraft.clockStatus === 'stopped');
 
   if (!shouldOpen) {
@@ -1937,7 +2235,11 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
 
   return withContentionRetry(
     () => db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(draftRef);
+      const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(33);
+      const [snapshot, teamsSnapshot] = await Promise.all([
+        transaction.get(draftRef),
+        transaction.get(teamsQuery),
+      ]);
 
       if (!snapshot.exists) {
         return false;
@@ -1980,6 +2282,14 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
         return false;
       }
 
+      const participantIds = teamsSnapshot.docs
+        .map((document) => document.id)
+        .sort((first, second) => first.localeCompare(second));
+
+      if (!draftFinalizationMatchesParticipants(snapshot.data(), participantIds)) {
+        return false;
+      }
+
       if (
         draft.serverDraftReadinessStatus !== 'ready' ||
         draft.serverDraftReadinessProjectionSnapshotId !==
@@ -1990,11 +2300,7 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
           projection.metadata.generationRequestId ||
         draft.serverDraftReadinessAvailabilityRevision !==
           projection.metadata.availabilityRevision ||
-        !draftReadinessMatchesSchedule({
-          readinessScheduledStartMilliseconds:
-            getReadinessScheduledStartMilliseconds(draft),
-          scheduledStartMilliseconds: getScheduledStartMilliseconds(draft),
-        })
+        !draftReadinessMatchesCurrentSchedule(draft)
       ) {
         return false;
       }
@@ -2290,6 +2596,44 @@ async function processLeagueDraftAutomation(
     let opened = false;
 
     if (draft.status === 'scheduled') {
+      const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
+
+      if (!isDraftMembershipLocked(draft) && scheduledStartMilliseconds !== null) {
+        const cutoffMilliseconds =
+          scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+
+        if (Date.now() + 100 >= cutoffMilliseconds) {
+          await finalizeScheduledDraftMembership(
+            leagueId,
+            scheduledStartMilliseconds,
+            draft.scheduleGeneration ?? 0,
+          );
+          draftSnapshot = await draftRef.get();
+          draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
+        } else {
+          const finalizationTaskStatus = await scheduleDraftMembershipFinalizationTask(
+            leagueId,
+            draft,
+          );
+
+          if (finalizationTaskStatus === 'error') {
+            console.warn(
+              'The exact membership-cutoff task was unavailable; the minute worker remains the safe fallback.',
+              { leagueId },
+            );
+          }
+        }
+      }
+
+      if (!isDraftMembershipLocked(draft)) {
+        return {
+          leagueId,
+          status: 'waiting',
+          picksMade: 0,
+          message: 'Draft membership remains open until the 40-minute cutoff.',
+        };
+      }
+
       const availabilityRefreshStatus =
         await scheduleDraftAvailabilityRefreshIfNeeded(leagueId, draft);
 
@@ -2587,6 +2931,62 @@ async function processDraftQueueWarmupTask(
   });
 }
 
+async function processDraftFinalizationTask(
+  payload: DraftFinalizationTaskPayload,
+): Promise<void> {
+  const leagueId = resolveSafeFirestoreDocumentId(
+    payload.leagueId,
+    FIRESTORE_LEAGUE_ID_OPTIONS,
+  );
+  const expectedScheduledStartMilliseconds = Math.trunc(
+    payload.expectedScheduledStartAtMilliseconds,
+  );
+  const expectedScheduleGeneration = Math.trunc(payload.expectedScheduleGeneration);
+
+  if (
+    !leagueId ||
+    !Number.isFinite(expectedScheduledStartMilliseconds) ||
+    !Number.isSafeInteger(expectedScheduleGeneration) ||
+    expectedScheduleGeneration < 0
+  ) {
+    console.warn('Ignored malformed Draft membership-finalization task.');
+    return;
+  }
+
+  const cutoffMilliseconds =
+    expectedScheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+
+  if (Date.now() + 100 < cutoffMilliseconds) {
+    throw new Error('Draft membership-finalization task arrived before its cutoff.');
+  }
+
+  const result = await finalizeScheduledDraftMembership(
+    leagueId,
+    expectedScheduledStartMilliseconds,
+    expectedScheduleGeneration,
+  );
+
+  if (result === 'early') {
+    throw new Error('Draft membership-finalization task must retry at the cutoff.');
+  }
+
+  if (result === 'stale') {
+    console.info('Ignored stale Draft membership-finalization task.', {
+      leagueId,
+      expectedScheduleGeneration,
+      expectedScheduledStartAt:
+        new Date(expectedScheduledStartMilliseconds).toISOString(),
+    });
+    return;
+  }
+
+  const automationResult = await processLeagueDraftAutomation(leagueId);
+
+  if (automationResult.status === 'error') {
+    throw new Error(automationResult.message);
+  }
+}
+
 async function processScheduledDraftStartTask(
   payload: DraftScheduledStartTaskPayload,
 ): Promise<void> {
@@ -2597,8 +2997,18 @@ async function processScheduledDraftStartTask(
   const expectedScheduledStartMilliseconds = Math.trunc(
     payload.expectedScheduledStartAtMilliseconds,
   );
+  const expectedScheduleGeneration = payload.expectedScheduleGeneration === undefined
+    ? undefined
+    : Math.trunc(payload.expectedScheduleGeneration);
 
-  if (!leagueId || !Number.isFinite(expectedScheduledStartMilliseconds)) {
+  if (
+    !leagueId ||
+    !Number.isFinite(expectedScheduledStartMilliseconds) ||
+    (
+      expectedScheduleGeneration !== undefined &&
+      (!Number.isSafeInteger(expectedScheduleGeneration) || expectedScheduleGeneration < 0)
+    )
+  ) {
     console.warn('Ignored malformed scheduled Draft-start task.', { payload });
     return;
   }
@@ -2615,6 +3025,8 @@ async function processScheduledDraftStartTask(
     draftStatus: draft.status,
     expectedScheduledStartMilliseconds,
     actualScheduledStartMilliseconds: getScheduledStartMilliseconds(draft),
+    expectedScheduleGeneration,
+    actualScheduleGeneration: draft.scheduleGeneration ?? 0,
     nowMilliseconds: Date.now(),
   });
 
@@ -2653,6 +3065,8 @@ async function processScheduledDraftStartTask(
       draftStatus: draft.status,
       expectedScheduledStartMilliseconds,
       actualScheduledStartMilliseconds: getScheduledStartMilliseconds(draft),
+      expectedScheduleGeneration,
+      actualScheduleGeneration: draft.scheduleGeneration ?? 0,
       nowMilliseconds: Date.now(),
     });
 
@@ -2706,7 +3120,11 @@ async function processScheduledDraftStartTask(
 
   if (
     finalDraft?.status === 'scheduled' &&
-    getScheduledStartMilliseconds(finalDraft) === expectedScheduledStartMilliseconds
+    getScheduledStartMilliseconds(finalDraft) === expectedScheduledStartMilliseconds &&
+    (
+      expectedScheduleGeneration === undefined ||
+      (finalDraft.scheduleGeneration ?? 0) === expectedScheduleGeneration
+    )
   ) {
     throw new Error(
       'The exact Draft-start task reached zero before server readiness completed. Retrying without starting an unverified clock.',
@@ -2756,6 +3174,11 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
 
     if (payload?.taskType === 'scheduled-start') {
       await processScheduledDraftStartTask(payload);
+      return;
+    }
+
+    if (payload?.taskType === 'draft-finalization') {
+      await processDraftFinalizationTask(payload);
       return;
     }
 
@@ -2951,8 +3374,12 @@ export const continueServerDraftAutomation = onDocumentWritten(
         before.clockStatus !== after.clockStatus ||
         before.nextOverallPick !== after.nextOverallPick
       );
+    const membershipFinalized =
+      after.status === 'scheduled' &&
+      after.membershipLockStatus === 'locked' &&
+      before?.membershipLockStatus !== 'locked';
 
-    if (!scheduledStartChanged && !liveProgress) {
+    if (!scheduledStartChanged && !membershipFinalized && !liveProgress) {
       return;
     }
 
@@ -2972,7 +3399,7 @@ export const continueServerDraftAutomation = onDocumentWritten(
       throw new Error(result.message);
     }
 
-    if (scheduledStartChanged) {
+    if (scheduledStartChanged || membershipFinalized) {
       return;
     }
 

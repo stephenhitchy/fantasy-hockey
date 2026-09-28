@@ -1869,7 +1869,7 @@ test('scheduled-start task identities are deterministic and cleanup accepts only
       `${FF132_DRAFT_CLOCK_TASK_QUEUE}/tasks/${taskId}`,
   });
 
-  assert.equal(firstId, 'e0e9c8f8c308b7de274cfb0397b26496b7bae630');
+  assert.equal(firstId, '335f4a147e913084a717b39a41fdfd4b6b432e63');
   assert.equal(buildFf132ScheduledDraftStartTaskId(firstStart), firstId);
   assert.notEqual(secondId, firstId);
   assert.notEqual(thirdId, secondId);

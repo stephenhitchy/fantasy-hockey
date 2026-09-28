@@ -157,9 +157,6 @@ export function isDraftJoinLocked(draftData: unknown): boolean {
 
   const data = draftData as Record<string, unknown>;
   const status = typeof data['status'] === 'string' ? data['status'] : '';
-  const roundOneOrder = Array.isArray(data['roundOneOrder'])
-    ? data['roundOneOrder']
-    : [];
   const draftedAssetKeys = Array.isArray(data['draftedAssetKeys'])
     ? data['draftedAssetKeys']
     : [];
@@ -168,13 +165,28 @@ export function isDraftJoinLocked(draftData: unknown): boolean {
     : 1;
 
   return (
-    status === 'scheduled' ||
     status === 'live' ||
     status === 'complete' ||
-    roundOneOrder.length > 0 ||
     draftedAssetKeys.length > 0 ||
-    nextOverallPick > 1
+    nextOverallPick > 1 ||
+    draftMembershipIsFinalized(data)
   );
+}
+
+function draftMembershipIsFinalized(draft: Record<string, unknown>): boolean {
+  if (draft['membershipLockStatus'] === 'open') {
+    return false;
+  }
+
+  if (draft['membershipLockStatus'] === 'locked') {
+    return true;
+  }
+
+  const status = typeof draft['status'] === 'string' ? draft['status'] : '';
+  const order = Array.isArray(draft['roundOneOrder']) ? draft['roundOneOrder'] : [];
+
+  return status === 'scheduled' || status === 'live' || status === 'complete' ||
+    order.length > 0;
 }
 
 export function getPreDraftLeagueCapacityBlockReason(input: {
@@ -193,10 +205,13 @@ export function getPreDraftLeagueCapacityBlockReason(input: {
     const draft = asRecord(input.draftData);
 
     if (
-      !draft || draft['status'] !== 'setup' ||
-      !Array.isArray(draft['roundOneOrder']) || draft['roundOneOrder'].length > 0 ||
+      !draft ||
+      (draft['status'] !== 'setup' && draft['status'] !== 'scheduled') ||
+      draftMembershipIsFinalized(draft) ||
+      !Array.isArray(draft['roundOneOrder']) ||
       !Array.isArray(draft['draftedAssetKeys']) || draft['draftedAssetKeys'].length > 0 ||
-      draft['nextOverallPick'] !== 1
+      draft['nextOverallPick'] !== 1 ||
+      (draft['clockStatus'] !== undefined && draft['clockStatus'] !== 'stopped')
     ) {
       return 'draft-locked';
     }
@@ -285,12 +300,13 @@ function draftStateIsSafeForPreDraftMemberRemoval(value: unknown): boolean {
 
   return Boolean(
     draft &&
-    draft['status'] === 'setup' &&
+    (draft['status'] === 'setup' || draft['status'] === 'scheduled') &&
+    !draftMembershipIsFinalized(draft) &&
     Array.isArray(draft['roundOneOrder']) &&
-    draft['roundOneOrder'].length === 0 &&
     Array.isArray(draft['draftedAssetKeys']) &&
     draft['draftedAssetKeys'].length === 0 &&
-    draft['nextOverallPick'] === 1,
+    draft['nextOverallPick'] === 1 &&
+    (draft['clockStatus'] === undefined || draft['clockStatus'] === 'stopped'),
   );
 }
 

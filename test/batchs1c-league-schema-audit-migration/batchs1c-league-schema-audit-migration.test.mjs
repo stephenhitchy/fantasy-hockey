@@ -24,6 +24,7 @@ const [
   authoritySource,
   authorityUtilSource,
   draftAuthoritySource,
+  draftAutomationSource,
   functionsIndexSource,
   functionsPackageSource,
   clientSource,
@@ -45,6 +46,7 @@ const [
   read('functions/src/league-lifecycle-authority.ts'),
   read('functions/src/league-lifecycle-authority.util.ts'),
   read('functions/src/draft-authority.ts'),
+  read('functions/src/draft-automation.ts'),
   read('functions/src/index.ts'),
   read('functions/package.json'),
   read('src/app/core/league/league.service.ts'),
@@ -117,13 +119,14 @@ test('commissioner presentation changes are idempotent, audited, and server-auth
   assert.match(clientSource, /timeout: 50_000/);
 });
 
-test('Draft settings and invite lock changes create immutable audit records', () => {
+test('Draft settings and T-40 membership finalization create immutable audit records', () => {
   assert.match(draftAuthoritySource, /draftSettingsAuditId/);
   assert.match(draftAuthoritySource, /action: 'draft-settings-saved'/);
   assert.match(draftAuthoritySource, /previousValues: existingDraft/);
   assert.match(draftAuthoritySource, /newValues: \{/);
-  assert.match(draftAuthoritySource, /action: 'invite-locked'/);
-  assert.match(draftAuthoritySource, /release: 'Security Batch S1C'/);
+  assert.doesNotMatch(draftAuthoritySource, /action: 'invite-locked'/);
+  assert.match(draftAutomationSource, /action: 'draft-membership-finalized'/);
+  assert.match(draftAutomationSource, /release: 'Draft Lifecycle T40'/);
   assert.match(rulesSource, /match \/audit\/\{auditId\}[\s\S]*?allow create, update, delete: if false;/);
 });
 

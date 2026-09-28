@@ -1140,7 +1140,7 @@ test('the shared availability revision and exact future task identity are determ
 
   const start = Date.parse('2026-09-09T13:00:00.000Z');
   const expectedTaskId = createHash('sha256')
-    .update(`scheduled-draft-start:${FF1_SIX_CLIENT_FIXTURE_LEAGUE_ID}:${start}`)
+    .update(`scheduled-draft-start:${FF1_SIX_CLIENT_FIXTURE_LEAGUE_ID}:${start}:0`)
     .digest('hex')
     .slice(0, 40);
   assert.equal(buildFf1SixClientScheduledDraftStartTaskId(start), expectedTaskId);

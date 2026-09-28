@@ -1433,7 +1433,7 @@ export function buildFf132ScheduledDraftStartTaskId(scheduledStartMilliseconds) 
   assert.equal(Number.isSafeInteger(scheduledStartMilliseconds), true);
   return createHash('sha256')
     .update(
-      `scheduled-draft-start:${D1N_FIXTURE_LEAGUE_ID}:${scheduledStartMilliseconds}`,
+      `scheduled-draft-start:${D1N_FIXTURE_LEAGUE_ID}:${scheduledStartMilliseconds}:0`,
     )
     .digest('hex')
     .slice(0, 40);

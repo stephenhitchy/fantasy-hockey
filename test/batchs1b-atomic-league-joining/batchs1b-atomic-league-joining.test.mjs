@@ -163,33 +163,37 @@ test('quota helpers reset rolling windows safely and deduplicate league owners',
   );
 });
 
-test('draft lock detection treats every saved or active draft state as closed to new members', () => {
+test('draft lock detection preserves legacy locks but honors the explicit open setup state', () => {
   assert.equal(isDraftJoinLocked(null), false);
   assert.equal(isDraftJoinLocked({ status: 'setup', roundOneOrder: [], nextOverallPick: 1 }), false);
   assert.equal(isDraftJoinLocked({ status: 'scheduled' }), true);
+  assert.equal(isDraftJoinLocked({
+    status: 'scheduled', membershipLockStatus: 'open', roundOneOrder: ['owner-a'],
+  }), false);
   assert.equal(isDraftJoinLocked({ status: 'live' }), true);
   assert.equal(isDraftJoinLocked({ status: 'complete' }), true);
   assert.equal(isDraftJoinLocked({ status: 'setup', roundOneOrder: ['owner-a'] }), true);
+  assert.equal(isDraftJoinLocked({
+    status: 'setup', membershipLockStatus: 'open', roundOneOrder: ['owner-a'],
+  }), false);
   assert.equal(isDraftJoinLocked({ status: 'setup', draftedAssetKeys: ['player:1'] }), true);
   assert.equal(isDraftJoinLocked({ status: 'setup', nextOverallPick: 2 }), true);
-  assert.match(authorityUtilSource, /roundOneOrder\.length > 0/);
+  assert.match(authorityUtilSource, /draftMembershipIsFinalized\(data\)/);
 });
 
-test('saving draft settings atomically freezes the team set and deactivates the invite', () => {
+test('saving draft settings validates the current teams but keeps membership open until cutoff', () => {
   const saveSection = section(
     draftAuthoritySource,
     'async function saveDraftSettings(',
-    'async function activateScheduledDraft(',
+    'async function cancelDraftSchedule(',
   );
 
   assert.match(saveSection, /transaction\.get\(teamsQuery\)/);
   assert.match(saveSection, /The draft order must contain every current league team exactly once/);
-  assert.match(saveSection, /joinStatus: 'locked'/);
-  assert.match(saveSection, /joinLockedReason: 'draft-order-saved'/);
-  assert.match(saveSection, /active: false/);
-  assert.match(saveSection, /lockedReason: 'draft-order-saved'/);
-  assert.match(saveSection, /invite-locked-draft-setup/);
-  assert.match(saveSection, /League entry is now closed/);
+  assert.match(saveSection, /membershipLockStatus: 'open'/);
+  assert.match(saveSection, /remain open until 40 minutes/);
+  assert.doesNotMatch(saveSection, /joinStatus: 'locked'/);
+  assert.doesNotMatch(saveSection, /invite-locked-draft-setup/);
 });
 
 test('the browser uses the secure join callable and never recreates member, team, roster, or invite documents', () => {
@@ -258,11 +262,11 @@ test('roadmap and release documentation record S1B without deleting completed wo
   assert.match(productionRuntimeConfigSource, /releaseLabel: 'Release Candidate \d+'/g);
 });
 
-test('create and join pages explain verification and the draft setup explains the entry lock', () => {
+test('create and join pages explain verification and Draft Setup explains the cutoff lock', () => {
   assert.match(createTemplateSource, /verified email/i);
   assert.match(joinTemplateSource, /verified email/i);
   assert.match(joinTemplateSource, /Entry must still be open/i);
-  assert.match(draftSetupTemplateSource, /closes league entry/i);
+  assert.match(draftSetupTemplateSource, /lock 40 minutes before/i);
 });
 
 test('S1B verification scripts are installed and the secure callable is exported', () => {

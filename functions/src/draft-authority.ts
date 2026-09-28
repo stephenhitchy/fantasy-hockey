@@ -43,6 +43,12 @@ import {
   LEAGUE_AUTHORITY_SCHEMA_VERSION,
 } from './league-lifecycle-authority.util';
 import {
+  type DraftOrderMode,
+  draftFinalizationMatchesParticipants,
+  isDraftMembershipLocked,
+} from './draft-lifecycle.util';
+import { requireRecentAuthentication } from './shared/security/auth-security.util';
+import {
   requireFirestoreDocumentId,
   resolveSafeFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
@@ -75,6 +81,8 @@ const MAX_DRAFT_SUBMISSION_ID_LENGTH = 120;
 
 export type DraftCommandAction =
   | 'save-settings'
+  | 'cancel-schedule'
+  | 'postpone-reopen'
   | 'activate-scheduled'
   | 'start-clock'
   | 'pause-clock'
@@ -84,7 +92,9 @@ interface DraftCommandRequest {
   leagueId?: unknown;
   action?: unknown;
   submissionId?: unknown;
+  expectedSettingsSubmissionId?: unknown;
   roundOneOrder?: unknown;
+  orderMode?: unknown;
   scheduledStartAt?: unknown;
   pickSeconds?: unknown;
 }
@@ -155,6 +165,42 @@ function getOptionalDraftSubmissionId(value: unknown): string | null {
     maxBytes: MAX_DRAFT_SUBMISSION_ID_LENGTH,
     pattern: /^[A-Za-z0-9_-]+$/,
   });
+}
+
+function getExpectedSettingsSubmissionId(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const submissionId = asString(value);
+
+  if (!submissionId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Draft Setup is out of date. Refresh before changing the schedule.',
+      { reason: 'draft-settings-revision-required' },
+    );
+  }
+
+  return requireFirestoreDocumentId(submissionId, 'prior draft settings identifier', {
+    minimumLength: 8,
+    maxBytes: MAX_DRAFT_SUBMISSION_ID_LENGTH,
+    pattern: /^[A-Za-z0-9_-]+$/,
+  });
+}
+
+function parseDraftOrderMode(value: unknown): DraftOrderMode {
+  // Older Hosting revisions saved an explicit order without a mode. During a
+  // targeted Functions-first rollout, preserve that exact order as custom.
+  if (value === undefined || value === null || value === '') {
+    return 'custom';
+  }
+
+  if (value === 'randomized' || value === 'custom' || value === 'legacy-custom') {
+    return value;
+  }
+
+  throw new HttpsError('invalid-argument', 'Choose randomized or custom draft order.');
 }
 
 function getOptionalExpectedOverallPick(value: unknown): number | null {
@@ -264,6 +310,41 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     lastSettingsSubmissionId:
       typeof value.lastSettingsSubmissionId === 'string'
         ? value.lastSettingsSubmissionId
+        : null,
+    orderMode:
+      value.orderMode === 'randomized' || value.orderMode === 'custom' ||
+      value.orderMode === 'legacy-custom'
+        ? value.orderMode
+        : 'legacy-custom',
+    scheduleGeneration:
+      typeof value.scheduleGeneration === 'number' && Number.isFinite(value.scheduleGeneration)
+        ? Math.max(0, Math.trunc(value.scheduleGeneration))
+        : 0,
+    orderEpoch:
+      typeof value.orderEpoch === 'number' && Number.isFinite(value.orderEpoch)
+        ? Math.max(0, Math.trunc(value.orderEpoch))
+        : 0,
+    membershipLockStatus:
+      value.membershipLockStatus === 'open' || value.membershipLockStatus === 'locked'
+        ? value.membershipLockStatus
+        : undefined,
+    membershipLockedAt: value.membershipLockedAt ?? null,
+    orderFinalizedAt: value.orderFinalizedAt ?? null,
+    orderParticipantHash:
+      typeof value.orderParticipantHash === 'string' ? value.orderParticipantHash : null,
+    finalizedScheduleGeneration:
+      typeof value.finalizedScheduleGeneration === 'number' &&
+      Number.isFinite(value.finalizedScheduleGeneration)
+        ? Math.max(0, Math.trunc(value.finalizedScheduleGeneration))
+        : null,
+    orderRandomizationSeedHash:
+      typeof value.orderRandomizationSeedHash === 'string'
+        ? value.orderRandomizationSeedHash
+        : null,
+    serverDraftReadinessScheduleGeneration:
+      typeof value.serverDraftReadinessScheduleGeneration === 'number' &&
+      Number.isFinite(value.serverDraftReadinessScheduleGeneration)
+        ? Math.max(0, Math.trunc(value.serverDraftReadinessScheduleGeneration))
         : null,
     projectionPreparationRequestId:
       typeof value.projectionPreparationRequestId === 'string'
@@ -466,19 +547,12 @@ function parseRoundOneOrder(value: unknown): string[] {
   return order;
 }
 
-interface VerifiedNearTermDraftReadiness {
-  scheduledStartMilliseconds: number;
-  availabilityRevision: string;
-  projectionRequestId: string;
-  projectionSnapshotId: string;
-  projectionSnapshotHash: string;
-}
-
 function draftSettingsMatchRequest(
   draft: FantasyDraft | null,
   input: {
     submissionId: string | null;
     roundOneOrder: string[];
+    orderMode: DraftOrderMode;
     scheduledStartMilliseconds: number | null;
     pickSeconds: number;
   },
@@ -496,34 +570,11 @@ function draftSettingsMatchRequest(
   return draft.status === expectedStatus &&
     existingStartMilliseconds === input.scheduledStartMilliseconds &&
     draft.pickSeconds === input.pickSeconds &&
+    draft.orderMode === input.orderMode &&
     draft.roundOneOrder.length === input.roundOneOrder.length &&
     draft.roundOneOrder.every(
       (ownerId, index) => ownerId === input.roundOneOrder[index],
     );
-}
-
-function draftMatchesVerifiedNearTermReadiness(
-  draft: FantasyDraft | null,
-  evidence: VerifiedNearTermDraftReadiness | null,
-): boolean {
-  if (!draft || !evidence) {
-    return false;
-  }
-
-  return draft.status === 'scheduled' &&
-    draft.serverDraftReadinessStatus === 'ready' &&
-    asTimestampDate(draft.scheduledStartAt)?.getTime() ===
-      evidence.scheduledStartMilliseconds &&
-    asTimestampDate(draft.serverDraftReadinessScheduledStartAt)?.getTime() ===
-      evidence.scheduledStartMilliseconds &&
-    draft.serverDraftReadinessAvailabilityRevision ===
-      evidence.availabilityRevision &&
-    draft.serverDraftReadinessProjectionRequestId ===
-      evidence.projectionRequestId &&
-    draft.serverDraftReadinessProjectionSnapshotId ===
-      evidence.projectionSnapshotId &&
-    draft.serverDraftReadinessProjectionSnapshotHash ===
-      evidence.projectionSnapshotHash;
 }
 
 function createUnsafeNearTermScheduleError(
@@ -533,7 +584,7 @@ function createUnsafeNearTermScheduleError(
   const earliestSafeStartMilliseconds =
     getEarliestSafeUnpreparedDraftStartMilliseconds(nowMilliseconds);
   const earliestSafeStart = earliestSafeStartMilliseconds === null
-    ? 'at least 25 minutes from now'
+    ? 'at least 40 minutes from now'
     : new Date(earliestSafeStartMilliseconds).toISOString();
 
   console.warn('Rejected an unsafe near-term Draft schedule.', {
@@ -549,11 +600,11 @@ function createUnsafeNearTermScheduleError(
 
   return new HttpsError(
     'failed-precondition',
-    `That Draft start is too soon for safe server preparation. Choose a start at least 25 minutes from now (earliest safe start: ${earliestSafeStart}). A nearer start is allowed only when this exact schedule already has a current injury-bound Projection V${SHARED_PROJECTION_VERSION} snapshot verified by the server. Your existing Draft settings were not changed.`,
+    `That Draft start is too soon. Choose a start at least 40 minutes from now (earliest safe start: ${earliestSafeStart}) so membership and the order can be finalized safely. Your existing Draft settings were not changed.`,
   );
 }
 
-async function saveDraftSettings(
+export async function saveDraftSettings(
   leagueId: string,
   userId: string,
   request: DraftCommandRequest,
@@ -561,7 +612,11 @@ async function saveDraftSettings(
   await requireCommissioner(leagueId, userId);
 
   const submissionId = getOptionalDraftSubmissionId(request.submissionId);
+  const expectedSettingsSubmissionId = getExpectedSettingsSubmissionId(
+    request.expectedSettingsSubmissionId,
+  );
   const roundOneOrder = parseRoundOneOrder(request.roundOneOrder);
+  const orderMode = parseDraftOrderMode(request.orderMode);
   const scheduledStartAt = parseScheduledStartAt(request.scheduledStartAt);
   const pickSeconds = normalizePickSeconds(request.pickSeconds);
 
@@ -572,7 +627,6 @@ async function saveDraftSettings(
   const draftRef = db.doc(`leagues/${leagueId}/${DRAFT_DOCUMENT_PATH_SUFFIX}`);
   const leagueRef = db.doc(`leagues/${leagueId}`);
   const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
-  const inviteLockAuditRef = db.doc(`leagues/${leagueId}/audit/invite-locked-draft-setup`);
   const draftSettingsAuditId = `draft-settings-${createHash('sha256')
     .update(submissionId ?? `${userId}:${Date.now()}:${roundOneOrder.join(',')}:${pickSeconds}`)
     .digest('hex')
@@ -580,79 +634,28 @@ async function saveDraftSettings(
   const draftSettingsAuditRef = db.doc(`leagues/${leagueId}/audit/${draftSettingsAuditId}`);
   const scheduledStartMilliseconds = scheduledStartAt?.getTime() ?? null;
   const schedulingNowMilliseconds = Date.now();
-  const preflightDraftSnapshot = scheduledStartAt
-    ? await draftRef.get()
-    : null;
-  const preflightDraft = preflightDraftSnapshot?.exists
-    ? normalizeDraft(preflightDraftSnapshot.data() as Partial<FantasyDraft>)
-    : null;
   const settingsRequest = {
     submissionId,
     roundOneOrder,
+    orderMode,
     scheduledStartMilliseconds,
     pickSeconds,
   };
-  const idempotentPreflight = draftSettingsMatchRequest(
-    preflightDraft,
-    settingsRequest,
-  );
   const initialNearTermGateState = getDraftNearTermScheduleGateState({
     scheduledStartMilliseconds,
     nowMilliseconds: schedulingNowMilliseconds,
     exactReadinessVerified: false,
   });
-  let verifiedNearTermReadiness: VerifiedNearTermDraftReadiness | null = null;
-
-  if (
-    initialNearTermGateState === 'requires-exact-readiness' &&
-    !idempotentPreflight
-  ) {
-    const preparedProjection = preflightDraft &&
-      asTimestampDate(preflightDraft.scheduledStartAt)?.getTime() ===
-        scheduledStartMilliseconds
-      ? await loadPreparedProjectionSnapshotForScheduledDraft(
-          leagueId,
-          preflightDraft,
-        )
-      : null;
-    const availabilityRevision = preparedProjection?.metadata.availabilityRevision;
-    const projectionRequestId = preparedProjection?.metadata.generationRequestId;
-    const projectionSnapshotId = preparedProjection?.metadata.activeSnapshotId;
-    const projectionSnapshotHash = preparedProjection?.metadata.snapshotContentHash;
-
-    if (
-      preparedProjection &&
-      scheduledStartMilliseconds !== null &&
-      isProjectionSha256(availabilityRevision) &&
-      typeof projectionRequestId === 'string' &&
-      Boolean(projectionRequestId) &&
-      typeof projectionSnapshotId === 'string' &&
-      Boolean(projectionSnapshotId) &&
-      isProjectionSha256(projectionSnapshotHash)
-    ) {
-      verifiedNearTermReadiness = {
-        scheduledStartMilliseconds,
-        availabilityRevision,
-        projectionRequestId,
-        projectionSnapshotId,
-        projectionSnapshotHash,
-      };
-    }
-
-  }
-
   await db.runTransaction(async (transaction) => {
     const [
       draftSnapshot,
       leagueSnapshot,
       teamSnapshot,
-      inviteLockAuditSnapshot,
       draftSettingsAuditSnapshot,
     ] = await Promise.all([
       transaction.get(draftRef),
       transaction.get(leagueRef),
       transaction.get(teamsQuery),
-      transaction.get(inviteLockAuditRef),
       transaction.get(draftSettingsAuditRef),
     ]);
 
@@ -661,14 +664,11 @@ async function saveDraftSettings(
     }
 
     const leagueData = leagueSnapshot.data() ?? {};
-    const inviteCode = resolveSafeFirestoreDocumentId(
-      leagueData['inviteCode'],
-      FIRESTORE_INVITE_CODE_OPTIONS,
-    );
-    const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
-    const inviteSnapshot = inviteRef
-      ? await transaction.get(inviteRef)
-      : null;
+
+    if (leagueData['commissionerId'] !== userId) {
+      throw new HttpsError('permission-denied', 'Only the commissioner can change draft settings.');
+    }
+
     const existingDraft = draftSnapshot.exists
       ? normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>)
       : null;
@@ -699,6 +699,19 @@ async function saveDraftSettings(
       }
     }
 
+    const observedSettingsSubmissionId = existingDraft?.lastSettingsSubmissionId ?? null;
+
+    if (
+      !idempotentSettingsReplay &&
+      observedSettingsSubmissionId !== expectedSettingsSubmissionId
+    ) {
+      throw new HttpsError(
+        'aborted',
+        'Draft settings changed in another tab. Refresh Draft Setup before saving again.',
+        { reason: 'stale-draft-settings' },
+      );
+    }
+
     if (
       existingDraft &&
       (
@@ -714,17 +727,19 @@ async function saveDraftSettings(
       );
     }
 
+    if (existingDraft && isDraftMembershipLocked(draftSnapshot.data()) && !idempotentSettingsReplay) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Draft membership and order are finalized. Use Postpone and Reopen before changing setup.',
+        { reason: 'draft-membership-finalized' },
+      );
+    }
+
     const timestamp = FieldValue.serverTimestamp();
     const status = scheduledStartAt ? 'scheduled' : 'setup';
-    const preserveVerifiedReadiness = draftMatchesVerifiedNearTermReadiness(
-      existingDraft,
-      verifiedNearTermReadiness,
-    );
-
     if (
       initialNearTermGateState === 'requires-exact-readiness' &&
-      !idempotentSettingsReplay &&
-      !preserveVerifiedReadiness
+      !idempotentSettingsReplay
     ) {
       throw createUnsafeNearTermScheduleError(
         schedulingNowMilliseconds,
@@ -732,12 +747,15 @@ async function saveDraftSettings(
       );
     }
 
-    const projectionPreparationRequestId = preserveVerifiedReadiness
-      ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
+    const previousStartMilliseconds = existingDraft
+      ? asTimestampDate(existingDraft.scheduledStartAt)?.getTime() ?? null
       : null;
-    const projectionPreparationStatus = preserveVerifiedReadiness
-      ? 'ready'
-      : null;
+    const scheduleChanged = previousStartMilliseconds !== scheduledStartMilliseconds;
+    const scheduleGeneration = Math.max(0, existingDraft?.scheduleGeneration ?? 0) +
+      (scheduleChanged ? 1 : 0);
+    const orderChanged = !existingDraft || existingDraft.orderMode !== orderMode ||
+      existingDraft.roundOneOrder.length !== roundOneOrder.length ||
+      existingDraft.roundOneOrder.some((ownerId, index) => ownerId !== roundOneOrder[index]);
 
     if (!idempotentSettingsReplay) {
       transaction.set(
@@ -762,45 +780,41 @@ async function saveDraftSettings(
           clockUpdatedAt: timestamp,
           lastPickId: null,
           lastSettingsSubmissionId: submissionId ?? null,
-          projectionPreparationRequestId,
-          projectionPreparationStatus,
-          serverDraftReadinessStatus: preserveVerifiedReadiness ? 'ready' : null,
-          serverDraftReadinessScheduledStartAt: preserveVerifiedReadiness
-            ? existingDraft?.serverDraftReadinessScheduledStartAt ?? null
-            : null,
-          serverDraftReadinessAvailabilityRevision: preserveVerifiedReadiness
-            ? existingDraft?.serverDraftReadinessAvailabilityRevision ?? null
-            : null,
-          serverDraftReadinessProjectionRequestId: preserveVerifiedReadiness
-            ? existingDraft?.serverDraftReadinessProjectionRequestId ?? null
-            : null,
-          serverDraftReadinessProjectionSnapshotId: preserveVerifiedReadiness
-            ? existingDraft?.serverDraftReadinessProjectionSnapshotId ?? null
-            : null,
-          serverDraftReadinessProjectionSnapshotHash: preserveVerifiedReadiness
-            ? existingDraft?.serverDraftReadinessProjectionSnapshotHash ?? null
-            : null,
-          serverDraftReadinessAttemptCount: preserveVerifiedReadiness
-            ? existingDraft?.serverDraftReadinessAttemptCount ?? 0
-            : 0,
+          orderMode,
+          scheduleGeneration,
+          orderEpoch: existingDraft?.orderEpoch ?? 0,
+          membershipLockStatus: 'open',
+          membershipLockedAt: null,
+          orderFinalizedAt: null,
+          orderParticipantHash: orderChanged
+            ? null
+            : existingDraft?.orderParticipantHash ?? null,
+          finalizedScheduleGeneration: null,
+          orderRandomizationSeedHash: orderChanged
+            ? null
+            : existingDraft?.orderRandomizationSeedHash ?? null,
+          projectionPreparationRequestId: null,
+          projectionPreparationStatus: null,
+          serverDraftReadinessStatus: null,
+          serverDraftReadinessScheduledStartAt: null,
+          serverDraftReadinessScheduleGeneration: null,
+          serverDraftReadinessAvailabilityRevision: null,
+          serverDraftReadinessProjectionRequestId: null,
+          serverDraftReadinessProjectionSnapshotId: null,
+          serverDraftReadinessProjectionSnapshotHash: null,
+          serverDraftReadinessAttemptCount: 0,
           serverDraftReadinessRetryAfterAt: null,
-          serverDraftReadinessMessage: preserveVerifiedReadiness
-            ? 'The server preserved the exact current injury input and verified Projection V11 snapshot for this unchanged near-term start.'
-            : null,
+          serverDraftReadinessMessage: null,
           serverDraftReadinessUpdatedAt: timestamp,
           serverDraftProjectionSnapshotId: null,
           serverDraftProjectionSnapshotHash: null,
           serverDraftProjectionAuthorityVersion: null,
           serverDraftProjectionCatalogHash: null,
           serverAutomationStatus: status === 'scheduled'
-            ? preserveVerifiedReadiness
-              ? 'scheduled-ready'
-              : 'scheduled'
+            ? 'scheduled'
             : 'waiting',
           serverAutomationMessage: status === 'scheduled'
-            ? preserveVerifiedReadiness
-              ? 'Draft settings are saved with exact server readiness. The server will open the draft at the scheduled time.'
-              : 'Draft settings are saved. One authoritative server preparation will begin inside the readiness window.'
+            ? 'Draft settings are saved. Membership and the final order remain open until 40 minutes before the start.'
             : 'Draft order saved without a scheduled start time.',
           serverAutomationUpdatedAt: timestamp,
           updatedAt: timestamp,
@@ -808,54 +822,6 @@ async function saveDraftSettings(
         },
         { merge: true },
       );
-    }
-
-    if (asString(leagueData['joinStatus']) !== 'locked') {
-      transaction.set(
-        leagueRef,
-        {
-          teamCount: teamSnapshot.size,
-          joinStatus: 'locked',
-          joinLockedAt: timestamp,
-          joinLockedReason: 'draft-order-saved',
-          updatedAt: timestamp,
-        },
-        { merge: true },
-      );
-    }
-
-    if (inviteRef && inviteSnapshot?.exists && inviteSnapshot.data()?.['active'] !== false) {
-      transaction.set(
-        inviteRef,
-        {
-          active: false,
-          lockedAt: timestamp,
-          lockedReason: 'draft-order-saved',
-          updatedAt: timestamp,
-        },
-        { merge: true },
-      );
-    }
-
-    if (!inviteLockAuditSnapshot.exists) {
-      transaction.create(inviteLockAuditRef, {
-        schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
-        id: 'invite-locked-draft-setup',
-        leagueId,
-        action: 'invite-locked',
-        actorId: userId,
-        actorRole: 'commissioner',
-        authority: 'cloud-function',
-        authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
-        reason: 'Draft order saved; league membership is now frozen.',
-        release: 'Security Batch S1C',
-        values: {
-          teamCount: teamSnapshot.size,
-          draftStatus: status,
-          inviteCode,
-        },
-        createdAt: timestamp,
-      });
     }
 
     if (!idempotentSettingsReplay && !draftSettingsAuditSnapshot.exists) {
@@ -869,14 +835,16 @@ async function saveDraftSettings(
         authority: 'cloud-function',
         authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
         requestId: submissionId ?? null,
-        reason: 'Commissioner saved the exact Draft order, start time, and pick clock.',
-        release: 'Security Batch S1C',
+        reason: 'Commissioner saved Draft setup intent before the membership cutoff.',
+        release: 'Draft Lifecycle T40',
         previousValues: existingDraft
           ? {
               status: existingDraft.status,
               roundOneOrder: existingDraft.roundOneOrder,
               scheduledStartAt: existingDraft.scheduledStartAt ?? null,
               pickSeconds: existingDraft.pickSeconds,
+              orderMode: existingDraft.orderMode,
+              scheduleGeneration: existingDraft.scheduleGeneration,
             }
           : null,
         newValues: {
@@ -884,8 +852,9 @@ async function saveDraftSettings(
           roundOneOrder,
           scheduledStartAt: scheduledStartAt ? Timestamp.fromDate(scheduledStartAt) : null,
           pickSeconds,
-          projectionPreparationRequestId,
-          projectionPreparationStatus,
+          orderMode,
+          scheduleGeneration,
+          membershipLockStatus: 'open',
         },
         createdAt: timestamp,
       });
@@ -896,10 +865,235 @@ async function saveDraftSettings(
     applied: true,
     action: 'save-settings',
     message: scheduledStartAt
-      ? verifiedNearTermReadiness
-        ? 'Draft settings and the already verified near-term start were saved. League entry is now closed.'
-        : 'Draft settings and scheduled start were saved. The server will prepare one exact Draft board inside the readiness window. League entry is now closed.'
-      : 'Draft order was saved. League entry is now closed.',
+      ? 'Draft settings were saved. League entry and size remain open until 40 minutes before the scheduled start.'
+      : 'Draft order preferences were saved. League entry remains open.',
+    submissionId,
+  };
+}
+
+export async function cancelDraftSchedule(
+  leagueId: string,
+  userId: string,
+  request: DraftCommandRequest,
+  reopenFinalizedMembership: boolean,
+): Promise<DraftCommandResult> {
+  await requireCommissioner(leagueId, userId);
+
+  const submissionId = getOptionalDraftSubmissionId(request.submissionId);
+
+  if (!submissionId) {
+    throw new HttpsError('invalid-argument', 'A cancellation request identifier is required.');
+  }
+
+  const expectedSettingsSubmissionId = getExpectedSettingsSubmissionId(
+    request.expectedSettingsSubmissionId,
+  );
+  const draftRef = db.doc(`leagues/${leagueId}/${DRAFT_DOCUMENT_PATH_SUFFIX}`);
+  const leagueRef = db.doc(`leagues/${leagueId}`);
+  const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
+  const cyclesQuery = db.collection(`leagues/${leagueId}/cycles`).limit(1);
+  const picksQuery = db.collection(`leagues/${leagueId}/draft/current/picks`).limit(1);
+  const transactionsQuery = db.collection(`leagues/${leagueId}/transactions`).limit(1);
+  const waiversQuery = db.collection(`leagues/${leagueId}/waivers`).limit(1);
+  const auditId = `draft-schedule-cancelled-${createHash('sha256')
+    .update(submissionId)
+    .digest('hex')
+    .slice(0, 24)}`;
+  const auditRef = db.doc(`leagues/${leagueId}/audit/${auditId}`);
+
+  await db.runTransaction(async (transaction) => {
+    const [
+      draftSnapshot,
+      leagueSnapshot,
+      teamSnapshot,
+      cyclesSnapshot,
+      picksSnapshot,
+      transactionsSnapshot,
+      waiversSnapshot,
+      auditSnapshot,
+    ] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(leagueRef),
+      transaction.get(teamsQuery),
+      transaction.get(cyclesQuery),
+      transaction.get(picksQuery),
+      transaction.get(transactionsQuery),
+      transaction.get(waiversQuery),
+      transaction.get(auditRef),
+    ]);
+
+    if (!draftSnapshot.exists || !leagueSnapshot.exists) {
+      throw new HttpsError('not-found', 'Draft setup was not found.');
+    }
+
+    const rawDraft = draftSnapshot.data() ?? {};
+    const draft = normalizeDraft(rawDraft as Partial<FantasyDraft>);
+    const league = leagueSnapshot.data() ?? {};
+
+    if (league['commissionerId'] !== userId) {
+      throw new HttpsError('permission-denied', 'Only the commissioner can cancel the Draft schedule.');
+    }
+
+    if (
+      draft.lastSettingsSubmissionId === submissionId &&
+      draft.status === 'setup' &&
+      !draft.scheduledStartAt &&
+      draft.membershipLockStatus === 'open'
+    ) {
+      return;
+    }
+
+    if ((draft.lastSettingsSubmissionId ?? null) !== expectedSettingsSubmissionId) {
+      throw new HttpsError(
+        'aborted',
+        'Draft settings changed in another tab. Refresh Draft Setup before canceling.',
+        { reason: 'stale-draft-settings' },
+      );
+    }
+
+    if (
+      draft.status === 'live' || draft.status === 'complete' ||
+      draft.nextOverallPick !== 1 || draft.draftedAssetKeys.length > 0 ||
+      cyclesSnapshot.size > 0 || picksSnapshot.size > 0 ||
+      transactionsSnapshot.size > 0 || waiversSnapshot.size > 0
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'A Draft cannot be canceled or reopened after drafting begins.',
+        { reason: 'draft-started' },
+      );
+    }
+
+    const membershipFinalized = isDraftMembershipLocked(rawDraft);
+
+    if (membershipFinalized !== reopenFinalizedMembership) {
+      throw new HttpsError(
+        'failed-precondition',
+        membershipFinalized
+          ? 'Membership is finalized. Use the password-confirmed Postpone and Reopen action.'
+          : 'This Draft is still open. Use Cancel Scheduled Time instead.',
+        { reason: membershipFinalized ? 'draft-membership-finalized' : 'draft-membership-open' },
+      );
+    }
+
+    const inviteCode = resolveSafeFirestoreDocumentId(
+      league['inviteCode'],
+      FIRESTORE_INVITE_CODE_OPTIONS,
+    );
+    const inviteRef = inviteCode ? db.doc(`leagueInvites/${inviteCode}`) : null;
+    const inviteSnapshot = inviteRef ? await transaction.get(inviteRef) : null;
+
+    if (!inviteRef || !inviteSnapshot?.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'League invitation authority is incomplete. Repair League HQ before reopening.',
+      );
+    }
+
+    const maxTeams = typeof league['maxTeams'] === 'number'
+      ? Math.max(2, Math.min(MAX_LEAGUE_TEAMS, Math.trunc(league['maxTeams'])))
+      : 2;
+    const teamCount = teamSnapshot.size;
+    const joinStatus = teamCount >= maxTeams ? 'full' : 'open';
+    const invite = inviteSnapshot.data() ?? {};
+    const inviteExpiry = asTimestampDate(invite['expiresAt']);
+    const inviteActive = joinStatus === 'open' &&
+      Boolean(inviteExpiry && inviteExpiry.getTime() > Date.now());
+    const timestamp = FieldValue.serverTimestamp();
+
+    transaction.set(draftRef, {
+      status: 'setup',
+      scheduledStartAt: null,
+      scheduleGeneration: Math.max(0, draft.scheduleGeneration ?? 0) + 1,
+      membershipLockStatus: 'open',
+      membershipLockedAt: null,
+      orderFinalizedAt: null,
+      finalizedScheduleGeneration: null,
+      clockStatus: 'stopped',
+      pickStartedAt: null,
+      pausedRemainingSeconds: null,
+      clockUpdatedBy: userId,
+      clockUpdatedAt: timestamp,
+      lastSettingsSubmissionId: submissionId,
+      projectionPreparationRequestId: null,
+      projectionPreparationStatus: null,
+      serverDraftReadinessStatus: null,
+      serverDraftReadinessScheduledStartAt: null,
+      serverDraftReadinessScheduleGeneration: null,
+      serverDraftReadinessAvailabilityRevision: null,
+      serverDraftReadinessProjectionRequestId: null,
+      serverDraftReadinessProjectionSnapshotId: null,
+      serverDraftReadinessProjectionSnapshotHash: null,
+      serverDraftReadinessAttemptCount: 0,
+      serverDraftReadinessRetryAfterAt: null,
+      serverDraftReadinessMessage: null,
+      serverDraftProjectionSnapshotId: null,
+      serverDraftProjectionSnapshotHash: null,
+      serverDraftProjectionAuthorityVersion: null,
+      serverDraftProjectionCatalogHash: null,
+      serverAutomationStatus: 'waiting',
+      serverAutomationMessage: reopenFinalizedMembership
+        ? 'The commissioner postponed the Draft and reopened membership. The preserved order will be reconciled at the next cutoff.'
+        : 'The commissioner canceled the scheduled time. Membership remains open.',
+      serverAutomationUpdatedAt: timestamp,
+      updatedAt: timestamp,
+    }, { merge: true });
+
+    transaction.set(leagueRef, {
+      teamCount,
+      joinStatus,
+      joinLockedAt: joinStatus === 'full' ? timestamp : null,
+      joinLockedReason: joinStatus === 'full' ? 'league-full' : null,
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.set(inviteRef, {
+      active: inviteActive,
+      joinCount: teamCount,
+      lockedAt: joinStatus === 'full' ? timestamp : null,
+      lockedReason: joinStatus === 'full' ? 'league-full' : null,
+      updatedAt: timestamp,
+    }, { merge: true });
+
+    if (!auditSnapshot.exists) {
+      transaction.create(auditRef, {
+        schemaVersion: LEAGUE_AUDIT_SCHEMA_VERSION,
+        id: auditId,
+        leagueId,
+        action: reopenFinalizedMembership
+          ? 'draft-postponed-membership-reopened'
+          : 'draft-schedule-cancelled',
+        actorId: userId,
+        actorRole: 'commissioner',
+        authority: 'cloud-function',
+        authoritySchemaVersion: LEAGUE_AUTHORITY_SCHEMA_VERSION,
+        requestId: submissionId,
+        reason: reopenFinalizedMembership
+          ? 'Commissioner postponed an unstarted Draft and explicitly reopened membership.'
+          : 'Commissioner canceled an unstarted Draft schedule before the membership cutoff.',
+        release: 'Draft Lifecycle T40',
+        previousValues: {
+          scheduledStartAt: draft.scheduledStartAt ?? null,
+          scheduleGeneration: draft.scheduleGeneration ?? 0,
+          membershipLockStatus: membershipFinalized ? 'locked' : 'open',
+          orderEpoch: draft.orderEpoch ?? 0,
+        },
+        newValues: {
+          scheduledStartAt: null,
+          scheduleGeneration: Math.max(0, draft.scheduleGeneration ?? 0) + 1,
+          membershipLockStatus: 'open',
+          orderPreserved: true,
+        },
+        createdAt: timestamp,
+      });
+    }
+  });
+
+  return {
+    applied: true,
+    action: reopenFinalizedMembership ? 'postpone-reopen' : 'cancel-schedule',
+    message: reopenFinalizedMembership
+      ? 'The Draft was postponed. Membership and league size are open again, and the order is preserved unless participants change.'
+      : 'The scheduled Draft time was canceled. Membership remains open.',
     submissionId,
   };
 }
@@ -931,12 +1125,17 @@ async function activateScheduledDraft(
   }
 
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(draftRef);
+    const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
+    const [snapshot, teamsSnapshot] = await Promise.all([
+      transaction.get(draftRef),
+      transaction.get(teamsQuery),
+    ]);
 
     if (!snapshot.exists) {
       throw new HttpsError('not-found', 'Draft setup was not found.');
     }
 
+    const rawDraft = snapshot.data() ?? {};
     const draft = normalizeDraft(snapshot.data() as Partial<FantasyDraft>);
 
     if (draft.status === 'live') {
@@ -953,6 +1152,17 @@ async function activateScheduledDraft(
       throw new HttpsError('failed-precondition', 'The scheduled draft start time has not arrived.');
     }
 
+    const participantIds = teamsSnapshot.docs
+      .map((document) => document.id)
+      .sort((first, second) => first.localeCompare(second));
+
+    if (!draftFinalizationMatchesParticipants(rawDraft, participantIds)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Draft membership and order have not been finalized for this schedule. The server will retry safely.',
+      );
+    }
+
     const readinessScheduledStart = asTimestampDate(
       draft.serverDraftReadinessScheduledStartAt,
     );
@@ -967,7 +1177,11 @@ async function activateScheduledDraft(
       draft.serverDraftReadinessProjectionRequestId !==
         projection.metadata.generationRequestId ||
       draft.serverDraftReadinessAvailabilityRevision !==
-        projection.metadata.availabilityRevision
+        projection.metadata.availabilityRevision ||
+      (
+        draft.membershipLockStatus !== undefined &&
+        draft.serverDraftReadinessScheduleGeneration !== (draft.scheduleGeneration ?? 0)
+      )
     ) {
       throw new HttpsError(
         'failed-precondition',
@@ -1235,6 +1449,15 @@ export const executeDraftCommand = onCall(
 
     if (action === 'save-settings') {
       return saveDraftSettings(leagueId, userId, input);
+    }
+
+    if (action === 'cancel-schedule') {
+      return cancelDraftSchedule(leagueId, userId, input, false);
+    }
+
+    if (action === 'postpone-reopen') {
+      requireRecentAuthentication(request.auth, 'postpone and reopen this Draft');
+      return cancelDraftSchedule(leagueId, userId, input, true);
     }
 
     if (action === 'activate-scheduled') {

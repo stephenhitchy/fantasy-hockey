@@ -1,6 +1,6 @@
 import type { FantasyDraft } from './draft.models';
 
-export const DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS = 25 * 60 * 1000;
+export const DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS = 40 * 60 * 1000;
 
 export type DraftSetupSchedulingGateState =
   | 'not-scheduled'
@@ -46,6 +46,14 @@ export function hasStoredExactDraftReadinessForSchedule(
     draft.serverDraftReadinessStatus === 'ready' &&
     savedStartMilliseconds === selectedStartMilliseconds &&
     readinessStartMilliseconds === selectedStartMilliseconds &&
+    (
+      draft.serverDraftReadinessScheduleGeneration ===
+        (draft.scheduleGeneration ?? 0) ||
+      (
+        draft.membershipLockStatus === undefined &&
+        draft.serverDraftReadinessScheduleGeneration == null
+      )
+    ) &&
     isSha256(draft.serverDraftReadinessAvailabilityRevision) &&
     typeof draft.serverDraftReadinessProjectionRequestId === 'string' &&
     Boolean(draft.serverDraftReadinessProjectionRequestId) &&
@@ -78,12 +86,7 @@ export function getDraftSetupSchedulingGateState(input: {
     return 'safe-lead';
   }
 
-  return hasStoredExactDraftReadinessForSchedule(
-    input.draft,
-    input.selectedStartMilliseconds,
-  )
-    ? 'exact-ready'
-    : 'unsafe-near-term';
+  return 'unsafe-near-term';
 }
 
 export function getEarliestSafeDraftStartMilliseconds(

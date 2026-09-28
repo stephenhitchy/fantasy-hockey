@@ -102,7 +102,6 @@
       } @else {
         <div class="saved-schedule empty-schedule rr-notice rr-notice--info">
           <strong>No draft time scheduled</strong>
-          <span>Save a future date and time when you are ready.</span>
         </div>
       }
 
@@ -118,7 +117,7 @@
         />
       </label>
 
-      <p class="schedule-help">Shown to each manager in their local timezone.</p>
+      <p class="schedule-help">Local time. Teams and league size lock 40 minutes before the Draft.</p>
 
       <aside
         class="preparation-gate rr-notice"
@@ -162,7 +161,47 @@
 
     @if (draft()?.status === 'live' || draft()?.status === 'complete') {
       <p class="locked-message rr-notice rr-notice--warning">
-        This draft is already in progress or complete. Draft settings are locked.
+        Draft settings are locked.
+      </p>
+    } @else if (membershipFinalized()) {
+      <section class="rr-card rr-card--padded" aria-labelledby="postpone-reopen-title">
+        <h2 id="postpone-reopen-title">Reopen Draft</h2>
+
+        <label class="rr-field-group" for="draft-reopen-password">
+          <span>Password</span>
+          <input
+            id="draft-reopen-password"
+            class="rr-field"
+            type="password"
+            maxlength="128"
+            autocomplete="current-password"
+            [(ngModel)]="reopenPassword"
+            [disabled]="saving()"
+          />
+        </label>
+
+        <label class="capacity-reset-confirmation" for="draft-reopen-confirm">
+          <input
+            id="draft-reopen-confirm"
+            type="checkbox"
+            [(ngModel)]="reopenConfirmed"
+            [disabled]="saving()"
+          />
+          <span>Cancel this time and reopen league entry.</span>
+        </label>
+
+        <button
+          type="button"
+          class="rr-button rr-button--secondary"
+          (click)="postponeAndReopen()"
+          [disabled]="saving() || !reopenPassword || !reopenConfirmed"
+        >
+          Reopen
+        </button>
+      </section>
+    } @else if (cutoffTimeReached()) {
+      <p class="locked-message rr-notice rr-notice--info" role="status">
+        Finalizing teams and Draft order…
       </p>
     } @else if (startTimeReached()) {
       <p class="locked-message rr-notice rr-notice--warning">
@@ -186,7 +225,10 @@
       <div class="section-title-row rr-section-heading">
         <div>
           <h2>Round 1 Order</h2>
-          <p>Even rounds reverse the order.</p>
+          <p>
+            Even rounds reverse ·
+            <strong>{{ orderMode() === 'randomized' ? 'Randomized at cutoff' : 'Custom' }}</strong>
+          </p>
         </div>
 
         <div class="order-actions rr-toolbar">
@@ -255,8 +297,8 @@
       }
 
       @if (!isDraftLocked()) {
-        <p class="rr-notice rr-notice--warning">
-          Saving the draft order closes league entry. Confirm every intended manager has joined before continuing; the server will reject any later invite-code join.
+        <p class="rr-notice rr-notice--info">
+          League entry stays open until 40 minutes before the Draft.
         </p>
       }
 
