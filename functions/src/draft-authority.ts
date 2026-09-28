@@ -45,6 +45,7 @@ import {
 import {
   type DraftOrderMode,
   draftFinalizationMatchesParticipants,
+  isDraftMembershipCutoffReached,
   isDraftMembershipLocked,
 } from './draft-lifecycle.util';
 import { requireRecentAuthentication } from './shared/security/auth-security.util';
@@ -608,6 +609,7 @@ export async function saveDraftSettings(
   leagueId: string,
   userId: string,
   request: DraftCommandRequest,
+  nowMilliseconds?: number,
 ): Promise<DraftCommandResult> {
   await requireCommissioner(leagueId, userId);
 
@@ -633,7 +635,6 @@ export async function saveDraftSettings(
     .slice(0, 24)}`;
   const draftSettingsAuditRef = db.doc(`leagues/${leagueId}/audit/${draftSettingsAuditId}`);
   const scheduledStartMilliseconds = scheduledStartAt?.getTime() ?? null;
-  const schedulingNowMilliseconds = Date.now();
   const settingsRequest = {
     submissionId,
     roundOneOrder,
@@ -641,12 +642,8 @@ export async function saveDraftSettings(
     scheduledStartMilliseconds,
     pickSeconds,
   };
-  const initialNearTermGateState = getDraftNearTermScheduleGateState({
-    scheduledStartMilliseconds,
-    nowMilliseconds: schedulingNowMilliseconds,
-    exactReadinessVerified: false,
-  });
   await db.runTransaction(async (transaction) => {
+    const authorizationNowMilliseconds = nowMilliseconds ?? Date.now();
     const [
       draftSnapshot,
       leagueSnapshot,
@@ -727,7 +724,22 @@ export async function saveDraftSettings(
       );
     }
 
-    if (existingDraft && isDraftMembershipLocked(draftSnapshot.data()) && !idempotentSettingsReplay) {
+    const existingStartMilliseconds = existingDraft
+      ? asTimestampDate(existingDraft.scheduledStartAt)?.getTime() ?? null
+      : null;
+    const membershipCutoffReached = existingDraft
+      ? isDraftMembershipCutoffReached({
+          draftStatus: existingDraft.status,
+          scheduledStartMilliseconds: existingStartMilliseconds,
+          nowMilliseconds: authorizationNowMilliseconds,
+        })
+      : false;
+
+    if (
+      existingDraft &&
+      (isDraftMembershipLocked(draftSnapshot.data()) || membershipCutoffReached) &&
+      !idempotentSettingsReplay
+    ) {
       throw new HttpsError(
         'failed-precondition',
         'Draft membership and order are finalized. Use Postpone and Reopen before changing setup.',
@@ -737,12 +749,15 @@ export async function saveDraftSettings(
 
     const timestamp = FieldValue.serverTimestamp();
     const status = scheduledStartAt ? 'scheduled' : 'setup';
-    if (
-      initialNearTermGateState === 'requires-exact-readiness' &&
-      !idempotentSettingsReplay
-    ) {
+    const nearTermGateState = getDraftNearTermScheduleGateState({
+      scheduledStartMilliseconds,
+      nowMilliseconds: authorizationNowMilliseconds,
+      exactReadinessVerified: false,
+    });
+
+    if (nearTermGateState === 'requires-exact-readiness' && !idempotentSettingsReplay) {
       throw createUnsafeNearTermScheduleError(
-        schedulingNowMilliseconds,
+        authorizationNowMilliseconds,
         scheduledStartMilliseconds,
       );
     }
@@ -876,6 +891,7 @@ export async function cancelDraftSchedule(
   userId: string,
   request: DraftCommandRequest,
   reopenFinalizedMembership: boolean,
+  nowMilliseconds?: number,
 ): Promise<DraftCommandResult> {
   await requireCommissioner(leagueId, userId);
 
@@ -902,6 +918,7 @@ export async function cancelDraftSchedule(
   const auditRef = db.doc(`leagues/${leagueId}/audit/${auditId}`);
 
   await db.runTransaction(async (transaction) => {
+    const authorizationNowMilliseconds = nowMilliseconds ?? Date.now();
     const [
       draftSnapshot,
       leagueSnapshot,
@@ -964,7 +981,14 @@ export async function cancelDraftSchedule(
       );
     }
 
-    const membershipFinalized = isDraftMembershipLocked(rawDraft);
+    const currentScheduledStartMilliseconds =
+      asTimestampDate(draft.scheduledStartAt)?.getTime() ?? null;
+    const membershipFinalized = isDraftMembershipLocked(rawDraft) ||
+      isDraftMembershipCutoffReached({
+        draftStatus: draft.status,
+        scheduledStartMilliseconds: currentScheduledStartMilliseconds,
+        nowMilliseconds: authorizationNowMilliseconds,
+      });
 
     if (membershipFinalized !== reopenFinalizedMembership) {
       throw new HttpsError(

@@ -9,6 +9,7 @@ import {
   createDraftParticipantHash,
   draftFinalizationMatchesParticipants,
   finalizeDraftOrder,
+  isDraftMembershipCutoffReached,
   isDraftMembershipLocked,
 } from '../../functions/src/draft-lifecycle.util.ts';
 import {
@@ -17,12 +18,21 @@ import {
 } from '../../functions/src/draft-readiness.util.ts';
 
 const requireFunctions = createRequire(new URL('../../functions/package.json', import.meta.url));
+const {
+  getPreDraftLeagueCapacityBlockReason,
+  getPreDraftMemberRemovalBlockReason,
+  isDraftJoinLocked,
+} = requireFunctions('./lib/league-lifecycle-authority.util.js');
 const projectId = 'demo-rinkrat-ff1-40';
 process.env.GCLOUD_PROJECT = projectId;
 process.env.GOOGLE_CLOUD_PROJECT = projectId;
 
 const { finalizeScheduledDraftMembership } = requireFunctions('./lib/draft-automation.js');
 const { cancelDraftSchedule, saveDraftSettings } = requireFunctions('./lib/draft-authority.js');
+const {
+  executePreDraftLeagueCapacityUpdate,
+  joinLeagueSecure,
+} = requireFunctions('./lib/league-lifecycle-authority.js');
 const { updateScheduledDraftReadinessDocument } = requireFunctions(
   './lib/shared/core/draft/draft-readiness-write.service.js',
 );
@@ -102,6 +112,68 @@ test('explicit open state supersedes legacy saved-order locking', () => {
   assert.equal(isDraftMembershipLocked({
     status: 'scheduled', membershipLockStatus: 'locked', roundOneOrder: ['a', 'b'],
   }), true);
+});
+
+test('server time closes every membership mutation exactly at T-40', () => {
+  const scheduledStartMilliseconds = 1_800_000_000_000;
+  const cutoffMilliseconds =
+    scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+  const draftData = {
+    status: 'scheduled',
+    membershipLockStatus: 'open',
+    scheduledStartAt: scheduledStartMilliseconds,
+    roundOneOrder: ['owner-a', 'owner-b'],
+    draftedAssetKeys: [],
+    nextOverallPick: 1,
+    clockStatus: 'stopped',
+  };
+
+  assert.equal(isDraftMembershipCutoffReached({
+    draftStatus: 'scheduled',
+    scheduledStartMilliseconds,
+    nowMilliseconds: cutoffMilliseconds - 1_000,
+  }), false);
+  assert.equal(isDraftMembershipCutoffReached({
+    draftStatus: 'scheduled',
+    scheduledStartMilliseconds,
+    nowMilliseconds: cutoffMilliseconds,
+  }), true);
+  assert.equal(isDraftMembershipCutoffReached({
+    draftStatus: 'scheduled',
+    scheduledStartMilliseconds,
+    nowMilliseconds: cutoffMilliseconds + 1_000,
+  }), true);
+
+  assert.equal(isDraftJoinLocked(draftData, cutoffMilliseconds - 1_000), false);
+  assert.equal(isDraftJoinLocked(draftData, cutoffMilliseconds), true);
+  assert.equal(isDraftJoinLocked(draftData, cutoffMilliseconds + 1_000), true);
+  assert.equal(getPreDraftLeagueCapacityBlockReason({
+    joinStatus: 'open',
+    draftData,
+    nowMilliseconds: cutoffMilliseconds,
+    cycleDocumentCount: 0,
+    draftPickDocumentCount: 0,
+    transactionDocumentCount: 0,
+    waiverDocumentCount: 0,
+  }), 'draft-locked');
+  assert.equal(getPreDraftMemberRemovalBlockReason({
+    leagueJoinStatus: 'open',
+    draftData,
+    nowMilliseconds: cutoffMilliseconds,
+    cycleDocumentCount: 0,
+    draftPickDocumentCount: 0,
+    transactionDocumentCount: 0,
+    waiverDocumentCount: 0,
+    teamData: { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0 },
+    rosterData: { activeSlots: [], benchSlots: [], irSlots: [] },
+  }), 'draft-locked');
+
+  assert.equal(isDraftJoinLocked({
+    status: 'setup',
+    membershipLockStatus: 'open',
+    scheduledStartAt: null,
+    roundOneOrder: draftData.roundOneOrder,
+  }, cutoffMilliseconds + 1_000), false);
 });
 
 test('start eligibility requires the exact finalized participant set and schedule generation', () => {
@@ -218,6 +290,16 @@ test('server cutoff atomically locks league, invite, participant hash, and custo
     pausedRemainingSeconds: null,
   });
   await batch.commit();
+
+  const early = await finalizeScheduledDraftMembership(
+    leagueId,
+    scheduledStartMilliseconds,
+    scheduleGeneration,
+    scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS - 1_000,
+    'too-early-finalization-seed',
+  );
+  assert.equal(early, 'early');
+  assert.equal((await db.doc(`leagues/${leagueId}/draft/current`).get()).data().membershipLockStatus, 'open');
 
   const first = await finalizeScheduledDraftMembership(
     leagueId,
@@ -359,6 +441,119 @@ test('legacy readiness writes remain compatible when schedule generation is abse
   assert.equal(draft.serverDraftReadinessScheduleGeneration, undefined);
 });
 
+test('cutoff finalization wins against concurrent join and capacity mutations', async () => {
+  const leagueId = `cutoff-race-${randomUUID()}`;
+  const commissionerId = `owner-${randomUUID()}`;
+  const memberId = `owner-${randomUUID()}`;
+  const lateJoinerId = `owner-${randomUUID()}`;
+  const inviteCode = `J${randomUUID().replaceAll('-', '').slice(0, 5).toUpperCase()}`;
+  const scheduledStartMilliseconds = Date.now() +
+    DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS - 1_000;
+  const cutoffMilliseconds =
+    scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+  const scheduleGeneration = 12;
+  const batch = db.batch();
+
+  batch.set(db.doc(`leagues/${leagueId}`), {
+    id: leagueId,
+    commissionerId,
+    inviteCode,
+    maxTeams: 3,
+    teamCount: 2,
+    joinStatus: 'open',
+  });
+  batch.set(db.doc(`leagueInvites/${inviteCode}`), {
+    leagueId,
+    inviteCode,
+    active: true,
+    joinCount: 2,
+    expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
+  });
+  for (const ownerId of [commissionerId, memberId]) {
+    batch.set(db.doc(`leagues/${leagueId}/members/${ownerId}`), {
+      uid: ownerId,
+      leagueId,
+      role: ownerId === commissionerId ? 'commissioner' : 'member',
+    });
+    batch.set(db.doc(`leagues/${leagueId}/teams/${ownerId}`), {
+      id: ownerId,
+      ownerId,
+    });
+  }
+  batch.set(db.doc(`leagues/${leagueId}/draft/current`), {
+    schemaVersion: 3,
+    status: 'scheduled',
+    format: 'snake',
+    totalRounds: 17,
+    rosterRequirements: { LW: 3, C: 3, RW: 3, D: 4, G: 1 },
+    benchSlots: 3,
+    roundOneOrder: [commissionerId, memberId],
+    orderMode: 'randomized',
+    orderEpoch: 0,
+    scheduleGeneration,
+    membershipLockStatus: 'open',
+    nextOverallPick: 1,
+    draftedAssetKeys: [],
+    scheduledStartAt: Timestamp.fromMillis(scheduledStartMilliseconds),
+    pickSeconds: 60,
+    clockStatus: 'stopped',
+    pickStartedAt: null,
+    currentPickSeconds: 60,
+    pausedRemainingSeconds: null,
+  });
+  await batch.commit();
+
+  const [joinOutcome, capacityOutcome, finalizationOutcome] = await Promise.allSettled([
+    joinLeagueSecure.run({
+      auth: {
+        uid: lateJoinerId,
+        token: {
+          email: 'late-joiner@example.test',
+          email_verified: true,
+        },
+      },
+      data: {
+        requestId: `join_${randomUUID().replaceAll('-', '')}`,
+        inviteCode,
+        username: 'Late Joiner',
+        profileIconId: 'emerald-visor',
+      },
+    }),
+    executePreDraftLeagueCapacityUpdate({
+      commissionerId,
+      nowMilliseconds: cutoffMilliseconds,
+      request: {
+        requestId: `capacity-${randomUUID()}`,
+        leagueId,
+        maxTeams: 4,
+        expectedMaxTeams: 3,
+        expectedTeamCount: 2,
+      },
+    }),
+    finalizeScheduledDraftMembership(
+      leagueId,
+      scheduledStartMilliseconds,
+      scheduleGeneration,
+      cutoffMilliseconds,
+      'cutoff-race-seed',
+    ),
+  ]);
+
+  assert.equal(joinOutcome.status, 'rejected');
+  assert.equal(capacityOutcome.status, 'rejected');
+  assert.equal(finalizationOutcome.status, 'fulfilled');
+  assert.equal(finalizationOutcome.value, 'finalized');
+
+  const draft = (await db.doc(`leagues/${leagueId}/draft/current`).get()).data();
+  const league = (await db.doc(`leagues/${leagueId}`).get()).data();
+  assert.equal((await db.doc(`leagues/${leagueId}/members/${lateJoinerId}`).get()).exists, false);
+  assert.equal((await db.doc(`leagues/${leagueId}/teams/${lateJoinerId}`).get()).exists, false);
+  assert.equal(league.maxTeams, 3);
+  assert.equal(league.teamCount, 2);
+  assert.deepEqual([...draft.roundOneOrder].sort(), [commissionerId, memberId].sort());
+  assert.equal(new Set(draft.roundOneOrder).size, 2);
+});
+
 test('ordinary commissioner can schedule and cancel while stale tabs fail closed', async () => {
   const leagueId = `commissioner-${randomUUID()}`;
   const commissionerId = `owner-${randomUUID()}`;
@@ -410,6 +605,36 @@ test('ordinary commissioner can schedule and cancel while stale tabs fail closed
   assert.equal(savedLeague.joinStatus, 'open');
   assert.equal(savedInvite.active, true);
 
+  for (const unauthorizedUserId of [memberId, 'owner-outsider', 'platform-admin-user']) {
+    await assert.rejects(
+      saveDraftSettings(leagueId, unauthorizedUserId, {
+        submissionId: `settings_${randomUUID().replaceAll('-', '')}`,
+        expectedSettingsSubmissionId: firstSubmissionId,
+        roundOneOrder: [commissionerId, memberId],
+        orderMode: 'custom',
+        scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+        pickSeconds: 90,
+      }),
+      (error) => error?.code === 'permission-denied',
+    );
+  }
+
+  const cutoffMilliseconds =
+    scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
+  await assert.rejects(
+    saveDraftSettings(leagueId, commissionerId, {
+      submissionId: `settings_${randomUUID().replaceAll('-', '')}`,
+      expectedSettingsSubmissionId: firstSubmissionId,
+      roundOneOrder: [memberId, commissionerId],
+      orderMode: 'custom',
+      scheduledStartAt: new Date(scheduledStartMilliseconds).toISOString(),
+      pickSeconds: 60,
+    }, cutoffMilliseconds),
+    (error) => error?.code === 'failed-precondition' &&
+      error?.details?.reason === 'draft-membership-finalized',
+  );
+  assert.deepEqual((await draftRef.get()).data().roundOneOrder, [commissionerId, memberId]);
+
   await assert.rejects(
     saveDraftSettings(leagueId, commissionerId, {
       submissionId: `settings_${randomUUID().replaceAll('-', '')}`,
@@ -436,6 +661,14 @@ test('ordinary commissioner can schedule and cancel while stale tabs fail closed
   );
 
   const cancellationSubmissionId = `settings_${randomUUID().replaceAll('-', '')}`;
+  await assert.rejects(
+    cancelDraftSchedule(leagueId, commissionerId, {
+      submissionId: `settings_${randomUUID().replaceAll('-', '')}`,
+      expectedSettingsSubmissionId: firstSubmissionId,
+    }, false, cutoffMilliseconds),
+    (error) => error?.code === 'failed-precondition' &&
+      error?.details?.reason === 'draft-membership-finalized',
+  );
   await cancelDraftSchedule(leagueId, commissionerId, {
     submissionId: cancellationSubmissionId,
     expectedSettingsSubmissionId: firstSubmissionId,
@@ -446,4 +679,67 @@ test('ordinary commissioner can schedule and cancel while stale tabs fail closed
   assert.equal(canceledDraft.membershipLockStatus, 'open');
   assert.equal(canceledDraft.scheduleGeneration, 2);
   assert.deepEqual(canceledDraft.roundOneOrder, [commissionerId, memberId]);
+
+  assert.equal(await finalizeScheduledDraftMembership(
+    leagueId,
+    scheduledStartMilliseconds,
+    1,
+    scheduledStartMilliseconds,
+    'canceled-schedule-seed',
+  ), 'stale');
+  assert.equal(getScheduledDraftStartTaskState({
+    draftStatus: canceledDraft.status,
+    expectedScheduledStartMilliseconds: scheduledStartMilliseconds,
+    actualScheduledStartMilliseconds: null,
+    expectedScheduleGeneration: 1,
+    actualScheduleGeneration: canceledDraft.scheduleGeneration,
+    nowMilliseconds: scheduledStartMilliseconds,
+  }), 'stale');
+});
+
+test('settings authority leaves active and completed Drafts byte-for-byte unchanged', async () => {
+  for (const status of ['live', 'complete']) {
+    const leagueId = `${status}-${randomUUID()}`;
+    const commissionerId = `owner-${randomUUID()}`;
+    const memberId = `owner-${randomUUID()}`;
+    const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+    const batch = db.batch();
+    batch.set(db.doc(`leagues/${leagueId}`), {
+      id: leagueId,
+      commissionerId,
+      maxTeams: 2,
+      teamCount: 2,
+      joinStatus: 'locked',
+    });
+    for (const ownerId of [commissionerId, memberId]) {
+      batch.set(db.doc(`leagues/${leagueId}/teams/${ownerId}`), { id: ownerId, ownerId });
+    }
+    batch.set(draftRef, {
+      status,
+      membershipLockStatus: 'locked',
+      roundOneOrder: [commissionerId, memberId],
+      nextOverallPick: status === 'live' ? 2 : 35,
+      draftedAssetKeys: ['skater:8478402'],
+      scheduleGeneration: 3,
+      lastSettingsSubmissionId: 'settings_existing',
+      pickSeconds: 60,
+      clockStatus: status === 'live' ? 'running' : 'stopped',
+    });
+    await batch.commit();
+    const before = (await draftRef.get()).data();
+
+    await assert.rejects(
+      saveDraftSettings(leagueId, commissionerId, {
+        submissionId: `settings_${randomUUID().replaceAll('-', '')}`,
+        expectedSettingsSubmissionId: 'settings_existing',
+        roundOneOrder: [commissionerId, memberId],
+        orderMode: 'custom',
+        scheduledStartAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        pickSeconds: 60,
+      }),
+      (error) => error?.code === 'failed-precondition',
+    );
+
+    assert.deepEqual((await draftRef.get()).data(), before);
+  }
 });

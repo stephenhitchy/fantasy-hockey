@@ -988,7 +988,7 @@ export async function finalizeScheduledDraftMembership(
     const cutoffMilliseconds =
       expectedScheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
 
-    if (nowMilliseconds + 100 < cutoffMilliseconds) {
+    if (nowMilliseconds < cutoffMilliseconds) {
       return 'early';
     }
 
@@ -2602,7 +2602,7 @@ async function processLeagueDraftAutomation(
         const cutoffMilliseconds =
           scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
 
-        if (Date.now() + 100 >= cutoffMilliseconds) {
+        if (Date.now() >= cutoffMilliseconds) {
           await finalizeScheduledDraftMembership(
             leagueId,
             scheduledStartMilliseconds,
@@ -2956,7 +2956,7 @@ async function processDraftFinalizationTask(
   const cutoffMilliseconds =
     expectedScheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
 
-  if (Date.now() + 100 < cutoffMilliseconds) {
+  if (Date.now() < cutoffMilliseconds) {
     throw new Error('Draft membership-finalization task arrived before its cutoff.');
   }
 

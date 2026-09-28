@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
-import {
+const requireFunctions = createRequire(new URL('../../functions/package.json', import.meta.url));
+const {
   getEffectiveActiveLeagueCount,
   getOccupiedLeagueOwnerIds,
   isDraftJoinLocked,
@@ -15,7 +17,7 @@ import {
   MAX_JOIN_ATTEMPTS_PER_24_HOURS,
   MAX_LEAGUE_CREATIONS_PER_24_HOURS,
   normalizeRollingWindow,
-} from '../../functions/src/league-lifecycle-authority.util.ts';
+} = requireFunctions('./lib/league-lifecycle-authority.util.js');
 
 async function read(relativePath) {
   return readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
@@ -107,7 +109,7 @@ test('the atomic join validates invite identity, expiry, capacity, draft lock, a
     /inviteData\['active'\] !== true/,
     /expiresAtMilliseconds/,
     /asString\(leagueData\['inviteCode'\]\) !== input\.inviteCode/,
-    /isDraftJoinLocked\(draftSnapshot\.data\(\)\)/,
+    /isDraftJoinLocked\(draftSnapshot\.data\(\), authorizationNowMilliseconds\)/,
     /currentTeamCount >= maxTeams/,
     /quotaState\.activeLeagueCount >= MAX_ACTIVE_LEAGUES_PER_USER/,
     /teamCount: resultingTeamCount/,
@@ -164,12 +166,22 @@ test('quota helpers reset rolling windows safely and deduplicate league owners',
 });
 
 test('draft lock detection preserves legacy locks but honors the explicit open setup state', () => {
+  const nowMilliseconds = 1_800_000_000_000;
   assert.equal(isDraftJoinLocked(null), false);
   assert.equal(isDraftJoinLocked({ status: 'setup', roundOneOrder: [], nextOverallPick: 1 }), false);
   assert.equal(isDraftJoinLocked({ status: 'scheduled' }), true);
   assert.equal(isDraftJoinLocked({
-    status: 'scheduled', membershipLockStatus: 'open', roundOneOrder: ['owner-a'],
-  }), false);
+    status: 'scheduled',
+    membershipLockStatus: 'open',
+    scheduledStartAt: nowMilliseconds + 2 * 60 * 60 * 1000,
+    roundOneOrder: ['owner-a'],
+  }, nowMilliseconds), false);
+  assert.equal(isDraftJoinLocked({
+    status: 'scheduled',
+    membershipLockStatus: 'open',
+    scheduledStartAt: nowMilliseconds + 40 * 60 * 1000,
+    roundOneOrder: ['owner-a'],
+  }, nowMilliseconds), true);
   assert.equal(isDraftJoinLocked({ status: 'live' }), true);
   assert.equal(isDraftJoinLocked({ status: 'complete' }), true);
   assert.equal(isDraftJoinLocked({ status: 'setup', roundOneOrder: ['owner-a'] }), true);

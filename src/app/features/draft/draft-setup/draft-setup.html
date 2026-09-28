@@ -97,6 +97,7 @@
       @if (savedStartDate()) {
         <div class="saved-schedule rr-notice rr-notice--info">
           <strong>{{ formatScheduledStart() }}</strong>
+          <span>{{ formatMembershipCutoff() }}</span>
           <span>{{ countdownText() }}</span>
         </div>
       } @else {

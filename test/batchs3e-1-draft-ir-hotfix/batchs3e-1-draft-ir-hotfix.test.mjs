@@ -32,7 +32,8 @@ test('Draft authority rejects near-term scheduling and clears stale readiness ev
   assert.doesNotMatch(source, /resolveDraftProjectionPreparation/);
   assert.match(source, /loadPreparedProjectionSnapshotForScheduledDraft/);
   assert.match(source, /createUnsafeNearTermScheduleError/);
-  assert.match(source, /initialNearTermGateState === 'requires-exact-readiness'/);
+  assert.match(source, /const authorizationNowMilliseconds = nowMilliseconds \?\? Date\.now\(\)/);
+  assert.match(source, /nearTermGateState === 'requires-exact-readiness'/);
   assert.match(source, /serverDraftReadinessStatus: null/);
   assert.match(source, /serverDraftReadinessScheduleGeneration: null/);
   assert.doesNotMatch(source, /loadSharedProjectionSnapshot\(/);

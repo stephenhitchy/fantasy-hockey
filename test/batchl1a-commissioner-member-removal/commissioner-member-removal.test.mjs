@@ -6,9 +6,6 @@ import test, { after, before, beforeEach } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  getPreDraftMemberRemovalBlockReason,
-} from '../../functions/src/league-lifecycle-authority.util.ts';
-import {
   buildAuditLeagueActivity,
 } from '../../functions/src/shared/core/league/league-activity.util.ts';
 
@@ -19,6 +16,9 @@ const require = createRequire(import.meta.url);
 const requireFunctions = createRequire(
   new URL('../../functions/package.json', import.meta.url),
 );
+const {
+  getPreDraftMemberRemovalBlockReason,
+} = requireFunctions('./lib/league-lifecycle-authority.util.js');
 const TEST_PROJECT_ID = 'demo-rinkrat-l1a';
 const FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST;
 
@@ -210,9 +210,11 @@ after(async () => {
 });
 
 test('pre-Draft guard fails closed for every protected history boundary', () => {
+  const nowMilliseconds = 1_800_000_000_000;
   const baseline = {
     leagueJoinStatus: 'open',
     draftData: null,
+    nowMilliseconds,
     cycleDocumentCount: 0,
     draftPickDocumentCount: 0,
     transactionDocumentCount: 0,
@@ -239,6 +241,7 @@ test('pre-Draft guard fails closed for every protected history boundary', () => 
     draftData: {
       status: 'scheduled',
       membershipLockStatus: 'open',
+      scheduledStartAt: nowMilliseconds + 2 * 60 * 60 * 1000,
       roundOneOrder: ['commissioner', 'member'],
       draftedAssetKeys: [],
       nextOverallPick: 1,

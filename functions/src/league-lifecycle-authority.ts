@@ -1437,8 +1437,10 @@ export const joinLeagueSecure = onCall(
       );
 
       if (!alreadyMember) {
+        const authorizationNowMilliseconds = Date.now();
         const expiresAtMilliseconds = timestampMilliseconds(inviteData['expiresAt']);
-        const inviteExpired = expiresAtMilliseconds !== null && expiresAtMilliseconds <= nowMilliseconds;
+        const inviteExpired = expiresAtMilliseconds !== null &&
+          expiresAtMilliseconds <= authorizationNowMilliseconds;
         const joinStatus = asString(leagueData['joinStatus']);
 
         if (inviteData['active'] !== true || inviteExpired) {
@@ -1451,7 +1453,11 @@ export const joinLeagueSecure = onCall(
           );
         }
 
-        if (joinStatus === 'locked' || joinStatus === 'full' || isDraftJoinLocked(draftSnapshot.data())) {
+        if (
+          joinStatus === 'locked' ||
+          joinStatus === 'full' ||
+          isDraftJoinLocked(draftSnapshot.data(), authorizationNowMilliseconds)
+        ) {
           throw new HttpsError(
             'failed-precondition',
             'League entry is closed because the Draft membership cutoff has passed.',
@@ -1736,13 +1742,14 @@ export async function executePreDraftLeagueMemberRemoval(input: {
     { minimumLength: 1, maxBytes: 128 },
   );
   const request = input.request;
-  const nowMilliseconds = input.nowMilliseconds ?? Date.now();
+  const requestedNowMilliseconds = input.nowMilliseconds;
   const payloadHash = createMemberRemovalPayloadHash(request);
   const auditId = createMemberRemovalAuditId(commissionerId, request.requestId);
   const leagueRef = db.doc(`leagues/${request.leagueId}`);
   const auditRef = db.doc(`leagues/${request.leagueId}/audit/${auditId}`);
 
   return db.runTransaction(async (transaction) => {
+    const nowMilliseconds = requestedNowMilliseconds ?? Date.now();
     const [leagueSnapshot, auditSnapshot] = await Promise.all([
       transaction.get(leagueRef),
       transaction.get(auditRef),
@@ -1904,6 +1911,7 @@ export async function executePreDraftLeagueMemberRemoval(input: {
     const blockReason = getPreDraftMemberRemovalBlockReason({
       leagueJoinStatus: leagueData['joinStatus'],
       draftData: draftSnapshot.data(),
+      nowMilliseconds,
       cycleDocumentCount: cyclesSnapshot.size,
       draftPickDocumentCount: picksSnapshot.size,
       transactionDocumentCount:
@@ -2247,6 +2255,7 @@ export async function executePreDraftLeagueCapacityUpdate(input: {
           ...safetyInput,
           joinStatus: league['joinStatus'],
           draftData: draftSnapshot.data(),
+          nowMilliseconds,
         });
 
     if (blockReason) {

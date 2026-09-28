@@ -13089,6 +13089,8 @@ generations invalidate old finalization, readiness, and exact-start work;
 ordinary commissioners receive the same authority without a platform-admin
 bypass. Random order is generated at cutoff, while custom order preserves
 surviving positions and inserts later joiners without commissioner repair.
+Server-time checks on every membership/setup mutation enforce the same cutoff
+even when the persisted lock worker is delayed.
 Immediate start is intentionally unsupported. Full behavior, compatibility,
 verification, deployment, and rollback guidance is in
 `docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md`.

@@ -3,14 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import test, { after, before, beforeEach } from 'node:test';
 
-import { getPreDraftLeagueCapacityBlockReason } from
-  '../../functions/src/league-lifecycle-authority.util.ts';
-import { getScheduledDraftCapacityReopenBlockReason } from
-  '../../functions/src/league-lifecycle-authority.util.ts';
 import { getScheduledDraftStartTaskState } from
   '../../functions/src/draft-readiness.util.ts';
 
 const requireFunctions = createRequire(new URL('../../functions/package.json', import.meta.url));
+const {
+  getPreDraftLeagueCapacityBlockReason,
+  getScheduledDraftCapacityReopenBlockReason,
+} = requireFunctions('./lib/league-lifecycle-authority.util.js');
 const projectId = 'demo-rinkrat-l1b';
 process.env.GCLOUD_PROJECT = projectId;
 process.env.GOOGLE_CLOUD_PROJECT = projectId;

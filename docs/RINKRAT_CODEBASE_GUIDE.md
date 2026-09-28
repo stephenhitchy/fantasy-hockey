@@ -320,7 +320,8 @@ path being readable by the browser does not mean the browser may write it.
 3. `draft-authority.service.ts` sends a command or pick with the exact league,
    submission identity, expected settings/pick revision, and user intent.
 4. `functions/src/draft-authority.ts` validates commissioner authority,
-   rejects schedules under 40 minutes, and owns cancel/reopen transitions.
+   rejects schedules under 40 minutes, enforces T-40 from server time even if
+   the lock worker is delayed, and owns cancel/reopen transitions.
 5. `functions/src/draft-automation.ts` finalizes participants/order at T-40,
    then advances readiness, scheduled starts, clocks, and auto-draft without
    transferring authority to a browser tab. Schedule-bound work must match

@@ -311,10 +311,36 @@ export class DraftSetup implements OnDestroy {
       return 'Not scheduled';
     }
 
-    return startDate.toLocaleString(undefined, {
-      dateStyle: 'full',
-      timeStyle: 'short',
-    });
+    return `Draft: ${startDate.toLocaleString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })}`;
+  }
+
+  formatMembershipCutoff(): string {
+    const startDate = this.savedStartDate();
+
+    if (!startDate) {
+      return '';
+    }
+
+    const cutoffDate = new Date(
+      startDate.getTime() - DRAFT_MINIMUM_UNPREPARED_START_LEAD_MILLISECONDS,
+    );
+
+    return `Teams lock: ${cutoffDate.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })}`;
   }
 
   randomizeOrder(): void {

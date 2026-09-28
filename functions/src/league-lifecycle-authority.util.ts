@@ -1,3 +1,5 @@
+import { isDraftMembershipCutoffReached } from './draft-lifecycle.util';
+
 export const LEAGUE_LIFECYCLE_STATE_SCHEMA_VERSION = 1;
 export const LEAGUE_AUTHORITY_SCHEMA_VERSION = 2;
 export const LEAGUE_DOCUMENT_SCHEMA_VERSION = 1;
@@ -150,7 +152,33 @@ export function getEffectiveActiveLeagueCount(
   return Math.max(normalizedStoredCount, normalizedMeasuredCount);
 }
 
-export function isDraftJoinLocked(draftData: unknown): boolean {
+function draftTimestampMilliseconds(value: unknown): number | null {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.getTime() : null;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'toMillis' in value &&
+    typeof value.toMillis === 'function'
+  ) {
+    const milliseconds = value.toMillis();
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    const milliseconds = new Date(value).getTime();
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  return null;
+}
+
+export function isDraftJoinLocked(
+  draftData: unknown,
+  nowMilliseconds = Date.now(),
+): boolean {
   if (!draftData || typeof draftData !== 'object' || Array.isArray(draftData)) {
     return false;
   }
@@ -169,7 +197,12 @@ export function isDraftJoinLocked(draftData: unknown): boolean {
     status === 'complete' ||
     draftedAssetKeys.length > 0 ||
     nextOverallPick > 1 ||
-    draftMembershipIsFinalized(data)
+    draftMembershipIsFinalized(data) ||
+    isDraftMembershipCutoffReached({
+      draftStatus: status,
+      scheduledStartMilliseconds: draftTimestampMilliseconds(data['scheduledStartAt']),
+      nowMilliseconds,
+    })
   );
 }
 
@@ -192,6 +225,7 @@ function draftMembershipIsFinalized(draft: Record<string, unknown>): boolean {
 export function getPreDraftLeagueCapacityBlockReason(input: {
   joinStatus: unknown;
   draftData: unknown;
+  nowMilliseconds?: number;
   cycleDocumentCount: number;
   draftPickDocumentCount: number;
   transactionDocumentCount: number;
@@ -207,7 +241,7 @@ export function getPreDraftLeagueCapacityBlockReason(input: {
     if (
       !draft ||
       (draft['status'] !== 'setup' && draft['status'] !== 'scheduled') ||
-      draftMembershipIsFinalized(draft) ||
+      isDraftJoinLocked(draft, input.nowMilliseconds ?? Date.now()) ||
       !Array.isArray(draft['roundOneOrder']) ||
       !Array.isArray(draft['draftedAssetKeys']) || draft['draftedAssetKeys'].length > 0 ||
       draft['nextOverallPick'] !== 1 ||
@@ -355,6 +389,7 @@ function rosterStateIsEmpty(value: unknown): boolean {
 export function getPreDraftMemberRemovalBlockReason(input: {
   leagueJoinStatus: unknown;
   draftData: unknown;
+  nowMilliseconds?: number;
   cycleDocumentCount: number;
   draftPickDocumentCount: number;
   transactionDocumentCount: number;
@@ -371,7 +406,7 @@ export function getPreDraftMemberRemovalBlockReason(input: {
   }
 
   if (
-    isDraftJoinLocked(input.draftData) ||
+    isDraftJoinLocked(input.draftData, input.nowMilliseconds ?? Date.now()) ||
     !draftStateIsSafeForPreDraftMemberRemoval(input.draftData)
   ) {
     return 'draft-locked';

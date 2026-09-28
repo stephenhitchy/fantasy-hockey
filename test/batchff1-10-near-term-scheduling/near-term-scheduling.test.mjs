@@ -132,9 +132,13 @@ test('server rejects every changed schedule inside 40 minutes without an immedia
   const saveEnd = authority.indexOf('async function activateScheduledDraft(', saveStart);
   const saveBody = authority.slice(saveStart, saveEnd);
   const transactionIndex = saveBody.indexOf('await db.runTransaction');
+  const nearTermGateIndex = saveBody.indexOf(
+    "nearTermGateState === 'requires-exact-readiness'",
+  );
 
   assert.ok(transactionIndex > 0);
-  assert.match(saveBody, /initialNearTermGateState === 'requires-exact-readiness'/);
+  assert.ok(nearTermGateIndex > transactionIndex);
+  assert.match(saveBody, /const authorizationNowMilliseconds = nowMilliseconds \?\? Date\.now\(\)/);
   assert.match(saveBody, /createUnsafeNearTermScheduleError/);
   assert.doesNotMatch(saveBody, /await loadPreparedProjectionSnapshotForScheduledDraft/);
   assert.match(authority, /earliest safe start:/);

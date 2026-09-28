@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
-import {
+const requireFunctions = createRequire(new URL('../../functions/package.json', import.meta.url));
+const {
   getCanonicalJoinStatus,
   getUnexpectedDocumentKeys,
   LEAGUE_AUDIT_SCHEMA_VERSION,
@@ -14,7 +16,7 @@ import {
   LEAGUE_MEMBER_DOCUMENT_KEYS,
   LEAGUE_TEAM_DOCUMENT_KEYS,
   normalizeBoundedInteger,
-} from '../../functions/src/league-lifecycle-authority.util.ts';
+} = requireFunctions('./lib/league-lifecycle-authority.util.js');
 
 async function read(relativePath) {
   return readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');

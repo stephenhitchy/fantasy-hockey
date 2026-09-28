@@ -285,6 +285,8 @@ settings are saved, rejects every new/changed schedule inside 40 minutes,
 finalizes current eligible teams and order transactionally at T-40, binds old
 tasks to a monotonic schedule generation, adds optimistic stale-tab rejection,
 and provides explicit cancel plus recent-authenticated Postpone and Reopen.
+Every membership/setup mutation also derives T-40 from server time, so a
+delayed finalization task cannot extend the editing window.
 Random order is server-generated at cutoff; custom order preserves surviving
 positions and inserts late joiners automatically. Legacy drafts remain locked
 until explicitly reopened. Immediate start remains unsupported. See

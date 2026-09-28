@@ -192,6 +192,29 @@ export function getDraftMembershipCutoffMilliseconds(
     : scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
 }
 
+/**
+ * Enforces the cutoff from server-observed time even when the task that
+ * persists the lock is delayed. A malformed scheduled Draft fails closed;
+ * setup without a scheduled time remains open.
+ */
+export function isDraftMembershipCutoffReached(input: {
+  draftStatus: unknown;
+  scheduledStartMilliseconds: number | null;
+  nowMilliseconds: number;
+}): boolean {
+  if (input.draftStatus !== 'scheduled') {
+    return false;
+  }
+
+  const cutoffMilliseconds = getDraftMembershipCutoffMilliseconds(
+    input.scheduledStartMilliseconds,
+  );
+
+  return cutoffMilliseconds === null ||
+    !Number.isFinite(input.nowMilliseconds) ||
+    input.nowMilliseconds >= cutoffMilliseconds;
+}
+
 export function buildDraftFinalizationTaskId(input: {
   leagueId: string;
   scheduledStartMilliseconds: number;
