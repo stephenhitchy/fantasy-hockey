@@ -8,7 +8,10 @@ export type DraftClockStatus = 'stopped' | 'running' | 'paused' | 'complete';
 
 export type DraftSelectionType = 'manual' | 'queue' | 'automatic';
 
-export type DraftAutoPickReason = 'timer-expired' | 'manager-auto-mode';
+export type DraftAutoPickReason =
+  | 'timer-expired'
+  | 'manager-auto-mode'
+  | 'timeout-auto-mode';
 
 export type ProjectionDataSource =
   | 'current-season-form'
@@ -442,6 +445,8 @@ export interface DraftPick extends DraftPickPreview {
 export interface DraftQueue {
   ownerId: string;
   assetKeys: string[];
+
+  /** The manager's explicit fast Auto-Draft preference. */
   autoDraftEnabled: boolean;
 
   /**
@@ -451,7 +456,7 @@ export interface DraftQueue {
    */
   consecutiveClockExpirations: number;
 
-  /** True when auto-draft was forced on by two consecutive expired turns. */
+  /** Temporary server fast mode after two consecutive expired turns. */
   autoDraftActivatedByTimeout: boolean;
 
   updatedAt?: unknown;

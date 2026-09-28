@@ -111,20 +111,29 @@ export function getDraftAutoPickExplanation(
   }
 
   const clockExpired = reason === 'timer-expired';
+  const timeoutAutoMode = reason === 'timeout-auto-mode';
   const fromQueue = selectionType === 'queue';
 
   if (fromQueue) {
     return {
-      title: clockExpired ? 'Clock expired · queue pick used' : 'Auto-Draft used your queue',
+      title: clockExpired
+        ? 'Clock expired · queue pick used'
+        : timeoutAutoMode
+          ? 'Missed-turn Auto-Draft used your queue'
+          : 'Auto-Draft used your queue',
       detail: `${assetName} was the first legal player in your queue for pick #${pick.overallPick}.`,
-      tone: clockExpired ? 'warning' : 'info',
+      tone: clockExpired || timeoutAutoMode ? 'warning' : 'info',
     };
   }
 
   return {
-    title: clockExpired ? 'Clock expired · RinkRat completed the pick' : 'Auto-Draft completed your pick',
+    title: clockExpired
+      ? 'Clock expired · RinkRat completed the pick'
+      : timeoutAutoMode
+        ? 'Missed-turn Auto-Draft completed your pick'
+        : 'Auto-Draft completed your pick',
     detail: `No queued player fit an open roster spot, so RinkRat selected the highest-ranked legal option: ${assetName}.`,
-    tone: clockExpired ? 'warning' : 'info',
+    tone: clockExpired || timeoutAutoMode ? 'warning' : 'info',
   };
 }
 

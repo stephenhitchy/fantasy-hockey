@@ -618,6 +618,12 @@ export class DraftRoom implements OnDestroy {
 
   readonly myQueue = computed<DraftQueue>(() => this.getQueueForOwner(this.userId));
 
+  readonly myAutoDraftActive = computed(() => {
+    const queue = this.myQueue();
+
+    return queue.autoDraftEnabled || queue.autoDraftActivatedByTimeout;
+  });
+
   readonly queueEntries = computed<DraftQueueEntryView[]>(() => {
     const draftedAssetKeys = new Set(this.draft()?.draftedAssetKeys ?? []);
     const assetsByKey = new Map(this.playerPool().map((asset) => [asset.assetKey, asset]));
@@ -781,7 +787,13 @@ export class DraftRoom implements OnDestroy {
   readonly currentOwnerAutoDraftEnabled = computed(() => {
     const ownerId = this.currentPick()?.ownerId;
 
-    return ownerId ? this.getQueueForOwner(ownerId).autoDraftEnabled : false;
+    if (!ownerId) {
+      return false;
+    }
+
+    const queue = this.getQueueForOwner(ownerId);
+
+    return queue.autoDraftEnabled || queue.autoDraftActivatedByTimeout;
   });
 
   readonly draftStartDate = computed(() => getScheduledStartDate(this.draft()));
@@ -2708,7 +2720,7 @@ export class DraftRoom implements OnDestroy {
 
     try {
       await withOperationDeadline(
-        setDraftAutoDraftEnabled(this.leagueId, this.userId, !this.myQueue().autoDraftEnabled),
+        setDraftAutoDraftEnabled(this.leagueId, this.userId, !this.myAutoDraftActive()),
         20_000,
         'RinkRat stopped waiting for the Auto-Draft response. Refresh the live Draft Room before trying again because the setting may still have saved.',
       );
@@ -2853,7 +2865,7 @@ export class DraftRoom implements OnDestroy {
 
     return this.isMyTurn()
       ? 'Your Pick'
-      : `${this.getTeamName(this.currentPick()?.ownerId ?? '')} Picking`;
+      : `${this.getTeamName(this.currentPick()?.ownerId ?? '')} Picking · Auto-pick at 0:00`;
   }
 
   private async saveMyQueue(assetKeys: string[]): Promise<void> {
@@ -2903,11 +2915,11 @@ export class DraftRoom implements OnDestroy {
   getMyAutoDraftButtonLabel(): string {
     const queue = this.myQueue();
 
-    if (!queue.autoDraftEnabled) {
-      return 'Auto-Draft Off';
+    if (queue.autoDraftActivatedByTimeout) {
+      return 'Auto-Draft On · 2 Missed Turns';
     }
 
-    return queue.autoDraftActivatedByTimeout ? 'Auto-Draft On · 2 Missed Turns' : 'Auto-Draft On';
+    return queue.autoDraftEnabled ? 'Auto-Draft On' : 'Auto-Draft Off';
   }
 
   getTimelineLogoUrl(pick: DraftPick): string | undefined {

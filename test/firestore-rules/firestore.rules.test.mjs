@@ -1161,6 +1161,43 @@ describe('draft authority hardening', () => {
       'Owner draft queue update',
     );
     await expectDenied(
+      updateDoc(managerQueueRef, {
+        autoDraftEnabled: false,
+        consecutiveClockExpirations: 2,
+        autoDraftActivatedByTimeout: true,
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner cannot activate the server missed-turn marker',
+    );
+    await seedDocument(
+      `leagues/${LEAGUE_ID}/draft/current/queues/${manager.uid}`,
+      {
+        ownerId: manager.uid,
+        assetKeys: ['skater-101'],
+        autoDraftEnabled: false,
+        consecutiveClockExpirations: 2,
+        autoDraftActivatedByTimeout: true,
+        updatedAt: new Date(),
+      },
+    );
+    await expectAllowed(
+      updateDoc(managerQueueRef, {
+        assetKeys: ['skater-101', 'skater-102'],
+        autoDraftEnabled: false,
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner preserves server missed-turn mode while editing queue',
+    );
+    await expectAllowed(
+      updateDoc(managerQueueRef, {
+        autoDraftEnabled: false,
+        consecutiveClockExpirations: 0,
+        autoDraftActivatedByTimeout: false,
+        updatedAt: serverTimestamp(),
+      }),
+      'Owner can clear server missed-turn mode',
+    );
+    await expectDenied(
       updateDoc(commissionerQueueRef, {
         assetKeys: ['skater-999'],
         autoDraftEnabled: true,

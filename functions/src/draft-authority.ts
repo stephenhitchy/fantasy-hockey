@@ -432,7 +432,7 @@ function normalizeQueue(ownerId: string, value: Partial<DraftQueue> | undefined)
     autoDraftEnabled: value?.autoDraftEnabled === true,
     consecutiveClockExpirations,
     autoDraftActivatedByTimeout:
-      value?.autoDraftActivatedByTimeout === true && value?.autoDraftEnabled === true,
+      value?.autoDraftActivatedByTimeout === true && consecutiveClockExpirations === 2,
     updatedAt: value?.updatedAt,
   };
 }

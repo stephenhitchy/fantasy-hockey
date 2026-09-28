@@ -367,6 +367,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/observability/scoring-phase-timing.util.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
+        // FF1.41 isolates effective Auto-Draft mode and exact-turn eligibility.
+        'src/draft-autodraft-state.util.ts',
         // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
         'src/draft-readiness.util.ts',
         // FF1.40 adds isolated Draft membership-cutoff and schedule-generation decisions.

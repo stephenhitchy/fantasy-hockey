@@ -382,6 +382,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/observability/scoring-phase-timing.util.ts',
     'draft-authority.ts',
     'draft-automation.ts',
+    // FF1.41 isolates effective Auto-Draft mode and exact-turn eligibility.
+    'draft-autodraft-state.util.ts',
     // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
     'draft-readiness.util.ts',
     // FF1.40 adds isolated Draft membership-cutoff and schedule-generation decisions.

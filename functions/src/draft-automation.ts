@@ -96,6 +96,14 @@ import {
   LEAGUE_AUDIT_SCHEMA_VERSION,
   LEAGUE_AUTHORITY_SCHEMA_VERSION,
 } from './league-lifecycle-authority.util';
+import {
+  DraftAutomaticActionBlockReason,
+  DraftAutomaticActionExpectation,
+  DraftEffectiveMode,
+  getDraftAutomaticActionDecision,
+  getDraftEffectiveMode,
+  getDraftQueueStateAfterAutomaticPick,
+} from './draft-autodraft-state.util';
 
 const FUNCTION_REGION = 'us-central1';
 const SERVER_DRAFT_ACTOR = 'server:draft-automation';
@@ -193,6 +201,9 @@ interface DraftAutomationRunResult {
   status: 'opened' | 'picked' | 'waiting' | 'complete' | 'skipped' | 'error';
   picksMade: number;
   message: string;
+  autoDraftReason?: DraftAutoPickReason;
+  effectiveDraftingMode?: DraftEffectiveMode;
+  teamCorrelationHash?: string;
 }
 
 interface DraftAutomationLease {
@@ -204,9 +215,20 @@ interface DraftPickDeadlineTaskPayload {
   taskType?: 'pick-deadline';
   leagueId: string;
   expectedOverallPick: number;
+  expectedOwnerId?: string;
   expectedPickStartedAtMilliseconds: number;
   expectedDueAtMilliseconds: number;
+  expectedDraftStartedAtMilliseconds?: number;
   d1nLoadProbe?: D1nLoadProbeTaskPayload;
+}
+
+interface ServerAutomaticPickResult {
+  picked: boolean;
+  overallPick: number | null;
+  teamCorrelationHash: string | null;
+  effectiveDraftingMode: DraftEffectiveMode | null;
+  autoDraftReason: DraftAutoPickReason | null;
+  blockedReason: DraftAutomaticActionBlockReason | null;
 }
 
 interface DraftScheduledStartTaskPayload {
@@ -939,6 +961,16 @@ function buildDraftPickHandoffCorrelationHash(
     .digest('hex');
 }
 
+function buildDraftTeamCorrelationHash(
+  leagueId: string,
+  ownerId: string,
+): string {
+  return createHash('sha256')
+    .update(`rinkrat:draft-team:v1:${leagueId}:${ownerId}`)
+    .digest('hex')
+    .slice(0, 24);
+}
+
 type DraftFinalizationResult = 'finalized' | 'already-finalized' | 'early' | 'stale';
 
 export async function finalizeScheduledDraftMembership(
@@ -1311,15 +1343,21 @@ async function scheduleDraftClockTask(
       ? (queueSnapshot.data() as Partial<DraftQueue>)
       : undefined,
   );
-  const dueAtMilliseconds = queue.autoDraftEnabled
+  const effectiveDraftingMode = getDraftEffectiveMode(queue);
+  const dueAtMilliseconds = effectiveDraftingMode !== 'manual-with-deadline'
     ? pickStartedAt.getTime() + AUTO_DRAFT_STEP_DELAY_MILLISECONDS
     : pickStartedAt.getTime() +
       normalizePickSeconds(draft.currentPickSeconds ?? draft.pickSeconds) * 1000;
-  const payload: DraftClockTaskPayload = {
+  const draftStartedAt = asTimestampDate(draft.startedAt);
+  const payload: DraftPickDeadlineTaskPayload = {
     leagueId,
     expectedOverallPick: currentPick.overallPick,
+    expectedOwnerId: currentPick.ownerId,
     expectedPickStartedAtMilliseconds: pickStartedAt.getTime(),
     expectedDueAtMilliseconds: dueAtMilliseconds,
+    ...(draftStartedAt
+      ? { expectedDraftStartedAtMilliseconds: draftStartedAt.getTime() }
+      : {}),
   };
 
   try {
@@ -1332,7 +1370,11 @@ async function scheduleDraftClockTask(
     console.info('Scheduled exact draft clock task.', {
       leagueId,
       overallPick: currentPick.overallPick,
-      autoDraftEnabled: queue.autoDraftEnabled,
+      teamCorrelationHash: buildDraftTeamCorrelationHash(
+        leagueId,
+        currentPick.ownerId,
+      ),
+      effectiveDraftingMode,
       dueAt: new Date(dueAtMilliseconds).toISOString(),
     });
 
@@ -1562,7 +1604,7 @@ function normalizeQueue(ownerId: string, value: Partial<DraftQueue> | undefined)
     autoDraftEnabled: value?.autoDraftEnabled === true,
     consecutiveClockExpirations,
     autoDraftActivatedByTimeout:
-      value?.autoDraftActivatedByTimeout === true && value?.autoDraftEnabled === true,
+      value?.autoDraftActivatedByTimeout === true && consecutiveClockExpirations === 2,
     updatedAt: value?.updatedAt,
   };
 }
@@ -1733,24 +1775,6 @@ export async function repairDraftTurnFromCommittedPicks(
 function isScheduledStartReached(draft: FantasyDraft, now = new Date()): boolean {
   const scheduledStart = asTimestampDate(draft.scheduledStartAt);
   return Boolean(scheduledStart && scheduledStart.getTime() <= now.getTime());
-}
-
-function isClockExpired(draft: FantasyDraft, now = new Date()): boolean {
-  if (draft.status !== 'live' || draft.clockStatus !== 'running') {
-    return false;
-  }
-
-  const startedAt = asTimestampDate(draft.pickStartedAt);
-
-  if (!startedAt) {
-    return false;
-  }
-
-  const currentPickSeconds = normalizePickSeconds(
-    draft.currentPickSeconds ?? draft.pickSeconds,
-  );
-
-  return startedAt.getTime() + currentPickSeconds * 1000 <= now.getTime();
 }
 
 async function setDraftAutomationError(
@@ -2323,14 +2347,14 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
   );
 }
 
-async function makeOneServerAutomaticPick(
+export async function makeOneServerAutomaticPick(
   leagueId: string,
   projectionAssets: DraftableAsset[],
   projectionSnapshotId: string,
   projectionSnapshotHash: string,
   projectionAuthorityVersion: number,
-  reasonOverride?: DraftAutoPickReason,
-): Promise<boolean> {
+  expectation?: DraftAutomaticActionExpectation,
+): Promise<ServerAutomaticPickResult> {
   if (projectionAssets.length === 0) {
     throw new Error('No shared projection assets are available for server auto-draft.');
   }
@@ -2341,13 +2365,27 @@ async function makeOneServerAutomaticPick(
     const draftSnapshot = await transaction.get(draftRef);
 
     if (!draftSnapshot.exists) {
-      return false;
+      return {
+        picked: false,
+        overallPick: null,
+        teamCorrelationHash: null,
+        effectiveDraftingMode: null,
+        autoDraftReason: null,
+        blockedReason: null,
+      };
     }
 
     const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
 
     if (draft.status !== 'live' || draft.clockStatus !== 'running') {
-      return false;
+      return {
+        picked: false,
+        overallPick: draft.nextOverallPick,
+        teamCorrelationHash: null,
+        effectiveDraftingMode: null,
+        autoDraftReason: null,
+        blockedReason: null,
+      };
     }
 
     if (
@@ -2374,7 +2412,14 @@ async function makeOneServerAutomaticPick(
     const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
 
     if (!currentPick) {
-      return false;
+      return {
+        picked: false,
+        overallPick: draft.nextOverallPick,
+        teamCorrelationHash: null,
+        effectiveDraftingMode: null,
+        autoDraftReason: null,
+        blockedReason: null,
+      };
     }
 
     const currentOwnerId = resolveSafeFirestoreDocumentId(
@@ -2396,13 +2441,38 @@ async function makeOneServerAutomaticPick(
         ? (queueSnapshot.data() as Partial<DraftQueue>)
         : undefined,
     );
-    const clockExpired = isClockExpired(draft);
-    const autoReason: DraftAutoPickReason | null = reasonOverride ??
-      (queue.autoDraftEnabled ? 'manager-auto-mode' : clockExpired ? 'timer-expired' : null);
+    const pickStartedAt = asTimestampDate(draft.pickStartedAt);
+    const draftStartedAt = asTimestampDate(draft.startedAt);
+    const automaticAction = getDraftAutomaticActionDecision({
+      queue,
+      currentOverallPick: currentPick.overallPick,
+      currentOwnerId,
+      pickStartedAtMilliseconds: pickStartedAt?.getTime() ?? null,
+      draftStartedAtMilliseconds: draftStartedAt?.getTime() ?? null,
+      pickSeconds: normalizePickSeconds(
+        draft.currentPickSeconds ?? draft.pickSeconds,
+      ),
+      autoDraftStepDelayMilliseconds: AUTO_DRAFT_STEP_DELAY_MILLISECONDS,
+      nowMilliseconds: Date.now(),
+      expectation,
+    });
+    const teamCorrelationHash = buildDraftTeamCorrelationHash(
+      leagueId,
+      currentOwnerId,
+    );
 
-    if (!autoReason) {
-      return false;
+    if (!automaticAction.eligible || !automaticAction.autoPickReason) {
+      return {
+        picked: false,
+        overallPick: currentPick.overallPick,
+        teamCorrelationHash,
+        effectiveDraftingMode: automaticAction.effectiveMode,
+        autoDraftReason: null,
+        blockedReason: automaticAction.blockedReason,
+      };
     }
+
+    const autoReason = automaticAction.autoPickReason;
 
     const uniqueDraftOwners = [...new Set(draft.roundOneOrder)];
     const rosterOwners = uniqueDraftOwners
@@ -2443,7 +2513,7 @@ async function makeOneServerAutomaticPick(
 
     if (!selected) {
       throw new Error(
-        `No legal automatic draft candidate was available for ${currentOwnerId}.`,
+        `No legal automatic draft candidate was available for pick ${currentPick.overallPick}.`,
       );
     }
 
@@ -2459,18 +2529,10 @@ async function makeOneServerAutomaticPick(
       destination,
     );
 
-    let nextConsecutiveClockExpirations = queue.consecutiveClockExpirations;
-    let nextAutoDraftEnabled = queue.autoDraftEnabled;
-    let nextAutoDraftActivatedByTimeout = queue.autoDraftActivatedByTimeout;
-
-    if (autoReason === 'timer-expired') {
-      nextConsecutiveClockExpirations = Math.min(2, queue.consecutiveClockExpirations + 1);
-
-      if (nextConsecutiveClockExpirations >= 2) {
-        nextAutoDraftEnabled = true;
-        nextAutoDraftActivatedByTimeout = true;
-      }
-    }
+    const nextQueueState = getDraftQueueStateAfterAutomaticPick(
+      queue,
+      autoReason,
+    );
 
     const pickId = String(currentPick.overallPick).padStart(3, '0');
     const pickRef = db.doc(`leagues/${leagueId}/draft/current/picks/${pickId}`);
@@ -2516,9 +2578,9 @@ async function makeOneServerAutomaticPick(
       {
         ownerId: currentOwnerId,
         assetKeys: queue.assetKeys.filter((assetKey) => assetKey !== selected.asset.assetKey),
-        autoDraftEnabled: nextAutoDraftEnabled,
-        consecutiveClockExpirations: nextConsecutiveClockExpirations,
-        autoDraftActivatedByTimeout: nextAutoDraftActivatedByTimeout,
+        autoDraftEnabled: nextQueueState.autoDraftEnabled,
+        consecutiveClockExpirations: nextQueueState.consecutiveClockExpirations,
+        autoDraftActivatedByTimeout: nextQueueState.autoDraftActivatedByTimeout,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -2546,12 +2608,20 @@ async function makeOneServerAutomaticPick(
       { merge: true },
     );
 
-    return true;
+    return {
+      picked: true,
+      overallPick: currentPick.overallPick,
+      teamCorrelationHash,
+      effectiveDraftingMode: automaticAction.effectiveMode,
+      autoDraftReason: autoReason,
+      blockedReason: null,
+    };
   });
 }
 
 async function processLeagueDraftAutomation(
   leagueId: string,
+  expectation?: DraftAutomaticActionExpectation,
 ): Promise<DraftAutomationRunResult> {
   const normalizedLeagueId = resolveSafeFirestoreDocumentId(
     leagueId,
@@ -2728,8 +2798,39 @@ async function processLeagueDraftAutomation(
         ? (queueSnapshot.data() as Partial<DraftQueue>)
         : undefined,
     );
+    const pickStartedAt = asTimestampDate(draft.pickStartedAt);
+    const draftStartedAt = asTimestampDate(draft.startedAt);
+    const automaticAction = getDraftAutomaticActionDecision({
+      queue: currentQueue,
+      currentOverallPick: currentPick.overallPick,
+      currentOwnerId,
+      pickStartedAtMilliseconds: pickStartedAt?.getTime() ?? null,
+      draftStartedAtMilliseconds: draftStartedAt?.getTime() ?? null,
+      pickSeconds: normalizePickSeconds(
+        draft.currentPickSeconds ?? draft.pickSeconds,
+      ),
+      autoDraftStepDelayMilliseconds: AUTO_DRAFT_STEP_DELAY_MILLISECONDS,
+      nowMilliseconds: Date.now(),
+      expectation,
+    });
 
-    if (!currentQueue.autoDraftEnabled && !isClockExpired(draft)) {
+    if (
+      expectation &&
+      automaticAction.blockedReason &&
+      automaticAction.blockedReason !== 'before-deadline' &&
+      automaticAction.blockedReason !== 'missing-clock'
+    ) {
+      return {
+        leagueId,
+        status: 'skipped',
+        picksMade: 0,
+        message: `The deadline task no longer matches this live turn (${automaticAction.blockedReason}).`,
+        effectiveDraftingMode: automaticAction.effectiveMode,
+        teamCorrelationHash: buildDraftTeamCorrelationHash(leagueId, currentOwnerId),
+      };
+    }
+
+    if (!automaticAction.eligible) {
       const taskScheduled = await scheduleDraftClockTask(leagueId, draft);
 
       if (!taskScheduled) {
@@ -2761,9 +2862,21 @@ async function processLeagueDraftAutomation(
         projection.metadata.activeSnapshotId,
         projection.metadata.snapshotContentHash ?? '',
         projection.metadata.authoritySchemaVersion ?? 0,
+        expectation,
       ),
       `automatic pick for ${leagueId}`,
     );
+
+    logger.info('Server automatic Draft action evaluated.', {
+      leagueId,
+      draftDocumentId: 'current',
+      overallPick: picked.overallPick,
+      teamCorrelationHash: picked.teamCorrelationHash,
+      effectiveDraftingMode: picked.effectiveDraftingMode,
+      autoDraftReason: picked.autoDraftReason,
+      blockedReason: picked.blockedReason,
+      picked: picked.picked,
+    });
     const updatedDraftSnapshot = await draftRef.get();
 
     if (updatedDraftSnapshot.exists) {
@@ -2782,13 +2895,24 @@ async function processLeagueDraftAutomation(
 
     return {
       leagueId,
-      status: picked ? 'picked' : opened ? 'opened' : 'waiting',
-      picksMade: picked ? 1 : 0,
-      message: picked
+      status: picked.picked ? 'picked' : opened ? 'opened' : 'waiting',
+      picksMade: picked.picked ? 1 : 0,
+      message: picked.picked
         ? 'The server made one automatic draft pick and scheduled the next exact deadline.'
         : opened
           ? 'The draft opened and the first clock started.'
-          : 'The current manager is still within the pick clock.',
+          : picked.blockedReason
+            ? `The automatic action was not eligible (${picked.blockedReason}).`
+            : 'The current manager is still within the pick clock.',
+      ...(picked.autoDraftReason
+        ? { autoDraftReason: picked.autoDraftReason }
+        : {}),
+      ...(picked.effectiveDraftingMode
+        ? { effectiveDraftingMode: picked.effectiveDraftingMode }
+        : {}),
+      ...(picked.teamCorrelationHash
+        ? { teamCorrelationHash: picked.teamCorrelationHash }
+        : {}),
     };
   } catch (error: unknown) {
     const message = error instanceof Error
@@ -3186,13 +3310,24 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       payload?.leagueId,
       FIRESTORE_LEAGUE_ID_OPTIONS,
     );
+    const expectedOwnerId = payload?.expectedOwnerId === undefined
+      ? null
+      : resolveSafeFirestoreDocumentId(
+          payload.expectedOwnerId,
+          FIRESTORE_AUTH_USER_ID_OPTIONS,
+        );
 
     if (
       !payload ||
       !leagueId ||
+      (payload.expectedOwnerId !== undefined && !expectedOwnerId) ||
       !Number.isFinite(payload.expectedOverallPick) ||
       !Number.isFinite(payload.expectedPickStartedAtMilliseconds) ||
-      !Number.isFinite(payload.expectedDueAtMilliseconds)
+      !Number.isFinite(payload.expectedDueAtMilliseconds) ||
+      (
+        payload.expectedDraftStartedAtMilliseconds !== undefined &&
+        !Number.isFinite(payload.expectedDraftStartedAtMilliseconds)
+      )
     ) {
       console.warn('Ignored malformed draft clock task.', { payload });
       return;
@@ -3207,18 +3342,33 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
 
     const draft = normalizeDraft(draftSnapshot.data() as Partial<FantasyDraft>);
     const pickStartedAt = asTimestampDate(draft.pickStartedAt);
+    const draftStartedAt = asTimestampDate(draft.startedAt);
+    const currentPick = getDraftPickAtOverall(draft, draft.nextOverallPick);
 
     if (
       draft.status !== 'live' ||
       draft.clockStatus !== 'running' ||
       draft.nextOverallPick !== Math.trunc(payload.expectedOverallPick) ||
+      !currentPick ||
+      (expectedOwnerId !== null && currentPick.ownerId !== expectedOwnerId) ||
       !pickStartedAt ||
-      pickStartedAt.getTime() !== Math.trunc(payload.expectedPickStartedAtMilliseconds)
+      pickStartedAt.getTime() !== Math.trunc(payload.expectedPickStartedAtMilliseconds) ||
+      (
+        payload.expectedDraftStartedAtMilliseconds !== undefined &&
+        draftStartedAt?.getTime() !==
+          Math.trunc(payload.expectedDraftStartedAtMilliseconds)
+      )
     ) {
       console.info('Ignored stale draft clock task.', {
         leagueId: leagueId,
         expectedOverallPick: payload.expectedOverallPick,
         currentOverallPick: draft.nextOverallPick,
+        expectedTeamCorrelationHash: expectedOwnerId
+          ? buildDraftTeamCorrelationHash(leagueId, expectedOwnerId)
+          : null,
+        currentTeamCorrelationHash: currentPick
+          ? buildDraftTeamCorrelationHash(leagueId, currentPick.ownerId)
+          : null,
       });
       return;
     }
@@ -3239,14 +3389,26 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       refreshedSnapshot.data() as Partial<FantasyDraft>,
     );
     const refreshedPickStartedAt = asTimestampDate(refreshedDraft.pickStartedAt);
+    const refreshedDraftStartedAt = asTimestampDate(refreshedDraft.startedAt);
+    const refreshedCurrentPick = getDraftPickAtOverall(
+      refreshedDraft,
+      refreshedDraft.nextOverallPick,
+    );
 
     if (
       refreshedDraft.status !== 'live' ||
       refreshedDraft.clockStatus !== 'running' ||
       refreshedDraft.nextOverallPick !== Math.trunc(payload.expectedOverallPick) ||
+      !refreshedCurrentPick ||
+      (expectedOwnerId !== null && refreshedCurrentPick.ownerId !== expectedOwnerId) ||
       !refreshedPickStartedAt ||
       refreshedPickStartedAt.getTime() !==
-        Math.trunc(payload.expectedPickStartedAtMilliseconds)
+        Math.trunc(payload.expectedPickStartedAtMilliseconds) ||
+      (
+        payload.expectedDraftStartedAtMilliseconds !== undefined &&
+        refreshedDraftStartedAt?.getTime() !==
+          Math.trunc(payload.expectedDraftStartedAtMilliseconds)
+      )
     ) {
       return;
     }
@@ -3255,7 +3417,21 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       throw new Error('Draft clock task arrived before its exact deadline. Retrying shortly.');
     }
 
-    const result = await processLeagueDraftAutomation(leagueId);
+    const result = await processLeagueDraftAutomation(leagueId, {
+      expectedOverallPick: Math.trunc(payload.expectedOverallPick),
+      expectedOwnerId: expectedOwnerId ?? refreshedCurrentPick.ownerId,
+      expectedPickStartedAtMilliseconds: Math.trunc(
+        payload.expectedPickStartedAtMilliseconds,
+      ),
+      expectedDueAtMilliseconds: Math.trunc(payload.expectedDueAtMilliseconds),
+      ...(payload.expectedDraftStartedAtMilliseconds !== undefined
+        ? {
+            expectedDraftStartedAtMilliseconds: Math.trunc(
+              payload.expectedDraftStartedAtMilliseconds,
+            ),
+          }
+        : {}),
+    });
 
     if (result.status === 'error') {
       throw new Error(result.message);
@@ -3270,6 +3446,9 @@ export const processDraftClockDeadline = onTaskDispatched<DraftClockTaskPayload>
       expectedOverallPick: payload.expectedOverallPick,
       status: result.status,
       picksMade: result.picksMade,
+      teamCorrelationHash: result.teamCorrelationHash ?? null,
+      effectiveDraftingMode: result.effectiveDraftingMode ?? null,
+      autoDraftReason: result.autoDraftReason ?? null,
       message: result.message,
     });
   },

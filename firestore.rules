@@ -252,8 +252,9 @@ service cloud.firestore {
             (
               data.autoDraftActivatedByTimeout == false ||
               (
-                data.autoDraftEnabled == true &&
-                data.consecutiveClockExpirations == 2
+                data.consecutiveClockExpirations == 2 &&
+                resource.data.autoDraftActivatedByTimeout == true &&
+                resource.data.consecutiveClockExpirations == 2
               )
             )
           )

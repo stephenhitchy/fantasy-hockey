@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-23
+Last updated: 2026-09-28
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -122,7 +122,7 @@ must not automatically rewrite production scores.
 ## Current verified release posture
 
 - Production Hosting manifest: exact source
-  `cde86671f3691b702cebeb4ea2e7605154858d14`, Release Candidate 65,
+  `6aacd7df6d63ae523e334388ecbb8e60a967912a`, Release Candidate 65,
   Production Scoring V4, Projection V11.
 - Deployed Production Function inventory: 107 expected by the currently live
   source and 107 matched, with no missing,
@@ -151,6 +151,18 @@ must not automatically rewrite production scores.
 Inventory parity does not prove that every deployed Function revision contains
 the exact current Git source. Capture the D1J exact-source season-freeze record
 before authorizing a real Draft.
+
+FF1.40 and FF1.41 are clean-source implementation candidates layered after the
+live manifest and are not deployed. FF1.40 moves membership/order finalization
+to T-40 with schedule generations. FF1.41 proves that the recurring visible
+single Auto-Draft holdout is the snake position that reaches its second missed
+turn last, distinguishes explicit and missed-turn automatic picks, and carries
+session/pick/owner/start/deadline identity into the automatic-pick transaction
+so stale work cannot act on a later turn. Its narrow Draft queue Rule accepts
+the server's marker-only temporary mode, prevents a browser from activating
+that marker, and still lets its owner preserve or clear it. Read
+`docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md` and
+`docs/RINKRAT_FF1_41_AUTODRAFT_LIVENESS.md` before Draft release work.
 
 ## Current capacity posture
 

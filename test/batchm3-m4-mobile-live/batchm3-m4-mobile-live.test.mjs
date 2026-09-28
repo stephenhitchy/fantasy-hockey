@@ -209,6 +209,17 @@ test('auto-pick explanations distinguish queue selections from ranked legal fall
   );
   assert.equal(automatic?.tone, 'info');
   assert.match(automatic?.detail ?? '', /highest-ranked legal option/i);
+
+  const timeoutMode = getDraftAutoPickExplanation(
+    makePick({
+      overallPick: 20,
+      selectionType: 'automatic',
+      autoPickReason: 'timeout-auto-mode',
+    }),
+    'Timeout Fallback Wing',
+  );
+  assert.equal(timeoutMode?.tone, 'warning');
+  assert.match(timeoutMode?.title ?? '', /missed-turn auto-draft/i);
   assert.equal(
     getDraftAutoPickExplanation(
       makePick({ selectionType: 'manual', autoPickReason: null }),

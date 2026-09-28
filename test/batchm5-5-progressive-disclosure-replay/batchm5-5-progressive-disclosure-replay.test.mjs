@@ -247,6 +247,8 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/core/team/roster.models.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
+        // FF1.41 isolates effective Auto-Draft mode and exact-turn eligibility.
+        'src/draft-autodraft-state.util.ts',
         // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
         'src/draft-readiness.util.ts',
         // FF1.40 adds isolated Draft membership-cutoff and schedule-generation decisions.

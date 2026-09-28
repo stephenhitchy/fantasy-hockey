@@ -42,7 +42,7 @@
           <button
             type="button"
             class="auto-draft-toggle header-auto-draft-toggle rr-button rr-button--secondary"
-            [class.enabled]="myQueue().autoDraftEnabled"
+            [class.enabled]="myAutoDraftActive()"
             [class.forced-auto-draft]="myQueue().autoDraftActivatedByTimeout"
             (click)="toggleMyAutoDraft()"
             [disabled]="queueSaving() || !canUseDraftQueueActions()"
