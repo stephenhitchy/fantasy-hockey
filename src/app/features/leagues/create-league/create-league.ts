@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { auth } from '../../../core/firebase';
 import { createLeague } from '../../../core/league/league.service';
+import { queueSharedProjectionSnapshotGeneration } from '../../../core/projection/projection-snapshot.service';
 import { getUserProfile } from '../../../core/user/user.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { TeamIdentityChallengeService } from '../../../core/user/team-identity-challenge.service';
@@ -62,13 +63,26 @@ export class CreateLeague {
 
       const profile = await getUserProfile(user.uid);
       const username = profile?.username || user.email || 'Unknown User';
-      await createLeague(
+      const leagueId = await createLeague(
         this.name,
         this.maxTeams,
         username,
         this.selectedLogoId(),
         this.selectedPaletteId(),
       );
+
+      // Start the server-owned directory build while the commissioner is
+      // returning to the dashboard. Add / Drop retains its own recovery path,
+      // so a warm-up failure never turns successful league creation into an
+      // apparent failure.
+      void queueSharedProjectionSnapshotGeneration({
+        leagueId,
+        teamCount: this.maxTeams,
+        requiredGamesPerCycle: 6,
+        generationReason: 'player-directory',
+      }).catch((error: unknown) => {
+        console.warn('Unable to prewarm the new league player directory.', error);
+      });
       this.telemetry.track('league_created', { max_teams: this.maxTeams });
       void this.challengeService.refresh(user.uid, { force: true });
       await this.router.navigate(['/dashboard']);

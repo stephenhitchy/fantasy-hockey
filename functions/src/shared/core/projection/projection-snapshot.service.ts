@@ -1425,7 +1425,11 @@ async function generateSnapshotInternal(
 
   try {
     const localAssets = await loadDraftPlayerPool({
-      forceRefresh: true,
+      // Directory recovery may run for several new leagues close together.
+      // Reuse the NHL client's bounded 5-15 minute fact caches instead of
+      // deliberately evicting them for every league. Draft-opening reasons
+      // retain their strict fresh-input behavior below.
+      forceRefresh: generationReason !== 'player-directory',
       targetCycleNumber,
       requiredGamesPerCycle,
       availabilityByPlayerId: context.availabilityByPlayerId,

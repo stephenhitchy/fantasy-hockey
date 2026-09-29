@@ -104,6 +104,20 @@
         <p class="rr-notice rr-notice--danger" aria-live="assertive">{{ errorMessage() }}</p>
       }
 
+      @if (rosterReadError()) {
+        <div class="rr-notice rr-notice--danger" role="alert">
+          <p>{{ rosterReadError() }}</p>
+          <button
+            type="button"
+            class="rr-button rr-button--quiet"
+            [disabled]="rosterReadRecovering()"
+            (click)="retryRosterOwnership()"
+          >
+            {{ rosterReadRecovering() ? 'Reconnecting...' : 'Retry roster connection' }}
+          </button>
+        </div>
+      }
+
       <p class="rr-visually-hidden" role="status" aria-live="polite">
         {{ watchlistStatusMessage() }}
       </p>
@@ -190,10 +204,21 @@
         <strong>{{ filteredBoardRows().length }} results</strong>
       </div>
 
-      @if (playerPoolLoading() && boardRows().length === 0) {
+      @if (rosterReadError() && boardRows().length === 0) {
+        <div class="unified-player-state rr-state" role="status">
+          <strong>Player availability could not be verified.</strong>
+          <small>Use the roster connection retry above. No player is being shown as a free agent without ownership proof.</small>
+        </div>
+      } @else if ((playerPoolLoading() || !rosterOwnershipReady()) && boardRows().length === 0) {
         <div class="unified-player-state rr-state" role="status">
           <span class="rr-spinner" aria-hidden="true"></span>
-          <strong>{{ playerPoolPreparing() ? 'Preparing players automatically...' : 'Refreshing players...' }}</strong>
+          <strong>
+            @if (!rosterOwnershipReady()) {
+              {{ rosterReadRecovering() ? 'Reconnecting league rosters...' : 'Checking player availability...' }}
+            } @else {
+              {{ playerPoolPreparing() ? 'Preparing players automatically...' : 'Refreshing players...' }}
+            }
+          </strong>
           @if (playerPoolPreparing()) {
             <small>
               RinkRat is building the verified player directory for this league. You do not need

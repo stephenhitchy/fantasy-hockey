@@ -194,7 +194,10 @@ export class FreeAgents implements OnDestroy {
   league = signal<League | null>(null);
   draft = signal<FantasyDraft | null>(null);
   teams = signal<FantasyTeam[]>([]);
+  teamsLoaded = signal(false);
   rosters = signal<Record<string, FantasyRoster | null>>({});
+  rosterReadError = signal('');
+  rosterReadRecovering = signal(false);
   latestCycle = signal<FantasyCycle | null>(null);
   leagueCycles = signal<FantasyCycle[]>([]);
   myTeamWindowsByCycle = signal<Record<number, FantasyTeamCycleWindows | null>>({});
@@ -276,6 +279,8 @@ export class FreeAgents implements OnDestroy {
   private viewStateRestored = false;
   private focusPendingMovesRequested = false;
   private operationWatchGeneration = 0;
+  private rosterListenerRecoveryAttempted = false;
+  private destroyed = false;
 
   readonly playerDataRefreshing = computed(() => {
     const replay = this.historicalReplayControl();
@@ -312,6 +317,19 @@ export class FreeAgents implements OnDestroy {
   });
 
   readonly myRoster = computed(() => this.rosters()[this.userId] ?? null);
+
+  readonly rosterOwnershipReady = computed(() => {
+    const teams = this.teams();
+
+    if (!this.teamsLoaded() || teams.length === 0) {
+      return false;
+    }
+
+    const rosters = this.rosters();
+    return teams.every((team) =>
+      Object.prototype.hasOwnProperty.call(rosters, team.ownerId),
+    );
+  });
 
   readonly pendingRosterMoves = computed(() =>
     (this.myRoster()?.activeSlots ?? [])
@@ -415,13 +433,15 @@ export class FreeAgents implements OnDestroy {
   );
 
   readonly boardRows = computed<LeaguePlayerBoardRow[]>(() =>
-    buildLeaguePlayerBoardRows({
-      assets: this.playerPool(),
-      ownershipByAssetKey: this.boardOwnershipByAssetKey(),
-      waiverAssetKeys: this.activeWaiverAssetKeys(),
-      watchedAssetKeys: this.watchedAssetKeys(),
-      reservedAssetKeys: this.boardReservedAssetKeys(),
-    }),
+    this.rosterOwnershipReady()
+      ? buildLeaguePlayerBoardRows({
+          assets: this.playerPool(),
+          ownershipByAssetKey: this.boardOwnershipByAssetKey(),
+          waiverAssetKeys: this.activeWaiverAssetKeys(),
+          watchedAssetKeys: this.watchedAssetKeys(),
+          reservedAssetKeys: this.boardReservedAssetKeys(),
+        })
+      : [],
   );
 
   readonly boardRosterFitByAssetKey = computed(() =>
@@ -787,6 +807,7 @@ export class FreeAgents implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.operationWatchGeneration += 1;
     this.persistFreeAgentViewState();
     this.stopDraftListener?.();
@@ -929,10 +950,14 @@ export class FreeAgents implements OnDestroy {
 
       this.stopTeamsListener = listenToLeagueTeams(leagueId, (teams) => {
         this.teams.set(teams);
+        this.teamsLoaded.set(true);
         this.refreshRosterListeners(teams);
       });
 
-      await this.loadPlayerPool();
+      // The route shell and navigation do not depend on the full Projection
+      // V11 asset payload. Let them render after the league read while the
+      // directory loads (or is prepared) in the page's dedicated state.
+      void this.loadPlayerPool();
     } catch (error: unknown) {
       this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load free agents.');
     } finally {
@@ -993,6 +1018,18 @@ export class FreeAgents implements OnDestroy {
       this.playerPoolPreparing.set(false);
       this.playerPoolLoading.set(false);
     }
+  }
+
+  retryRosterOwnership(): void {
+    if (this.rosterReadRecovering()) {
+      return;
+    }
+
+    this.rosterListenerRecoveryAttempted = false;
+    this.rosterReadError.set('');
+    this.rosters.set({});
+    this.clearRosterListeners();
+    void this.recoverRosterListeners();
   }
 
   async loadWatchlist(): Promise<void> {
@@ -3915,8 +3952,80 @@ export class FreeAgents implements OnDestroy {
             this.focusPendingMovesAfterRender();
           }
         },
+        (error) => {
+          this.handleRosterListenerError(team.ownerId, error);
+        },
       );
     });
+  }
+
+  private handleRosterListenerError(ownerId: string, error: Error): void {
+    this.rosterListeners[ownerId]?.();
+    delete this.rosterListeners[ownerId];
+
+    const nextRosters = { ...this.rosters() };
+    delete nextRosters[ownerId];
+    this.rosters.set(nextRosters);
+
+    const code = (error as Error & { code?: string }).code ?? '';
+    const permissionDenied = code.includes('permission-denied');
+
+    if (permissionDenied && !this.rosterListenerRecoveryAttempted) {
+      void this.recoverRosterListeners();
+      return;
+    }
+
+    if (permissionDenied && this.rosterReadRecovering()) {
+      return;
+    }
+
+    this.rosterReadError.set(
+      permissionDenied
+        ? 'RinkRat could not verify league roster ownership with this sign-in session. Retry the connection before adding a player.'
+        : 'RinkRat could not finish loading league roster ownership. Retry before adding a player.',
+    );
+  }
+
+  private async recoverRosterListeners(): Promise<void> {
+    if (this.rosterReadRecovering() || this.destroyed) {
+      return;
+    }
+
+    this.rosterListenerRecoveryAttempted = true;
+    this.rosterReadRecovering.set(true);
+    this.rosterReadError.set('');
+
+    try {
+      const user = auth.currentUser;
+
+      if (!user || user.uid !== this.userId) {
+        throw new Error('The signed-in account changed while roster ownership was loading.');
+      }
+
+      // A page refresh can retain a stale Firebase credential. Refresh only
+      // after a denied roster read, then recreate the bounded listeners once.
+      await user.getIdToken(true);
+
+      if (this.destroyed || auth.currentUser?.uid !== this.userId) {
+        return;
+      }
+
+      this.clearRosterListeners();
+      this.rosters.set({});
+      this.refreshRosterListeners(this.teams());
+    } catch (error: unknown) {
+      if (!this.destroyed) {
+        this.rosterReadError.set(
+          error instanceof Error
+            ? error.message
+            : 'RinkRat could not reconnect league roster ownership.',
+        );
+      }
+    } finally {
+      if (!this.destroyed) {
+        this.rosterReadRecovering.set(false);
+      }
+    }
   }
 
   private clearRosterListeners(): void {

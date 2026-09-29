@@ -47,9 +47,16 @@ const snapshotReadCache = new Map<
   { loadedAt: number; value: SharedProjectionSnapshot | null }
 >();
 
+const activeSnapshotReadCache = new Map<
+  string,
+  { loadedAt: number; value: SharedProjectionSnapshot }
+>();
+
 const metadataReadInFlight = new Map<string, Promise<SharedProjectionSnapshotMetadata | null>>();
 
 const snapshotReadInFlight = new Map<string, Promise<SharedProjectionSnapshot | null>>();
+
+const activeSnapshotReadInFlight = new Map<string, Promise<SharedProjectionSnapshot>>();
 
 export type SharedProjectionSnapshotStatus = 'building' | 'ready' | 'error';
 
@@ -398,15 +405,53 @@ function loadProjectionSnapshotAtPointer(
   }
 
   const request = loadProjectionSnapshotMetadataAtPointer(leagueId, pointerId)
-    .then(async (metadata) => {
+    .then((metadata) => {
       if (!metadata || metadata.status !== 'ready') {
         return null;
       }
 
-      const assetSnapshot = await getDocs(
-        getProjectionSnapshotAssetsRef(leagueId, metadata.activeSnapshotId),
-      );
+      return loadProjectionSnapshotAssets(leagueId, metadata);
+    })
+    .then((value) => {
+      snapshotReadCache.set(cacheKey, {
+        loadedAt: Date.now(),
+        value,
+      });
 
+      return value;
+    })
+    .finally(() => {
+      snapshotReadInFlight.delete(cacheKey);
+    });
+
+  snapshotReadInFlight.set(cacheKey, request);
+  return request;
+}
+
+function loadProjectionSnapshotAssets(
+  leagueId: string,
+  metadata: SharedProjectionSnapshotMetadata,
+): Promise<SharedProjectionSnapshot> {
+  // Pointer reads and the live pointer listener can race during route startup.
+  // Snapshot IDs are immutable, so key the expensive chunk read by that stable
+  // identity and let every pointer share one in-flight request.
+  const cacheKey = getProjectionReadCacheKey(leagueId, metadata.activeSnapshotId);
+  const cached = activeSnapshotReadCache.get(cacheKey);
+
+  if (cached && isRecentRead(cached.loadedAt)) {
+    return Promise.resolve(cached.value);
+  }
+
+  const existingRequest = activeSnapshotReadInFlight.get(cacheKey);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = getDocs(
+    getProjectionSnapshotAssetsRef(leagueId, metadata.activeSnapshotId),
+  )
+    .then((assetSnapshot) => {
       const assets = assetSnapshot.docs
         .flatMap((assetDocument: { data: () => unknown }) => {
           const data = assetDocument.data() as {
@@ -428,13 +473,12 @@ function loadProjectionSnapshotAtPointer(
         );
       }
 
-      return {
+      const value = {
         metadata,
         assets,
       } satisfies SharedProjectionSnapshot;
-    })
-    .then((value) => {
-      snapshotReadCache.set(cacheKey, {
+
+      activeSnapshotReadCache.set(cacheKey, {
         loadedAt: Date.now(),
         value,
       });
@@ -442,10 +486,10 @@ function loadProjectionSnapshotAtPointer(
       return value;
     })
     .finally(() => {
-      snapshotReadInFlight.delete(cacheKey);
+      activeSnapshotReadInFlight.delete(cacheKey);
     });
 
-  snapshotReadInFlight.set(cacheKey, request);
+  activeSnapshotReadInFlight.set(cacheKey, request);
   return request;
 }
 
@@ -606,10 +650,7 @@ export function listenToSharedProjectionSnapshot(
       const generation = ++requestGeneration;
       invalidateSharedProjectionReadCache(normalizedLeagueId);
 
-      void loadSharedProjectionSnapshotById(
-        normalizedLeagueId,
-        metadata.activeSnapshotId,
-      )
+      void loadProjectionSnapshotAssets(normalizedLeagueId, metadata)
         .then((snapshot) => {
           if (generation === requestGeneration) {
             callback(snapshot);
