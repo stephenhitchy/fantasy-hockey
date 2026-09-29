@@ -1508,11 +1508,44 @@
               }
             </div>
 
-            <div class="ir-activation-cycle-note lineup-change-cycle-note">
-              The app checks only the two roster spots involved. If neither six-game count has
-              started, the swap applies now. Otherwise, it waits for the first future matchup where
-              both spots can change without counting already-played games.
-            </div>
+            <section
+              class="ir-activation-cycle-note lineup-swap-timing"
+              [class.lineup-swap-timing--ready]="benchSwapTimingMessage()?.tone === 'ready'"
+              [class.lineup-swap-timing--waiting]="benchSwapTimingMessage()?.tone === 'waiting'"
+              aria-live="polite"
+            >
+              @if (benchSwapTimingLoading()) {
+                <span class="rr-spinner" aria-hidden="true"></span>
+                <div>
+                  <small>Matchup timing</small>
+                  <strong>Checking both players...</strong>
+                  <p>RinkRat is finding the first matchup where this exact swap can happen fairly.</p>
+                </div>
+              } @else if (benchSwapTimingError()) {
+                <div>
+                  <small>Timing unavailable</small>
+                  <strong>RinkRat could not verify when this swap would happen.</strong>
+                  <p>{{ benchSwapTimingError() }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="rr-button rr-button--quiet lineup-swap-timing-retry"
+                  (click)="retryBenchSwapTiming()"
+                >
+                  Retry timing check
+                </button>
+              } @else if (benchSwapTimingMessage(); as timingMessage) {
+                <div class="lineup-swap-timing-matchup">
+                  <small>Swap timing</small>
+                  <strong>{{ timingMessage.matchupLabel }}</strong>
+                </div>
+                <div class="lineup-swap-timing-copy">
+                  <strong>{{ timingMessage.headline }}</strong>
+                  <p>{{ timingMessage.detail }}</p>
+                  <small>The server checks both roster spots again when you confirm.</small>
+                </div>
+              }
+            </section>
 
             <footer class="ir-activation-dialog-actions rr-dialog__actions">
               <button
@@ -1538,6 +1571,8 @@
                       ? getCompetitiveActionButtonBlockLabel()
                       : rosterMoveLoading()
                         ? 'Applying...'
+                        : benchSwapTimingLoading()
+                          ? 'Checking Matchup...'
                         : 'Confirm Swap'
                   }}</strong>
                 </span>

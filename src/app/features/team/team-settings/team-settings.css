@@ -3007,3 +3007,67 @@
     box-sizing: border-box;
   }
 }
+
+/* Exact, selection-specific timing shown before a lineup swap is confirmed. */
+.lineup-swap-timing {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border-left: 4px solid var(--rr-team-migration-color-05);
+}
+
+.lineup-swap-timing--ready {
+  border-left-color: var(--rr-team-migration-color-06);
+}
+
+.lineup-swap-timing--waiting {
+  border-left-color: var(--rr-team-migration-color-05);
+}
+
+.lineup-swap-timing > div,
+.lineup-swap-timing-copy {
+  min-width: 0;
+}
+
+.lineup-swap-timing strong,
+.lineup-swap-timing p {
+  display: block;
+}
+
+.lineup-swap-timing strong {
+  margin-top: 3px;
+  overflow-wrap: break-word;
+  color: var(--rr-team-migration-color-02);
+}
+
+.lineup-swap-timing p {
+  margin: 6px 0 0;
+}
+
+.lineup-swap-timing-matchup {
+  min-width: 88px;
+  text-align: center;
+}
+
+.lineup-swap-timing-copy > small:last-child {
+  display: block;
+  margin-top: 8px;
+}
+
+.lineup-swap-timing-retry {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 44px;
+}
+
+@media (max-width: 480px) {
+  .lineup-swap-timing {
+    grid-template-columns: 1fr;
+  }
+
+  .lineup-swap-timing-matchup {
+    min-width: 0;
+    text-align: left;
+  }
+}

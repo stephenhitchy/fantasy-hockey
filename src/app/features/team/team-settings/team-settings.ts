@@ -45,6 +45,8 @@ import {
   queueActiveBenchSwap,
   type RosterDropSource,
 } from '../../../core/draft/draft.service';
+import { previewActiveBenchSwapTiming } from '../../../core/transactions/active-bench-swap-timing.service';
+import type { ActiveBenchSwapTimingPreview } from '../../../core/transactions/active-bench-swap-timing.util';
 
 import { loadDraftPlayerPool } from '../../../core/draft/draft-player-pool.service';
 
@@ -111,6 +113,10 @@ import {
   type RosterRemovalExpectation,
   type RosterRemovalObservation,
 } from './roster-operation-confirmation.util';
+import {
+  buildActiveBenchSwapTimingMessage,
+  type ActiveBenchSwapTimingMessage,
+} from './active-bench-swap-timing.util';
 
 import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
 
@@ -195,6 +201,9 @@ export class TeamSettings implements OnDestroy {
   benchSwapSlotId = signal('');
   benchSwapTargetSlotId = signal('');
   benchSwapRestrictedTargetSlotId = signal('');
+  benchSwapTimingPreview = signal<ActiveBenchSwapTimingPreview | null>(null);
+  benchSwapTimingLoading = signal(false);
+  benchSwapTimingError = signal('');
   activeBenchPickerSlotId = signal('');
   rosterDropSource = signal<RosterDropSource | null>(null);
   rosterDropSlotId = signal('');
@@ -219,6 +228,7 @@ export class TeamSettings implements OnDestroy {
   private stopCurrentNavigationMatchupListener: (() => void) | null = null;
   private stopSharedScoringListener: (() => void) | null = null;
   private rosterOperationGeneration = 0;
+  private benchSwapTimingGeneration = 0;
   private benchSwapReopenBlockedUntil = 0;
   private loadGeneration = 0;
   private readonly routeSubscription: Subscription;
@@ -314,6 +324,24 @@ export class TeamSettings implements OnDestroy {
   readonly activeBenchPickerOpen = computed(() =>
     Boolean(this.activeBenchPickerSlotId()),
   );
+
+  readonly benchSwapTimingMessage = computed((): ActiveBenchSwapTimingMessage | null => {
+    const preview = this.benchSwapTimingPreview();
+    const benchAsset = this.getPendingBenchSwapSlot()?.asset ?? null;
+    const activeAsset = this.getBenchSwapTargetSlots().find(
+      (slot) => slot.slotId === this.benchSwapTargetSlotId(),
+    )?.asset ?? null;
+
+    if (!preview || !benchAsset) {
+      return null;
+    }
+
+    return buildActiveBenchSwapTimingMessage(
+      preview,
+      activeAsset ? this.getRosterAssetName(activeAsset) : null,
+      this.getRosterAssetName(benchAsset),
+    );
+  });
 
   readonly rosterManagerAsset = computed(() => {
     const area = this.rosterManagerArea();
@@ -1779,6 +1807,7 @@ export class TeamSettings implements OnDestroy {
     const preferredTarget = targets.find((slot) => slot.slotId === preferredActiveSlotId);
     this.benchSwapRestrictedTargetSlotId.set(preferredTarget?.slotId ?? '');
     this.benchSwapTargetSlotId.set(preferredTarget?.slotId ?? targets[0].slotId);
+    void this.refreshBenchSwapTimingPreview();
   }
 
   cancelBenchSwap(): void {
@@ -1790,9 +1819,13 @@ export class TeamSettings implements OnDestroy {
   }
 
   private clearBenchSwapDialogState(): void {
+    this.benchSwapTimingGeneration += 1;
     this.benchSwapSlotId.set('');
     this.benchSwapTargetSlotId.set('');
     this.benchSwapRestrictedTargetSlotId.set('');
+    this.benchSwapTimingPreview.set(null);
+    this.benchSwapTimingLoading.set(false);
+    this.benchSwapTimingError.set('');
     this.scheduleViewportOverlayRepair();
   }
 
@@ -1841,6 +1874,61 @@ export class TeamSettings implements OnDestroy {
   selectBenchSwapTarget(slotId: string): void {
     if (this.getBenchSwapTargetSlots().some((slot) => slot.slotId === slotId)) {
       this.benchSwapTargetSlotId.set(slotId);
+      void this.refreshBenchSwapTimingPreview();
+    }
+  }
+
+  retryBenchSwapTiming(): void {
+    void this.refreshBenchSwapTimingPreview();
+  }
+
+  private async refreshBenchSwapTimingPreview(): Promise<void> {
+    const benchSlot = this.getPendingBenchSwapSlot();
+    const targetSlot = this.getBenchSwapTargetSlots().find(
+      (slot) => slot.slotId === this.benchSwapTargetSlotId(),
+    );
+
+    if (!benchSlot?.asset || !targetSlot || !this.userId) {
+      return;
+    }
+
+    const generation = ++this.benchSwapTimingGeneration;
+    const benchSlotId = benchSlot.slotId;
+    const activeSlotId = targetSlot.slotId;
+    this.benchSwapTimingPreview.set(null);
+    this.benchSwapTimingError.set('');
+    this.benchSwapTimingLoading.set(true);
+
+    try {
+      const preview = await previewActiveBenchSwapTiming({
+        leagueId: this.leagueId,
+        ownerId: this.userId,
+        activeSlot: targetSlot,
+        benchAsset: benchSlot.asset,
+        requiredGamesPerCycle:
+          this.league()?.scoringRules?.requiredGamesPerCycle ??
+          defaultScoringRules.requiredGamesPerCycle,
+      });
+
+      if (
+        generation === this.benchSwapTimingGeneration &&
+        this.benchSwapSlotId() === benchSlotId &&
+        this.benchSwapTargetSlotId() === activeSlotId
+      ) {
+        this.benchSwapTimingPreview.set(preview);
+      }
+    } catch (error: unknown) {
+      if (generation === this.benchSwapTimingGeneration) {
+        this.benchSwapTimingError.set(
+          error instanceof Error
+            ? error.message
+            : 'RinkRat could not verify the matchup timing for this swap.',
+        );
+      }
+    } finally {
+      if (generation === this.benchSwapTimingGeneration) {
+        this.benchSwapTimingLoading.set(false);
+      }
     }
   }
 
@@ -1849,6 +1937,8 @@ export class TeamSettings implements OnDestroy {
       this.isOwnTeam() &&
       this.getPendingBenchSwapSlot()?.asset &&
       this.getBenchSwapTargetSlots().some((slot) => slot.slotId === this.benchSwapTargetSlotId()) &&
+      this.benchSwapTimingPreview() &&
+      !this.benchSwapTimingLoading() &&
       this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading(),
     );
@@ -1869,6 +1959,13 @@ export class TeamSettings implements OnDestroy {
 
     if (!benchSlot?.asset || !targetSlot) {
       this.rosterMoveError.set('Choose a valid bench player or goalie unit and an active slot.');
+      return;
+    }
+
+    if (!this.benchSwapTimingPreview()) {
+      this.benchSwapTimingError.set(
+        'RinkRat must verify the exact matchup timing before this swap can be confirmed.',
+      );
       return;
     }
 
