@@ -8,6 +8,10 @@ import {
 } from '../../../core/scoring/scoring-engine';
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 import {
+  buildNhlSkaterGameScoringFacts,
+  type NhlGameFantasyPointPhase,
+} from '../../../core/scoring/nhl-game-fantasy-points.util';
+import {
   getMockPlayerDetail,
   MockPlayerDetail
 } from '../../../core/player/mock-player-data';
@@ -45,6 +49,8 @@ interface NhlSingleGamePlayerDisplay {
   gameStatus: string;
   stats: Array<{ label: string; value: string }>;
   isGoalie: boolean;
+  fantasyBreakdown: GamePointBreakdown | null;
+  fantasyPointPhase: NhlGameFantasyPointPhase | null;
 }
 
 @Component({
@@ -98,6 +104,14 @@ export class PlayerDetail implements OnDestroy {
     if (event.currentTarget instanceof HTMLImageElement) {
       event.currentTarget.hidden = true;
     }
+  }
+
+  formatFantasyPoints(value: number): string {
+    return value.toFixed(1);
+  }
+
+  formatFantasyPointLine(value: number): string {
+    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
   }
 
   private createGameBreakdowns(
@@ -211,6 +225,9 @@ export class PlayerDetail implements OnDestroy {
       .join(' ') || player.name.default;
     const away = boxscore.awayTeam?.abbrev ?? 'Away';
     const home = boxscore.homeTeam?.abbrev ?? 'Home';
+    const fantasyFacts = skater
+      ? buildNhlSkaterGameScoringFacts(skater, boxscore, playByPlay)
+      : null;
 
     return {
       playerId,
@@ -227,6 +244,10 @@ export class PlayerDetail implements OnDestroy {
         ? this.getSkaterStats(skater)
         : this.getGoalieStats(goalie as NhlGoalieBoxscoreLine),
       isGoalie: Boolean(goalie),
+      fantasyBreakdown: fantasyFacts
+        ? calculateSkaterGameBreakdown(fantasyFacts.stats, defaultScoringRules)
+        : null,
+      fantasyPointPhase: fantasyFacts?.phase ?? null,
     };
   }
 

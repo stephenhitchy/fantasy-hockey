@@ -314,6 +314,10 @@
         </div>
       </header>
 
+      <p class="nhl-game-section-note nhl-boxscore-fantasy-note">
+        RinkRat FP applies the current Scoring V4 rules to this NHL game only. It does not confirm that the game counted in a fantasy lineup.
+      </p>
+
       @if (!selectedTeamStats()) {
         <div class="nhl-game-empty">
           {{ game.gameState === 'FUT' || game.gameState === 'PRE' ? 'Player box scores will appear after puck drop.' : 'Player box scores are unavailable for this game.' }}
@@ -348,6 +352,32 @@
                     <small>{{ selectedTeam()?.abbrev }} · {{ player.position }} · #{{ player.sweaterNumber ?? '—' }}</small>
                   </span>
                 </a>
+                @if (getSkaterFantasyPoints(player.playerId); as fantasyPoints) {
+                  <div
+                    class="nhl-player-fantasy-score"
+                    [class.nhl-player-fantasy-score--live]="fantasyPoints.phase === 'live'"
+                    [attr.aria-label]="
+                      getPlayerName(player) +
+                      ' has ' +
+                      formatFantasyPoints(fantasyPoints.breakdown.total) +
+                      (fantasyPoints.phase === 'live' ? ' provisional' : '') +
+                      ' RinkRat fantasy points in this game'
+                    "
+                  >
+                    <span>RinkRat FP</span>
+                    <strong>{{ formatFantasyPoints(fantasyPoints.breakdown.total) }}</strong>
+                    <small>{{ fantasyPoints.phase === 'live' ? 'Live estimate' : 'Game total' }}</small>
+                  </div>
+                } @else {
+                  <div
+                    class="nhl-player-fantasy-score nhl-player-fantasy-score--unavailable"
+                    [attr.aria-label]="getPlayerName(player) + ' RinkRat fantasy points are awaiting complete NHL game data'"
+                  >
+                    <span>RinkRat FP</span>
+                    <strong>—</strong>
+                    <small>Awaiting data</small>
+                  </div>
+                }
                 <dl class="nhl-player-stats">
                   <div><dt>G</dt><dd>{{ player.goals }}</dd></div>
                   <div><dt>A</dt><dd>{{ player.assists }}</dd></div>
@@ -371,7 +401,7 @@
           <h3>Goalies <small>Individual NHL goalies, not RinkRat team-goalie units</small></h3>
           <div class="nhl-player-list">
             @for (player of selectedGoalies(); track player.playerId) {
-              <article class="nhl-player-line">
+              <article class="nhl-player-line nhl-player-line--goalie">
                 <a
                   class="nhl-player-identity"
                   [routerLink]="['/players', player.playerId]"

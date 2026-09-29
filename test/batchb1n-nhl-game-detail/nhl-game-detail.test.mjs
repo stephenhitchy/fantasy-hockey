@@ -407,7 +407,8 @@ test('Batch B1N NHL game detail source contracts', async (suite) => {
     assert.match(template, /NHL single-game statistics only/);
     assert.match(template, /\['\/players', player\.playerId\]/);
     assert.match(template, /\[queryParams\]="\{ nhlGameId: gameId\(\) \}"/);
-    assert.doesNotMatch(component, /scoring-engine|six-game|projection/i);
+    assert.match(component, /calculateSkaterGameBreakdown/);
+    assert.doesNotMatch(component, /six-game|projection/i);
   });
 
   await suite.test('resolves real NHL player links to an exact-game detail instead of the demo dead end', () => {
@@ -416,7 +417,7 @@ test('Batch B1N NHL game detail source contracts', async (suite) => {
     assert.match(playerDetailComponent, /findSkaterBoxscoreLine\(boxscore, playerId\)/);
     assert.match(playerDetailComponent, /findGoalieBoxscoreLine\(boxscore, playerId\)/);
     assert.match(playerDetailTemplate, /NHL single-game player detail/);
-    assert.match(playerDetailTemplate, /NHL box-score statistics only/);
+    assert.match(playerDetailTemplate, /RinkRat FP is a single-game Scoring V4 calculation/);
     assert.match(playerDetailTemplate, /Return to game details/);
   });
 

@@ -63,6 +63,41 @@
         <strong>{{ player.gameStatus }}</strong>
       </header>
 
+      @if (player.fantasyBreakdown; as fantasyBreakdown) {
+        <section
+          class="nhl-player-fantasy-summary"
+          [class.nhl-player-fantasy-summary--live]="player.fantasyPointPhase === 'live'"
+          aria-labelledby="nhl-player-fantasy-title"
+        >
+          <div class="nhl-player-fantasy-total">
+            <span id="nhl-player-fantasy-title">RinkRat game fantasy points</span>
+            <strong>{{ formatFantasyPoints(fantasyBreakdown.total) }}</strong>
+            <small>
+              Scoring V4 · {{ player.fantasyPointPhase === 'live' ? 'Live estimate' : 'Game total' }}
+            </small>
+          </div>
+
+          <details class="nhl-player-fantasy-breakdown">
+            <summary>View scoring breakdown</summary>
+            <div>
+              @for (line of fantasyBreakdown.lines; track line.label) {
+                <p>
+                  <span>{{ line.label }}</span>
+                  <strong>{{ formatFantasyPointLine(line.points) }}</strong>
+                </p>
+              } @empty {
+                <p><span>No scoring categories recorded.</span><strong>0.0</strong></p>
+              }
+            </div>
+          </details>
+        </section>
+      } @else if (!player.isGoalie) {
+        <div class="nhl-player-fantasy-unavailable" role="status">
+          <strong>RinkRat game fantasy points are still unavailable.</strong>
+          <span>The NHL feeds have not supplied a complete matching scoring line yet.</span>
+        </div>
+      }
+
       <dl class="nhl-player-game-stats">
         @for (stat of player.stats; track stat.label) {
           <div>
@@ -72,9 +107,15 @@
         }
       </dl>
 
-      <p>
-        NHL box-score statistics only. This does not indicate whether the performance counted in a fantasy lineup.
-      </p>
+      @if (player.isGoalie) {
+        <p>
+          RinkRat scores the NHL club’s combined team-goalie unit, not an individual goalie. The statistics above are the individual NHL line only.
+        </p>
+      } @else {
+        <p>
+          RinkRat FP is a single-game Scoring V4 calculation. It does not indicate whether this performance counted in a fantasy lineup or six-game window.
+        </p>
+      }
 
       <a class="rr-button rr-button--secondary" [routerLink]="['/nhl', 'games', player.gameId]">
         Return to game details

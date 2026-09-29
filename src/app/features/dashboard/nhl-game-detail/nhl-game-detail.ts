@@ -12,6 +12,12 @@ import {
   getGamePlayByPlay,
 } from '../../../core/nhl/nhl-api.service';
 import {
+  calculateSkaterGameBreakdown,
+  type GamePointBreakdown,
+} from '../../../core/scoring/scoring-engine';
+import { buildNhlSkaterGameScoringFacts } from '../../../core/scoring/nhl-game-fantasy-points.util';
+import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
+import {
   buildNhlGamePeriodScores,
   buildNhlGameScoringEvents,
   buildNhlGameTeamComparison,
@@ -27,6 +33,11 @@ import {
 } from './nhl-game-detail.util';
 
 type TeamSide = 'awayTeam' | 'homeTeam';
+
+interface NhlSkaterFantasyPointView {
+  breakdown: GamePointBreakdown;
+  phase: 'live' | 'final';
+}
 
 @Component({
   selector: 'app-nhl-game-detail',
@@ -78,6 +89,34 @@ export class NhlGameDetail implements OnDestroy {
     return [...(team?.forwards ?? []), ...(team?.defense ?? [])];
   });
   readonly selectedGoalies = computed(() => this.selectedTeamStats()?.goalies ?? []);
+  readonly skaterFantasyPointsByPlayerId = computed(() => {
+    const boxscore = this.boxscore();
+    const playByPlay = this.playByPlay();
+    const views = new Map<number, NhlSkaterFantasyPointView>();
+
+    if (!boxscore) {
+      return views;
+    }
+
+    for (const side of ['awayTeam', 'homeTeam'] as const) {
+      const team = boxscore.playerByGameStats?.[side];
+
+      for (const player of [...(team?.forwards ?? []), ...(team?.defense ?? [])]) {
+        const facts = buildNhlSkaterGameScoringFacts(player, boxscore, playByPlay);
+
+        if (!facts) {
+          continue;
+        }
+
+        views.set(player.playerId, {
+          breakdown: calculateSkaterGameBreakdown(facts.stats, defaultScoringRules),
+          phase: facts.phase,
+        });
+      }
+    }
+
+    return views;
+  });
   readonly hasAnyData = computed(() => Boolean(this.boxscore() || this.playByPlay()));
   readonly hasCompleteFailure = computed(() =>
     !this.loading() && !this.hasAnyData() && Boolean(this.boxscoreError() && this.playByPlayError()),
@@ -192,6 +231,14 @@ export class NhlGameDetail implements OnDestroy {
 
   getPenaltyMinutes(player: NhlSkaterBoxscoreLine | NhlGoalieBoxscoreLine): string {
     return typeof player.pim === 'number' ? String(player.pim) : '—';
+  }
+
+  getSkaterFantasyPoints(playerId: number): NhlSkaterFantasyPointView | null {
+    return this.skaterFantasyPointsByPlayerId().get(playerId) ?? null;
+  }
+
+  formatFantasyPoints(value: number): string {
+    return value.toFixed(1);
   }
 
   hideBrokenImage(event: Event): void {

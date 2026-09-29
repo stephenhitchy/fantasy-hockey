@@ -655,15 +655,23 @@
   gap: 8px;
 }
 
+.nhl-boxscore-fantasy-note {
+  max-width: 760px;
+}
+
 .nhl-player-line {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(210px, 0.75fr) minmax(420px, 1.25fr);
+  grid-template-columns: minmax(190px, 0.7fr) 92px minmax(420px, 1.3fr);
   align-items: center;
   gap: 12px;
   padding: 9px;
   border: 1px solid var(--border-soft);
   background: var(--surface-2);
+}
+
+.nhl-player-line--goalie {
+  grid-template-columns: minmax(210px, 0.75fr) minmax(420px, 1.25fr);
 }
 
 .nhl-player-identity {
@@ -706,6 +714,48 @@
 .nhl-player-identity:focus-visible {
   outline: 2px solid var(--user-team-accent);
   outline-offset: 3px;
+}
+
+.nhl-player-fantasy-score {
+  display: grid;
+  min-width: 0;
+  min-height: 62px;
+  place-content: center;
+  gap: 2px;
+  padding: 6px;
+  border: 2px solid var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-accent) 11%, var(--surface-1));
+  text-align: center;
+}
+
+.nhl-player-fantasy-score span,
+.nhl-player-fantasy-score small {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.nhl-player-fantasy-score strong {
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.nhl-player-fantasy-score--live {
+  border-color: var(--rr-color-success, #6de7a7);
+}
+
+.nhl-player-fantasy-score--unavailable {
+  border-color: var(--border-soft);
+  background: var(--surface-1);
+}
+
+.nhl-player-fantasy-score--unavailable strong {
+  color: var(--text-muted);
 }
 
 .nhl-player-stats {
@@ -753,7 +803,15 @@
   }
 
   .nhl-player-line {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+
+  .nhl-player-line--goalie {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nhl-player-stats {
+    grid-column: 1 / -1;
   }
 
   .nhl-player-stats div:first-child {

@@ -46,8 +46,9 @@ manpower code proves (power play, shorthanded, or empty net).
 The current provider response does not supply official game stars or reliable
 power-play opportunity totals. The UI therefore says **Statistical leaders —
 Not official NHL stars**, uses a deterministic game-only ordering, and shows
-power-play goals without inventing opportunity counts. Six-game bonuses,
-cycle totals, and fantasy-point estimates are intentionally absent.
+power-play goals without inventing opportunity counts. Six-game bonuses and
+cycle totals remain absent. Batch B1R later adds a clearly labeled read-only
+Scoring V4 exact-game skater calculation without changing that boundary.
 
 ## Player links
 
@@ -55,8 +56,9 @@ Goal scorers, assists, leaders, skaters, and individual goalies link through
 the existing `/players/:playerId` route with the exact NHL game id. The legacy
 demo-player behavior remains intact for its fixture ids. For a real NHL player,
 the route now resolves that exact game's approved box-score and play-by-play
-data and shows a raw single-game stat card. It does not present an individual
-NHL goalie as a RinkRat team-goalie unit.
+data and shows a raw single-game stat card. Batch B1R also shows the skater's
+exact-game RinkRat calculation and category breakdown. It does not present an
+individual NHL goalie as a RinkRat team-goalie unit.
 
 ## Verification
 
