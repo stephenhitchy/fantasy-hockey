@@ -287,7 +287,7 @@ export class Dashboard {
 
   getBriefingLeagueLogoPath(item: ManagerBriefingItem): string {
     const league = this.leagueSummaries().find((entry) => entry.leagueId === item.leagueId);
-    return league ? this.getLeagueLogoPath(league) : '/assets/branding/rinkrat-headshot.png';
+    return league ? this.getLeagueLogoPath(league) : '/assets/branding/rinkrat-colored-mascot-512.png';
   }
 
   openLeagueHqFromCard(event: MouseEvent, leagueId: string): void {

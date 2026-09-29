@@ -116,7 +116,7 @@ const RINKRAT_NEUTRAL_PALETTE: PixelTeamPalette = {
   primaryColor: '#26384C',
   secondaryColor: '#D6E2EE',
   tertiaryColor: '#C94F5D',
-  logoUrl: '/assets/branding/rinkrat-headshot.png',
+  logoUrl: '/assets/branding/rinkrat-colored-mascot-512.png',
 };
 
 const NHL_TEAM_PALETTES: PixelTeamPalette[] = [

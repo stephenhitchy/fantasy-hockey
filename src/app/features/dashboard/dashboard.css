@@ -711,8 +711,7 @@
   width: 62px;
   height: 62px;
   object-fit: contain;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: auto;
 }
 
 .training-camp-banner-copy h2 {

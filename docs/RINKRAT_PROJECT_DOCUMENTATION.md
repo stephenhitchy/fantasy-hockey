@@ -4007,7 +4007,7 @@ Mobile performance is a priority. Avoid adding high-frequency listeners or repea
 
 BRANDING AND UI
 ---------------
-The site uses a pixel-art hockey theme with the masked RinkRat mascot and a clearer pixel jersey icon. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
+The site uses a pixel-inspired hockey theme with the approved colored masked-rat mascot, horizontal RinkRat Fantasy Hockey lockup, and minimalist small-icon mark. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
 
 Favorite NHL team colors are identity accents rather than whole-page backgrounds. The app uses a neutral readable canvas and chooses black/white foregrounds based on contrast.
 
@@ -8253,7 +8253,7 @@ Mobile performance is a priority. Avoid adding high-frequency listeners or repea
 
 BRANDING AND UI
 ---------------
-The site uses a pixel-art hockey theme with the masked RinkRat mascot and a clearer pixel jersey icon. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
+The site uses a pixel-inspired hockey theme with the approved colored masked-rat mascot, horizontal RinkRat Fantasy Hockey lockup, and minimalist small-icon mark. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
 
 Favorite NHL team colors are identity accents rather than whole-page backgrounds. The app uses a neutral readable canvas and chooses black/white foregrounds based on contrast.
 
@@ -8908,7 +8908,7 @@ Mobile performance is a priority. Avoid adding high-frequency listeners or repea
 
 BRANDING AND UI
 ---------------
-The site uses a pixel-art hockey theme with the masked RinkRat mascot and a clearer pixel jersey icon. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
+The site uses a pixel-inspired hockey theme with the approved colored masked-rat mascot, horizontal RinkRat Fantasy Hockey lockup, and minimalist small-icon mark. Primary site branding assets are under public/assets/branding and public/assets/pixel-icons.
 
 Favorite NHL team colors are identity accents rather than whole-page backgrounds. The app uses a neutral readable canvas and chooses black/white foregrounds based on contrast.
 

@@ -1,5 +1,5 @@
 /* RinkRat Mobile Batch N1B — installable shell plus saved read-only matchup access. */
-const RINKRAT_CACHE_VERSION = 'rc55-v1';
+const RINKRAT_CACHE_VERSION = 'rc65-brand-v1';
 const RINKRAT_CACHE_PREFIX = 'rinkrat-pwa-';
 const SHELL_CACHE = `${RINKRAT_CACHE_PREFIX}shell-${RINKRAT_CACHE_VERSION}`;
 const ASSET_CACHE = `${RINKRAT_CACHE_PREFIX}assets-${RINKRAT_CACHE_VERSION}`;
@@ -13,8 +13,8 @@ const APP_SHELL_URLS = [
   '/apple-touch-icon.png',
   '/android-chrome-192x192.png',
   '/android-chrome-512x512.png',
-  '/assets/branding/rinkrat-headshot.png',
-  '/assets/branding/rinkrat-mascot-full.png',
+  '/assets/branding/rinkrat-colored-mascot-512.png',
+  '/assets/branding/rinkrat-full-logo-1024.png',
 ];
 
 const NETWORK_ONLY_PATHS = [

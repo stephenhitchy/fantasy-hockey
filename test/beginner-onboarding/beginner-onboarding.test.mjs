@@ -69,7 +69,7 @@ test('Batch M2 neutral RinkRat identity behavior', async (suite) => {
     assert.equal(theme.getPixelTeamTheme('UNKNOWN').abbreviation, 'RR');
     assert.equal(
       theme.getNhlLogoUrl('RR'),
-      '/assets/branding/rinkrat-headshot.png',
+      '/assets/branding/rinkrat-colored-mascot-512.png',
     );
   });
 

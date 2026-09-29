@@ -98,9 +98,9 @@ app-team-settings .team-hero-card::after {
   bottom: -1px;
   width: 88px;
   height: 88px;
-  background: url('/assets/branding/rinkrat-mascot-crop.png') center / contain no-repeat;
+  background: url('/assets/branding/rinkrat-colored-mascot-512.png') center / contain no-repeat;
   opacity: 0.14;
-  image-rendering: pixelated;
+  image-rendering: auto;
   pointer-events: none;
 }
 
@@ -464,9 +464,9 @@ app-free-agents .free-agent-hero::after {
   bottom: -6px;
   width: 94px;
   height: 94px;
-  background: url('/assets/branding/rinkrat-headshot.png') center / contain no-repeat;
+  background: url('/assets/branding/rinkrat-colored-mascot-512.png') center / contain no-repeat;
   opacity: .16;
-  image-rendering: pixelated;
+  image-rendering: auto;
   pointer-events: none;
 }
 
@@ -1174,13 +1174,13 @@ app-playoff-bracket .champion-card::after {
   padding: 112px 20px 24px !important;
   border: 3px solid var(--border-strong);
   background:
-    url('/assets/branding/rinkrat-mascot-crop.png') center 18px / 78px 78px no-repeat,
+    url('/assets/branding/rinkrat-colored-mascot-512.png') center 18px / 78px 78px no-repeat,
     linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 94%, transparent), var(--surface-1));
   box-shadow: var(--rr-phase3-shadow);
   color: var(--text-primary) !important;
   font-family: var(--rr-font-display);
   text-align: center;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 
 .page-loading::before {
@@ -1246,9 +1246,9 @@ app-playoff-bracket .champion-card::after {
   bottom: 8px;
   width: 68px;
   height: 68px;
-  background: url('/assets/branding/rinkrat-headshot.png') center / contain no-repeat;
+  background: url('/assets/branding/rinkrat-colored-mascot-512.png') center / contain no-repeat;
   opacity: .23;
-  image-rendering: pixelated;
+  image-rendering: auto;
   pointer-events: none;
 }
 

@@ -58,8 +58,7 @@
 .completion-mascot img,
 .coach-avatar img {
   object-fit: contain;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: auto;
 }
 
 .training-camp-brand img {

@@ -822,18 +822,20 @@
 }
 
 .auth-brand-lockup {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 10px;
+  width: min(100%, 410px);
+  min-height: 104px;
 }
 
-.auth-brand-mark {
-  width: 42px;
-  height: 42px;
-  border: 2px solid var(--user-team-accent);
-  background: var(--surface-2);
-  object-fit: cover;
-  image-rendering: pixelated;
+.auth-brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1024 / 364;
+  object-fit: contain;
+  object-position: left center;
+  image-rendering: auto;
 }
 
 

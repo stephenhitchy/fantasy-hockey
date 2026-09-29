@@ -30,7 +30,7 @@
   width: 54px;
   height: 54px;
   object-fit: contain;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 
 .verification-brand div {

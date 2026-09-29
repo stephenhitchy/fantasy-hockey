@@ -76,8 +76,8 @@
 
 .brand-mark {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   place-items: center;
   border: 2px solid var(--user-team-accent);
   border-radius: 0;
@@ -401,14 +401,15 @@
 .brand-mark-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
+  padding: 2px;
+  object-fit: contain;
+  image-rendering: auto;
 }
 
 .mobile-brand-mark {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   place-items: center;
   border: 2px solid var(--user-team-accent);
   background: var(--surface-2);

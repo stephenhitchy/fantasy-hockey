@@ -1662,8 +1662,9 @@
 .account-install-mark img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
+  padding: 3px;
+  object-fit: contain;
+  image-rendering: auto;
 }
 
 .account-install-copy h2 {
@@ -2016,8 +2017,7 @@
   width: 52px;
   height: 52px;
   object-fit: contain;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: auto;
 }
 
 .neutral-identity-note div,
