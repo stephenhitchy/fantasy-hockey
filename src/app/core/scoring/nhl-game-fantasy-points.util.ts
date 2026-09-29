@@ -22,6 +22,39 @@ const LIVE_GAME_STATES = new Set(['LIVE', 'CRIT']);
 const FINAL_GAME_STATES = new Set(['FINAL', 'OFF']);
 
 /**
+ * Orders one NHL team's skaters by their exact-game RinkRat total. Players
+ * without a trustworthy calculation stay visible after the scored players,
+ * while equal totals preserve the provider's original box-score order.
+ */
+export function sortNhlSkatersByFantasyPoints(
+  players: readonly NhlSkaterBoxscoreLine[],
+  totalsByPlayerId: ReadonlyMap<number, number>,
+): NhlSkaterBoxscoreLine[] {
+  return players
+    .map((player, index) => ({
+      player,
+      index,
+      total: totalsByPlayerId.get(player.playerId),
+    }))
+    .sort((first, second) => {
+      const firstHasTotal = Number.isFinite(first.total);
+      const secondHasTotal = Number.isFinite(second.total);
+
+      if (firstHasTotal && secondHasTotal) {
+        const difference = (second.total as number) - (first.total as number);
+        return difference || first.index - second.index;
+      }
+
+      if (firstHasTotal !== secondHasTotal) {
+        return firstHasTotal ? -1 : 1;
+      }
+
+      return first.index - second.index;
+    })
+    .map(({ player }) => player);
+}
+
+/**
  * Converts one exact NHL box-score line into the existing Scoring V4 engine's
  * input shape. Missing or internally inconsistent provider evidence returns
  * null so the UI never turns an incomplete calculation into a displayed zero.

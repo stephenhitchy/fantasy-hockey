@@ -183,6 +183,31 @@ test('live calculations preserve the existing provisional special-teams boundary
   assert.equal(facts.stats.overtimeGoal, false);
 });
 
+test('each team box score ranks skaters by exact-game fantasy points', async () => {
+  const factsUtility = await loadTypescriptModule(scoringFactsPath, 'facts.mjs');
+  const players = [
+    makePlayer({ playerId: 1 }),
+    makePlayer({ playerId: 2 }),
+    makePlayer({ playerId: 3 }),
+    makePlayer({ playerId: 4 }),
+    makePlayer({ playerId: 5 }),
+  ];
+  const sorted = factsUtility.sortNhlSkatersByFantasyPoints(
+    players,
+    new Map([
+      [1, 4.5],
+      [2, 12.25],
+      [3, 12.25],
+      [5, -1.5],
+    ]),
+  );
+
+  assert.deepEqual(
+    sorted.map((player) => player.playerId),
+    [2, 3, 1, 5, 4],
+  );
+});
+
 test('overtime and game-winning bonuses apply only to a proven final scorer', async () => {
   const factsUtility = await loadTypescriptModule(scoringFactsPath, 'facts.mjs');
   const player = makePlayer({
@@ -247,9 +272,11 @@ test('box score and player detail expose the calculation without creating new NH
 
   assert.match(component, /calculateSkaterGameBreakdown/);
   assert.match(component, /buildNhlSkaterGameScoringFacts/);
+  assert.match(component, /sortNhlSkatersByFantasyPoints/);
   assert.match(component, /defaultScoringRules/);
   assert.doesNotMatch(component, /getRegularSeasonGameLog/);
   assert.match(template, /RinkRat FP/);
+  assert.match(template, /Highest RinkRat FP first/);
   assert.match(template, /Live estimate/);
   assert.match(template, /Awaiting data/);
   assert.match(template, /It does not confirm that the game counted in a fantasy lineup/);

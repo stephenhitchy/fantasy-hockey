@@ -15,7 +15,10 @@ import {
   calculateSkaterGameBreakdown,
   type GamePointBreakdown,
 } from '../../../core/scoring/scoring-engine';
-import { buildNhlSkaterGameScoringFacts } from '../../../core/scoring/nhl-game-fantasy-points.util';
+import {
+  buildNhlSkaterGameScoringFacts,
+  sortNhlSkatersByFantasyPoints,
+} from '../../../core/scoring/nhl-game-fantasy-points.util';
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 import {
   buildNhlGamePeriodScores,
@@ -84,10 +87,6 @@ export class NhlGameDetail implements OnDestroy {
   readonly selectedTeamStats = computed(() =>
     this.boxscore()?.playerByGameStats?.[this.selectedTeamSide()] ?? null,
   );
-  readonly selectedSkaters = computed(() => {
-    const team = this.selectedTeamStats();
-    return [...(team?.forwards ?? []), ...(team?.defense ?? [])];
-  });
   readonly selectedGoalies = computed(() => this.selectedTeamStats()?.goalies ?? []);
   readonly skaterFantasyPointsByPlayerId = computed(() => {
     const boxscore = this.boxscore();
@@ -116,6 +115,17 @@ export class NhlGameDetail implements OnDestroy {
     }
 
     return views;
+  });
+  readonly selectedSkaters = computed(() => {
+    const team = this.selectedTeamStats();
+    const players = [...(team?.forwards ?? []), ...(team?.defense ?? [])];
+    const totalsByPlayerId = new Map<number, number>();
+
+    for (const [playerId, view] of this.skaterFantasyPointsByPlayerId()) {
+      totalsByPlayerId.set(playerId, view.breakdown.total);
+    }
+
+    return sortNhlSkatersByFantasyPoints(players, totalsByPlayerId);
   });
   readonly hasAnyData = computed(() => Boolean(this.boxscore() || this.playByPlay()));
   readonly hasCompleteFailure = computed(() =>

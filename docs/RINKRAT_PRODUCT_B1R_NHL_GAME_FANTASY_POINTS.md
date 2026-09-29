@@ -7,6 +7,11 @@ single-game experience. Each skater row in the player box score receives a
 compact **RinkRat FP** value, and the linked exact-game player detail exposes
 the same total with an expandable category breakdown.
 
+Within each NHL team tab, scored skaters are ordered from highest to lowest
+exact-game RinkRat FP. Equal totals preserve the provider's box-score order,
+and skaters whose calculation is unavailable remain visible at the end rather
+than disappearing.
+
 The number applies the existing Production Scoring V4 engine to that exact NHL
 game. It is not a fantasy matchup total, does not apply a six-game or cycle
 bonus, and does not claim that the performance occupied one of a roster slot's
