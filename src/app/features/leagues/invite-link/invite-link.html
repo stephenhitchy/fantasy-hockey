@@ -38,7 +38,7 @@
         @case ('ready') {
           <p class="invite-summary">
             Continue with one deliberate click. RinkRat will remember this invitation while you
-            sign in, create an account, finish or exit Training Camp, and verify your email.
+            sign in or create an account and verify your email.
           </p>
 
           <div class="invite-code-panel">
@@ -96,33 +96,12 @@
           </button>
         }
 
-        @case ('training-camp') {
-          <div class="invite-state">
-            <span class="pixel-icon icon-whistle icon-lg" aria-hidden="true"></span>
-            <div>
-              <strong>Training Camp comes first</strong>
-              <p>
-                Finish the five-shift tutorial or choose Finish Later. RinkRat will then let you
-                send the first verification email yourself before this saved invitation resumes.
-              </p>
-            </div>
-          </div>
-
-          <button type="button" class="invite-primary" (click)="continueTrainingCamp()">
-            Continue Training Camp
-          </button>
-          <button type="button" class="invite-secondary" (click)="cancelInvite()">
-            Cancel Invitation
-          </button>
-        }
-
         @case ('verification') {
           <div class="invite-state">
             <span class="pixel-icon icon-mail icon-lg" aria-hidden="true"></span>
             <div>
               <strong>Verify your email to join</strong>
               <p>
-                Training Camp is saved.
                 @if (verificationEmailPreviouslySent()) {
                   Open the latest email sent to <b>{{ verificationEmail() }}</b> and press
                   <b>Verify Email &amp; Join League</b>. RinkRat will finish the join automatically.

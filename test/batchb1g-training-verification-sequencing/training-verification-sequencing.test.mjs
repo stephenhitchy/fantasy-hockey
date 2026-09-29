@@ -8,31 +8,15 @@ import {
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('invite continuation always resolves Training Camp before email verification', () => {
+test('invite continuation ignores tutorial state and resolves from email verification', () => {
   assert.equal(
     resolveLeagueInviteContinuationStep({
-      trainingCampResolved: false,
-      emailVerified: false,
-    }),
-    'training-camp',
-  );
-  assert.equal(
-    resolveLeagueInviteContinuationStep({
-      trainingCampResolved: false,
-      emailVerified: true,
-    }),
-    'training-camp',
-  );
-  assert.equal(
-    resolveLeagueInviteContinuationStep({
-      trainingCampResolved: true,
       emailVerified: false,
     }),
     'email-verification',
   );
   assert.equal(
     resolveLeagueInviteContinuationStep({
-      trainingCampResolved: true,
       emailVerified: true,
     }),
     'join',
@@ -44,10 +28,7 @@ test('completion and Finish Later remain separate authoritative profile outcomes
 
   assert.match(service, /hasCompletedTrainingCamp/);
   assert.match(service, /hasDeferredTrainingCamp/);
-  assert.match(
-    service,
-    /hasResolvedTrainingCampOnboarding[\s\S]*?hasCompletedTrainingCamp\(profile\) \|\| hasDeferredTrainingCamp\(profile\)/,
-  );
+  assert.doesNotMatch(service, /hasResolvedTrainingCampOnboarding|email verification/);
   assert.match(
     service,
     /completeTrainingCamp[\s\S]*?trainingCampVersion:[\s\S]*?trainingCampDeferredVersion: deleteField\(\)/,
@@ -62,63 +43,52 @@ test('completion and Finish Later remain separate authoritative profile outcomes
   );
 });
 
-test('Training Camp completion and explicit exit both unlock a manual first verification send', async () => {
+test('Training Camp completion and explicit exit stay separate from verification and invitations', async () => {
   const [component, template] = await Promise.all([
     read('src/app/features/onboarding/training-camp/training-camp.ts'),
     read('src/app/features/onboarding/training-camp/training-camp.html'),
   ]);
 
-  assert.match(component, /completeTrainingCamp\(this\.userId\)[\s\S]*?continueAfterTrainingCamp\(\)/);
-  assert.match(component, /deferTrainingCamp\(this\.userId\)[\s\S]*?continueAfterTrainingCamp\(\)/);
+  assert.match(component, /completeTrainingCamp\(this\.userId\)/);
+  assert.match(component, /deferTrainingCamp\(this\.userId\)/);
   assert.match(component, /training_camp_deferred/);
-  assert.match(component, /markPendingLeagueInviteTrainingCampComplete/);
-  assert.match(component, /getVerificationEmailState/);
-  assert.match(component, /verificationSendButtonLabel/);
-  assert.match(
-    component,
-    /this\.inviteContinuationActive\(\) \? 'Join League First' : 'Finish Later'/,
-  );
-  assert.doesNotMatch(component, /RinkRat is sending the verification email now/);
-  assert.doesNotMatch(template, /Finish Later &amp; Verify/);
-  assert.match(template, /I Verified — Continue/);
-  assert.match(template, /verificationSendButtonLabel\(\)/);
-  assert.match(template, /Click to send the first verification email/);
+  assert.doesNotMatch(component, /requestVerificationEmail|getVerificationEmailState|verificationSendButtonLabel/);
+  assert.doesNotMatch(template, /Verify Email|verificationSendButtonLabel|Join League First/);
+  assert.match(component, /return 'Finish Later'/);
+  assert.match(template, /exitActionLabel\(\)/);
 });
 
-test('the invite page reads completed-or-deferred profile state before joining', async () => {
+test('the invite page joins from email state without completed-or-deferred tutorial state', async () => {
   const [component, template] = await Promise.all([
     read('src/app/features/leagues/invite-link/invite-link.ts'),
     read('src/app/features/leagues/invite-link/invite-link.html'),
   ]);
 
-  assert.match(component, /hasResolvedTrainingCampOnboarding/);
-  assert.match(component, /const trainingCampResolved = hasResolvedTrainingCampOnboarding\(profile\);/);
-  assert.match(component, /resolveLeagueInviteContinuationStep\(\{[\s\S]*?trainingCampResolved/);
-  assert.match(template, /choose Finish Later/);
-  assert.match(template, /send the first verification email yourself/);
+  assert.match(component, /resolveLeagueInviteContinuationStep\(\{[\s\S]*?emailVerified: user\.emailVerified/);
+  assert.doesNotMatch(component, /hasResolvedTrainingCampOnboarding|trainingCampResolved/);
+  assert.doesNotMatch(template, /choose Finish Later|Training Camp/);
   assert.match(template, /verificationSendButtonLabel\(\)/);
 });
 
-test('the profile-created trigger holds email during Training Camp and only marks manual send ready afterward', async () => {
+test('the profile-created trigger records immediate sender readiness without sending a duplicate email', async () => {
   const source = await read('functions/src/email-notifications.ts');
   const createdTrigger = source.match(
-    /export const sendWelcomeEmailOnProfileCreated[\s\S]*?\n\);\n\nexport const sendWelcomeEmailAfterTrainingCampResolved/,
+    /export const sendWelcomeEmailOnProfileCreated[\s\S]*?\n\);\n\n\/\/ Keep the deployed function name/,
   )?.[0] ?? '';
 
   assert.match(createdTrigger, /const currentSnapshot = await db\.doc\(`users\/\$\{userId\}`\)\.get\(\);/);
-  assert.match(createdTrigger, /welcomeEmailStatus: 'waiting-for-training-camp'/);
-  assert.match(createdTrigger, /hasReleasedOnboardingVerification\(profile\)/);
   assert.match(createdTrigger, /markInitialAccountEmailReady\(userId, profile\)/);
   assert.match(source, /export const sendWelcomeEmailAfterTrainingCampResolved = onDocumentWritten/);
   assert.match(
     source,
-    /sendWelcomeEmailAfterTrainingCampResolved[\s\S]*?!hasReleasedOnboardingVerification\(profile\)[\s\S]*?markInitialAccountEmailReady\(userId, profile\)/,
+    /sendWelcomeEmailAfterTrainingCampResolved[\s\S]*?markInitialAccountEmailReady\(userId, profile\)/,
   );
   assert.match(source, /welcomeEmailStatus: 'ready-for-manual-send'/);
   assert.match(source, /verificationEmailReadyAt: FieldValue\.serverTimestamp\(\)/);
+  assert.doesNotMatch(createdTrigger, /sendVerificationEmail\(|waiting-for-training-camp|trainingCampVersion/);
 });
 
-test('the Training Camp email trigger narrows optional Firestore profile data before use', async () => {
+test('the legacy-named readiness trigger narrows optional Firestore profile data before use', async () => {
   const source = await read('functions/src/email-notifications.ts');
   const writtenTrigger = source.match(
     /export const sendWelcomeEmailAfterTrainingCampResolved[\s\S]*?\n\);\n\nexport const sendInjuryEmailOnAvailabilityChange/,
@@ -131,8 +101,8 @@ test('the Training Camp email trigger narrows optional Firestore profile data be
     'DocumentSnapshot.data() is optional in the Firebase type contract and must be narrowed before helper calls',
   );
   assert.match(writtenTrigger, /hasOnboardingEmailHistory\(profile\)/);
-  assert.match(writtenTrigger, /hasReleasedOnboardingVerification\(profile\)/);
   assert.match(writtenTrigger, /markInitialAccountEmailReady\(userId, profile\)/);
+  assert.doesNotMatch(writtenTrigger, /trainingCampVersion|trainingCampDeferredVersion/);
 });
 
 test('the verification callable separates status from send and reports cooldown truthfully', async () => {
@@ -143,9 +113,8 @@ test('the verification callable separates status from send and reports cooldown 
 
   assert.match(callable, /action = asString\(asRecord\(request\.data\)\['action'\]\)/);
   assert.match(callable, /action === 'status'/);
-  assert.match(callable, /action === 'send'/);
-  assert.match(callable, /onboardingResolved/);
-  assert.match(callable, /Finish Training Camp or choose Finish Later before requesting email verification/);
+  assert.match(callable, /eligible: true/);
+  assert.doesNotMatch(callable, /onboardingResolved|Finish Training Camp|trainingCamp/);
   assert.match(callable, /'welcome-verification'/);
   assert.match(callable, /claimRateLimitWithState/);
   assert.match(callable, /outcome: 'cooldown'/);
@@ -174,7 +143,7 @@ test('Firestore permits the private deferral fields without exposing server emai
   assert.match(rules, /match \/leagueInvites\/\{inviteCode\}[\s\S]*?allow read, create, update, delete: if false;/);
 });
 
-test('Release Readiness requires no-early-email and Finish Later evidence', async () => {
+test('Release Readiness requires direct verification and tutorial-independent recovery evidence', async () => {
   const [validation, releaseUtil] = await Promise.all([
     read('src/app/core/release/invite-beta-validation.util.ts'),
     read('scripts/release/invite-beta-release.util.mjs'),
@@ -185,6 +154,8 @@ test('Release Readiness requires no-early-email and Finish Later evidence', asyn
   assert.match(validation, /id: 'invite-link-training-first'/);
   assert.match(validation, /id: 'invite-link-finish-later'/);
   assert.match(validation, /id: 'invite-link-reload-recovery'/);
+  assert.match(validation, /automatically requested verification email/);
+  assert.match(validation, /tutorial state remains incomplete and undeferred/);
   assert.match(releaseUtil, /schemaVersion !== 4/);
 });
 

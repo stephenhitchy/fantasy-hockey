@@ -1,4 +1,4 @@
-import { Component, computed, OnDestroy, signal } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -6,26 +6,15 @@ import { withOperationDeadline } from '../../../core/async/bounded-operation.uti
 import { auth } from '../../../core/firebase-auth';
 import {
   buildLeagueInvitePath,
-  markPendingLeagueInviteTrainingCampComplete,
   pendingLeagueInviteAccountMatch,
   readPendingLeagueInvite,
 } from '../../../core/league/invite-link-intent.service';
-import {
-  getVerificationEmailState,
-  requestVerificationEmail,
-  type VerificationEmailResponse,
-} from '../../../core/notifications/email-notification.service';
-import {
-  getVerificationCooldownSeconds,
-  getVerificationSendButtonLabel,
-} from '../../../core/notifications/verification-email-state.util';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import {
   completeTrainingCamp,
   CURRENT_TRAINING_CAMP_VERSION,
   deferTrainingCamp,
   hasCompletedTrainingCamp,
-  hasResolvedTrainingCampOnboarding,
 } from '../../../core/onboarding/training-camp.service';
 import { getUserProfile } from '../../../core/user/user.service';
 import { HockeyTermChip } from '../../../shared/hockey-terms/hockey-term-chip';
@@ -69,7 +58,7 @@ function clampInteger(value: unknown, minimum: number, maximum: number): number 
   templateUrl: './training-camp.html',
   styleUrl: './training-camp.css',
 })
-export class TrainingCamp implements OnDestroy {
+export class TrainingCamp {
   readonly footballPositionComparisons = TRAINING_CAMP_FOOTBALL_COMPARISONS;
   readonly steps = TRAINING_CAMP_STEPS;
 
@@ -82,17 +71,6 @@ export class TrainingCamp implements OnDestroy {
   readonly completed = signal(false);
   readonly previouslyCompleted = signal(false);
   readonly errorMessage = signal('');
-  readonly verificationPromptVisible = signal(false);
-  readonly verificationEmail = signal('');
-  readonly sendingVerification = signal(false);
-  readonly refreshingVerification = signal(false);
-  readonly verificationStatusMessage = signal('');
-  readonly verificationEmailPreviouslySent = signal(false);
-  readonly verificationEmailEligible = signal(false);
-  readonly verificationCooldownSeconds = signal(0);
-  readonly trainingCampOutcome = signal<'completed' | 'deferred'>('completed');
-  readonly inviteContinuationActive = signal(false);
-  readonly pendingInviteCode = signal('');
 
   readonly exitActionLabel = computed(() => {
     if (this.saving()) {
@@ -100,37 +78,11 @@ export class TrainingCamp implements OnDestroy {
     }
 
     if (this.previouslyCompleted()) {
-      return this.inviteContinuationActive() ? 'Return to Invitation' : 'Exit Training Camp';
+      return 'Exit Training Camp';
     }
 
-    return this.inviteContinuationActive() ? 'Join League First' : 'Finish Later';
+    return 'Finish Later';
   });
-  readonly verificationSendButtonLabel = computed(() =>
-    getVerificationSendButtonLabel({
-      sending: this.sendingVerification(),
-      emailPreviouslySent: this.verificationEmailPreviouslySent(),
-      cooldownSeconds: this.verificationCooldownSeconds(),
-    }),
-  );
-  readonly verificationSendDisabled = computed(() =>
-    this.sendingVerification() ||
-    this.refreshingVerification() ||
-    !this.verificationEmailEligible() ||
-    this.verificationCooldownSeconds() > 0,
-  );
-  readonly verificationPromptTitle = computed(() =>
-    this.verificationEmailPreviouslySent()
-      ? 'Check your email before the next faceoff'
-      : 'Send your verification email',
-  );
-  readonly verificationPromptInstruction = computed(() =>
-    this.verificationEmailPreviouslySent()
-      ? 'Open the latest verification email, then return to RinkRat.'
-      : 'Press the button below when you are ready. RinkRat will not send the first email until you do.',
-  );
-  readonly verifyLaterLabel = computed(() =>
-    this.trainingCampOutcome() === 'completed' ? 'Verify Later' : 'Continue to Dashboard',
-  );
   readonly currentStep = computed(() => this.steps[this.currentStepIndex()] ?? this.steps[0]!);
   readonly currentDrill = computed(
     () => this.currentStep().drills[this.currentDrillIndex()] ?? this.currentStep().drills[0]!,
@@ -164,7 +116,6 @@ export class TrainingCamp implements OnDestroy {
     from: 'training-camp',
     shift: this.currentStepIndex() + 1,
     drill: this.currentDrillIndex() + 1,
-    continue: this.inviteContinuationActive() ? 'league-invite' : null,
   }));
 
   readonly primaryActionLabel = computed(() => {
@@ -184,8 +135,6 @@ export class TrainingCamp implements OnDestroy {
   });
 
   private userId = '';
-  private verificationNextAllowedAtMillis = 0;
-  private verificationCooldownTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -193,10 +142,6 @@ export class TrainingCamp implements OnDestroy {
     private readonly telemetry: TelemetryService,
   ) {
     void this.initialize();
-  }
-
-  ngOnDestroy(): void {
-    this.clearVerificationCooldownTimer();
   }
 
   canOpenStep(index: number): boolean {
@@ -285,7 +230,6 @@ export class TrainingCamp implements OnDestroy {
 
     this.saving.set(true);
     this.errorMessage.set('');
-    this.verificationStatusMessage.set('');
 
     try {
       await withOperationDeadline(
@@ -300,13 +244,13 @@ export class TrainingCamp implements OnDestroy {
       }
 
       this.previouslyCompleted.set(true);
-      this.trainingCampOutcome.set('completed');
       this.telemetry.track('training_camp_completed', {
         version: CURRENT_TRAINING_CAMP_VERSION,
-        invite_continuation: this.inviteContinuationActive(),
+        invite_continuation: false,
       });
 
-      await this.continueAfterTrainingCamp();
+      this.completed.set(true);
+      this.focusHeading();
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
@@ -330,7 +274,6 @@ export class TrainingCamp implements OnDestroy {
 
     this.saving.set(true);
     this.errorMessage.set('');
-    this.verificationStatusMessage.set('');
 
     try {
       await withOperationDeadline(
@@ -339,15 +282,14 @@ export class TrainingCamp implements OnDestroy {
         'RinkRat stopped waiting while saving Training Camp for later. The button has been released; reload before trying again because the choice may still have saved.',
       );
 
-      this.trainingCampOutcome.set('deferred');
       this.telemetry.track('training_camp_deferred', {
         version: CURRENT_TRAINING_CAMP_VERSION,
         step: this.currentStepIndex() + 1,
         drill: this.currentDrillIndex() + 1,
-        invite_continuation: this.inviteContinuationActive(),
+        invite_continuation: false,
       });
 
-      await this.continueAfterTrainingCamp();
+      await this.router.navigate(['/dashboard']);
     } catch (error: unknown) {
       this.errorMessage.set(
         error instanceof Error
@@ -359,161 +301,13 @@ export class TrainingCamp implements OnDestroy {
     }
   }
 
-  async sendVerificationEmail(): Promise<void> {
-    if (this.verificationSendDisabled()) {
-      return;
-    }
-
-    this.errorMessage.set('');
-    this.verificationStatusMessage.set('');
-    this.sendingVerification.set(true);
-
-    try {
-      const result = await requestVerificationEmail({
-        inviteCode: this.inviteContinuationActive()
-          ? this.pendingInviteCode()
-          : undefined,
-      });
-
-      if (result.alreadyVerified) {
-        await this.finishVerificationStep();
-        return;
-      }
-
-      this.applyVerificationEmailState(result);
-
-      if (result.outcome === 'cooldown') {
-        this.verificationStatusMessage.set(
-          'A verification email was sent recently. You can send another when the countdown finishes.',
-        );
-      } else if (result.outcome === 'blocked') {
-        this.errorMessage.set(
-          'Finish Training Camp or choose Finish Later before sending the verification email.',
-        );
-      } else {
-        this.verificationStatusMessage.set(
-          `${result.firstSend ? 'Verification email sent.' : 'Another verification email sent.'} Open the email button to verify your account${this.inviteContinuationActive() ? ' and finish joining your league' : ''}.`,
-        );
-      }
-    } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'Unable to send a verification email right now.',
-      );
-    } finally {
-      this.sendingVerification.set(false);
-    }
-  }
-
-  async refreshVerificationStatus(): Promise<void> {
-    const user = auth.currentUser;
-
-    if (!user || this.refreshingVerification() || this.sendingVerification()) {
-      return;
-    }
-
-    this.errorMessage.set('');
-    this.verificationStatusMessage.set('');
-    this.refreshingVerification.set(true);
-
-    try {
-      await user.reload();
-
-      if (!user.emailVerified) {
-        this.verificationStatusMessage.set(
-          'Verification is not visible yet. Open the email link, then try again.',
-        );
-        return;
-      }
-
-      await user.getIdToken(true);
-      await this.finishVerificationStep();
-    } catch (error: unknown) {
-      this.errorMessage.set(
-        error instanceof Error
-          ? error.message
-          : 'RinkRat could not refresh your verification status.',
-      );
-    } finally {
-      this.refreshingVerification.set(false);
-    }
-  }
-
-  async verifyLater(): Promise<void> {
-    await this.finishVerificationStep();
-  }
-
   private async leaveCompletedTrainingCamp(): Promise<void> {
     this.telemetry.track('training_camp_exited', {
       completed: true,
       step: this.currentStepIndex() + 1,
       drill: this.currentDrillIndex() + 1,
-      invite_continuation: this.inviteContinuationActive(),
+      invite_continuation: false,
     });
-
-    if (this.inviteContinuationActive()) {
-      const intent = markPendingLeagueInviteTrainingCampComplete(
-        this.userId,
-        this.pendingInviteCode(),
-      );
-      const invitePath = buildLeagueInvitePath(intent?.inviteCode);
-
-      if (invitePath) {
-        await this.router.navigateByUrl(invitePath);
-        return;
-      }
-    }
-
-    await this.router.navigate(['/dashboard']);
-  }
-
-  private async continueAfterTrainingCamp(): Promise<void> {
-    if (this.inviteContinuationActive()) {
-      const intent = markPendingLeagueInviteTrainingCampComplete(
-        this.userId,
-        this.pendingInviteCode(),
-      );
-      const invitePath = buildLeagueInvitePath(intent?.inviteCode);
-
-      if (invitePath) {
-        await this.router.navigateByUrl(invitePath);
-        return;
-      }
-    }
-
-    const user = auth.currentUser;
-
-    if (user) {
-      try {
-        await user.reload();
-      } catch {
-        // The verification prompt remains usable if the refresh is temporarily unavailable.
-      }
-    }
-
-    if (user?.emailVerified) {
-      await user.getIdToken(true).catch(() => undefined);
-      await this.finishVerificationStep();
-      return;
-    }
-
-    this.verificationEmail.set(user?.email ?? 'your account email');
-    this.verificationEmailEligible.set(true);
-    this.verificationStatusMessage.set('');
-    this.verificationPromptVisible.set(true);
-    void this.loadVerificationEmailState();
-    this.focusHeading();
-  }
-
-  private async finishVerificationStep(): Promise<void> {
-    this.verificationPromptVisible.set(false);
-
-    if (this.trainingCampOutcome() === 'completed') {
-      this.completed.set(true);
-      this.focusHeading();
-      return;
-    }
 
     await this.router.navigate(['/dashboard']);
   }
@@ -535,46 +329,24 @@ export class TrainingCamp implements OnDestroy {
       ? pendingLeagueInviteAccountMatch(pendingInvite, user.uid) === 'matching'
       : false;
 
-    this.inviteContinuationActive.set(
-      Boolean(continuationRequested && pendingInvite && inviteMatchesAccount),
-    );
-    this.pendingInviteCode.set(
-      this.inviteContinuationActive() ? pendingInvite?.inviteCode ?? '' : '',
-    );
+    if (continuationRequested && pendingInvite && inviteMatchesAccount) {
+      const invitePath = buildLeagueInvitePath(pendingInvite.inviteCode);
+
+      if (invitePath) {
+        await this.router.navigateByUrl(invitePath, { replaceUrl: true });
+        return;
+      }
+    }
 
     try {
       const profile = await getUserProfile(user.uid);
       const alreadyComplete = hasCompletedTrainingCamp(profile);
-      const onboardingResolved = hasResolvedTrainingCampOnboarding(profile);
       this.previouslyCompleted.set(alreadyComplete);
       this.telemetry.track('training_camp_started', {
         version: CURRENT_TRAINING_CAMP_VERSION,
         replay: alreadyComplete,
-        invite_continuation: this.inviteContinuationActive(),
+        invite_continuation: false,
       });
-
-      if (onboardingResolved && this.inviteContinuationActive()) {
-        const intent = markPendingLeagueInviteTrainingCampComplete(
-          user.uid,
-          this.pendingInviteCode(),
-        );
-        const invitePath = buildLeagueInvitePath(intent?.inviteCode);
-
-        if (invitePath) {
-          await this.router.navigateByUrl(invitePath);
-          return;
-        }
-      }
-
-      if (onboardingResolved && !user.emailVerified) {
-        this.trainingCampOutcome.set(alreadyComplete ? 'completed' : 'deferred');
-        this.verificationEmail.set(user.email ?? 'your account email');
-        this.verificationEmailEligible.set(true);
-        this.verificationPromptVisible.set(true);
-        void this.loadVerificationEmailState();
-        this.focusHeading();
-        return;
-      }
 
       if (alreadyComplete) {
         this.highestUnlockedStepIndex.set(this.steps.length - 1);
@@ -699,59 +471,4 @@ export class TrainingCamp implements OnDestroy {
     });
   }
 
-  private async loadVerificationEmailState(): Promise<void> {
-    try {
-      const state = await getVerificationEmailState();
-
-      if (state.alreadyVerified) {
-        await this.finishVerificationStep();
-        return;
-      }
-
-      this.applyVerificationEmailState(state);
-    } catch {
-      // The send action remains available if the optional status lookup is interrupted.
-    }
-  }
-
-  private applyVerificationEmailState(state: VerificationEmailResponse): void {
-    this.verificationEmailEligible.set(state.eligible);
-    this.verificationEmailPreviouslySent.set(state.emailPreviouslySent);
-    this.verificationNextAllowedAtMillis = state.nextAllowedAtMillis;
-    this.updateVerificationCooldown(state.cooldownSecondsRemaining);
-  }
-
-  private updateVerificationCooldown(fallbackSeconds = 0): void {
-    this.clearVerificationCooldownTimer();
-
-    if (this.verificationNextAllowedAtMillis <= 0 && fallbackSeconds > 0) {
-      this.verificationNextAllowedAtMillis = Date.now() + fallbackSeconds * 1_000;
-    }
-
-    const update = () => {
-      const remaining = getVerificationCooldownSeconds(
-        this.verificationNextAllowedAtMillis,
-      );
-
-      this.verificationCooldownSeconds.set(remaining);
-
-      if (remaining === 0) {
-        this.verificationNextAllowedAtMillis = 0;
-        this.clearVerificationCooldownTimer();
-      }
-    };
-
-    update();
-
-    if (this.verificationCooldownSeconds() > 0) {
-      this.verificationCooldownTimer = setInterval(update, 1_000);
-    }
-  }
-
-  private clearVerificationCooldownTimer(): void {
-    if (this.verificationCooldownTimer) {
-      clearInterval(this.verificationCooldownTimer);
-      this.verificationCooldownTimer = null;
-    }
-  }
 }

@@ -9,6 +9,7 @@ export interface PendingLeagueInviteIntent {
   requestedAt: number;
   expiresAt: number;
   accountUid: string | null;
+  /** Legacy schema-v1 field retained so pending pre-repair intents still load. */
   requiresTrainingCamp: boolean;
 }
 
@@ -18,18 +19,12 @@ export type PendingLeagueInviteAccountMatch =
   | 'mismatch';
 
 export type LeagueInviteContinuationStep =
-  | 'training-camp'
   | 'email-verification'
   | 'join';
 
 export function resolveLeagueInviteContinuationStep(options: {
-  trainingCampResolved: boolean;
   emailVerified: boolean;
 }): LeagueInviteContinuationStep {
-  if (!options.trainingCampResolved) {
-    return 'training-camp';
-  }
-
   return options.emailVerified ? 'join' : 'email-verification';
 }
 
@@ -186,37 +181,6 @@ export function unbindPendingLeagueInviteAccount(
   });
 }
 
-export function markPendingLeagueInviteRequiresTrainingCamp(
-  accountUid: unknown,
-  inviteCode?: unknown,
-): PendingLeagueInviteIntent | null {
-  const intent = bindPendingLeagueInviteToAccount(accountUid, { inviteCode });
-
-  if (!intent) {
-    return null;
-  }
-
-  return updateIntent(intent, {
-    requiresTrainingCamp: true,
-  });
-}
-
-export function markPendingLeagueInviteTrainingCampComplete(
-  accountUid: unknown,
-  inviteCode?: unknown,
-): PendingLeagueInviteIntent | null {
-  const intent = readPendingLeagueInvite(inviteCode);
-  const normalizedUid = normalizeAccountUid(accountUid);
-
-  if (!intent || !normalizedUid || intent.accountUid !== normalizedUid) {
-    return null;
-  }
-
-  return updateIntent(intent, {
-    requiresTrainingCamp: false,
-  });
-}
-
 export function clearPendingLeagueInvite(inviteCode?: unknown): void {
   const requestedCode = normalizeLeagueInviteCode(inviteCode);
 
@@ -273,7 +237,7 @@ function normalizeStoredIntent(value: unknown): PendingLeagueInviteIntent | null
 
 function updateIntent(
   intent: PendingLeagueInviteIntent,
-  update: Partial<Pick<PendingLeagueInviteIntent, 'accountUid' | 'requiresTrainingCamp'>>,
+  update: Partial<Pick<PendingLeagueInviteIntent, 'accountUid'>>,
 ): PendingLeagueInviteIntent {
   const nextIntent: PendingLeagueInviteIntent = {
     ...intent,

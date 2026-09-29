@@ -18,12 +18,14 @@ import {
 } from '../../core/auth/auth-security.config';
 import { validateRegistrationPassword } from '../../core/auth/password-policy.service';
 import { TelemetryService } from '../../core/observability/telemetry.service';
-import { requestPasswordResetEmail } from '../../core/notifications/email-notification.service';
+import {
+  requestPasswordResetEmail,
+  requestVerificationEmail,
+} from '../../core/notifications/email-notification.service';
 import {
   bindPendingLeagueInviteToAccount,
   buildLeagueInvitePath,
   clearPendingLeagueInvite,
-  markPendingLeagueInviteRequiresTrainingCamp,
   pendingLeagueInviteAccountMatch,
   readPendingLeagueInvite,
 } from '../../core/league/invite-link-intent.service';
@@ -253,11 +255,25 @@ export class Auth implements OnDestroy {
           )
         : await loginUser(this.email, this.password);
 
-      this.successMessage.set(
-        this.isRegistering()
-          ? 'Profile created. Opening Training Camp before email verification...'
-          : 'Login successful. Opening your manager home...',
-      );
+      const pendingInvite = readPendingLeagueInvite();
+
+      if (pendingInvite) {
+        const accountMatch = pendingLeagueInviteAccountMatch(pendingInvite, user.uid);
+        bindPendingLeagueInviteToAccount(user.uid, {
+          inviteCode: pendingInvite.inviteCode,
+          ...(this.isRegistering() || accountMatch === 'mismatch'
+            ? { allowAccountSwitch: this.isRegistering() }
+            : {}),
+        });
+      }
+
+      if (this.isRegistering()) {
+        this.successMessage.set(
+          await this.initiateRegistrationVerificationEmail(pendingInvite?.inviteCode),
+        );
+      } else {
+        this.successMessage.set('Login successful. Opening your manager home...');
+      }
 
       const { getUserProfile } = await import('../../core/user/user.service');
       let profile = null;
@@ -289,32 +305,8 @@ export class Auth implements OnDestroy {
         },
       );
 
-      const pendingInvite = readPendingLeagueInvite();
-
       if (pendingInvite) {
-        const accountMatch = pendingLeagueInviteAccountMatch(pendingInvite, user.uid);
-        const boundIntent = this.isRegistering()
-          ? bindPendingLeagueInviteToAccount(user.uid, {
-              inviteCode: pendingInvite.inviteCode,
-              allowAccountSwitch: true,
-            })
-          : accountMatch === 'mismatch'
-            ? null
-            : bindPendingLeagueInviteToAccount(user.uid, {
-                inviteCode: pendingInvite.inviteCode,
-              });
         const invitePath = buildLeagueInvitePath(pendingInvite.inviteCode);
-
-        if (this.isRegistering() && boundIntent) {
-          markPendingLeagueInviteRequiresTrainingCamp(
-            user.uid,
-            pendingInvite.inviteCode,
-          );
-          await this.router.navigate(['/training-camp'], {
-            queryParams: { continue: 'league-invite' },
-          });
-          return;
-        }
 
         if (invitePath) {
           await this.router.navigateByUrl(invitePath);
@@ -323,7 +315,7 @@ export class Auth implements OnDestroy {
       }
 
       if (this.isRegistering()) {
-        await this.router.navigate(['/training-camp']);
+        await this.router.navigate(['/dashboard']);
         return;
       }
 
@@ -349,6 +341,32 @@ export class Auth implements OnDestroy {
       this.mascotCelebrating.set(false);
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  private async initiateRegistrationVerificationEmail(inviteCode?: string): Promise<string> {
+    const email = this.email.trim();
+
+    try {
+      const result = await requestVerificationEmail({ inviteCode });
+
+      if (result.alreadyVerified) {
+        return 'Profile created. Your email is already verified.';
+      }
+
+      if (result.outcome === 'sent') {
+        return `Profile created. Verification email sent to ${email}.`;
+      }
+
+      if (result.outcome === 'cooldown') {
+        return `Profile created. A verification email was already requested for ${email}.`;
+      }
+
+      return `Profile created, but the verification email was not accepted for sending. You can retry from the verification screen without creating another account.`;
+    } catch (error: unknown) {
+      this.telemetry.track('registration_verification_send_failed');
+      console.warn('The account was created, but the first verification email was not accepted.', error);
+      return `Profile created, but the verification email could not be sent to ${email}. You can retry without creating another account.`;
     }
   }
 

@@ -32,84 +32,8 @@
       </div>
     </article>
   </section>
-} @else if (verificationPromptVisible()) {
-  <section class="training-camp-page completion-page verification-page">
-    <article class="completion-card verification-card">
-      <div class="completion-mascot" aria-hidden="true">
-        <img src="/assets/branding/rinkrat-colored-mascot-512.png" alt="" />
-      </div>
-      <span class="eyebrow">Email Verification</span>
-      <h1 id="training-camp-step-title" tabindex="-1">{{ verificationPromptTitle() }}</h1>
-      <p>
-        {{ trainingCampOutcome() === 'completed' ? 'Training Camp is complete.' : 'Training Camp is saved for later.' }}
-        {{ verificationPromptInstruction() }} The email will go to
-        <strong>{{ verificationEmail() }}</strong>.
-      </p>
-
-      <div class="completion-badge verification-badge" aria-live="polite">
-        <span class="pixel-icon icon-mail icon-lg" aria-hidden="true"></span>
-        <div>
-          <small>{{ verificationEmailPreviouslySent() ? 'Verification link sent' : 'Ready when you are' }}</small>
-          <strong>
-            {{ verificationEmailPreviouslySent()
-              ? 'Open the email, then return to RinkRat'
-              : 'Click to send the first verification email' }}
-          </strong>
-        </div>
-      </div>
-
-      @if (verificationStatusMessage()) {
-        <p class="verification-status" role="status">{{ verificationStatusMessage() }}</p>
-      }
-
-      @if (errorMessage()) {
-        <p class="camp-error" role="alert">{{ errorMessage() }}</p>
-      }
-
-      <div class="completion-actions verification-actions">
-        <button
-          type="button"
-          class="primary-camp-button"
-          [disabled]="verificationSendDisabled()"
-          (click)="sendVerificationEmail()"
-        >
-          {{ verificationSendButtonLabel() }}
-        </button>
-        <button
-          type="button"
-          class="secondary-camp-button"
-          [disabled]="sendingVerification() || refreshingVerification()"
-          (click)="refreshVerificationStatus()"
-        >
-          {{ refreshingVerification() ? 'Checking...' : 'I Verified — Continue' }}
-        </button>
-        <button
-          type="button"
-          class="secondary-camp-button"
-          [disabled]="sendingVerification() || refreshingVerification()"
-          (click)="verifyLater()"
-        >
-          {{ verifyLaterLabel() }}
-        </button>
-      </div>
-    </article>
-  </section>
 } @else {
   <section class="training-camp-page">
-    @if (inviteContinuationActive()) {
-      <aside class="training-camp-invite-banner" aria-live="polite">
-        <span class="pixel-icon icon-team icon-lg" aria-hidden="true"></span>
-        <div>
-          <small>League invitation waiting</small>
-          <strong>Learn now, or join your league first</strong>
-          <p>
-            Training Camp is optional right now. Choose <strong>Join League First</strong>
-            to save it for later and continue directly to email verification.
-          </p>
-        </div>
-      </aside>
-    }
-
     <header class="training-camp-hero">
       <div class="training-camp-brand">
         <img src="/assets/branding/rinkrat-colored-mascot-512.png" alt="" />

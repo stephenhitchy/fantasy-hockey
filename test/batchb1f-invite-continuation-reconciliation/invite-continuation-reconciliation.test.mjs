@@ -5,7 +5,6 @@ import test from 'node:test';
 import {
   bindPendingLeagueInviteToAccount,
   clearPendingLeagueInvite,
-  markPendingLeagueInviteRequiresTrainingCamp,
   readPendingLeagueInvite,
   resolveLeagueInviteContinuationStep,
   startPendingLeagueInvite,
@@ -17,73 +16,46 @@ test.afterEach(() => {
   clearPendingLeagueInvite();
 });
 
-test('the authoritative continuation order supports either verification sequence', () => {
+test('the authoritative continuation depends only on verified email state', () => {
   assert.equal(
     resolveLeagueInviteContinuationStep({
-      trainingCampResolved: false,
-      emailVerified: false,
-    }),
-    'training-camp',
-  );
-  assert.equal(
-    resolveLeagueInviteContinuationStep({
-      trainingCampResolved: false,
-      emailVerified: true,
-    }),
-    'training-camp',
-  );
-  assert.equal(
-    resolveLeagueInviteContinuationStep({
-      trainingCampResolved: true,
       emailVerified: false,
     }),
     'email-verification',
   );
   assert.equal(
     resolveLeagueInviteContinuationStep({
-      trainingCampResolved: true,
       emailVerified: true,
     }),
     'join',
   );
 });
 
-test('a local Training Camp hint remains only a hint and cannot replace profile truth', () => {
-  startPendingLeagueInvite('ICE123');
+test('a legacy local Training Camp hint remains inert for old saved intents', () => {
+  startPendingLeagueInvite('ICE123', { requiresTrainingCamp: true });
   bindPendingLeagueInviteToAccount('new-user', { inviteCode: 'ICE123' });
 
   const intent = readPendingLeagueInvite('ICE123');
   assert.ok(intent);
-  assert.equal(intent.requiresTrainingCamp, false);
+  assert.equal(intent.requiresTrainingCamp, true);
   assert.equal(
     resolveLeagueInviteContinuationStep({
-      trainingCampResolved: false,
       emailVerified: true,
     }),
-    'training-camp',
+    'join',
   );
-
-  const marked = markPendingLeagueInviteRequiresTrainingCamp('new-user', 'ICE123');
-  assert.ok(marked);
-  assert.equal(marked.requiresTrainingCamp, true);
 });
 
-test('the invite component reads the manager profile before every prerequisite decision', async () => {
+test('the invite component uses profile identity without treating tutorial state as a prerequisite', async () => {
   const component = await read('src/app/features/leagues/invite-link/invite-link.ts');
 
   assert.match(component, /const profile = await getUserProfile\(user\.uid\);/);
-  assert.match(component, /const trainingCampResolved = hasResolvedTrainingCampOnboarding\(profile\);/);
-  assert.match(component, /resolveLeagueInviteContinuationStep\(\{[\s\S]*?trainingCampResolved,[\s\S]*?emailVerified: user\.emailVerified/);
-  assert.match(component, /continuationStep === 'training-camp'[\s\S]*?markPendingLeagueInviteRequiresTrainingCamp/);
-  assert.match(component, /markPendingLeagueInviteRequiresTrainingCamp,[\s\S]*?markPendingLeagueInviteTrainingCampComplete/);
+  assert.match(component, /resolveLeagueInviteContinuationStep\(\{[\s\S]*?emailVerified: user\.emailVerified/);
   assert.match(component, /joinLeague\(user, profile\?\.username \?\? ''\)/);
-  assert.doesNotMatch(
-    component,
-    /if \(activeIntent\?\.requiresTrainingCamp\) \{[\s\S]{0,260}const profile = await getUserProfile/,
-  );
+  assert.doesNotMatch(component, /hasResolvedTrainingCampOnboarding|continuationStep === 'training-camp'/);
 });
 
-test('verification refresh re-enters the reconciler instead of bypassing Training Camp', async () => {
+test('verification refresh re-enters the reconciler before secure joining', async () => {
   const component = await read('src/app/features/leagues/invite-link/invite-link.ts');
   const refreshBlock = component.match(
     /async refreshVerificationStatus\([\s\S]*?\n  async retry\(\)/,
@@ -97,13 +69,12 @@ test('verification refresh re-enters the reconciler instead of bypassing Trainin
 test('manager-facing copy explains that verification continues the saved invitation', async () => {
   const template = await read('src/app/features/leagues/invite-link/invite-link.html');
 
-  assert.match(template, /send the first verification email yourself/);
   assert.match(template, /Verify Email &amp; Join League/);
   assert.match(template, /finish automatically/);
-  assert.doesNotMatch(template, /released the verification email/);
+  assert.doesNotMatch(template, /Training Camp|finish or exit Training Camp/);
 });
 
-test('the exact-build board records both onboarding orders and reload recovery', async () => {
+test('the exact-build board records direct onboarding and reload recovery', async () => {
   const validation = await read('src/app/core/release/invite-beta-validation.util.ts');
 
   assert.match(validation, /INVITE_BETA_VALIDATION_SCHEMA_VERSION = 4/);
@@ -111,6 +82,8 @@ test('the exact-build board records both onboarding orders and reload recovery',
   assert.match(validation, /id: 'invite-link-email-held-during-training-camp'/);
   assert.match(validation, /id: 'invite-link-reload-recovery'/);
   assert.match(validation, /id: 'invite-link-finish-later'/);
+  assert.match(validation, /without tutorial interruption/);
+  assert.match(validation, /tutorial state remains incomplete and undeferred/);
 });
 
 test('current release controls use the B1G exact verification and freeze identity', async () => {

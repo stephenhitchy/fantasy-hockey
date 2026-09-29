@@ -548,14 +548,13 @@
             @if (!emailVerified()) {
               <p class="email-verification-copy">
                 @if (!verificationEmailEligible()) {
-                  Finish Training Camp or choose Finish Later before sending a verification email to
-                  <strong>{{ profile()?.email }}</strong>.
+                  Verification email sending is temporarily unavailable. Refresh this page before trying again.
                 } @else if (verificationEmailPreviouslySent()) {
                   A verification email has been sent to <strong>{{ profile()?.email }}</strong>.
                   Open the latest link, or send another after the countdown finishes.
                 } @else {
-                  Click below to send the first verification email to
-                  <strong>{{ profile()?.email }}</strong>. RinkRat will not send it until you do.
+                  No verification email is currently recorded for
+                  <strong>{{ profile()?.email }}</strong>. Use the button below to send one.
                 }
               </p>
 

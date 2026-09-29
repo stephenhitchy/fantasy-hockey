@@ -13,17 +13,6 @@ export function hasDeferredTrainingCamp(profile: UserProfile | null | undefined)
   return (profile?.trainingCampDeferredVersion ?? 0) >= CURRENT_TRAINING_CAMP_VERSION;
 }
 
-/**
- * Completing Training Camp is preferred, but a manager may deliberately choose
- * to finish it later. Either explicit outcome is enough to move onboarding to
- * email verification without pretending that a deferred tutorial was completed.
- */
-export function hasResolvedTrainingCampOnboarding(
-  profile: UserProfile | null | undefined,
-): boolean {
-  return hasCompletedTrainingCamp(profile) || hasDeferredTrainingCamp(profile);
-}
-
 export async function completeTrainingCamp(userId: string): Promise<void> {
   await updateDoc(doc(db, 'users', userId), {
     trainingCampVersion: CURRENT_TRAINING_CAMP_VERSION,

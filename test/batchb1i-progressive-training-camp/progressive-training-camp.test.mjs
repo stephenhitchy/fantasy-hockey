@@ -91,7 +91,7 @@ test('the page reveals one drill at a time and unlocks later shifts through natu
   assert.match(styles, /\.camp-step-tabs button\.cleared/);
 });
 
-test('completion, deferral, verification, and invite continuation authority remain intact', async () => {
+test('completion and deferral remain intact while verification and invite authority stay outside Training Camp', async () => {
   const [source, template] = await Promise.all([
     read('src/app/features/onboarding/training-camp/training-camp.ts'),
     read('src/app/features/onboarding/training-camp/training-camp.html'),
@@ -99,19 +99,11 @@ test('completion, deferral, verification, and invite continuation authority rema
 
   assert.match(source, /completeTrainingCamp\(this\.userId\)/);
   assert.match(source, /deferTrainingCamp\(this\.userId\)/);
-  assert.match(source, /markPendingLeagueInviteTrainingCampComplete/);
-  assert.match(
-    source,
-    /requestVerificationEmail\(\{[\s\S]*?inviteCode: this\.inviteContinuationActive\(\)[\s\S]*?this\.pendingInviteCode\(\)[\s\S]*?undefined,[\s\S]*?\}\)/,
-  );
-  assert.match(source, /getVerificationEmailState\(\)/);
-  assert.match(source, /hasResolvedTrainingCampOnboarding/);
-  assert.match(source, /continueAfterTrainingCamp/);
-  assert.match(source, /'Join League First' : 'Finish Later'/);
-  assert.doesNotMatch(template, /Later &amp; Verify/);
-  assert.match(template, /I Verified — Continue/);
-  assert.match(template, /verificationSendButtonLabel\(\)/);
-  assert.match(template, /Click to send the first verification email/);
+  assert.match(source, /continuationRequested[\s\S]*?navigateByUrl\(invitePath, \{ replaceUrl: true \}\)/);
+  assert.doesNotMatch(source, /requestVerificationEmail|getVerificationEmailState|hasResolvedTrainingCampOnboarding/);
+  assert.doesNotMatch(template, /Verify Email|Join League First|verificationSendButtonLabel/);
+  assert.match(source, /return 'Finish Later'/);
+  assert.match(template, /exitActionLabel\(\)/);
 });
 
 test('hockey definitions allow only one panel and stay inside the viewport', async () => {

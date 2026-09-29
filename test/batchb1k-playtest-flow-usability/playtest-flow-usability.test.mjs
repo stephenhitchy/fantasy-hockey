@@ -46,10 +46,10 @@ test('verification labels and countdown distinguish the first send from resends'
   assert.equal(getVerificationCooldownSeconds(9_999, 10_000), 0);
 });
 
-test('the backend marks an unresolved account ready but never auto-sends its first email', async () => {
+test('the backend marks an unresolved account ready while the coordinated registration call owns the first send', async () => {
   const source = await read('functions/src/email-notifications.ts');
   const createdTrigger = source.match(
-    /export const sendWelcomeEmailOnProfileCreated[\s\S]*?\n\);\n\nexport const sendWelcomeEmailAfterTrainingCampResolved/,
+    /export const sendWelcomeEmailOnProfileCreated[\s\S]*?\n\);\n\n\/\/ Keep the deployed function name/,
   )?.[0] ?? '';
   const resolvedTrigger = source.match(
     /export const sendWelcomeEmailAfterTrainingCampResolved[\s\S]*?\n\);\n\nexport const sendInjuryEmailOnAvailabilityChange/,
@@ -152,11 +152,12 @@ test('one listener-free league navigation component is present on every destinat
   assert.doesNotMatch(pages[0], /Most-used league pages|League Essentials|league-essentials-card/);
 });
 
-test('Release Readiness now tests the manual first-send path', async () => {
+test('Release Readiness tests the coordinated first-send path and resend recovery', async () => {
   const validation = await read('src/app/core/release/invite-beta-validation.util.ts');
 
-  assert.match(validation, /press Send verification email/);
-  assert.match(validation, /No verification email arrives[^;]*before the manager presses Send verification email/);
+  assert.match(validation, /automatically requested verification email/);
+  assert.match(validation, /Exactly one initial verification request is recorded/);
+  assert.match(validation, /resend reflects the real cooldown/);
   assert.doesNotMatch(validation, /Finish Later & Verify|newly released verification email/);
 });
 

@@ -9,8 +9,6 @@ import {
   bindPendingLeagueInviteToAccount,
   clearPendingLeagueInvite,
   isValidLeagueInviteCode,
-  markPendingLeagueInviteRequiresTrainingCamp,
-  markPendingLeagueInviteTrainingCampComplete,
   normalizeLeagueInviteCode,
   pendingLeagueInviteAccountMatch,
   readPendingLeagueInvite,
@@ -29,7 +27,6 @@ import {
   getVerificationCooldownSeconds,
   getVerificationSendButtonLabel,
 } from '../../../core/notifications/verification-email-state.util';
-import { hasResolvedTrainingCampOnboarding } from '../../../core/onboarding/training-camp.service';
 import { TelemetryService } from '../../../core/observability/telemetry.service';
 import { TeamIdentityChallengeService } from '../../../core/user/team-identity-challenge.service';
 import { getUserProfile } from '../../../core/user/user.service';
@@ -40,7 +37,6 @@ export type LeagueInviteLinkStage =
   | 'ready'
   | 'sign-in'
   | 'account-mismatch'
-  | 'training-camp'
   | 'verification'
   | 'joining'
   | 'error'
@@ -202,12 +198,6 @@ export class LeagueInviteLink implements OnDestroy {
     }
   }
 
-  async continueTrainingCamp(): Promise<void> {
-    await this.router.navigate(['/training-camp'], {
-      queryParams: { continue: 'league-invite' },
-    });
-  }
-
   async sendVerificationEmail(): Promise<void> {
     if (this.verificationSendDisabled()) {
       return;
@@ -236,7 +226,7 @@ export class LeagueInviteLink implements OnDestroy {
         );
       } else if (result.outcome === 'blocked') {
         this.errorMessage.set(
-          'Finish Training Camp or choose Finish Later before sending the verification email.',
+          'Verification email sending is temporarily unavailable. Refresh this page and try again.',
         );
       } else {
         this.statusMessage.set(
@@ -368,7 +358,6 @@ export class LeagueInviteLink implements OnDestroy {
       }
 
       const profile = await getUserProfile(user.uid);
-      const trainingCampResolved = hasResolvedTrainingCampOnboarding(profile);
 
       if (!user.emailVerified) {
         try {
@@ -383,29 +372,8 @@ export class LeagueInviteLink implements OnDestroy {
       }
 
       const continuationStep = resolveLeagueInviteContinuationStep({
-        trainingCampResolved,
         emailVerified: user.emailVerified,
       });
-
-      if (continuationStep === 'training-camp') {
-        const marked = markPendingLeagueInviteRequiresTrainingCamp(
-          user.uid,
-          this.inviteCode(),
-        );
-
-        if (!marked) {
-          throw new Error('The invitation could not save your Training Camp step.');
-        }
-
-        this.stage.set('training-camp');
-        await this.continueTrainingCamp();
-        return;
-      }
-
-      const activeIntent = readPendingLeagueInvite(this.inviteCode());
-      if (activeIntent?.requiresTrainingCamp) {
-        markPendingLeagueInviteTrainingCampComplete(user.uid, this.inviteCode());
-      }
 
       if (continuationStep === 'email-verification') {
         this.verificationEmail.set(user.email ?? 'your account email');
@@ -485,6 +453,7 @@ export class LeagueInviteLink implements OnDestroy {
 
       if (state.alreadyVerified) {
         this.statusMessage.set('Your email is verified. Joining the league now...');
+        await this.refreshVerificationStatus(true);
         return;
       }
 

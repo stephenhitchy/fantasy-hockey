@@ -9,11 +9,10 @@ import {
   buildLeagueInviteUrl,
   clearPendingLeagueInvite,
   isValidLeagueInviteCode,
-  markPendingLeagueInviteRequiresTrainingCamp,
-  markPendingLeagueInviteTrainingCampComplete,
   normalizeLeagueInviteCode,
   pendingLeagueInviteAccountMatch,
   readPendingLeagueInvite,
+  resolveLeagueInviteContinuationStep,
   startPendingLeagueInvite,
   unbindPendingLeagueInviteAccount,
 } from '../../src/app/core/league/invite-link-intent.service.ts';
@@ -76,21 +75,23 @@ test('account binding prevents silent account switching but allows explicit conf
   assert.equal(pendingLeagueInviteAccountMatch(unbound, 'user-a'), 'unbound');
 });
 
-test('new-account Training Camp state can only be completed by the bound account', () => {
-  startPendingLeagueInvite('ICE123');
-  bindPendingLeagueInviteToAccount('new-user', { inviteCode: 'ICE123' });
+test('legacy Training Camp intent state cannot gate a bound invitation', () => {
+  const started = startPendingLeagueInvite('ICE123', {
+    accountUid: 'new-user',
+    requiresTrainingCamp: true,
+  });
 
-  const required = markPendingLeagueInviteRequiresTrainingCamp('new-user', 'ICE123');
-  assert.ok(required);
-  assert.equal(required.requiresTrainingCamp, true);
+  assert.ok(started);
+  assert.equal(started.requiresTrainingCamp, true);
+  assert.equal(pendingLeagueInviteAccountMatch(started, 'new-user'), 'matching');
   assert.equal(
-    markPendingLeagueInviteTrainingCampComplete('wrong-user', 'ICE123'),
-    null,
+    resolveLeagueInviteContinuationStep({ emailVerified: false }),
+    'email-verification',
   );
-
-  const complete = markPendingLeagueInviteTrainingCampComplete('new-user', 'ICE123');
-  assert.ok(complete);
-  assert.equal(complete.requiresTrainingCamp, false);
+  assert.equal(
+    resolveLeagueInviteContinuationStep({ emailVerified: true }),
+    'join',
+  );
 });
 
 test('the public route sits outside the authenticated shell and loads a dedicated invite page', async () => {
@@ -115,7 +116,7 @@ test('opening a link cannot mutate membership until Join League is deliberately 
   assert.doesNotMatch(component, /constructor\([\s\S]{0,1200}startPendingLeagueInvite/);
 });
 
-test('saved invitations continue through auth, Training Camp, verification, and the existing secure join', async () => {
+test('saved invitations continue directly through auth, verification, and the existing secure join', async () => {
   const [invite, authPage, trainingCamp, leagueService, emailService] = await Promise.all([
     read('src/app/features/leagues/invite-link/invite-link.ts'),
     read('src/app/features/auth/auth.ts'),
@@ -125,10 +126,11 @@ test('saved invitations continue through auth, Training Camp, verification, and 
   ]);
 
   assert.match(authPage, /readPendingLeagueInvite/);
-  assert.match(authPage, /markPendingLeagueInviteRequiresTrainingCamp/);
-  assert.match(authPage, /continue: 'league-invite'/);
-  assert.match(trainingCamp, /markPendingLeagueInviteTrainingCampComplete/);
-  assert.match(trainingCamp, /navigateByUrl\(invitePath\)/);
+  assert.match(authPage, /initiateRegistrationVerificationEmail/);
+  assert.match(authPage, /buildLeagueInvitePath\(pendingInvite\.inviteCode\)/);
+  assert.doesNotMatch(authPage, /navigate\(\['\/training-camp'\]/);
+  assert.doesNotMatch(trainingCamp, /requestVerificationEmail|getVerificationEmailState/);
+  assert.match(trainingCamp, /navigateByUrl\(invitePath, \{ replaceUrl: true \}\)/);
   assert.match(invite, /requestVerificationEmail/);
   assert.match(invite, /user\.reload\(\)/);
   assert.match(invite, /user\.getIdToken\(true\)/);

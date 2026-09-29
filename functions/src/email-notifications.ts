@@ -28,7 +28,6 @@ const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const PASSWORD_RESET_COOLDOWN_SECONDS = 120;
 const VERIFICATION_COOLDOWN_SECONDS = 120;
-const CURRENT_TRAINING_CAMP_EMAIL_GATE_VERSION = 1;
 const TEST_INJURY_EMAIL_COOLDOWN_SECONDS = 60;
 const INJURY_BATCH_DELAY_MILLISECONDS = 15 * 60 * 1000;
 const INJURY_MAX_BATCH_HOLD_MILLISECONDS = 30 * 60 * 1000;
@@ -122,17 +121,6 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
-}
-
-function asInteger(value: unknown): number {
-  return typeof value === 'number' && Number.isInteger(value) ? value : 0;
-}
-
-function hasReleasedOnboardingVerification(profile: DocumentData): boolean {
-  return asInteger(profile['trainingCampVersion']) >=
-      CURRENT_TRAINING_CAMP_EMAIL_GATE_VERSION ||
-    asInteger(profile['trainingCampDeferredVersion']) >=
-      CURRENT_TRAINING_CAMP_EMAIL_GATE_VERSION;
 }
 
 function hasOnboardingEmailHistory(profile: DocumentData): boolean {
@@ -612,8 +600,7 @@ async function markInitialAccountEmailReady(
 ): Promise<boolean> {
   if (
     hasOnboardingEmailHistory(profile) ||
-    isManualVerificationEmailReady(profile) ||
-    !hasReleasedOnboardingVerification(profile)
+    isManualVerificationEmailReady(profile)
   ) {
     return false;
   }
@@ -633,17 +620,31 @@ async function markInitialAccountEmailReady(
     return true;
   }
 
-  await db.doc(`users/${userId}`).set(
-    {
-      welcomeEmailStatus: 'ready-for-manual-send',
-      verificationEmailReadyAt: FieldValue.serverTimestamp(),
-      welcomeEmailDeferredAt: FieldValue.delete(),
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+  const profileRef = db.doc(`users/${userId}`);
+  return db.runTransaction(async (transaction) => {
+    const latestSnapshot = await transaction.get(profileRef);
+    const latestProfile = latestSnapshot.data() ?? {};
 
-  return true;
+    if (
+      hasOnboardingEmailHistory(latestProfile) ||
+      isManualVerificationEmailReady(latestProfile)
+    ) {
+      return false;
+    }
+
+    transaction.set(
+      profileRef,
+      {
+        welcomeEmailStatus: 'ready-for-manual-send',
+        verificationEmailReadyAt: FieldValue.serverTimestamp(),
+        welcomeEmailDeferredAt: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return true;
+  });
 }
 
 function getTimestampMillis(value: unknown): number {
@@ -2045,7 +2046,6 @@ export const resendVerificationEmail = onCall(
     const inviteCode = normalizeVerificationInviteCode(
       asRecord(request.data)['inviteCode'],
     );
-    const onboardingResolved = hasReleasedOnboardingVerification(profile);
     const profileShowsEmailHistory = hasOnboardingEmailHistory(profile);
     const rateLimitKey = `verification-${userId}`;
     const action = asString(asRecord(request.data)['action']) === 'status'
@@ -2068,7 +2068,7 @@ export const resendVerificationEmail = onCall(
       accepted: true,
       alreadyVerified: user.emailVerified,
       outcome: input.outcome,
-      eligible: onboardingResolved || user.emailVerified,
+      eligible: true,
       emailPreviouslySent: input.previouslySent ?? emailPreviouslySent,
       firstSend: input.firstSend ?? false,
       cooldownSecondsRemaining: input.cooldownSecondsRemaining ?? 0,
@@ -2084,17 +2084,6 @@ export const resendVerificationEmail = onCall(
         outcome: 'already-verified',
         previouslySent: profileShowsEmailHistory,
       });
-    }
-
-    if (!onboardingResolved) {
-      if (action === 'send') {
-        throw new HttpsError(
-          'failed-precondition',
-          'Finish Training Camp or choose Finish Later before requesting email verification.',
-        );
-      }
-
-      return buildResponse({ outcome: 'blocked' });
     }
 
     if (action === 'status') {
@@ -2174,10 +2163,8 @@ export const sendWelcomeEmailOnProfileCreated = onDocumentCreated(
       return;
     }
 
-    // The create-event snapshot can be stale if a very fast manager finishes or
-    // exits Training Camp before this retryable trigger runs. Re-read the current
-    // profile so an older creation event never puts an already-released account
-    // back into the waiting state.
+    // Re-read current state so a retry never replaces a successful callable send
+    // with older profile-created metadata.
     const currentSnapshot = await db.doc(`users/${userId}`).get();
     const profile = currentSnapshot.data() ?? snapshot.data();
 
@@ -2185,22 +2172,12 @@ export const sendWelcomeEmailOnProfileCreated = onDocumentCreated(
       return;
     }
 
-    if (hasReleasedOnboardingVerification(profile)) {
-      await markInitialAccountEmailReady(userId, profile);
-      return;
-    }
-
-    await currentSnapshot.ref.set(
-      {
-        welcomeEmailStatus: 'waiting-for-training-camp',
-        welcomeEmailDeferredAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    await markInitialAccountEmailReady(userId, profile);
   },
 );
 
+// Keep the deployed function name for a no-delete rollout. Its current job is
+// generic readiness reconciliation; Training Camp no longer controls email.
 export const sendWelcomeEmailAfterTrainingCampResolved = onDocumentWritten(
   {
     document: 'users/{userId}',
@@ -2223,14 +2200,11 @@ export const sendWelcomeEmailAfterTrainingCampResolved = onDocumentWritten(
     // even after exists is checked. Keep the runtime guard so strict Functions
     // builds and any malformed trigger payload both fail closed.
     if (!profile) {
-      console.warn('Ignored Training Camp email trigger without profile data.');
+      console.warn('Ignored verification-readiness trigger without profile data.');
       return;
     }
 
-    if (
-      hasOnboardingEmailHistory(profile) ||
-      !hasReleasedOnboardingVerification(profile)
-    ) {
+    if (hasOnboardingEmailHistory(profile)) {
       return;
     }
 
@@ -2240,7 +2214,7 @@ export const sendWelcomeEmailAfterTrainingCampResolved = onDocumentWritten(
     );
 
     if (!userId) {
-      console.warn('Ignored malformed Training Camp email trigger.');
+      console.warn('Ignored malformed verification-readiness trigger.');
       return;
     }
 

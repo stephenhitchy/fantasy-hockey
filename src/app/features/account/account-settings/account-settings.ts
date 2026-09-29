@@ -23,7 +23,6 @@ import {
 } from '../../../core/notifications/verification-email-state.util';
 import {
   hasCompletedTrainingCamp,
-  hasResolvedTrainingCampOnboarding,
 } from '../../../core/onboarding/training-camp.service';
 import {
   getMyLeagueSummaries,
@@ -300,7 +299,7 @@ export class AccountSettings {
       this.profile.set(normalizedProfile);
 
       if (!user.emailVerified) {
-        this.verificationEmailEligible.set(hasResolvedTrainingCampOnboarding(profile));
+        this.verificationEmailEligible.set(true);
         void this.loadVerificationEmailState();
       }
 
@@ -799,7 +798,7 @@ export class AccountSettings {
         );
       } else if (result.outcome === 'blocked') {
         this.errorMessage.set(
-          'Finish Training Camp or choose Finish Later before sending the verification email.',
+          'Verification email sending is temporarily unavailable. Refresh this page and try again.',
         );
       } else {
         this.successMessage.set(
