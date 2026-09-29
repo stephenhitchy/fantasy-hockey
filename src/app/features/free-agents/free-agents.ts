@@ -21,6 +21,7 @@ import {
   cancelQueuedRosterMove,
   FantasyWaiver,
   FantasyWaiverClaimMoveType,
+  getFantasyDraft,
   listenToFantasyDraft,
   listenToLeagueWaivers,
   placeWaiverClaim,
@@ -28,8 +29,10 @@ import {
 } from '../../core/draft/draft.service';
 
 import {
+  generateSharedProjectionSnapshot,
   listenToSharedProjectionSnapshot,
   loadSharedProjectionSnapshot,
+  loadSharedProjectionSnapshotById,
   loadSharedProjectionSnapshotFresh,
   type SharedProjectionSnapshotMetadata,
 } from '../../core/projection/projection-snapshot.service';
@@ -206,6 +209,7 @@ export class FreeAgents implements OnDestroy {
   boardSortMode = signal<LeaguePlayerBoardSortMode>('roster-fit');
   boardVisibleLimit = signal(UNIFIED_PLAYER_PAGE_SIZE);
   boardRefreshing = signal(false);
+  playerPoolPreparing = signal(false);
   expandedRosterFitAssetKey = signal('');
   suggestedRosterFitComparisonAssetKey = signal('');
 
@@ -942,26 +946,51 @@ export class FreeAgents implements OnDestroy {
     this.errorMessage.set('');
 
     try {
-      const snapshot = forceRefresh
+      let snapshot = forceRefresh
         ? await loadSharedProjectionSnapshotFresh(this.leagueId)
         : await loadSharedProjectionSnapshot(this.leagueId);
 
       if (!snapshot) {
-        this.playerPool.set([]);
-        this.snapshotMetadata.set(null);
-        throw new Error(
-          'Shared projections are not ready. The commissioner must refresh them in Projection Lab.',
-        );
+        const draft = this.draft() ?? (await getFantasyDraft(this.leagueId));
+        const pinnedSnapshotId = draft?.serverDraftProjectionSnapshotId?.trim() ?? '';
+
+        if (pinnedSnapshotId) {
+          snapshot = await loadSharedProjectionSnapshotById(
+            this.leagueId,
+            pinnedSnapshotId,
+          );
+        }
+      }
+
+      if (!snapshot) {
+        const league = this.league();
+
+        if (!league) {
+          throw new Error('League not found.');
+        }
+
+        this.playerPoolPreparing.set(true);
+        snapshot = await generateSharedProjectionSnapshot({
+          leagueId: this.leagueId,
+          teamCount: Math.max(league.maxTeams ?? 0, this.teams().length, 2),
+          requiredGamesPerCycle: league.scoringRules?.requiredGamesPerCycle ?? 6,
+          generationReason: 'player-directory',
+        });
       }
 
       this.playerPool.set(snapshot.assets);
       this.snapshotMetadata.set(snapshot.metadata);
       this.resumeRestoredSelectionIfAvailable();
     } catch (error: unknown) {
+      this.playerPool.set([]);
+      this.snapshotMetadata.set(null);
       this.errorMessage.set(
-        error instanceof Error ? error.message : 'Unable to load the shared player pool.',
+        error instanceof Error
+          ? error.message
+          : 'RinkRat could not prepare the player directory automatically. Try again shortly.',
       );
     } finally {
+      this.playerPoolPreparing.set(false);
       this.playerPoolLoading.set(false);
     }
   }

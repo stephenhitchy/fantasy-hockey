@@ -995,6 +995,68 @@
       </div>
     </app-action-sheet>
 
+    <app-action-sheet
+      [open]="isOwnTeam() && activeBenchPickerOpen()"
+      title="Swap with Bench"
+      eyebrow="Active Lineup Change"
+      description="Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary before you confirm."
+      [busy]="isRosterOperationPending()"
+      closeLabel="Close bench player choices"
+      dialogId="active-bench-picker-title"
+      (close)="cancelActiveBenchSwapPicker()"
+    >
+      @if (getPendingActiveBenchSwapSlot(); as activeSwapSlot) {
+        @if (activeSwapSlot.asset; as activeSwapAsset) {
+          <section class="active-bench-picker-summary">
+            <app-asset-portrait [asset]="activeSwapAsset" />
+            <div>
+              <span>Currently starting</span>
+              <strong>{{ getRosterAssetName(activeSwapAsset) }}</strong>
+              <small>
+                {{ getRosterAssetTeamLabel(activeSwapAsset) }} · {{ activeSwapSlot.position }} Slot
+                {{ activeSwapSlot.slotNumber }} · {{ getRosterAssetGameProgress(activeSwapAsset) }}
+              </small>
+            </div>
+          </section>
+
+          @if (getActiveBenchSwapCandidates().length > 0) {
+            <div class="active-bench-picker-list" aria-label="Compatible bench players">
+              @for (benchSlot of getActiveBenchSwapCandidates(); track benchSlot.slotId) {
+                @if (benchSlot.asset; as benchAsset) {
+                  <button
+                    type="button"
+                    class="active-bench-picker-option"
+                    (click)="chooseActiveBenchSwapCandidate(benchSlot.slotId)"
+                    [disabled]="isRosterOperationPending()"
+                  >
+                    <app-asset-portrait [asset]="benchAsset" />
+                    <span>
+                      <strong>{{ getRosterAssetName(benchAsset) }}</strong>
+                      <small>
+                        {{ getRosterAssetTeamLabel(benchAsset) }} · {{ benchAsset.position }} · Bench
+                        {{ benchSlot.slotNumber }}
+                      </small>
+                      <small>Six-game progress: {{ getRosterAssetGameProgress(benchAsset) }}</small>
+                    </span>
+                    <em aria-hidden="true">›</em>
+                  </button>
+                }
+              }
+            </div>
+          } @else {
+            <div class="active-bench-picker-empty rr-notice rr-notice--info" role="status">
+              <strong>No matching bench player is available.</strong>
+              <span>
+                Your bench does not currently contain an unreserved
+                {{ activeSwapSlot.position }} player who can swap into this spot. The active player
+                has not been changed.
+              </span>
+            </div>
+          }
+        }
+      }
+    </app-action-sheet>
+
     @if (getPendingIrActivationSlot(); as activationIrSlot) {
       @if (activationIrSlot.asset; as activationAsset) {
         <div
@@ -1466,6 +1528,7 @@
                 class="ir-activation-confirm rr-button rr-button--commit"
                 (click)="confirmBenchSwap($event)"
                 [disabled]="!canConfirmBenchSwap()"
+                [attr.data-commit-ready]="canConfirmBenchSwap() ? 'true' : null"
               >
                 <span class="rr-commit-mark" aria-hidden="true">✓</span>
                 <span class="rr-commit-copy">

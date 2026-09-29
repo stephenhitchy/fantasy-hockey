@@ -193,7 +193,13 @@
       @if (playerPoolLoading() && boardRows().length === 0) {
         <div class="unified-player-state rr-state" role="status">
           <span class="rr-spinner" aria-hidden="true"></span>
-          <strong>Refreshing players...</strong>
+          <strong>{{ playerPoolPreparing() ? 'Preparing players automatically...' : 'Refreshing players...' }}</strong>
+          @if (playerPoolPreparing()) {
+            <small>
+              RinkRat is building the verified player directory for this league. You do not need
+              the commissioner or Projection Lab.
+            </small>
+          }
         </div>
       } @else if (visibleBoardRows().length === 0) {
         <div class="unified-player-state rr-state"><strong>No matches.</strong></div>

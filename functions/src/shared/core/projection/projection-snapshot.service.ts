@@ -80,6 +80,7 @@ export type SharedProjectionGenerationReason =
   | 'draft-start-fallback'
   | 'cycle-refresh'
   | 'window-boundary'
+  | 'player-directory'
   | 'server-emergency';
 
 export interface SharedProjectionSnapshotMetadata {

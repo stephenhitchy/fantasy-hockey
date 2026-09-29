@@ -206,7 +206,7 @@ html[data-background-theme='light-ice'] body {
   button[class*='confirm'],
   button[class*='save'],
   button[class*='submit']
-) {
+):not(.rr-button--commit) {
   --rr-button-face: var(--user-team-primary);
   --rr-button-ink: var(--user-team-on-primary);
   --rr-button-edge: color-mix(in srgb, var(--user-team-primary) 68%, #fff3d2);

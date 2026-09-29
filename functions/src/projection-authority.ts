@@ -43,6 +43,10 @@ import {
   PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
 import { DRAFT_RANKING_MODEL_VERSION } from './shared/core/projection/projection-ranking.util';
+import {
+  isClientProjectionGenerationReason,
+  projectionGenerationRequiresCommissioner,
+} from './shared/core/projection/projection-generation-access.util';
 
 const FUNCTION_REGION = 'us-central1';
 const PROJECTION_REQUEST_SCHEMA_VERSION = 1;
@@ -58,15 +62,6 @@ const DRAFT_PROJECTION_FRESH_MILLISECONDS = 45 * 60 * 1000;
 const WINDOW_PROJECTION_FRESH_MILLISECONDS = 6 * 60 * 60 * 1000;
 const PROJECTION_INTEGRITY_REASON_MIN_LENGTH = 8;
 const PROJECTION_INTEGRITY_REASON_MAX_LENGTH = 500;
-
-const CLIENT_GENERATION_REASONS = new Set<SharedProjectionGenerationReason>([
-  'manual',
-  'draft-setup',
-  'pre-draft',
-  'draft-start-fallback',
-  'cycle-refresh',
-  'window-boundary',
-]);
 
 interface ProjectionGenerationTaskPayload {
   requestId: string;
@@ -156,9 +151,9 @@ function requireRequestId(value: unknown): string {
 }
 
 function requireGenerationReason(value: unknown): SharedProjectionGenerationReason {
-  const reason = asString(value) as SharedProjectionGenerationReason;
+  const reason = asString(value);
 
-  if (!CLIENT_GENERATION_REASONS.has(reason)) {
+  if (!isClientProjectionGenerationReason(reason)) {
     throw new HttpsError('invalid-argument', 'Choose a supported projection refresh reason.');
   }
 
@@ -396,11 +391,7 @@ async function resolveProjectionRequestContext(
     throw new HttpsError('permission-denied', 'You do not have access to that league.');
   }
 
-  const privilegedReason =
-    generationReason === 'manual' ||
-    generationReason === 'draft-setup' ||
-    generationReason === 'cycle-refresh' ||
-    generationReason === 'window-boundary';
+  const privilegedReason = projectionGenerationRequiresCommissioner(generationReason);
 
   if (privilegedReason && !commissioner && !platformAdmin) {
     throw new HttpsError(

@@ -6,6 +6,7 @@ export type RosterManagementActionId =
   | 'view'
   | 'find-player'
   | 'review-scheduled'
+  | 'swap-with-bench'
   | 'start'
   | 'move-to-ir'
   | 'activate'
@@ -111,10 +112,18 @@ export function buildRosterManagementActions(
 
     actions.push(
       action(
+        'swap-with-bench',
+        'Swap with a Bench Player',
+        'Choose a matching player from your bench. If none are eligible, the next screen will explain what is missing.',
+        'primary',
+        !locked,
+        'Wait for the current roster action to finish.',
+      ),
+      action(
         'find-player',
         'Find a Replacement',
         'Open Add / Drop already filtered to this position. This exact roster slot will be preselected.',
-        'primary',
+        'secondary',
         !locked,
         'Wait for the current roster action to finish.',
       ),

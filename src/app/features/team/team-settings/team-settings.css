@@ -1635,7 +1635,7 @@
   color: var(--rr-team-migration-color-01);
 }
 
-.ir-activation-confirm {
+.ir-activation-confirm:not(.rr-button--commit):not(.rr-button--danger) {
   border: 1px solid rgba(152, 245, 189, 0.46);
   background: var(--rr-team-migration-color-06);
   color: #102016;

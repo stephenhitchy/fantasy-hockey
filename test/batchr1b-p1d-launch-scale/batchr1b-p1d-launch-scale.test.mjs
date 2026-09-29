@@ -379,6 +379,8 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/player/draft-availability-attestation-write.service.ts',
         'src/shared/core/draft/draft.models.ts',
         'src/projection-authority.ts',
+        // B1S adds the isolated client-generation access policy used by projection authority.
+        'src/shared/core/projection/projection-generation-access.util.ts',
         'src/shared/core/projection/projection-asset-catalog.service.ts',
         'src/shared/core/projection/projection-asset-catalog.util.ts',
         'src/shared/core/projection/projection-snapshot.service.ts',

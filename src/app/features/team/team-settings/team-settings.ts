@@ -194,6 +194,8 @@ export class TeamSettings implements OnDestroy {
   irBenchActivationTargetSlotId = signal('');
   benchSwapSlotId = signal('');
   benchSwapTargetSlotId = signal('');
+  benchSwapRestrictedTargetSlotId = signal('');
+  activeBenchPickerSlotId = signal('');
   rosterDropSource = signal<RosterDropSource | null>(null);
   rosterDropSlotId = signal('');
   rosterManagerArea = signal<RosterManagementArea | null>(null);
@@ -307,6 +309,10 @@ export class TeamSettings implements OnDestroy {
 
   readonly rosterManagerOpen = computed(() =>
     Boolean(this.rosterManagerArea() && this.rosterManagerSlotId()),
+  );
+
+  readonly activeBenchPickerOpen = computed(() =>
+    Boolean(this.activeBenchPickerSlotId()),
   );
 
   readonly rosterManagerAsset = computed(() => {
@@ -560,6 +566,8 @@ export class TeamSettings implements OnDestroy {
     this.irBenchActivationTargetSlotId.set('');
     this.benchSwapSlotId.set('');
     this.benchSwapTargetSlotId.set('');
+    this.benchSwapRestrictedTargetSlotId.set('');
+    this.activeBenchPickerSlotId.set('');
     this.rosterDropSource.set(null);
     this.rosterDropSlotId.set('');
   }
@@ -981,6 +989,11 @@ export class TeamSettings implements OnDestroy {
           queryParams: { focus: 'pending-moves' },
           fragment: 'pending-roster-moves',
         });
+        return;
+
+      case 'swap-with-bench':
+        this.closeRosterManager();
+        this.beginActiveBenchSwapPicker(slotId);
         return;
 
       case 'start':
@@ -1664,7 +1677,78 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
-  beginBenchSwap(benchSlotId: string): void {
+  beginActiveBenchSwapPicker(activeSlotId: string): void {
+    if (!this.isOwnTeam() || this.isRosterOperationPending()) {
+      return;
+    }
+
+    const activeSlot = this.roster()?.activeSlots.find(
+      (slot) => slot.slotId === activeSlotId,
+    );
+
+    if (!activeSlot?.asset || activeSlot.pendingMove) {
+      this.rosterMoveError.set(
+        activeSlot?.pendingMove
+          ? 'That active roster slot already has a scheduled move.'
+          : 'That active roster slot is empty.',
+      );
+      return;
+    }
+
+    this.rosterMoveError.set('');
+    this.rosterMoveMessage.set('');
+    this.activeBenchPickerSlotId.set(activeSlotId);
+  }
+
+  cancelActiveBenchSwapPicker(): void {
+    if (this.rosterMoveLoading()) {
+      return;
+    }
+
+    this.activeBenchPickerSlotId.set('');
+  }
+
+  getPendingActiveBenchSwapSlot(): ActiveRosterSlot | null {
+    const slotId = this.activeBenchPickerSlotId();
+
+    if (!slotId) {
+      return null;
+    }
+
+    return this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null;
+  }
+
+  getActiveBenchSwapCandidates(): BenchRosterSlot[] {
+    const activeSlot = this.getPendingActiveBenchSwapSlot();
+
+    if (!activeSlot?.asset) {
+      return [];
+    }
+
+    return this.getBenchSlots().filter(
+      (slot) =>
+        slot.asset?.position === activeSlot.position &&
+        !this.isBenchSlotReservedForActiveSwap(slot),
+    );
+  }
+
+  chooseActiveBenchSwapCandidate(benchSlotId: string): void {
+    const activeSlot = this.getPendingActiveBenchSwapSlot();
+    const candidate = this.getActiveBenchSwapCandidates().find(
+      (slot) => slot.slotId === benchSlotId,
+    );
+
+    if (!activeSlot?.asset || !candidate?.asset || this.rosterMoveLoading()) {
+      return;
+    }
+
+    this.activeBenchPickerSlotId.set('');
+    this.beginBenchSwap(candidate.slotId, activeSlot.slotId);
+  }
+
+  beginBenchSwap(benchSlotId: string): void;
+  beginBenchSwap(benchSlotId: string, preferredActiveSlotId: string): void;
+  beginBenchSwap(benchSlotId: string, preferredActiveSlotId = ''): void {
     if (
       !this.isOwnTeam() ||
       this.isRosterOperationPending() ||
@@ -1692,7 +1776,9 @@ export class TeamSettings implements OnDestroy {
     this.rosterMoveError.set('');
     this.rosterMoveMessage.set('');
     this.benchSwapSlotId.set(benchSlotId);
-    this.benchSwapTargetSlotId.set(targets[0].slotId);
+    const preferredTarget = targets.find((slot) => slot.slotId === preferredActiveSlotId);
+    this.benchSwapRestrictedTargetSlotId.set(preferredTarget?.slotId ?? '');
+    this.benchSwapTargetSlotId.set(preferredTarget?.slotId ?? targets[0].slotId);
   }
 
   cancelBenchSwap(): void {
@@ -1706,6 +1792,7 @@ export class TeamSettings implements OnDestroy {
   private clearBenchSwapDialogState(): void {
     this.benchSwapSlotId.set('');
     this.benchSwapTargetSlotId.set('');
+    this.benchSwapRestrictedTargetSlotId.set('');
     this.scheduleViewportOverlayRepair();
   }
 
@@ -1741,9 +1828,14 @@ export class TeamSettings implements OnDestroy {
 
   getBenchSwapTargetSlots(): ActiveRosterSlot[] {
     const benchSlot = this.getPendingBenchSwapSlot();
-    return benchSlot?.asset
+    const targets = benchSlot?.asset
       ? this.getPositionSlots(benchSlot.asset.position).filter((slot) => !slot.pendingMove)
       : [];
+    const restrictedTargetSlotId = this.benchSwapRestrictedTargetSlotId();
+
+    return restrictedTargetSlotId
+      ? targets.filter((slot) => slot.slotId === restrictedTargetSlotId)
+      : targets;
   }
 
   selectBenchSwapTarget(slotId: string): void {

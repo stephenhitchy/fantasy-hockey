@@ -330,6 +330,103 @@ app-team-settings .roster-empty-find-action {
   text-align: center;
 }
 
+.active-bench-picker-summary {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--rr-space-3);
+  padding: var(--rr-space-3);
+  border: 1px solid var(--rr-color-border);
+  background: var(--rr-color-surface-raised);
+}
+
+.active-bench-picker-summary app-asset-portrait,
+.active-bench-picker-option app-asset-portrait {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.active-bench-picker-summary div,
+.active-bench-picker-option > span {
+  display: grid;
+  gap: var(--rr-space-1);
+  min-width: 0;
+}
+
+.active-bench-picker-summary span {
+  color: var(--rr-color-text-muted);
+  font-family: var(--rr-font-micro);
+  font-size: var(--rr-text-xs);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.active-bench-picker-summary strong,
+.active-bench-picker-option strong {
+  color: var(--rr-color-text);
+  font-size: var(--rr-text-md);
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.active-bench-picker-summary small,
+.active-bench-picker-option small {
+  color: var(--rr-color-text-secondary);
+  font-size: var(--rr-text-sm);
+  line-height: var(--rr-line-normal);
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.active-bench-picker-list {
+  display: grid;
+  gap: var(--rr-space-2);
+  margin-top: var(--rr-space-3);
+}
+
+.active-bench-picker-option {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--rr-space-3);
+  width: 100%;
+  min-height: var(--rr-touch-target);
+  padding: var(--rr-space-3);
+  border: 2px solid color-mix(in srgb, var(--rr-info) 60%, var(--rr-color-border));
+  background: color-mix(in srgb, var(--rr-info) 11%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.active-bench-picker-option:hover:not(:disabled),
+.active-bench-picker-option:focus-visible {
+  border-color: var(--rr-info);
+  background: color-mix(in srgb, var(--rr-info) 18%, var(--rr-color-surface-raised));
+}
+
+.active-bench-picker-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.active-bench-picker-option em {
+  color: var(--rr-info);
+  font-size: 1.75rem;
+  font-style: normal;
+}
+
+.active-bench-picker-empty {
+  display: grid;
+  gap: var(--rr-space-2);
+  margin-top: var(--rr-space-3);
+}
+
+.active-bench-picker-empty span {
+  color: inherit;
+  line-height: var(--rr-line-normal);
+}
+
 app-team-settings .roster-player-card--interactive {
   cursor: pointer;
 }

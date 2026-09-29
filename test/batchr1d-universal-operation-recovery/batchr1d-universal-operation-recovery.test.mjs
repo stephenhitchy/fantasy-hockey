@@ -398,6 +398,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-asset-catalog.util.ts',
     'shared/core/projection/projection-snapshot.service.ts',
     'shared/core/projection/projection-snapshot-hash.util.ts',
+    // B1S adds the isolated client-generation access policy used by projection authority.
+    'shared/core/projection/projection-generation-access.util.ts',
     // FF1.18 adds the reviewed prospect adapter and its optional V11 input.
     'shared/core/cycle/cycle.service.ts',
     'shared/core/projection/projection-v11.util.ts',
