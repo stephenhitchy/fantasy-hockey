@@ -330,6 +330,32 @@ test('Batch B1N NHL game detail behavior', async (suite) => {
     assert.equal(utility.formatNhlSavePercentage(0), '.000');
     assert.equal(utility.formatNhlSavePercentage(undefined), '—');
   });
+
+  await suite.test('keeps live leaders available while the NHL feed is still missing time on ice', () => {
+    const teams = makeTeams();
+    const performers = utility.buildNhlGameTopPerformers({
+      ...teams,
+      gameState: 'LIVE',
+      playerByGameStats: {
+        awayTeam: {
+          forwards: [
+            skater({ playerId: 10, toi: undefined }),
+            skater({ playerId: 11, name: { default: 'D. Ready' }, toi: '02:10' }),
+          ],
+          defense: [],
+          goalies: [],
+        },
+        homeTeam: {
+          forwards: [],
+          defense: [],
+          goalies: [goalie({ toi: undefined, shotsAgainst: 0, saves: 0 })],
+        },
+      },
+    }, { rosterSpots: makeRoster() });
+
+    assert.deepEqual(performers.map((performer) => performer.playerId), [11, 10]);
+    assert.equal(performers[1].basis, '4 shots · — TOI');
+  });
 });
 
 test('Batch B1N NHL game detail source contracts', async (suite) => {

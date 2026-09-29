@@ -240,7 +240,11 @@ function getGameWinningGoalScorerId(
   return winningTeamGoals[losingScore]?.details?.scoringPlayerId ?? null;
 }
 
-function parseTimeOnIceMinutes(value: string): number | null {
+function parseTimeOnIceMinutes(value: unknown): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
   const match = /^(\d+):(\d{2})$/.exec(value.trim());
 
   if (!match) {

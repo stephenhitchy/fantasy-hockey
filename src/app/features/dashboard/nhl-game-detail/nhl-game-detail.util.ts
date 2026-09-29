@@ -317,7 +317,7 @@ export function buildNhlGameTopPerformers(
   const goalies = (collectPlayers(boxscore, 'goalie') as Array<{
     player: NhlGoalieBoxscoreLine;
     team: NhlGameTeamSummary;
-  }>).filter(({ player }) => player.toi !== '00:00' || player.shotsAgainst > 0);
+  }>).filter(({ player }) => timeOnIceSeconds(player.toi) > 0 || player.shotsAgainst > 0);
 
   skaters.sort((first, second) =>
     second.player.points - first.player.points ||
@@ -341,7 +341,7 @@ export function buildNhlGameTopPerformers(
     position: player.position,
     headshotUrl: roster.get(player.playerId)?.headshot ?? '',
     headline: `${player.goals} G · ${player.assists} A · ${player.points} P`,
-    basis: `${player.sog} shots · ${player.toi} TOI`,
+    basis: `${player.sog} shots · ${formatTimeOnIce(player.toi)} TOI`,
   }));
 
   if (goalies[0]) {
@@ -566,9 +566,30 @@ function collectPlayers(
   return result;
 }
 
-function timeOnIceSeconds(value: string): number {
-  const [minutes, seconds] = value.split(':').map(Number);
-  return Number.isFinite(minutes) && Number.isFinite(seconds)
+function normalizedTimeOnIce(value: unknown): string | null {
+  // A live NHL box score can briefly omit TOI before a player records a shift.
+  // Keep the partial payload renderable and label the value as unavailable.
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return /^\d+:\d{2}$/.test(normalized) ? normalized : null;
+}
+
+function formatTimeOnIce(value: unknown): string {
+  return normalizedTimeOnIce(value) ?? '—';
+}
+
+function timeOnIceSeconds(value: unknown): number {
+  const normalized = normalizedTimeOnIce(value);
+
+  if (!normalized) {
+    return 0;
+  }
+
+  const [minutes, seconds] = normalized.split(':').map(Number);
+  return Number.isFinite(minutes) && Number.isFinite(seconds) && seconds <= 59
     ? minutes * 60 + seconds
     : 0;
 }

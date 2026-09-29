@@ -259,6 +259,14 @@ test('missing or inconsistent provider evidence stays unavailable instead of bec
     ),
     null,
   );
+  assert.equal(
+    factsUtility.buildNhlSkaterGameScoringFacts(
+      makePlayer({ toi: undefined }),
+      makeBoxscore(),
+      makePlayByPlay(),
+    ),
+    null,
+  );
 });
 
 test('box score and player detail expose the calculation without creating new NHL requests', async () => {
