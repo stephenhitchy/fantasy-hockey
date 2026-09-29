@@ -288,229 +288,6 @@
       [isCommissioner]="isCommissioner()"
     />
 
-    <section class="league-overview-section" aria-labelledby="league-status-title">
-      <div class="section-heading rr-section-heading">
-        <div>
-          <span class="draft-section-eyebrow">League Overview</span>
-          <h2 id="league-status-title">Status and settings</h2>
-        </div>
-      </div>
-
-    <section class="league-info-grid rr-stat-grid">
-      <article class="league-info-card rr-stat-card">
-        <span>Format</span>
-        <strong>Six-Game Matchups</strong>
-      </article>
-
-      <article class="league-info-card rr-stat-card">
-        <span>Current Matchup</span>
-        <strong>{{ currentCycleLabel() }}</strong>
-      </article>
-
-      <article class="league-info-card rr-stat-card">
-        <span>NHL Games Per Roster Spot</span>
-        <strong>
-          {{ league()?.scoringRules?.requiredGamesPerCycle ?? 6 }}
-        </strong>
-      </article>
-
-      <article class="league-info-card rr-stat-card">
-        <span>Roster Format</span>
-        <strong>14 Active + 3 Bench + 3 Injured Reserve (IR)</strong>
-      </article>
-    </section>
-
-      <div class="league-status-grid">
-    @if (shouldShowDraftStatus()) {
-      <section class="draft-status-card rr-card rr-card--padded">
-        <div class="draft-status-heading">
-          <div>
-            <span class="draft-section-eyebrow">League Draft</span>
-            <h2>Draft Status</h2>
-          </div>
-
-          <span
-            class="draft-status-badge rr-badge"
-            [class.status-scheduled]="draft()?.status === 'scheduled' && !startTimeReached()"
-            [class.status-ready]="startTimeReached()"
-            [class.status-live]="draft()?.status === 'live'"
-            [class.status-complete]="draft()?.status === 'complete'"
-          >
-            {{ draftStatusLabel() }}
-          </span>
-        </div>
-
-        <p class="draft-status-description">
-          {{ draftStatusDescription() }}
-        </p>
-
-        @if (scheduledStartDate()) {
-          <div class="draft-time-display">
-            <strong>{{ formatDraftStart() }}</strong>
-            <span>{{ countdownText() }}</span>
-          </div>
-        } @else {
-          <div class="draft-time-display empty-draft-time">
-            <strong>No date selected yet</strong>
-            <span> Check back once the commissioner schedules the draft. </span>
-          </div>
-        }
-
-        <div
-          class="draft-injury-sync-card rr-notice rr-notice--info"
-          [class.sync-running]="injurySyncState()?.status === 'running'"
-          [class.sync-success]="injurySyncState()?.status === 'success'"
-          [class.sync-warning]="injurySyncState()?.status === 'error'"
-        >
-          <div>
-            <span class="draft-section-eyebrow">Shared Injury Report</span>
-            <strong>{{ getDraftInjurySyncStatusLabel() }}</strong>
-          </div>
-
-          <p>{{ getDraftInjurySyncDescription() }}</p>
-          <small>{{ getDraftInjurySyncTimeLabel() }}</small>
-        </div>
-      </section>
-    }
-
-    <section class="cycle-status-card rr-card rr-card--padded">
-      <div class="cycle-status-heading">
-        <div>
-          <span class="draft-section-eyebrow">Fantasy Season</span>
-          <h2>{{ currentCycleLabel() }}</h2>
-        </div>
-
-        <span
-          class="cycle-status-badge rr-badge"
-          [class.status-live]="cycle()?.status === 'active'"
-          [class.status-complete]="cycle()?.status === 'complete'"
-          [class.status-ready]="!cycle() && draft()?.status === 'complete'"
-        >
-          {{ getCurrentCycleStatusLabel() }}
-        </span>
-      </div>
-
-      <p class="draft-status-description">
-        {{ getCurrentCycleDescription() }}
-      </p>
-
-      @if (cycle()) {
-        <div class="cycle-link-row">
-          <a
-            class="view-cycle-link rr-button rr-button--primary"
-            [routerLink]="getCurrentOwnerMatchupLink()"
-          >
-            <span class="pixel-icon icon-matchup icon-sm" aria-hidden="true"></span>
-            <span>Open Current Matchup</span>
-          </a>
-
-          <a
-            class="view-cycle-link secondary-cycle-link rr-button rr-button--secondary"
-            [routerLink]="['/leagues', leagueId, 'cycles', currentCycleNumber(), 'matchups']"
-          >
-            <span class="pixel-icon icon-matchup icon-sm" aria-hidden="true"></span>
-            <span>View All Matchups</span>
-          </a>
-        </div>
-
-        <details class="cycle-matchup-preview">
-          <summary>
-            <span>
-              <strong>Preview every matchup</strong>
-              <small>{{ matchups().length }} in {{ currentCycleLabel() }}</small>
-            </span>
-            <span class="summary-chevron" aria-hidden="true">⌄</span>
-          </summary>
-
-          <div class="matchup-list">
-            @for (matchup of matchups(); track matchup.id) {
-            <article
-              class="matchup-card rr-card rr-card--padded"
-              [class.matchup-complete-card]="matchup.status === 'complete'"
-            >
-              <header>
-                <strong>{{ matchup.id }}</strong>
-                <span>{{ getMatchupResultLabel(matchup) }}</span>
-              </header>
-
-              <div class="matchup-team-row">
-                <span class="manager-name-with-avatar">
-                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamAOwnerId)" [label]="getTeamManagerLabel(matchup.teamAOwnerId)" size="xs" />
-                  <strong>{{ getTeamName(matchup.teamAOwnerId) }}</strong>
-                </span>
-                <span>{{ getDisplayNumber(matchup.teamAScore) }}</span>
-              </div>
-
-              <div class="matchup-vs">vs</div>
-
-              <div class="matchup-team-row">
-                <span class="manager-name-with-avatar">
-                  <app-manager-avatar [profileIconId]="getTeamProfileIconId(matchup.teamBOwnerId)" [label]="getTeamManagerLabel(matchup.teamBOwnerId)" size="xs" />
-                  <strong>{{ getTeamName(matchup.teamBOwnerId) }}</strong>
-                </span>
-                <span>{{ getDisplayNumber(matchup.teamBScore) }}</span>
-              </div>
-            </article>
-            }
-          </div>
-        </details>
-      } @else if (draft()?.status === 'complete') {
-        @if (shouldShowSeasonStartCard()) {
-          <section class="season-start-card rr-notice rr-notice--info" aria-live="polite">
-            <div class="season-start-copy">
-              <span class="draft-section-eyebrow">Preparing the Season</span>
-              <h3>Creating Matchup 1 and the opening schedule…</h3>
-              <p>
-                The server starts the season automatically as soon as the draft finishes.
-                This page will update when the matchup schedule is ready.
-              </p>
-            </div>
-
-            <div class="season-start-meta">
-              <strong>Automatic setup in progress</strong>
-              <span>No commissioner action is required.</span>
-            </div>
-          </section>
-        }
-      }
-
-    </section>
-      </div>
-
-    <section
-      class="daily-injury-status rr-notice rr-notice--info"
-      [class.daily-status-running]="
-        dailyInjuryRefreshInProgress() || injurySyncState()?.status === 'running'
-      "
-      [class.daily-status-success]="injurySyncState()?.lastDailySyncKey === getUtcDailyKey()"
-      [class.daily-status-warning]="
-        dailyInjuryRefreshError() || injurySyncState()?.status === 'error'
-      "
-      aria-live="polite"
-    >
-      <span class="daily-injury-icon pixel-icon icon-injury icon-lg" aria-hidden="true"></span>
-
-      <div class="daily-injury-copy">
-        <span class="draft-section-eyebrow">Daily Injury Report</span>
-        <strong>{{ getDailyInjuryStatusLabel() }}</strong>
-        <p>{{ getDailyInjuryStatusDescription() }}</p>
-      </div>
-
-      @if (isCommissioner() && injurySyncState()?.lastDailySyncKey !== getUtcDailyKey()) {
-        <div class="daily-injury-meta">
-          <button
-            type="button"
-            class="daily-injury-refresh-button rr-button rr-button--secondary"
-            (click)="requestTodayInjuryRefresh()"
-            [disabled]="dailyInjuryRefreshInProgress()"
-          >
-            {{ dailyInjuryRefreshInProgress() ? 'Refreshing…' : 'Refresh Today' }}
-          </button>
-        </div>
-      }
-    </section>
-    </section>
-
     <section class="teams-section">
       <div class="section-heading rr-section-heading">
         <div>
@@ -710,7 +487,8 @@
     </section>
 
     @if (isCommissioner()) {
-      <details class="league-tools league-capacity-disclosure rr-card">
+      @if (showPreDraftCommissionerManagement()) {
+        <details class="league-tools league-capacity-disclosure rr-card">
         <summary>
           <span>
             <strong id="league-capacity-title" role="heading" aria-level="2">League size</strong>
@@ -795,9 +573,9 @@
             <p class="rr-notice rr-notice--danger" role="alert">{{ capacityError() }}</p>
           }
         </div>
-      </details>
+        </details>
 
-      <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="member-management-title">
+        <section class="commissioner-member-management rr-card rr-card--padded" aria-labelledby="member-management-title">
         <div class="section-heading rr-section-heading">
           <div>
             <span class="draft-section-eyebrow">Commissioner Only</span>
@@ -930,7 +708,8 @@
             {{ memberRemovalError() }}
           </p>
         }
-      </section>
+        </section>
+      }
 
       <section class="commissioner-danger-zone rr-danger-zone" aria-labelledby="delete-league-title">
         <div class="danger-zone-heading">

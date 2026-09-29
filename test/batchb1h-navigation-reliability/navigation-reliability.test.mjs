@@ -140,8 +140,9 @@ test('dashboard, League HQ, and My Team use the clearer matchup label and larger
 
   assert.match(activity, /primaryActionLabel: 'Open Current Matchup'/);
   assert.doesNotMatch(activity, /primaryActionLabel: 'Open Game Center'/);
-  assert.match(leagueHome, /icon-matchup icon-sm[\s\S]*?Open Current Matchup/);
+  assert.match(leagueHome, /<app-league-quick-navigation/);
   assert.doesNotMatch(leagueHome, /View Current Matchup/);
+  assert.doesNotMatch(leagueHome, />Open Current Matchup</);
 
   assert.match(team, /<app-league-quick-navigation/);
   assert.doesNotMatch(team, /Projection Lab/);

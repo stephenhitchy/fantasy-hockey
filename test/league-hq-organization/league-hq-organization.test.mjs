@@ -91,13 +91,12 @@ test('primary header actions adapt to draft and season state', async () => {
   assert.doesNotMatch(primaryNav, /secondary-action/);
 });
 
-test('team identity flows into league activity, status, teams, and tools without duplicate page tiles', async () => {
+test('team identity flows into league activity, teams, and tools without duplicate page tiles', async () => {
   const html = await source(htmlPath);
 
   expectOrder(html, [
     'id="my-league-team-title"',
     '<app-league-wire',
-    'id="league-status-title"',
     'class="teams-section"',
     'class="league-secondary-tools"',
     'class="commissioner-danger-zone',
@@ -145,13 +144,14 @@ test('league size management is a compact, closed-by-default commissioner disclo
   );
 });
 
-test('cycle matchup cards are available behind disclosure instead of dominating the page', async () => {
+test('redundant status, matchup-preview, and injury panels no longer dominate League HQ', async () => {
   const html = await source(htmlPath);
 
-  assert.match(html, /<details class="cycle-matchup-preview">/);
-  assert.match(html, /<strong>Preview every matchup<\/strong>/);
-  assert.match(html, /\{\{ matchups\(\)\.length \}\} in \{\{ currentCycleLabel\(\) \}\}/);
-  assert.match(html, /class="matchup-list"/);
+  assert.doesNotMatch(html, /id="league-status-title"/);
+  assert.doesNotMatch(html, /class="league-info-grid/);
+  assert.doesNotMatch(html, /class="cycle-status-card/);
+  assert.doesNotMatch(html, /class="cycle-matchup-preview/);
+  assert.doesNotMatch(html, /class="daily-injury-status/);
 });
 
 test('the new hierarchy is responsive and uses the shared token system', async () => {
@@ -161,8 +161,7 @@ test('the new hierarchy is responsive and uses the shared token system', async (
   for (const marker of [
     '.league-header-priority',
     '.top-invite-card',
-    '.league-status-grid',
-    '.cycle-matchup-preview',
+    '.teams-section',
     '.commissioner-tools-body',
     '@media (max-width: 980px)',
     '@media (max-width: 720px)',

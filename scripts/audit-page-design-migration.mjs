@@ -13,7 +13,7 @@ const templates = new Map([
     'rr-select', 'rr-action-tile', 'rr-danger-zone',
   ]],
   ['src/app/features/leagues/league-detail/league-detail.html', [
-    'rr-card', 'rr-stat-grid', 'rr-action-tile', 'rr-notice', 'rr-field',
+    'rr-card', 'rr-section-heading', 'rr-action-tile', 'rr-notice', 'rr-field',
     'rr-button--danger', 'rr-danger-zone',
   ]],
 ]);

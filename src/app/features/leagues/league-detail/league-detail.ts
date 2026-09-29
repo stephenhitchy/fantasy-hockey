@@ -78,6 +78,7 @@ import {
   type ProfileIconOption,
 } from '../../../shared/profile-icon/profile-icon.data';
 import { ClientHealthService } from '../../../core/observability/client-health.service';
+import { shouldShowPreDraftCommissionerManagement } from './league-hq-visibility.util';
 
 const DRAFT_ROOM_NAVIGATION_TIMEOUT_MILLISECONDS = 8_000;
 const DRAFT_ENTRY_RECOVERY_DELAY_MILLISECONDS = 7_000;
@@ -252,6 +253,14 @@ export class LeagueDetail implements OnDestroy {
 
   readonly capacityChangeAvailable = computed(() =>
     this.preDraftMemberRemovalAvailable() || this.scheduledCapacityReopenAvailable(),
+  );
+
+  readonly showPreDraftCommissionerManagement = computed(() =>
+    shouldShowPreDraftCommissionerManagement({
+      isCommissioner: this.isCommissioner(),
+      draftStatus: this.draft()?.status,
+      hasStartedCompetition: Boolean(this.cycle()),
+    }),
   );
 
   readonly selectedLeagueProfileIconId = computed(() =>
