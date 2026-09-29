@@ -79,12 +79,8 @@
 /* --------------------------------------------------------------------------
    My Team: explicit Manage flow and calm roster rows
    -------------------------------------------------------------------------- */
-app-team-settings :where(
-  .fantasy-position-group,
-  .fantasy-player-card,
-  .ir-slot-card,
-  .roster-section
-) {
+app-team-settings
+  :where(.fantasy-position-group, .fantasy-player-card, .ir-slot-card, .roster-section) {
   border-width: 1px;
 }
 
@@ -109,7 +105,11 @@ app-team-settings .roster-empty-find-action {
 }
 
 app-team-settings .roster-manage-button {
-  display: none;
+  display: inline-flex;
+  min-height: 36px;
+  padding-inline: var(--rr-space-3);
+  font-size: var(--rr-text-xs);
+  white-space: nowrap;
 }
 
 app-team-settings .empty-slot-copy {
@@ -121,14 +121,14 @@ app-team-settings .roster-empty-find-action {
   margin-top: var(--rr-space-2);
 }
 
-app-team-settings .roster-manager-summary {
+.roster-manager-summary {
   display: grid;
   gap: var(--rr-space-4);
   margin-bottom: var(--rr-space-4);
 }
 
-app-team-settings .roster-manager-identity,
-app-team-settings .roster-manager-empty-summary {
+.roster-manager-identity,
+.roster-manager-empty-summary {
   display: flex;
   align-items: center;
   gap: var(--rr-space-3);
@@ -139,9 +139,8 @@ app-team-settings .roster-manager-empty-summary {
   background: var(--rr-color-surface-raised);
 }
 
-app-team-settings .roster-manager-identity img,
-app-team-settings .roster-manager-logo-fallback,
-app-team-settings .roster-manager-empty-summary > span {
+.roster-manager-logo-fallback,
+.roster-manager-empty-summary > span {
   display: grid;
   width: 3rem;
   height: 3rem;
@@ -156,32 +155,38 @@ app-team-settings .roster-manager-empty-summary > span {
   font-weight: 800;
 }
 
-app-team-settings .roster-manager-identity > div,
-app-team-settings .roster-manager-empty-summary > div {
+.roster-manager-portrait {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+}
+
+.roster-manager-identity > div,
+.roster-manager-empty-summary > div {
   display: grid;
   gap: var(--rr-space-1);
   min-width: 0;
 }
 
-app-team-settings .roster-manager-identity strong,
-app-team-settings .roster-manager-empty-summary strong {
+.roster-manager-identity strong,
+.roster-manager-empty-summary strong {
   color: var(--rr-color-text);
   font-size: var(--rr-text-lg);
 }
 
-app-team-settings .roster-manager-identity span,
-app-team-settings .roster-manager-empty-summary small {
+.roster-manager-identity > div > span,
+.roster-manager-empty-summary small {
   color: var(--rr-color-text-secondary);
   font-size: var(--rr-text-sm);
 }
 
-app-team-settings .roster-manager-score-grid {
+.roster-manager-score-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--rr-space-2);
 }
 
-app-team-settings .roster-manager-score-grid > div {
+.roster-manager-score-grid > div {
   display: grid;
   gap: var(--rr-space-1);
   min-width: 0;
@@ -191,35 +196,38 @@ app-team-settings .roster-manager-score-grid > div {
   background: var(--rr-color-surface-raised);
 }
 
-app-team-settings .roster-manager-score-grid span {
+.roster-manager-score-grid span {
   color: var(--rr-color-text-muted);
   font-size: var(--rr-text-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  line-height: 1.25;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
-app-team-settings .roster-manager-score-grid strong {
+.roster-manager-score-grid strong {
   color: var(--rr-color-text);
   font-size: var(--rr-text-xl);
 }
 
-app-team-settings .roster-manager-pending-note {
+.roster-manager-pending-note {
   display: grid;
   gap: var(--rr-space-1);
 }
 
-app-team-settings .roster-manager-pending-note span {
+.roster-manager-pending-note span {
   color: inherit;
   font-size: var(--rr-text-sm);
 }
 
-app-team-settings .roster-manager-action-list {
+.roster-manager-action-list {
   display: grid;
   gap: var(--rr-space-2);
 }
 
-app-team-settings .roster-manager-action {
+.roster-manager-action {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -235,29 +243,32 @@ app-team-settings .roster-manager-action {
   cursor: pointer;
 }
 
-app-team-settings .roster-manager-action > span:first-child {
+.roster-manager-action > span:first-child {
   display: grid;
   gap: var(--rr-space-1);
   min-width: 0;
 }
 
-app-team-settings .roster-manager-action strong,
-app-team-settings .roster-manager-action small,
-app-team-settings .roster-manager-action em {
+.roster-manager-action strong,
+.roster-manager-action small,
+.roster-manager-action em {
   display: block;
 }
 
-app-team-settings .roster-manager-action strong {
+.roster-manager-action strong {
   font-size: var(--rr-text-md);
+  line-height: var(--rr-line-tight);
 }
 
-app-team-settings .roster-manager-action small {
+.roster-manager-action small {
   color: var(--rr-color-text-secondary);
   font-size: var(--rr-text-sm);
   line-height: var(--rr-line-normal);
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
-app-team-settings .roster-manager-action em {
+.roster-manager-action em {
   grid-column: 1 / -1;
   color: var(--rr-color-warning);
   font-size: var(--rr-text-xs);
@@ -265,13 +276,13 @@ app-team-settings .roster-manager-action em {
   font-weight: 700;
 }
 
-app-team-settings .roster-manager-action-arrow {
+.roster-manager-action-arrow {
   align-self: center;
   color: var(--rr-color-text-muted);
   font-size: 1.6rem;
 }
 
-app-team-settings .roster-manager-action--primary {
+.roster-manager-action--primary {
   border-width: 2px;
   border-color: color-mix(in srgb, var(--rr-info) 74%, var(--rr-ice-white));
   background: var(--rr-info);
@@ -279,54 +290,75 @@ app-team-settings .roster-manager-action--primary {
   box-shadow: 0 4px 0 color-mix(in srgb, var(--rr-info) 38%, var(--rr-scoreboard));
 }
 
-app-team-settings .roster-manager-action--primary small,
-app-team-settings .roster-manager-action--primary .roster-manager-action-arrow {
+.roster-manager-action--primary small,
+.roster-manager-action--primary .roster-manager-action-arrow {
   color: color-mix(in srgb, var(--rr-scoreboard) 82%, transparent);
 }
 
-app-team-settings .roster-manager-action--primary:hover:not(:disabled),
-app-team-settings .roster-manager-action--primary:focus-visible {
+.roster-manager-action--primary:hover:not(:disabled),
+.roster-manager-action--primary:focus-visible {
   border-color: var(--rr-ice-white);
   background: color-mix(in srgb, var(--rr-info) 84%, var(--rr-ice-white));
   color: var(--rr-scoreboard);
 }
 
-app-team-settings .roster-manager-action--warning {
+.roster-manager-action--warning {
   border-color: color-mix(in srgb, var(--rr-color-warning) 54%, var(--rr-color-border));
 }
 
-app-team-settings .roster-manager-action--danger {
+.roster-manager-action--danger {
+  background: color-mix(in srgb, var(--rr-color-danger) 12%, var(--rr-color-surface-raised));
+  color: color-mix(in srgb, var(--rr-color-danger) 64%, var(--rr-color-text));
   border-color: color-mix(in srgb, var(--rr-color-danger) 58%, var(--rr-color-border));
 }
 
-app-team-settings .roster-manager-action:hover:not(:disabled):not(.roster-manager-action--primary),
-app-team-settings .roster-manager-action:focus-visible:not(.roster-manager-action--primary) {
+.roster-manager-action:hover:not(:disabled):not(.roster-manager-action--primary),
+.roster-manager-action:focus-visible:not(.roster-manager-action--primary) {
   border-color: var(--rr-color-accent);
   background: var(--rr-color-surface-strong);
 }
 
-app-team-settings .roster-manager-action:disabled {
+.roster-manager-action:disabled {
   cursor: not-allowed;
   opacity: 0.62;
 }
 
-app-team-settings .roster-manager-no-actions {
+.roster-manager-no-actions {
   margin: 0;
   padding: var(--rr-space-4);
   color: var(--rr-color-text-secondary);
   text-align: center;
 }
 
+app-team-settings .roster-player-card--interactive {
+  cursor: pointer;
+}
+
+app-team-settings .roster-player-card--interactive:hover {
+  border-color: color-mix(in srgb, var(--rr-color-info) 58%, var(--rr-color-border));
+}
+
+app-team-settings .roster-player-detail-link {
+  border-radius: var(--rr-radius-sm);
+  cursor: pointer;
+}
+
+app-team-settings .roster-player-detail-link:focus-visible {
+  outline: 3px solid var(--rr-color-info);
+  outline-offset: 3px;
+}
+
 /* --------------------------------------------------------------------------
    Available Players: focused two-step task flow
    -------------------------------------------------------------------------- */
-app-free-agents :where(
-  .free-agent-list-card,
-  .pending-moves-card,
-  .decision-asset-card,
-  .slot-choice-card,
-  .move-comparison-panel
-) {
+app-free-agents
+  :where(
+    .free-agent-list-card,
+    .pending-moves-card,
+    .decision-asset-card,
+    .slot-choice-card,
+    .move-comparison-panel
+  ) {
   border-width: 1px;
   box-shadow: none;
 }
@@ -738,13 +770,8 @@ app-free-agents .free-agent-sheet-buttons button {
     padding: var(--rr-space-3);
   }
 
-  app-team-settings :where(
-    .forward-row,
-    .defense-goalie-row,
-    .defense-slots,
-    .bench-slot-grid,
-    .ir-slot-grid
-  ) {
+  app-team-settings
+    :where(.forward-row, .defense-goalie-row, .defense-slots, .bench-slot-grid, .ir-slot-grid) {
     grid-template-columns: 1fr;
     gap: var(--rr-space-2);
   }
@@ -858,14 +885,13 @@ app-free-agents .free-agent-sheet-buttons button {
     grid-column: 1 / -1;
   }
 
-  app-team-settings .roster-manager-score-grid,
   app-free-agents .selected-primary-metrics,
   app-free-agents .projection-explanation-grid,
   app-free-agents .compact-stat-breakdown {
     grid-template-columns: 1fr;
   }
 
-  app-team-settings .roster-manager-action {
+  .roster-manager-action {
     padding: var(--rr-space-3);
   }
 
@@ -1117,7 +1143,9 @@ app-free-agents .free-agent-sheet-buttons button {
 }
 
 @keyframes rr-free-agent-confirm-spin {
-  to { transform: rotate(1turn); }
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .top-confirmation-copy {

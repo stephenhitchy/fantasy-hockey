@@ -30,7 +30,6 @@
   width: min(68rem, 100%);
 }
 
-
 /*
  * Some information-dense workflows need the title, helper copy, action row,
  * content, and footer to move as one document. This variant gives the dialog
@@ -155,7 +154,6 @@
     padding: 0;
   }
 
-
   .rr-action-sheet {
     width: 100%;
     max-height: min(94dvh, 58rem);
@@ -172,6 +170,10 @@
   .rr-action-sheet__header,
   .rr-action-sheet__content {
     padding: var(--rr-space-4);
+  }
+
+  .rr-action-sheet__content {
+    padding-bottom: max(var(--rr-space-4), env(safe-area-inset-bottom));
   }
 
   .rr-action-sheet__top-actions:not(:empty) {

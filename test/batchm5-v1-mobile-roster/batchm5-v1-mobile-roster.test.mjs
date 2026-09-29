@@ -95,13 +95,17 @@ test('open roster spots lead directly to a preselected Available Players task', 
   const benchActions = buildRosterManagementActions(
     rosterContext({ area: 'bench', hasAsset: false }),
   );
-  const irActions = buildRosterManagementActions(
-    rosterContext({ area: 'ir', hasAsset: false }),
-  );
+  const irActions = buildRosterManagementActions(rosterContext({ area: 'ir', hasAsset: false }));
 
-  assert.deepEqual(activeActions.map((action) => action.id), ['find-player']);
+  assert.deepEqual(
+    activeActions.map((action) => action.id),
+    ['find-player'],
+  );
   assert.match(activeActions[0].detail, /exact roster slot|position and roster slot/i);
-  assert.deepEqual(benchActions.map((action) => action.id), ['find-player']);
+  assert.deepEqual(
+    benchActions.map((action) => action.id),
+    ['find-player'],
+  );
   assert.match(benchActions[0].detail, /bench spot/i);
   assert.deepEqual(irActions, []);
 });
@@ -111,7 +115,10 @@ test('active roster management explains fair timing and protects a scheduled mov
     rosterContext({ hasPendingMove: true, canMoveToIr: false }),
   );
 
-  assert.deepEqual(actions.map((action) => action.id), ['view', 'review-scheduled']);
+  assert.deepEqual(
+    actions.map((action) => action.id),
+    ['view', 'review-scheduled'],
+  );
   assert.equal(actions.find((action) => action.id === 'review-scheduled').enabled, true);
 });
 
@@ -141,7 +148,10 @@ test('bench and Injured Reserve actions expose only relevant roster consequences
   const healthyActive = buildRosterManagementActions(
     rosterContext({ area: 'active', showMoveToIr: false, canMoveToIr: false }),
   );
-  assert.equal(healthyActive.some((action) => action.id === 'move-to-ir'), false);
+  assert.equal(
+    healthyActive.some((action) => action.id === 'move-to-ir'),
+    false,
+  );
 });
 
 test('My Team produces safe roster-target query parameters for Available Players', () => {
@@ -244,7 +254,7 @@ test('route preferences validate filters and require a roster area for target ha
   assert.equal(invalid.poolTab, null);
 });
 
-test('My Team uses explicit mobile Manage actions without nested clickable roster cards', async () => {
+test('My Team keeps details navigation distinct from the explicit Manage action', async () => {
   const [template, source, styles] = await Promise.all([
     read('src/app/features/team/team-settings/team-settings.html'),
     read('src/app/features/team/team-settings/team-settings.ts'),
@@ -256,14 +266,17 @@ test('My Team uses explicit mobile Manage actions without nested clickable roste
   assert.match(template, /openRosterManager\('bench'/);
   assert.match(template, /openRosterManager\('ir'/);
   assert.match(template, /<app-action-sheet/);
-  assert.match(template, /Six-game count/);
+  assert.match(template, /Six-game progress/);
   assert.match(template, /Find Player/);
   assert.doesNotMatch(template, /class="fantasy-player-card[^>]*role="button"/s);
-  assert.doesNotMatch(template, /class="fantasy-player-card[^>]*\(click\)=/s);
+  assert.match(template, /handleRosterCardSurfaceClick\(\$event, slot\.asset\)/);
+  assert.match(template, /handleRosterIdentityKeydown\(\$event, asset\)/);
+  assert.doesNotMatch(template, /View Stats/);
 
   assert.match(source, /buildRosterManagementActions/);
   assert.match(source, /buildFreeAgentRosterTargetQuery/);
   assert.match(source, /openFreeAgentsForRosterSlot/);
+  assert.match(source, /target\.closest\('button, a, input, select, textarea/);
   assert.match(styles, /app-team-settings \.roster-manage-button/);
   assert.match(styles, /grid-template-columns:\s*1fr/);
 });
@@ -302,7 +315,10 @@ test('Add / Drop uses a focused player-board flow with exact timing and valid ro
   assert.match(template, /id="pending-roster-moves"[\s\S]*tabindex="-1"/);
   assert.match(styles, /@media \(max-width: 560px\)/);
   assert.match(styles, /min-height:\s*var\(--rr-mobile-control-min-height\)/);
-  assert.doesNotMatch(template, /role="dialog"|appViewportOverlayPortal|View six-game status & full stats/i);
+  assert.doesNotMatch(
+    template,
+    /role="dialog"|appViewportOverlayPortal|View six-game status & full stats/i,
+  );
 });
 
 test('shared action sheet is an accessible desktop dialog and mobile bottom sheet', async () => {
@@ -393,10 +409,7 @@ test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules,
     await sha256('src/app/core/draft/draft-player-pool.service.ts'),
     'ab6ee7c4ea5e92966b80f928897b3c2b01b1fcc8bafe7738e67a2651cd048300',
   );
-  assert.equal(
-    await sha256('firestore.rules'),
-    PROTECTED_SOURCE_HASHES.firestoreRules,
-  );
+  assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(
     await sha256('firestore.indexes.json'),
     '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',

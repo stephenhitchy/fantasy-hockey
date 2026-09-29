@@ -334,12 +334,22 @@ recovery, deployment, and rollback details.
 
 ### Roster, waiver, and IR
 
-1. Client utilities may preview whether a move appears eligible.
-2. `src/app/core/transactions/roster-authority.service.ts` sends the user's
+1. `team-settings` and `free-agents` present roster state and existing
+   server-backed timing. `shared/asset-portrait` resolves NHL player headshots,
+   neutral failure states, and team-goalie-unit logos without changing asset
+   identity.
+2. Client utilities may preview whether a move appears eligible.
+3. `src/app/core/transactions/roster-authority.service.ts` sends the user's
    intent to `executeSecureRosterAction` or requests roster initialization.
-3. Server authority revalidates current ownership, slot state, timing, league
+4. Server authority revalidates current ownership, slot state, timing, league
    rules, and transaction boundaries.
-4. The committed roster, waiver, and transaction documents drive UI success.
+5. The committed roster, waiver, and transaction documents drive UI success.
+
+Roster sheets use the shared viewport portal and focus trap. A portaled node no
+longer has its route-component ancestor, so styles for projected sheet content
+must be component-scoped or use a unique portal-safe selector; do not qualify
+those rules through `app-team-settings` or another ancestor that is removed by
+portaling.
 
 ### Projection snapshots
 

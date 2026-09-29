@@ -20,9 +20,16 @@
         </div>
 
         <nav class="unified-player-header-actions" aria-label="Player tools">
-          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'decision-history']">Decision history</a>
-          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'leaders']">Point Leaders</a>
-          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'team']">My Team</a>
+          <a
+            class="rr-button rr-button--quiet"
+            [routerLink]="['/leagues', leagueId, 'decision-history']"
+            >Decision history</a
+          >
+          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'leaders']"
+            >Point Leaders</a>
+          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId, 'team']"
+            >My Team</a
+          >
           <button
             class="rr-button rr-button--quiet"
             type="button"
@@ -44,12 +51,17 @@
 
       @if (draft()?.status !== 'complete') {
         <p class="rr-notice rr-notice--info" role="status">
-          Add / Drop opens after the Draft is complete. Player browsing and Watchlist tools remain available.
+          Add / Drop opens after the Draft is complete. Player browsing and Watchlist tools remain
+          available.
         </p>
       }
 
       @if (pendingRosterMoves().length > 0) {
-        <section id="pending-roster-moves" class="unified-pending-moves rr-card rr-card--padded" tabindex="-1">
+        <section
+          id="pending-roster-moves"
+          class="unified-pending-moves rr-card rr-card--padded"
+          tabindex="-1"
+        >
           <div class="unified-section-heading">
             <div>
               <span class="eyebrow">Scheduled Moves</span>
@@ -120,7 +132,9 @@
             (change)="updateBoardStatus($any($event.target).value)"
           >
             <option value="free-agent">Free agents ({{ freeAgentBoardCount() }})</option>
-            <option value="available">Available ({{ freeAgentBoardCount() + waiverBoardCount() }})</option>
+            <option value="available">
+              Available ({{ freeAgentBoardCount() + waiverBoardCount() }})
+            </option>
             <option value="all">All players ({{ boardRows().length }})</option>
             <option value="rostered">Rostered ({{ rosteredBoardCount() }})</option>
             <option value="waivers">Waivers ({{ waiverBoardCount() }})</option>
@@ -166,7 +180,9 @@
 
       @if (boardSortMode() === 'roster-fit') {
         <p class="unified-fit-method rr-notice rr-notice--info" role="status">
-          Roster fit compares every player only with your legal options at that exact position. Open <strong>Why</strong> for the Next 6, rest-of-season, availability, and reliability evidence.
+          Roster fit compares every player only with your legal options at that exact position. Open
+          <strong>Why</strong> for the Next 6, rest-of-season, availability, and reliability
+          evidence.
         </p>
       }
 
@@ -195,11 +211,7 @@
                 [attr.aria-label]="'Open Player Intel for ' + row.name"
               >
                 <span class="unified-player-image" aria-hidden="true">
-                  @if (getBoardImageUrl(row); as imageUrl) {
-                    <img [src]="imageUrl" alt="" />
-                  } @else {
-                    <span>{{ row.nhlTeamAbbreviation }}</span>
-                  }
+                  <app-asset-portrait [asset]="row.asset" />
                 </span>
 
                 <span class="unified-player-identity">
@@ -223,19 +235,34 @@
                         <span
                           [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
                           [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                        >{{ dotIndex + 1 }}</span>
+                          >{{ dotIndex + 1 }}</span
+                        >
                       } @else {
-                        <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                        <span class="unified-cycle-dot cycle-marker-unavailable">{{
+                          dotIndex + 1
+                        }}</span>
                       }
                     }
                   </span>
                 </span>
 
                 <span class="unified-player-metrics">
-                  <span><small>Season</small><strong>{{ formatBoardPoints(row.seasonFantasyPoints) }}</strong></span>
-                  <span><small>Overall</small><strong>{{ formatBoardRank(row.overallRank, row.overallRankCount) }}</strong></span>
-                  <span><small>{{ row.position }} rank</small><strong>{{ formatBoardRank(row.positionRank, row.positionRankCount) }}</strong></span>
-                  <span><small>Next 6</small><strong>{{ formatBoardPoints(row.nextSixProjection) }}</strong></span>
+                  <span>
+                    <small>Season</small>
+                    <strong>{{ formatBoardPoints(row.seasonFantasyPoints) }}</strong>
+                  </span>
+                  <span>
+                    <small>Overall</small>
+                    <strong>{{ formatBoardRank(row.overallRank, row.overallRankCount) }}</strong>
+                  </span>
+                  <span>
+                    <small>{{ row.position }} rank</small>
+                    <strong>{{ formatBoardRank(row.positionRank, row.positionRankCount) }}</strong>
+                  </span>
+                  <span>
+                    <small>Next 6</small>
+                    <strong>{{ formatBoardPoints(row.nextSixProjection) }}</strong>
+                  </span>
                 </span>
               </a>
 
@@ -248,7 +275,12 @@
                   [attr.aria-pressed]="row.watched"
                   (click)="toggleAssetWatchlist(row.asset)"
                 >
-                  {{ watchlistSavingAssetKey() === row.assetKey ? 'Saving...' : row.watched ? 'Watching' : 'Watch' }}
+                  {{
+                    watchlistSavingAssetKey() === row.assetKey
+                      ? 'Saving...'
+                      : row.watched
+                        ? 'Watching' : 'Watch'
+                  }}
                 </button>
 
                 @if (row.status === 'free-agent' || row.status === 'waivers') {
@@ -300,7 +332,9 @@
                     @if (fit.factors.length > 0 || fit.risks.length > 0) {
                       <div class="unified-fit-signals" aria-label="Roster fit signals">
                         @for (factor of fit.factors; track factor) {
-                          <span class="unified-fit-signal unified-fit-signal-positive">{{ factor }}</span>
+                          <span class="unified-fit-signal unified-fit-signal-positive">{{
+                            factor
+                          }}</span>
                         }
                         @for (risk of fit.risks; track risk) {
                           <span class="unified-fit-signal unified-fit-signal-risk">{{ risk }}</span>
@@ -327,12 +361,21 @@
       }
 
       @if (hiddenBoardRowCount() > 0) {
-        <button class="unified-show-more rr-button rr-button--quiet" type="button" (click)="showMoreBoardRows()">
+        <button
+          class="unified-show-more rr-button rr-button--quiet"
+          type="button"
+          (click)="showMoreBoardRows()"
+        >
           Show {{ hiddenBoardRowCount() > 50 ? 50 : hiddenBoardRowCount() }} more
         </button>
       }
     } @else if (selectedAddAsset(); as addAsset) {
-      <button class="unified-back-button rr-button rr-button--quiet" type="button" [disabled]="moving()" (click)="returnToPlayerPool()">
+      <button
+        class="unified-back-button rr-button rr-button--quiet"
+        type="button"
+        [disabled]="moving()"
+        (click)="returnToPlayerPool()"
+      >
         Back to Add / Drop
       </button>
 
@@ -348,18 +391,17 @@
         <p class="rr-notice rr-notice--danger" role="alert">{{ errorMessage() }}</p>
       }
 
-      <section class="transaction-incoming-row unified-player-row rr-card" aria-label="Incoming player">
+      <section
+        class="transaction-incoming-row unified-player-row rr-card"
+        aria-label="Incoming player"
+      >
         <a
           class="unified-player-main"
           [routerLink]="['/leagues', leagueId, 'players', addAsset.assetKey]"
           [attr.aria-label]="'Open Player Intel for ' + getAssetName(addAsset)"
         >
           <span class="unified-player-image" aria-hidden="true">
-            @if (getAssetLogoUrl(addAsset); as imageUrl) {
-              <img [src]="imageUrl" alt="" />
-            } @else {
-              <span>{{ getAssetTeamLabel(addAsset) }}</span>
-            }
+            <app-asset-portrait [asset]="addAsset" />
           </span>
 
           <span class="unified-player-identity">
@@ -382,7 +424,8 @@
                   <span
                     [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
                     [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                  >{{ dotIndex + 1 }}</span>
+                    >{{ dotIndex + 1 }}</span
+                  >
                 } @else {
                   <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
                 }
@@ -391,21 +434,44 @@
           </span>
 
           <span class="unified-player-metrics">
-            <span><small>Season</small><strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></span>
-            <span><small>Next 6</small><strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></span>
-            <span><small>Rest of season</small><strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></span>
-            <span><small>Next 6 rank</small><strong>{{ getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—' }}</strong></span>
+            <span
+              ><small>Season</small
+              ><strong>{{ getDisplayNumber(getCurrentSeasonPoints(addAsset)) }}</strong></span
+            >
+            <span
+              ><small>Next 6</small
+              ><strong>{{ getDisplayNumber(getProjectedCyclePoints(addAsset)) }}</strong></span
+            >
+            <span
+              ><small>Rest of season</small
+              ><strong>{{ getDisplayNumber(getRestOfSeasonProjection(addAsset)) }}</strong></span
+            >
+            <span
+              ><small>Next 6 rank</small
+              ><strong>{{
+                getCycleRank(addAsset) ? '#' + getCycleRank(addAsset) : '—'
+              }}</strong></span
+            >
           </span>
         </a>
       </section>
 
-      <section [class]="'transaction-eligibility rr-notice ' + getSelectedAssetCycleClass()" aria-live="polite">
+      <section
+        [class]="'transaction-eligibility rr-notice ' + getSelectedAssetCycleClass()"
+        aria-live="polite"
+      >
         @if (eligibilityLoading()) {
           <strong>Checking matchup timing...</strong>
         } @else if (eligibilityError()) {
           <div>
             <strong>{{ eligibilityError() }}</strong>
-            <button class="rr-button rr-button--quiet" type="button" (click)="retryEligibilityCheck()">Retry</button>
+            <button
+              class="rr-button rr-button--quiet"
+              type="button"
+              (click)="retryEligibilityCheck()"
+            >
+              Retry
+            </button>
           </div>
         } @else {
           <strong>{{ getSelectedAssetCycleHeadline() }}</strong>
@@ -425,9 +491,14 @@
       @if (!areRosterWindowsReady()) {
         <div class="unified-player-state rr-state"><strong>Loading roster progress...</strong></div>
       } @else if (dropCandidates().length === 0) {
-        <div class="unified-player-state rr-state"><strong>No valid roster move is available.</strong></div>
+        <div class="unified-player-state rr-state">
+          <strong>No valid roster move is available.</strong>
+        </div>
       } @else {
-        <section class="unified-player-list transaction-roster-list" aria-label="Valid roster move options">
+        <section
+          class="unified-player-list transaction-roster-list"
+          aria-label="Valid roster move options"
+        >
           @for (candidate of dropCandidates(); track candidate.slotId) {
             <article
               class="unified-player-row transaction-roster-row rr-card"
@@ -441,31 +512,35 @@
                   [attr.aria-label]="'Open Player Intel for ' + getAssetName(outgoing)"
                 >
                   <span class="unified-player-image" aria-hidden="true">
-                    @if (getDropCandidateImageUrl(candidate); as imageUrl) {
-                      <img [src]="imageUrl" alt="" />
-                    } @else {
-                      <span>{{ getAssetTeamLabel(outgoing) }}</span>
-                    }
+                    <app-asset-portrait [asset]="outgoing" />
                   </span>
 
                   <span class="unified-player-identity">
                     <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
                     @if (candidate.asset; as rosterAsset) {
-                      <span>{{ getRosterAssetTeamLabel(rosterAsset) }} · {{ rosterAsset.position }}</span>
+                      <span
+                        >{{ getRosterAssetTeamLabel(rosterAsset) }} ·
+                        {{ rosterAsset.position }}</span
+                      >
                     }
                     <small>{{ getDropCandidateStatusLabel(candidate) }}</small>
                     @if (isSuggestedRosterFitCandidate(candidate)) {
                       <span class="transaction-roster-fit-badge">Suggested comparison</span>
                     }
                     @if (shouldShowBoardAvailability(outgoing)) {
-                      <span [class]="'unified-injury-status ' + getBoardAvailabilityClass(outgoing)">
+                      <span
+                        [class]="'unified-injury-status ' + getBoardAvailabilityClass(outgoing)"
+                      >
                         <strong>{{ getBoardAvailabilityLabel(outgoing) }}</strong>
                         <small>{{ getBoardAvailabilityReturnLabel(outgoing) }}</small>
                       </span>
                     }
                   </span>
 
-                  <span class="unified-cycle-block" [attr.aria-label]="getCandidateMatchupNumberLabel(candidate)">
+                  <span
+                    class="unified-cycle-block"
+                    [attr.aria-label]="getCandidateMatchupNumberLabel(candidate)"
+                  >
                     <strong>{{ getCandidateMatchupNumberLabel(candidate) }}</strong>
                     <span class="unified-cycle-dots" aria-hidden="true">
                       @for (dotIndex of cycleDotSlots; track dotIndex) {
@@ -473,24 +548,47 @@
                           <span
                             [class]="'unified-cycle-dot ' + getCycleMarkerClass(marker)"
                             [attr.title]="getCycleMarkerTooltip(marker, dotIndex)"
-                          >{{ dotIndex + 1 }}</span>
+                            >{{ dotIndex + 1 }}</span
+                          >
                         } @else {
-                          <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                          <span class="unified-cycle-dot cycle-marker-unavailable">{{
+                            dotIndex + 1
+                          }}</span>
                         }
                       }
                     </span>
                   </span>
 
                   <span class="unified-player-metrics">
-                    <span><small>Season</small><strong>{{ getDisplayNumber(getCurrentSeasonPoints(outgoing)) }}</strong></span>
-                    <span><small>Next 6</small><strong>{{ getDisplayNumber(getProjectedCyclePoints(outgoing)) }}</strong></span>
-                    <span><small>Rest of season</small><strong>{{ getDisplayNumber(getRestOfSeasonProjection(outgoing)) }}</strong></span>
-                    <span><small>Starts</small><strong>{{ getCandidateActivationLabel(candidate) }}</strong></span>
+                    <span
+                      ><small>Season</small
+                      ><strong>{{
+                        getDisplayNumber(getCurrentSeasonPoints(outgoing))
+                      }}</strong></span
+                    >
+                    <span
+                      ><small>Next 6</small
+                      ><strong>{{
+                        getDisplayNumber(getProjectedCyclePoints(outgoing))
+                      }}</strong></span
+                    >
+                    <span
+                      ><small>Rest of season</small
+                      ><strong>{{
+                        getDisplayNumber(getRestOfSeasonProjection(outgoing))
+                      }}</strong></span
+                    >
+                    <span
+                      ><small>Starts</small
+                      ><strong>{{ getCandidateActivationLabel(candidate) }}</strong></span
+                    >
                   </span>
                 </a>
               } @else {
                 <div class="unified-player-main transaction-open-slot-main">
-                  <span class="unified-player-image unified-open-slot-icon" aria-hidden="true">+</span>
+                  <span class="unified-player-image unified-open-slot-icon" aria-hidden="true"
+                    >+</span
+                  >
                   <span class="unified-player-identity">
                     <strong>{{ getRosterSpotCandidateName(candidate) }}</strong>
                     <span>{{ getDropCandidateStatusLabel(candidate) }}</span>
@@ -500,15 +598,27 @@
                     <strong>Matchup {{ candidate.effectiveCycleNumber }}</strong>
                     <span class="unified-cycle-dots" aria-hidden="true">
                       @for (dotIndex of cycleDotSlots; track dotIndex) {
-                        <span class="unified-cycle-dot cycle-marker-unavailable">{{ dotIndex + 1 }}</span>
+                        <span class="unified-cycle-dot cycle-marker-unavailable">{{
+                          dotIndex + 1
+                        }}</span>
                       }
                     </span>
                   </span>
                   <span class="unified-player-metrics">
-                    <span><small>Roster area</small><strong>{{ candidate.rosterArea === 'bench' ? 'Bench' : 'Active' }}</strong></span>
-                    <span><small>Position</small><strong>{{ candidate.position }}</strong></span>
+                    <span
+                      ><small>Roster area</small
+                      ><strong>{{
+                        candidate.rosterArea === 'bench' ? 'Bench' : 'Active'
+                      }}</strong></span
+                    >
+                    <span
+                      ><small>Position</small><strong>{{ candidate.position }}</strong></span
+                    >
                     <span><small>Outgoing</small><strong>None</strong></span>
-                    <span><small>Starts</small><strong>{{ getCandidateActivationLabel(candidate) }}</strong></span>
+                    <span
+                      ><small>Starts</small
+                      ><strong>{{ getCandidateActivationLabel(candidate) }}</strong></span
+                    >
                   </span>
                 </div>
               }
@@ -547,13 +657,22 @@
             >
               {{ getConfirmButtonLabel() }}
             </button>
-            <button class="rr-button rr-button--quiet" type="button" [disabled]="moving()" (click)="clearSelectedDropCandidate()">
+            <button
+              class="rr-button rr-button--quiet"
+              type="button"
+              [disabled]="moving()"
+              (click)="clearSelectedDropCandidate()"
+            >
               Change selection
             </button>
           </div>
 
           @if (moveLens(); as lens) {
-            <section class="transaction-move-lens" [attr.data-verdict]="lens.verdict" aria-label="Move recommendation">
+            <section
+              class="transaction-move-lens"
+              [attr.data-verdict]="lens.verdict"
+              aria-label="Move recommendation"
+            >
               <div class="transaction-move-lens-heading">
                 <div>
                   <span class="eyebrow">Move lens</span>
@@ -574,7 +693,9 @@
                     </li>
                   }
                 </ul>
-                <small>{{ lens.uncertainty }} Uses the current Projection V11 snapshot; it is guidance, not a guarantee.</small>
+                <small
+                  >{{ lens.uncertainty }} Uses the current Projection V11 snapshot; it is guidance, not a guarantee.</small
+                >
               </details>
             </section>
           }
@@ -591,11 +712,21 @@
     }
 
     @if (shouldShowRosterActionShield()) {
-      <aside class="roster-operation-status-dock" role="status" aria-live="assertive" aria-atomic="true">
+      <aside
+        class="roster-operation-status-dock"
+        role="status"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
         <span class="roster-action-spinner" aria-hidden="true"></span>
         <div>
-          <strong>{{ rosterOperationHeadline() || (selectedWaiver() ? 'Submitting waiver action…' : 'Confirming roster move…') }}</strong>
-          <small>{{ rosterOperationDetail() || 'Waiting for the secure response or live roster update.' }}</small>
+          <strong>{{
+            rosterOperationHeadline() ||
+              (selectedWaiver() ? 'Submitting waiver action…' : 'Confirming roster move…')
+          }}</strong>
+          <small>{{
+            rosterOperationDetail() || 'Waiting for the secure response or live roster update.'
+          }}</small>
         </div>
       </aside>
     }

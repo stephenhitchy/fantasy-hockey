@@ -1,0 +1,46 @@
+@if (portrait; as resolvedPortrait) {
+  <span
+    class="asset-portrait"
+    [class.asset-portrait--headshot]="resolvedPortrait.primaryKind === 'headshot'"
+    [class.asset-portrait--team-logo]="resolvedPortrait.primaryKind === 'team-logo'"
+    [attr.data-player-id]="resolvedPortrait.playerId"
+  >
+    @if (resolvedPortrait.primaryImageUrl; as primaryImageUrl) {
+      <img
+        class="asset-portrait__primary"
+        [src]="primaryImageUrl"
+        [alt]="resolvedPortrait.primaryAlt"
+        (error)="markImageUnavailable(primaryImageUrl)"
+      />
+    } @else if (resolvedPortrait.primaryKind === 'player-placeholder') {
+      <span
+        class="asset-portrait__placeholder"
+        role="img"
+        [attr.aria-label]="resolvedPortrait.fallbackLabel"
+      >
+        <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <circle cx="24" cy="17" r="8"></circle>
+          <path d="M9 43c1.4-10 7.6-15 15-15s13.6 5 15 15"></path>
+        </svg>
+      </span>
+    } @else {
+      <span
+        class="asset-portrait__placeholder asset-portrait__placeholder--team"
+        role="img"
+        [attr.aria-label]="resolvedPortrait.fallbackLabel + ' goalie unit'"
+      >
+        {{ resolvedPortrait.fallbackLabel }}
+      </span>
+    }
+
+    @if (resolvedPortrait.teamBadgeUrl; as teamBadgeUrl) {
+      <img
+        class="asset-portrait__team-badge"
+        [src]="teamBadgeUrl"
+        alt=""
+        aria-hidden="true"
+        (error)="markImageUnavailable(teamBadgeUrl)"
+      />
+    }
+  </span>
+}

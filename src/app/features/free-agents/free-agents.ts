@@ -6,6 +6,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { auth } from '../../core/firebase';
 import { LeagueQuickNavigation } from '../../shared/league-quick-navigation/league-quick-navigation';
+import { AssetPortrait } from '../../shared/asset-portrait/asset-portrait';
 
 import {
   DraftableAsset,
@@ -86,7 +87,12 @@ import { getLeagueById, League } from '../../core/league/league.service';
 
 import { FantasyTeam, listenToLeagueTeams } from '../../core/team/team.service';
 
-import { ActiveRosterSlot, BenchRosterSlot, FantasyRoster, RosterAsset } from '../../core/team/roster.models';
+import {
+  ActiveRosterSlot,
+  BenchRosterSlot,
+  FantasyRoster,
+  RosterAsset,
+} from '../../core/team/roster.models';
 
 import { listenToFantasyRoster } from '../../core/team/roster.service';
 
@@ -125,10 +131,7 @@ import {
   type FreeAgentComparisonGame,
   type FreeAgentTransactionTimingDecision,
 } from './free-agent-transaction-comparison.util';
-import {
-  buildFreeAgentMoveLens,
-  type FreeAgentMoveLensResult,
-} from './free-agent-move-lens.util';
+import { buildFreeAgentMoveLens, type FreeAgentMoveLensResult } from './free-agent-move-lens.util';
 import {
   isFreeAgentOperationObserved,
   withFreeAgentOperationTimeout,
@@ -162,7 +165,6 @@ interface DropCandidate {
   canApplyImmediately: boolean;
 }
 
-
 function waitForAuthUser(): Promise<User | null> {
   if (auth.currentUser) {
     return Promise.resolve(auth.currentUser);
@@ -178,7 +180,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-free-agents',
-  imports: [FormsModule, RouterLink, LeagueQuickNavigation],
+  imports: [FormsModule, RouterLink, AssetPortrait, LeagueQuickNavigation],
   templateUrl: './free-agents.html',
   styleUrl: './free-agents.css',
 })
@@ -274,16 +276,14 @@ export class FreeAgents implements OnDestroy {
   readonly playerDataRefreshing = computed(() => {
     const replay = this.historicalReplayControl();
     const metadata = this.snapshotMetadata();
-    const replayDate = replay?.enabled ? replay.simulatedDate?.trim() ?? '' : '';
+    const replayDate = replay?.enabled ? (replay.simulatedDate?.trim() ?? '') : '';
     const snapshotDate = metadata?.projectionAsOfDate?.trim() ?? '';
 
     return Boolean(
       replayDate &&
-      (
-        metadata?.projectionContext !== 'historical-replay' ||
+      (metadata?.projectionContext !== 'historical-replay' ||
         !snapshotDate ||
-        snapshotDate < replayDate
-      ),
+        snapshotDate < replayDate),
     );
   });
 
@@ -365,7 +365,6 @@ export class FreeAgents implements OnDestroy {
     return assetKeys;
   });
 
-
   readonly waiverByAssetKey = computed(() => {
     const waiversByAssetKey = new Map<string, FantasyWaiver>();
 
@@ -379,17 +378,13 @@ export class FreeAgents implements OnDestroy {
   });
 
   readonly boardOwnershipByAssetKey = computed(() => {
-    const rostersByOwnerId = new Map<string, FantasyRoster | null>(
-      Object.entries(this.rosters()),
-    );
+    const rostersByOwnerId = new Map<string, FantasyRoster | null>(Object.entries(this.rosters()));
 
     return buildLeaguePlayerOwnership(this.teams(), rostersByOwnerId);
   });
 
   readonly boardReservedAssetKeys = computed(() => {
-    const rostersByOwnerId = new Map<string, FantasyRoster | null>(
-      Object.entries(this.rosters()),
-    );
+    const rostersByOwnerId = new Map<string, FantasyRoster | null>(Object.entries(this.rosters()));
 
     return buildLeaguePlayerReservedAssetKeys(rostersByOwnerId);
   });
@@ -400,16 +395,18 @@ export class FreeAgents implements OnDestroy {
       .map((cycle) => cycle.cycleNumber);
     const loadedByCycle = this.teamWindowLoadedByCycle();
 
-    return activeCycleNumbers.length === 0 ||
-      activeCycleNumbers.every((cycleNumber) => loadedByCycle[cycleNumber] === true);
+    return (
+      activeCycleNumbers.length === 0 ||
+      activeCycleNumbers.every((cycleNumber) => loadedByCycle[cycleNumber] === true)
+    );
   });
 
   readonly boardCurrentWindowByAssetKey = computed(() =>
     this.teamWindowSnapshotReady()
       ? buildCurrentRosterWindowByAssetKey(
-        this.boardOwnershipByAssetKey(),
-        this.teamWindowsByCycle(),
-      )
+          this.boardOwnershipByAssetKey(),
+          this.teamWindowsByCycle(),
+        )
       : new Map<string, FantasyAssetCycleWindow>(),
   );
 
@@ -445,14 +442,15 @@ export class FreeAgents implements OnDestroy {
     }
 
     const recommendations = this.boardRosterFitByAssetKey();
-    return rows.sort((first, second) =>
-      compareLeaguePlayerRosterFitRecommendations(
-        recommendations.get(first.assetKey),
-        recommendations.get(second.assetKey),
-      ) ||
-      (second.nextSixProjection ?? Number.NEGATIVE_INFINITY) -
-        (first.nextSixProjection ?? Number.NEGATIVE_INFINITY) ||
-      first.name.localeCompare(second.name),
+    return rows.sort(
+      (first, second) =>
+        compareLeaguePlayerRosterFitRecommendations(
+          recommendations.get(first.assetKey),
+          recommendations.get(second.assetKey),
+        ) ||
+        (second.nextSixProjection ?? Number.NEGATIVE_INFINITY) -
+          (first.nextSixProjection ?? Number.NEGATIVE_INFINITY) ||
+        first.name.localeCompare(second.name),
     );
   });
 
@@ -464,25 +462,23 @@ export class FreeAgents implements OnDestroy {
     Math.max(0, this.filteredBoardRows().length - this.visibleBoardRows().length),
   );
 
-  readonly freeAgentBoardCount = computed(() =>
-    this.boardRows().filter((row) => row.status === 'free-agent').length,
+  readonly freeAgentBoardCount = computed(
+    () => this.boardRows().filter((row) => row.status === 'free-agent').length,
   );
 
-  readonly rosteredBoardCount = computed(() =>
-    this.boardRows().filter((row) => row.status === 'rostered').length,
+  readonly rosteredBoardCount = computed(
+    () => this.boardRows().filter((row) => row.status === 'rostered').length,
   );
 
-  readonly waiverBoardCount = computed(() =>
-    this.boardRows().filter((row) => row.status === 'waivers').length,
+  readonly waiverBoardCount = computed(
+    () => this.boardRows().filter((row) => row.status === 'waivers').length,
   );
 
-  readonly unavailableBoardCount = computed(() =>
-    this.boardRows().filter((row) => row.status === 'reserved').length,
+  readonly unavailableBoardCount = computed(
+    () => this.boardRows().filter((row) => row.status === 'reserved').length,
   );
 
-  readonly watchedBoardCount = computed(() =>
-    this.boardRows().filter((row) => row.watched).length,
-  );
+  readonly watchedBoardCount = computed(() => this.boardRows().filter((row) => row.watched).length);
 
   readonly availableWaivers = computed(() => {
     const search = this.searchTerm().trim().toLowerCase();
@@ -584,8 +580,7 @@ export class FreeAgents implements OnDestroy {
         eligibility?.earliestEligibleCycleNumber ?? slotNextCycleNumber,
       );
       const canApplyImmediately = Boolean(
-        currentWindowUntouched &&
-        effectiveCycleNumber === slotNextCycleNumber,
+        currentWindowUntouched && effectiveCycleNumber === slotNextCycleNumber,
       );
 
       return {
@@ -906,9 +901,7 @@ export class FreeAgents implements OnDestroy {
         (error) => {
           console.warn('Unable to follow live Player Board projections.', error);
           if (this.playerPool().length === 0) {
-            this.errorMessage.set(
-              'The latest player data could not be loaded. Try Refresh.',
-            );
+            this.errorMessage.set('The latest player data could not be loaded. Try Refresh.');
           }
         },
       );
@@ -1050,8 +1043,6 @@ export class FreeAgents implements OnDestroy {
     }
   }
 
-
-
   updateBoardStatus(value: string): void {
     const allowed = new Set<LeaguePlayerBoardStatusFilter>([
       'free-agent',
@@ -1065,19 +1056,17 @@ export class FreeAgents implements OnDestroy {
     this.expandedRosterFitAssetKey.set('');
     this.boardStatusFilter.set(
       allowed.has(value as LeaguePlayerBoardStatusFilter)
-        ? value as LeaguePlayerBoardStatusFilter
+        ? (value as LeaguePlayerBoardStatusFilter)
         : 'free-agent',
     );
     this.resetBoardVisibleLimit();
   }
 
   updateBoardPosition(value: string): void {
-    const allowed = new Set<LeaguePlayerBoardPositionFilter>([
-      'all', 'LW', 'C', 'RW', 'D', 'G',
-    ]);
+    const allowed = new Set<LeaguePlayerBoardPositionFilter>(['all', 'LW', 'C', 'RW', 'D', 'G']);
     this.boardPositionFilter.set(
       allowed.has(value as LeaguePlayerBoardPositionFilter)
-        ? value as LeaguePlayerBoardPositionFilter
+        ? (value as LeaguePlayerBoardPositionFilter)
         : 'all',
     );
     this.expandedRosterFitAssetKey.set('');
@@ -1096,7 +1085,7 @@ export class FreeAgents implements OnDestroy {
       'name',
     ]);
     const nextSort = allowed.has(value as LeaguePlayerBoardSortMode)
-      ? value as LeaguePlayerBoardSortMode
+      ? (value as LeaguePlayerBoardSortMode)
       : 'roster-fit';
 
     this.boardSortMode.set(nextSort);
@@ -1112,16 +1101,16 @@ export class FreeAgents implements OnDestroy {
     this.resetBoardVisibleLimit();
   }
 
-  getBoardRosterFit(
-    row: LeaguePlayerBoardRow,
-  ): LeaguePlayerRosterFitRecommendation | null {
+  getBoardRosterFit(row: LeaguePlayerBoardRow): LeaguePlayerRosterFitRecommendation | null {
     return this.boardRosterFitByAssetKey().get(row.assetKey) ?? null;
   }
 
   shouldShowBoardRosterFit(row: LeaguePlayerBoardRow): boolean {
-    return this.boardSortMode() === 'roster-fit' &&
+    return (
+      this.boardSortMode() === 'roster-fit' &&
       (row.status === 'free-agent' || row.status === 'waivers') &&
-      Boolean(this.getBoardRosterFit(row));
+      Boolean(this.getBoardRosterFit(row))
+    );
   }
 
   getBoardRosterFitTierLabel(row: LeaguePlayerBoardRow): string {
@@ -1171,11 +1160,12 @@ export class FreeAgents implements OnDestroy {
 
   getBoardStatusLabel(row: LeaguePlayerBoardRow): string {
     if (row.ownership) {
-      const area = row.ownership.area === 'active'
-        ? 'Active'
-        : row.ownership.area === 'bench'
-          ? 'Bench'
-          : 'IR';
+      const area =
+        row.ownership.area === 'active'
+          ? 'Active'
+          : row.ownership.area === 'bench'
+            ? 'Bench'
+            : 'IR';
       return `${area} · ${row.ownership.teamName}`;
     }
 
@@ -1190,9 +1180,7 @@ export class FreeAgents implements OnDestroy {
   }
 
   getBoardWaiver(row: LeaguePlayerBoardRow): FantasyWaiver | null {
-    return row.status === 'waivers'
-      ? this.waiverByAssetKey().get(row.assetKey) ?? null
-      : null;
+    return row.status === 'waivers' ? (this.waiverByAssetKey().get(row.assetKey) ?? null) : null;
   }
 
   getBoardActionLabel(row: LeaguePlayerBoardRow): string {
@@ -1226,7 +1214,7 @@ export class FreeAgents implements OnDestroy {
     const rosterFit = this.getBoardRosterFit(row);
     this.suggestedRosterFitComparisonAssetKey.set(
       rosterFit && (rosterFit.tier === 'strong' || rosterFit.tier === 'possible')
-        ? rosterFit.comparisonAssetKey ?? ''
+        ? (rosterFit.comparisonAssetKey ?? '')
         : '',
     );
 
@@ -1244,9 +1232,7 @@ export class FreeAgents implements OnDestroy {
   }
 
   formatBoardPoints(value: number | null, digits = 1): string {
-    return value === null
-      ? '—'
-      : value.toFixed(digits).replace(/\.0+$/, '');
+    return value === null ? '—' : value.toFixed(digits).replace(/\.0+$/, '');
   }
 
   formatBoardRank(rank: number | null, total: number): string {
@@ -1280,9 +1266,7 @@ export class FreeAgents implements OnDestroy {
     }
 
     const status = liveAvailability?.status || asset.availabilityStatus;
-    return status && status !== 'active' && status !== 'unknown'
-      ? 'Return date TBD'
-      : '';
+    return status && status !== 'active' && status !== 'unknown' ? 'Return date TBD' : '';
   }
 
   shouldShowBoardAvailability(asset: DraftableAsset): boolean {
@@ -1370,7 +1354,7 @@ export class FreeAgents implements OnDestroy {
         : asset.teamLogoUrl || null;
     }
 
-    return candidate.asset ? this.getRosterAssetLogoUrl(candidate.asset) ?? null : null;
+    return candidate.asset ? (this.getRosterAssetLogoUrl(candidate.asset) ?? null) : null;
   }
 
   getDropCandidateActionLabel(candidate: DropCandidate): string {
@@ -1399,9 +1383,9 @@ export class FreeAgents implements OnDestroy {
       return 'TBD';
     }
 
-    const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(normalized)
-      ? `${normalized}T12:00:00Z`
-      : normalized);
+    const parsed = new Date(
+      /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? `${normalized}T12:00:00Z` : normalized,
+    );
 
     if (Number.isNaN(parsed.getTime())) {
       return normalized;
@@ -1633,15 +1617,16 @@ export class FreeAgents implements OnDestroy {
         throw new Error('The selected roster slot is no longer available.');
       }
 
-      if (
-        dropCandidate.rosterArea === 'active' &&
-        addAsset.position !== dropCandidate.position
-      ) {
-        throw new Error('Active roster moves must use the same position. Bench slots accept any position.');
+      if (dropCandidate.rosterArea === 'active' && addAsset.position !== dropCandidate.position) {
+        throw new Error(
+          'Active roster moves must use the same position. Bench slots accept any position.',
+        );
       }
 
       if (!this.selectedAssetEligibility()) {
-        throw new Error(this.eligibilityError() || 'Unable to verify the player’s current six-game status.');
+        throw new Error(
+          this.eligibilityError() || 'Unable to verify the player’s current six-game status.',
+        );
       }
 
       const effectiveCycleNumber = dropCandidate.effectiveCycleNumber;
@@ -1684,11 +1669,12 @@ export class FreeAgents implements OnDestroy {
         );
       } else if (dropCandidate.moveType === 'open-slot') {
         const fallbackExecution = {
-          mode: dropCandidate.rosterArea === 'bench'
-            ? 'ownership-only' as const
-            : dropCandidate.canApplyImmediately
-              ? 'immediate' as const
-              : 'queued' as const,
+          mode:
+            dropCandidate.rosterArea === 'bench'
+              ? ('ownership-only' as const)
+              : dropCandidate.canApplyImmediately
+                ? ('immediate' as const)
+                : ('queued' as const),
           effectiveCycleNumber,
         };
         const request = addFreeAgentToOpenRosterSlot({
@@ -1708,24 +1694,27 @@ export class FreeAgents implements OnDestroy {
           operationWatchGeneration,
         );
 
-        this.successMessage.set(dropCandidate.rosterArea === 'bench'
-          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
-          : execution.mode === 'immediate'
-            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} immediately. The slot was untouched and the incoming NHL-team block had not started, so the player is active in Matchup ${execution.effectiveCycleNumber}.`
-            : this.hasStartedCycleWindows()
-              ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in Matchup ${effectiveCycleNumber}.`
-              : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`);
+        this.successMessage.set(
+          dropCandidate.rosterArea === 'bench'
+            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
+            : execution.mode === 'immediate'
+              ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} immediately. The slot was untouched and the incoming NHL-team block had not started, so the player is active in Matchup ${execution.effectiveCycleNumber}.`
+              : this.hasStartedCycleWindows()
+                ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in Matchup ${effectiveCycleNumber}.`
+                : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`,
+        );
       } else {
         if (!dropCandidate.asset) {
           throw new Error('The selected drop option is missing a roster player or goalie unit.');
         }
 
         const fallbackExecution = {
-          mode: dropCandidate.rosterArea === 'bench'
-            ? 'ownership-only' as const
-            : dropCandidate.canApplyImmediately
-              ? 'immediate' as const
-              : 'queued' as const,
+          mode:
+            dropCandidate.rosterArea === 'bench'
+              ? ('ownership-only' as const)
+              : dropCandidate.canApplyImmediately
+                ? ('immediate' as const)
+                : ('queued' as const),
           effectiveCycleNumber,
         };
         const request = addDropRosterAsset({
@@ -1745,13 +1734,15 @@ export class FreeAgents implements OnDestroy {
           operationWatchGeneration,
         );
 
-        this.successMessage.set(dropCandidate.rosterArea === 'bench'
-          ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
-          : execution.mode === 'immediate'
-            ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both six-game counts were untouched, so the change applies to Matchup ${execution.effectiveCycleNumber}.`
-            : this.hasStartedCycleWindows()
-              ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started six-game count, and the move activates in Matchup ${effectiveCycleNumber}.`
-              : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`);
+        this.successMessage.set(
+          dropCandidate.rosterArea === 'bench'
+            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
+            : execution.mode === 'immediate'
+              ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both six-game counts were untouched, so the change applies to Matchup ${execution.effectiveCycleNumber}.`
+              : this.hasStartedCycleWindows()
+                ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started six-game count, and the move activates in Matchup ${effectiveCycleNumber}.`
+                : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`,
+        );
       }
 
       completed = true;
@@ -1760,11 +1751,12 @@ export class FreeAgents implements OnDestroy {
       const message =
         error instanceof Error ? error.message : 'Unable to complete this roster move.';
       this.errorMessage.set(message);
-      actionOutcome = /may still finish|check my team before retrying|final server or live-roster confirmation/i.test(
-        message,
-      )
-        ? 'uncertain'
-        : 'error';
+      actionOutcome =
+        /may still finish|check my team before retrying|final server or live-roster confirmation/i.test(
+          message,
+        )
+          ? 'uncertain'
+          : 'error';
       reopenComparison = true;
     } finally {
       if (this.operationWatchGeneration === operationWatchGeneration) {
@@ -1983,12 +1975,14 @@ export class FreeAgents implements OnDestroy {
 
     const incomingProjection = this.getProjectionAsset(incoming);
     const outgoingProjection = this.getProjectionAsset(outgoing);
-    const incomingValue = metric === 'NEXT_CYCLE'
-      ? incomingProjection.projectedCyclePoints
-      : incomingProjection.projectedRestOfSeasonPoints;
-    const outgoingValue = metric === 'NEXT_CYCLE'
-      ? outgoingProjection.projectedCyclePoints
-      : outgoingProjection.projectedRestOfSeasonPoints;
+    const incomingValue =
+      metric === 'NEXT_CYCLE'
+        ? incomingProjection.projectedCyclePoints
+        : incomingProjection.projectedRestOfSeasonPoints;
+    const outgoingValue =
+      metric === 'NEXT_CYCLE'
+        ? outgoingProjection.projectedCyclePoints
+        : outgoingProjection.projectedRestOfSeasonPoints;
 
     if (typeof incomingValue !== 'number' || typeof outgoingValue !== 'number') {
       return metric === 'NEXT_CYCLE'
@@ -2016,9 +2010,10 @@ export class FreeAgents implements OnDestroy {
 
     const incomingProjection = this.getProjectionAsset(incoming);
     const outgoing = this.getDropCandidateProjectionAsset(candidate);
-    const incomingValue = metric === 'NEXT_CYCLE'
-      ? incomingProjection.projectedCyclePoints
-      : incomingProjection.projectedRestOfSeasonPoints;
+    const incomingValue =
+      metric === 'NEXT_CYCLE'
+        ? incomingProjection.projectedCyclePoints
+        : incomingProjection.projectedRestOfSeasonPoints;
 
     if (typeof incomingValue !== 'number') {
       return null;
@@ -2029,9 +2024,10 @@ export class FreeAgents implements OnDestroy {
     }
 
     const outgoingProjection = this.getProjectionAsset(outgoing);
-    const outgoingValue = metric === 'NEXT_CYCLE'
-      ? outgoingProjection.projectedCyclePoints
-      : outgoingProjection.projectedRestOfSeasonPoints;
+    const outgoingValue =
+      metric === 'NEXT_CYCLE'
+        ? outgoingProjection.projectedCyclePoints
+        : outgoingProjection.projectedRestOfSeasonPoints;
 
     return typeof outgoingValue === 'number' ? incomingValue - outgoingValue : null;
   }
@@ -2115,14 +2111,11 @@ export class FreeAgents implements OnDestroy {
     );
   }
 
-
   getCurrentTeamCycleNumber(asset: DraftableAsset): number | null {
     const projectionAsset = this.getProjectionAsset(asset);
 
     return (
-      projectionAsset.currentTeamCycleNumber ??
-      projectionAsset.targetProjectionCycleNumber ??
-      null
+      projectionAsset.currentTeamCycleNumber ?? projectionAsset.targetProjectionCycleNumber ?? null
     );
   }
 
@@ -2137,10 +2130,7 @@ export class FreeAgents implements OnDestroy {
     return marker?.title ?? `Game ${index + 1}: schedule unavailable.`;
   }
 
-  getCandidateCycleMarker(
-    candidate: DropCandidate,
-    index: number,
-  ): LeaguePlayerProgressMarker {
+  getCandidateCycleMarker(candidate: DropCandidate, index: number): LeaguePlayerProgressMarker {
     const requiredGames = this.getRequiredGamesPerCycle();
 
     if (candidate.rosterArea === 'active') {
@@ -2150,10 +2140,9 @@ export class FreeAgents implements OnDestroy {
     }
 
     const projectionAsset = this.getDropCandidateProjectionAsset(candidate);
-    return buildProjectionProgressMarkers(
-      projectionAsset?.currentTeamCycleGames,
-      requiredGames,
-    )[index];
+    return buildProjectionProgressMarkers(projectionAsset?.currentTeamCycleGames, requiredGames)[
+      index
+    ];
   }
 
   getCycleProgressLabel(asset: DraftableAsset): string {
@@ -2551,9 +2540,7 @@ export class FreeAgents implements OnDestroy {
   getIncomingMatchupNumberLabel(): string {
     const eligibility = this.selectedAssetEligibility();
 
-    return eligibility
-      ? `Matchup ${eligibility.currentCycleNumber}`
-      : 'Matchup pending';
+    return eligibility ? `Matchup ${eligibility.currentCycleNumber}` : 'Matchup pending';
   }
 
   getIncomingGameProgressLabel(): string {
@@ -2602,10 +2589,7 @@ export class FreeAgents implements OnDestroy {
       }
 
       const scheduledGames = window.scheduledGames || this.getRequiredGamesPerCycle();
-      const usedGames = Math.min(
-        scheduledGames,
-        window.gamesPlayed + window.liveGameIds.length,
-      );
+      const usedGames = Math.min(scheduledGames, window.gamesPlayed + window.liveGameIds.length);
 
       return `${usedGames} / ${scheduledGames} games used`;
     }
@@ -2671,7 +2655,9 @@ export class FreeAgents implements OnDestroy {
     );
   }
 
-  getCandidateTransactionTiming(candidate: DropCandidate): FreeAgentTransactionTimingDecision | null {
+  getCandidateTransactionTiming(
+    candidate: DropCandidate,
+  ): FreeAgentTransactionTimingDecision | null {
     return this.resolveCandidateTransactionTiming(candidate);
   }
 
@@ -2684,7 +2670,6 @@ export class FreeAgents implements OnDestroy {
       ? 'Use this open spot'
       : `Replace ${candidate.asset ? this.getRosterAssetName(candidate.asset) : 'this slot'}`;
   }
-
 
   private resolveCandidateTransactionTiming(
     candidate: DropCandidate,
@@ -2707,7 +2692,8 @@ export class FreeAgents implements OnDestroy {
       canApplyImmediately: candidate.canApplyImmediately,
       effectiveCycleNumber: candidate.effectiveCycleNumber,
       slotNextCycleNumber: candidate.slotNextCycleNumber,
-      outgoingCycleNumber: outgoingWindow?.cycleNumber ??
+      outgoingCycleNumber:
+        outgoingWindow?.cycleNumber ??
         (candidate.rosterArea === 'active' ? candidate.slotNextCycleNumber : null),
       outgoingWindowStatus: outgoingWindow?.status ?? null,
       outgoingFinalGames: outgoingWindow?.gamesPlayed ?? 0,
@@ -2716,8 +2702,8 @@ export class FreeAgents implements OnDestroy {
       incomingCurrentCycleNumber: eligibility?.currentCycleNumber ?? null,
       incomingFinalGames: eligibility?.completedGamesInCurrentCycle ?? 0,
       incomingLiveGames: eligibility?.liveGamesInCurrentCycle ?? 0,
-      incomingScheduledGames: eligibility?.scheduledGamesInCurrentCycle ??
-        this.getRequiredGamesPerCycle(),
+      incomingScheduledGames:
+        eligibility?.scheduledGamesInCurrentCycle ?? this.getRequiredGamesPerCycle(),
       incomingHasStarted: eligibility?.currentCycleHasStarted ?? false,
       incomingEarliestCycleNumber: eligibility?.earliestEligibleCycleNumber ?? null,
     });
@@ -2804,7 +2790,9 @@ export class FreeAgents implements OnDestroy {
 
   getRosterSpotCandidateName(candidate: DropCandidate): string {
     if (!candidate.asset) {
-      return candidate.rosterArea === 'bench' ? `Open Bench ${candidate.slotNumber}` : `Open ${candidate.position} Slot`;
+      return candidate.rosterArea === 'bench'
+        ? `Open Bench ${candidate.slotNumber}`
+        : `Open ${candidate.position} Slot`;
     }
 
     return this.getRosterAssetName(candidate.asset);
@@ -2838,9 +2826,10 @@ export class FreeAgents implements OnDestroy {
     }
 
     if (dropCandidate.moveType === 'open-slot') {
-      const destination = dropCandidate.rosterArea === 'bench'
-        ? `Fill Bench ${dropCandidate.slotNumber}`
-        : `Fill open ${addAsset.position} slot`;
+      const destination =
+        dropCandidate.rosterArea === 'bench'
+          ? `Fill Bench ${dropCandidate.slotNumber}`
+          : `Fill open ${addAsset.position} slot`;
       return waiver
         ? `Claim ${this.getAssetName(addAsset)} · ${destination} · ${this.getEffectiveCycleText()}`
         : `Add ${this.getAssetName(addAsset)} · ${destination} · ${this.getEffectiveCycleText()}`;
@@ -2945,9 +2934,7 @@ export class FreeAgents implements OnDestroy {
       return `Matchup ${candidate.slotNextCycleNumber} · six-game window not started`;
     }
 
-    const liveSuffix = window.liveGameIds.length > 0
-      ? ` · ${window.liveGameIds.length} live`
-      : '';
+    const liveSuffix = window.liveGameIds.length > 0 ? ` · ${window.liveGameIds.length} live` : '';
 
     return `Matchup ${window.cycleNumber} · ${window.gamesPlayed}/${window.scheduledGames || this.getRequiredGamesPerCycle()} team games final${liveSuffix}`;
   }
@@ -2961,17 +2948,17 @@ export class FreeAgents implements OnDestroy {
         : 'Incoming matchup status unavailable';
     }
 
-    const liveSuffix = eligibility.liveGamesInCurrentCycle > 0
-      ? ` · ${eligibility.liveGamesInCurrentCycle} live`
-      : '';
-    const replaySuffix = eligibility.evaluationMode === 'historical-replay'
-      ? ` · replay through ${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}`
-      : '';
+    const liveSuffix =
+      eligibility.liveGamesInCurrentCycle > 0
+        ? ` · ${eligibility.liveGamesInCurrentCycle} live`
+        : '';
+    const replaySuffix =
+      eligibility.evaluationMode === 'historical-replay'
+        ? ` · replay through ${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}`
+        : '';
 
     return `Matchup ${eligibility.currentCycleNumber} · ${eligibility.completedGamesInCurrentCycle}/${eligibility.scheduledGamesInCurrentCycle} team games final${liveSuffix}${replaySuffix}`;
   }
-
-
 
   getEligibilityEvaluationLabel(): string {
     const eligibility = this.selectedAssetEligibility();
@@ -2980,14 +2967,9 @@ export class FreeAgents implements OnDestroy {
       return '';
     }
 
-    const replayContext = resolveRosterMoveReplayContext(
-      this.historicalReplayControl(),
-    );
+    const replayContext = resolveRosterMoveReplayContext(this.historicalReplayControl());
 
-    if (
-      replayContext.mode === 'historical-replay' &&
-      replayContext.safePregameRecovery
-    ) {
+    if (replayContext.mode === 'historical-replay' && replayContext.safePregameRecovery) {
       return `Historical replay is paused after an error, but no NHL game has been released into this league. RinkRat can safely complete pregame roster moves using the last verified pregame date (${this.getReplayEvaluationDateLabel(eligibility.completedThroughDate)}). Retry replay before making moves after games begin.`;
     }
 
@@ -3235,9 +3217,7 @@ export class FreeAgents implements OnDestroy {
     this.preferredRosterArea.set(state.preferredRosterArea);
     this.playerPoolScrollY.set(Math.max(0, state.playerPoolScrollY));
     this.flowStep.set(
-      state.flowStep === 'roster-slot' && state.selectedAddAssetKey
-        ? 'roster-slot'
-        : 'player-pool',
+      state.flowStep === 'roster-slot' && state.selectedAddAssetKey ? 'roster-slot' : 'player-pool',
     );
   }
 
@@ -3270,9 +3250,7 @@ export class FreeAgents implements OnDestroy {
       activeSlots: (roster?.activeSlots ?? []).map((slot) => ({
         slotId: slot.slotId,
         assetKey: this.getRosterAssetKey(slot.asset),
-        pendingIncomingAssetKey: this.getRosterAssetKey(
-          slot.pendingMove?.incomingAsset ?? null,
-        ),
+        pendingIncomingAssetKey: this.getRosterAssetKey(slot.pendingMove?.incomingAsset ?? null),
       })),
       benchSlots: (roster?.benchSlots ?? []).map((slot) => ({
         slotId: slot.slotId,
@@ -3286,13 +3264,8 @@ export class FreeAgents implements OnDestroy {
     };
   }
 
-  private isFreeAgentOperationConfirmed(
-    expectation: FreeAgentOperationExpectation,
-  ): boolean {
-    return isFreeAgentOperationObserved(
-      expectation,
-      this.getFreeAgentOperationObservation(),
-    );
+  private isFreeAgentOperationConfirmed(expectation: FreeAgentOperationExpectation): boolean {
+    return isFreeAgentOperationObserved(expectation, this.getFreeAgentOperationObservation());
   }
 
   private async waitForFreeAgentOperationObservation(
@@ -3302,10 +3275,7 @@ export class FreeAgents implements OnDestroy {
   ): Promise<boolean> {
     const deadline = Date.now() + Math.max(0, timeoutMs);
 
-    while (
-      this.operationWatchGeneration === generation &&
-      Date.now() <= deadline
-    ) {
+    while (this.operationWatchGeneration === generation && Date.now() <= deadline) {
       if (this.isFreeAgentOperationConfirmed(expectation)) {
         return true;
       }
@@ -3341,10 +3311,7 @@ export class FreeAgents implements OnDestroy {
 
     const deadline = Date.now() + 20_000;
 
-    while (
-      this.operationWatchGeneration === generation &&
-      Date.now() <= deadline
-    ) {
+    while (this.operationWatchGeneration === generation && Date.now() <= deadline) {
       if (this.isFreeAgentOperationConfirmed(expectation)) {
         return listenerFallbackValue;
       }
@@ -3358,13 +3325,7 @@ export class FreeAgents implements OnDestroy {
         // a second before the authoritative Firestore listener reports the
         // committed transaction. Give that listener a brief reconciliation
         // window before surfacing an error to the manager.
-        if (
-          await this.waitForFreeAgentOperationObservation(
-            expectation,
-            2_500,
-            generation,
-          )
-        ) {
+        if (await this.waitForFreeAgentOperationObservation(expectation, 2_500, generation)) {
           return listenerFallbackValue;
         }
 
@@ -3620,9 +3581,7 @@ export class FreeAgents implements OnDestroy {
     }
   }
 
-  private getRosterMoveEligibilityOptions(
-    forceRefresh: boolean,
-  ): RosterMoveEligibilityOptions {
+  private getRosterMoveEligibilityOptions(forceRefresh: boolean): RosterMoveEligibilityOptions {
     if (!this.historicalReplayControlLoaded()) {
       throw new Error(
         'RinkRat is checking whether historical replay is active. Wait a moment and retry the add/drop timing check.',
@@ -3633,9 +3592,7 @@ export class FreeAgents implements OnDestroy {
       throw new Error(this.historicalReplayControlError());
     }
 
-    const replayContext = resolveRosterMoveReplayContext(
-      this.historicalReplayControl(),
-    );
+    const replayContext = resolveRosterMoveReplayContext(this.historicalReplayControl());
 
     if (replayContext.mode === 'live') {
       return { forceRefresh };
@@ -3645,9 +3602,7 @@ export class FreeAgents implements OnDestroy {
       throw new Error(replayContext.message);
     }
 
-    const referenceDate = new Date(
-      `${replayContext.completedThroughDate}T12:00:00Z`,
-    );
+    const referenceDate = new Date(`${replayContext.completedThroughDate}T12:00:00Z`);
 
     if (Number.isNaN(referenceDate.getTime())) {
       throw new Error(
@@ -3663,9 +3618,7 @@ export class FreeAgents implements OnDestroy {
     };
   }
 
-  private getHistoricalReplayControlSignature(
-    control: HistoricalReplayControl | null,
-  ): string {
+  private getHistoricalReplayControlSignature(control: HistoricalReplayControl | null): string {
     if (!control) {
       return 'none';
     }
@@ -3782,7 +3735,9 @@ export class FreeAgents implements OnDestroy {
   }
 
   private getLatestWindowForSlot(slotId: string): FantasyAssetCycleWindow | null {
-    const windows = (Object.values(this.myTeamWindowsByCycle()) as Array<FantasyTeamCycleWindows | null>)
+    const windows = (
+      Object.values(this.myTeamWindowsByCycle()) as Array<FantasyTeamCycleWindows | null>
+    )
       .flatMap((teamWindows) => teamWindows?.windows ?? [])
       .filter((window) => window.rosterSlotId === slotId)
       .sort((first, second) => second.cycleNumber - first.cycleNumber);

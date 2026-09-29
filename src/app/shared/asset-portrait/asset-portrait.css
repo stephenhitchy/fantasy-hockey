@@ -1,0 +1,69 @@
+:host {
+  display: inline-block;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.asset-portrait {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: visible;
+}
+
+.asset-portrait__primary,
+.asset-portrait__placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 1px solid var(--rr-color-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--rr-color-surface-strong) 86%, var(--rr-color-info) 14%);
+}
+
+.asset-portrait__primary {
+  object-fit: contain;
+}
+
+.asset-portrait--headshot .asset-portrait__primary {
+  object-fit: cover;
+  object-position: center 12%;
+}
+
+.asset-portrait__placeholder {
+  color: var(--rr-color-text-muted);
+}
+
+.asset-portrait__placeholder svg {
+  width: 72%;
+  height: 72%;
+  fill: color-mix(in srgb, var(--rr-color-text-muted) 38%, transparent);
+  stroke: color-mix(in srgb, var(--rr-color-text-secondary) 68%, transparent);
+  stroke-width: 2;
+}
+
+.asset-portrait__placeholder--team {
+  font-family: var(--rr-font-interface);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.asset-portrait__team-badge {
+  position: absolute;
+  right: -0.2rem;
+  bottom: -0.2rem;
+  width: 42%;
+  height: 42%;
+  padding: 2px;
+  border: 1px solid var(--rr-color-border-strong);
+  border-radius: 50%;
+  background: var(--rr-color-surface);
+  object-fit: contain;
+  box-shadow: 0 2px 5px color-mix(in srgb, #000 48%, transparent);
+}

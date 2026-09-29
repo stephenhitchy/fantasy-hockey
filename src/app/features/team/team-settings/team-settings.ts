@@ -88,6 +88,7 @@ import {
   ViewportOverlayPortalDirective,
 } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
+import { AssetPortrait } from '../../../shared/asset-portrait/asset-portrait';
 import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import {
   getRosterDisplayMetric,
@@ -141,7 +142,16 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 
 @Component({
   selector: 'app-team-settings',
-  imports: [FormsModule, RouterLink, ManagerAvatar, DialogFocusTrapDirective, ViewportOverlayPortalDirective, ActionSheet, LeagueQuickNavigation],
+  imports: [
+    FormsModule,
+    RouterLink,
+    ManagerAvatar,
+    DialogFocusTrapDirective,
+    ViewportOverlayPortalDirective,
+    ActionSheet,
+    AssetPortrait,
+    LeagueQuickNavigation,
+  ],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
 })
@@ -275,7 +285,6 @@ export class TeamSettings implements OnDestroy {
     return (team.pointsFor ?? 0) - (team.pointsAgainst ?? 0);
   });
 
-
   readonly leagueRank = computed(() => {
     const ownerId = this.userId;
 
@@ -329,15 +338,18 @@ export class TeamSettings implements OnDestroy {
       return [];
     }
 
-    const activeSlot = area === 'active'
-      ? this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null
-      : null;
-    const benchSlot = area === 'bench'
-      ? this.roster()?.benchSlots.find((slot) => slot.slotId === slotId) ?? null
-      : null;
-    const irSlot = area === 'ir'
-      ? this.roster()?.irSlots.find((slot) => slot.slotId === slotId) ?? null
-      : null;
+    const activeSlot =
+      area === 'active'
+        ? (this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null)
+        : null;
+    const benchSlot =
+      area === 'bench'
+        ? (this.roster()?.benchSlots.find((slot) => slot.slotId === slotId) ?? null)
+        : null;
+    const irSlot =
+      area === 'ir'
+        ? (this.roster()?.irSlots.find((slot) => slot.slotId === slotId) ?? null)
+        : null;
     const benchReservedForActiveSwap = Boolean(
       benchSlot && this.isBenchSlotReservedForActiveSwap(benchSlot),
     );
@@ -349,9 +361,7 @@ export class TeamSettings implements OnDestroy {
           (slot) => !this.isBenchSlotReservedForActiveSwap(slot),
         )
       : [];
-    const availability = asset?.assetType === 'skater'
-      ? this.getPlayerAvailability(asset)
-      : null;
+    const availability = asset?.assetType === 'skater' ? this.getPlayerAvailability(asset) : null;
     const moveToIrDisabledReason = activeSlot
       ? this.getMoveToIrDisabledText(activeSlot)
       : benchSlot && this.getOpenIrSlotCount() <= 0
@@ -374,15 +384,17 @@ export class TeamSettings implements OnDestroy {
           : false,
       moveToIrDisabledReason,
       canStartFromBench: benchStartTargets.length > 0,
-      startDisabledReason: benchSlot?.asset && benchStartTargets.length === 0
-        ? `Every ${benchSlot.asset.position} starting slot already has a scheduled move.`
-        : null,
+      startDisabledReason:
+        benchSlot?.asset && benchStartTargets.length === 0
+          ? `Every ${benchSlot.asset.position} starting slot already has a scheduled move.`
+          : null,
       canActivateFromIr: irSlot ? this.canActivateIrSlot(irSlot) : false,
       activateDisabledReason: irSlot ? this.getIrActivationHelp(irSlot) : null,
       canMoveIrToBench: irBenchTargets.length > 0,
-      moveIrToBenchDisabledReason: irSlot?.asset && irBenchTargets.length === 0
-        ? 'Every bench spot is reserved for another scheduled lineup move.'
-        : null,
+      moveIrToBenchDisabledReason:
+        irSlot?.asset && irBenchTargets.length === 0
+          ? 'Every bench spot is reserved for another scheduled lineup move.'
+          : null,
     });
   });
 
@@ -665,10 +677,7 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
-  private runBoundedRosterOperation<T>(
-    operation: Promise<T>,
-    actionLabel: string,
-  ): Promise<T> {
+  private runBoundedRosterOperation<T>(operation: Promise<T>, actionLabel: string): Promise<T> {
     return withOperationDeadline(
       operation,
       45_000,
@@ -760,9 +769,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   getRosterManagerTitle(): string {
-    const asset = this.rosterManagerAsset();
-
-    return asset ? this.getRosterAssetName(asset) : this.getRosterManagerSlotLabel();
+    return this.getRosterManagerSlotLabel();
   }
 
   getRosterManagerDescription(): string {
@@ -897,22 +904,19 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
-  async openFreeAgentsForRosterSlot(
-    area: RosterManagementArea,
-    slotId: string,
-  ): Promise<void> {
+  async openFreeAgentsForRosterSlot(area: RosterManagementArea, slotId: string): Promise<void> {
     const roster = this.roster();
 
     if (!roster) {
       return;
     }
 
-    const activeSlot = area === 'active'
-      ? roster.activeSlots.find((slot) => slot.slotId === slotId) ?? null
-      : null;
-    const benchSlot = area === 'bench'
-      ? roster.benchSlots.find((slot) => slot.slotId === slotId) ?? null
-      : null;
+    const activeSlot =
+      area === 'active'
+        ? (roster.activeSlots.find((slot) => slot.slotId === slotId) ?? null)
+        : null;
+    const benchSlot =
+      area === 'bench' ? (roster.benchSlots.find((slot) => slot.slotId === slotId) ?? null) : null;
     const position = activeSlot?.position ?? benchSlot?.asset?.position ?? null;
     const query = buildFreeAgentRosterTargetQuery(area, position, slotId);
 
@@ -1048,8 +1052,10 @@ export class TeamSettings implements OnDestroy {
     }
 
     const activeSlots = this.getActiveSlotsForIrAsset(slot.asset);
-    return activeSlots.some((activeSlot) => activeSlot.asset === null) ||
-      (activeSlots.length > 0 && this.getIrActivationBenchTargets().length > 0);
+    return (
+      activeSlots.some((activeSlot) => activeSlot.asset === null) ||
+      (activeSlots.length > 0 && this.getIrActivationBenchTargets().length > 0)
+    );
   }
 
   getIrActivationHelp(slot: IrRosterSlot): string {
@@ -1111,15 +1117,14 @@ export class TeamSettings implements OnDestroy {
       return null;
     }
 
-    return this.getActiveSlotsForIrAsset(irSlot.asset).find(
-      (slot) => slot.slotId === targetSlotId,
-    ) ?? null;
+    return (
+      this.getActiveSlotsForIrAsset(irSlot.asset).find((slot) => slot.slotId === targetSlotId) ??
+      null
+    );
   }
 
   getIrActivationBenchTargets(): BenchRosterSlot[] {
-    return this.getBenchSlots().filter(
-      (slot) => !this.isBenchSlotReservedForActiveSwap(slot),
-    );
+    return this.getBenchSlots().filter((slot) => !this.isBenchSlotReservedForActiveSwap(slot));
   }
 
   getSelectedIrActivationBenchSlot(): BenchRosterSlot | null {
@@ -1129,9 +1134,7 @@ export class TeamSettings implements OnDestroy {
       return null;
     }
 
-    return this.getIrActivationBenchTargets().find(
-      (slot) => slot.slotId === slotId,
-    ) ?? null;
+    return this.getIrActivationBenchTargets().find((slot) => slot.slotId === slotId) ?? null;
   }
 
   irActivationNeedsBenchDestination(): boolean {
@@ -1153,9 +1156,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   getIrActivationBenchTargetHeading(slot: BenchRosterSlot): string {
-    return slot.asset
-      ? this.getRosterAssetName(slot.asset)
-      : `Open Bench ${slot.slotNumber}`;
+    return slot.asset ? this.getRosterAssetName(slot.asset) : `Open Bench ${slot.slotNumber}`;
   }
 
   getIrActivationBenchTargetDetail(slot: BenchRosterSlot): string {
@@ -1211,9 +1212,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   selectIrActivationTarget(slotId: string): void {
-    const targetSlot = this.getIrActivationTargetSlots().find(
-      (slot) => slot.slotId === slotId,
-    );
+    const targetSlot = this.getIrActivationTargetSlots().find((slot) => slot.slotId === slotId);
 
     if (!targetSlot || this.rosterMoveLoading()) {
       return;
@@ -1409,7 +1408,9 @@ export class TeamSettings implements OnDestroy {
     const previousAssetKey = this.getRosterAssetKey(pendingDrop.asset);
 
     if (!previousAssetKey) {
-      this.rosterMoveError.set('Unable to verify the selected roster asset. Refresh and try again.');
+      this.rosterMoveError.set(
+        'Unable to verify the selected roster asset. Refresh and try again.',
+      );
       return;
     }
 
@@ -1443,11 +1444,7 @@ export class TeamSettings implements OnDestroy {
         effectiveLabel,
       });
 
-      await this.awaitRosterRemovalConfirmation(
-        request,
-        expectation,
-        operationGeneration,
-      );
+      await this.awaitRosterRemovalConfirmation(request, expectation, operationGeneration);
 
       this.rosterMoveMessage.set(
         pendingDrop.sourceRosterArea === 'active'
@@ -1459,11 +1456,12 @@ export class TeamSettings implements OnDestroy {
       const message =
         error instanceof Error ? error.message : 'Unable to drop this player or goalie unit.';
       this.rosterMoveError.set(message);
-      actionOutcome = /may still finish|check my team before retrying|final server or live-roster confirmation/i.test(
-        message,
-      )
-        ? 'uncertain'
-        : 'error';
+      actionOutcome =
+        /may still finish|check my team before retrying|final server or live-roster confirmation/i.test(
+          message,
+        )
+          ? 'uncertain'
+          : 'error';
     } finally {
       if (this.rosterOperationGeneration === operationGeneration) {
         this.rosterOperationGeneration += 1;
@@ -1524,9 +1522,10 @@ export class TeamSettings implements OnDestroy {
       );
       actionOutcome = 'success';
     } catch (error: unknown) {
-      const message = error instanceof Error
-        ? error.message
-        : 'Unable to move this bench player to Injured Reserve (IR).';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to move this bench player to Injured Reserve (IR).';
       this.rosterMoveError.set(message);
       actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
@@ -1539,10 +1538,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   beginBenchSwap(benchSlotId: string): void {
-    if (
-      this.isRosterOperationPending() ||
-      Date.now() < this.benchSwapReopenBlockedUntil
-    ) {
+    if (this.isRosterOperationPending() || Date.now() < this.benchSwapReopenBlockedUntil) {
       return;
     }
 
@@ -1552,9 +1548,13 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    const targets = this.getPositionSlots(benchSlot.asset.position).filter((slot) => !slot.pendingMove);
+    const targets = this.getPositionSlots(benchSlot.asset.position).filter(
+      (slot) => !slot.pendingMove,
+    );
     if (targets.length === 0) {
-      this.rosterMoveError.set(`No ${benchSlot.asset.position} active slot is available for a scheduled swap.`);
+      this.rosterMoveError.set(
+        `No ${benchSlot.asset.position} active slot is available for a scheduled swap.`,
+      );
       return;
     }
 
@@ -1624,9 +1624,7 @@ export class TeamSettings implements OnDestroy {
   canConfirmBenchSwap(): boolean {
     return Boolean(
       this.getPendingBenchSwapSlot()?.asset &&
-      this.getBenchSwapTargetSlots().some(
-        (slot) => slot.slotId === this.benchSwapTargetSlotId(),
-      ) &&
+      this.getBenchSwapTargetSlots().some((slot) => slot.slotId === this.benchSwapTargetSlotId()) &&
       this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading(),
     );
@@ -1677,12 +1675,17 @@ export class TeamSettings implements OnDestroy {
         previousRosterFingerprint,
         operationGeneration,
       );
-      const effectiveCycleNumber = execution?.effectiveCycleNumber ?? this.getRosterMoveEffectiveCycleNumber();
-      const observedTarget = this.roster()?.activeSlots.find((slot) => slot.slotId === targetSlot.slotId);
+      const effectiveCycleNumber =
+        execution?.effectiveCycleNumber ?? this.getRosterMoveEffectiveCycleNumber();
+      const observedTarget = this.roster()?.activeSlots.find(
+        (slot) => slot.slotId === targetSlot.slotId,
+      );
       const incomingKey = this.getRosterAssetKey(benchSlot.asset);
       const observedImmediate = this.getRosterAssetKey(observedTarget?.asset) === incomingKey;
-      const observedQueued = this.getRosterAssetKey(observedTarget?.pendingMove?.incomingAsset) === incomingKey;
-      const mode = execution?.mode ?? (observedImmediate ? 'immediate' : observedQueued ? 'queued' : 'queued');
+      const observedQueued =
+        this.getRosterAssetKey(observedTarget?.pendingMove?.incomingAsset) === incomingKey;
+      const mode =
+        execution?.mode ?? (observedImmediate ? 'immediate' : observedQueued ? 'queued' : 'queued');
 
       this.rosterMoveMessage.set(
         mode === 'immediate'
@@ -1777,11 +1780,13 @@ export class TeamSettings implements OnDestroy {
     const targetSlot = this.getIrBenchActivationTargets().find(
       (slot) => slot.slotId === this.irBenchActivationTargetSlotId(),
     );
-    return !!irSlot?.asset &&
+    return (
+      !!irSlot?.asset &&
       !!targetSlot &&
       !this.isBenchSlotReservedForActiveSwap(targetSlot) &&
       this.clientHealth.competitiveActionsReady() &&
-      !this.rosterMoveLoading();
+      !this.rosterMoveLoading()
+    );
   }
 
   async confirmIrBenchActivation(): Promise<void> {
@@ -1826,14 +1831,17 @@ export class TeamSettings implements OnDestroy {
         previousRosterFingerprint,
         operationGeneration,
       );
-      this.rosterMoveMessage.set(replacedAsset
-        ? `${playerName} moved from Injured Reserve (IR) to ${targetSlot.slotId}. ${this.getRosterAssetName(replacedAsset)} was placed on waivers.`
-        : `${playerName} moved from Injured Reserve (IR) to ${targetSlot.slotId}.`);
+      this.rosterMoveMessage.set(
+        replacedAsset
+          ? `${playerName} moved from Injured Reserve (IR) to ${targetSlot.slotId}. ${this.getRosterAssetName(replacedAsset)} was placed on waivers.`
+          : `${playerName} moved from Injured Reserve (IR) to ${targetSlot.slotId}.`,
+      );
       actionOutcome = 'success';
     } catch (error: unknown) {
-      const message = error instanceof Error
-        ? error.message
-        : 'Unable to move this player from Injured Reserve (IR) to the bench.';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to move this player from Injured Reserve (IR) to the bench.';
       this.rosterMoveError.set(message);
       actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
@@ -1878,7 +1886,8 @@ export class TeamSettings implements OnDestroy {
       const effectiveCycleNumber = this.getRosterMoveEffectiveCycleNumber();
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const playerName = this.getRosterAssetName(slot.asset);
-      const availabilityLabel = this.getPlayerAvailability(slot.asset)?.label ?? 'Injured Reserve eligible';
+      const availabilityLabel =
+        this.getPlayerAvailability(slot.asset)?.label ?? 'Injured Reserve eligible';
       const request = moveRosterAssetToIr({
         leagueId: this.leagueId,
         ownerId: this.userId,
@@ -1901,9 +1910,10 @@ export class TeamSettings implements OnDestroy {
       );
       actionOutcome = 'success';
     } catch (error: unknown) {
-      const message = error instanceof Error
-        ? error.message
-        : 'Unable to move this player to Injured Reserve (IR).';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to move this player to Injured Reserve (IR).';
       this.rosterMoveError.set(message);
       actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
@@ -1941,9 +1951,7 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    const benchSlot = targetSlot.asset
-      ? this.getSelectedIrActivationBenchSlot()
-      : null;
+    const benchSlot = targetSlot.asset ? this.getSelectedIrActivationBenchSlot() : null;
 
     if (targetSlot.asset && !benchSlot) {
       this.rosterMoveError.set(
@@ -1954,9 +1962,7 @@ export class TeamSettings implements OnDestroy {
 
     const playerName = this.getRosterAssetName(irSlot.asset);
     const replacedPlayerName = targetSlot.asset ? this.getRosterAssetName(targetSlot.asset) : '';
-    const waivedBenchAssetName = benchSlot?.asset
-      ? this.getRosterAssetName(benchSlot.asset)
-      : '';
+    const waivedBenchAssetName = benchSlot?.asset ? this.getRosterAssetName(benchSlot.asset) : '';
     const actionHandle = this.actionMonitor.begin('injured-reserve');
     let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
     const operationGeneration = ++this.rosterOperationGeneration;
@@ -1986,11 +1992,13 @@ export class TeamSettings implements OnDestroy {
       );
       const confirmedCycle = execution?.effectiveCycleNumber ?? effectiveCycleNumber;
       const activationLabel = `Matchup ${confirmedCycle}`;
-      const observedTarget = this.roster()?.activeSlots.find((slot) => slot.slotId === targetSlot.slotId);
-      const playerKey = this.getRosterAssetKey(irSlot.asset);
-      const mode = execution?.mode ?? (
-        this.getRosterAssetKey(observedTarget?.asset) === playerKey ? 'immediate' : 'queued'
+      const observedTarget = this.roster()?.activeSlots.find(
+        (slot) => slot.slotId === targetSlot.slotId,
       );
+      const playerKey = this.getRosterAssetKey(irSlot.asset);
+      const mode =
+        execution?.mode ??
+        (this.getRosterAssetKey(observedTarget?.asset) === playerKey ? 'immediate' : 'queued');
 
       this.rosterMoveMessage.set(
         mode === 'immediate'
@@ -2003,9 +2011,10 @@ export class TeamSettings implements OnDestroy {
       );
       actionOutcome = 'success';
     } catch (error: unknown) {
-      const message = error instanceof Error
-        ? error.message
-        : 'Unable to activate this player from Injured Reserve (IR).';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to activate this player from Injured Reserve (IR).';
       this.rosterMoveError.set(message);
       actionOutcome = this.isUncertainRosterOperationMessage(message) ? 'uncertain' : 'error';
     } finally {
@@ -2036,9 +2045,7 @@ export class TeamSettings implements OnDestroy {
   getRosterAssetDisplayMetric(asset: unknown): number | null {
     const displayAsset = this.getRosterDisplayAsset(asset);
 
-    return displayAsset
-      ? getRosterDisplayMetric(displayAsset, this.rosterDisplayPhase())
-      : null;
+    return displayAsset ? getRosterDisplayMetric(displayAsset, this.rosterDisplayPhase()) : null;
   }
 
   getRosterAssetDisplayMetricLabel(): string {
@@ -2048,7 +2055,7 @@ export class TeamSettings implements OnDestroy {
   private getRosterDisplayAsset(asset: unknown): DraftableAsset | null {
     const assetKey = this.getRosterAssetKey(asset);
     const currentProjectionAsset = assetKey
-      ? this.playerPool().find((candidate) => candidate.assetKey === assetKey) ?? null
+      ? (this.playerPool().find((candidate) => candidate.assetKey === assetKey) ?? null)
       : null;
 
     return currentProjectionAsset ?? this.getRosterAssetProjection(asset);
@@ -2155,7 +2162,8 @@ export class TeamSettings implements OnDestroy {
       return 'Injury';
     }
 
-    const searchableText = `${availability.externalStatus ?? ''} ${availability.note ?? ''}`.toLowerCase();
+    const searchableText =
+      `${availability.externalStatus ?? ''} ${availability.note ?? ''}`.toLowerCase();
     const injuryLabels: Array<[RegExp, string]> = [
       [/concussion|head|face/, 'Head'],
       [/chest|rib|sternum/, 'Chest'],
@@ -2172,7 +2180,9 @@ export class TeamSettings implements OnDestroy {
       [/illness|flu|virus/, 'Illness'],
     ];
 
-    return injuryLabels.find(([pattern]) => pattern.test(searchableText))?.[1] ?? availability.label;
+    return (
+      injuryLabels.find(([pattern]) => pattern.test(searchableText))?.[1] ?? availability.label
+    );
   }
 
   getPlayerExpectedReturnLabel(asset: RosterAsset): string {
@@ -2270,22 +2280,10 @@ export class TeamSettings implements OnDestroy {
     const matchup = this.currentNavigationMatchup();
 
     if (matchup) {
-      return [
-        '/leagues',
-        this.leagueId,
-        'cycles',
-        matchup.cycleNumber,
-        'matchups',
-        matchup.id,
-      ];
+      return ['/leagues', this.leagueId, 'cycles', matchup.cycleNumber, 'matchups', matchup.id];
     }
 
-    return [
-      '/leagues',
-      this.leagueId,
-      'cycles',
-      this.latestCycle()?.cycleNumber ?? 1,
-    ];
+    return ['/leagues', this.leagueId, 'cycles', this.latestCycle()?.cycleNumber ?? 1];
   }
 
   getCurrentMatchupStatusText(): string {
@@ -2347,18 +2345,6 @@ export class TeamSettings implements OnDestroy {
     }
 
     return rosterAsset.teamAbbreviation ?? '—';
-  }
-
-  getRosterAssetLogoUrl(asset: unknown): string | undefined {
-    const rosterAsset = asset as {
-      assetType?: string;
-      player?: { teamLogoUrl?: string };
-      teamLogoUrl?: string;
-    };
-
-    return rosterAsset.assetType === 'skater'
-      ? rosterAsset.player?.teamLogoUrl
-      : rosterAsset.teamLogoUrl;
   }
 
   getRosterAssetProjection(asset: unknown): DraftableAsset | null {
@@ -2501,6 +2487,29 @@ export class TeamSettings implements OnDestroy {
     );
   }
 
+  handleRosterCardSurfaceClick(event: MouseEvent, asset: unknown): void {
+    const target = event.target;
+
+    if (
+      target instanceof Element &&
+      target.closest('button, a, input, select, textarea, [role="button"], [role="link"]')
+    ) {
+      return;
+    }
+
+    this.openRosterAssetDetail(asset);
+  }
+
+  handleRosterIdentityKeydown(event: KeyboardEvent, asset: unknown): void {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.openRosterAssetDetail(asset);
+  }
+
   getProjectedCycle(asset: unknown): number | null {
     return this.getRosterAssetProjection(asset)?.projectedCyclePoints ?? null;
   }
@@ -2515,25 +2524,36 @@ export class TeamSettings implements OnDestroy {
     return this.cycleScoring()?.assetScores[projectionAsset.assetKey] ?? null;
   }
 
-  getRosterAssetCurrentCycleScore(asset: unknown): number {
-    return this.getRosterAssetScoreSummary(asset)?.currentScore ?? 0;
+  getRosterAssetCurrentCycleScore(asset: unknown): number | null {
+    return this.getRosterAssetScoreSummary(asset)?.currentScore ?? null;
   }
 
-  getRosterAssetGamesPlayed(asset: unknown): number {
-    return this.getRosterAssetScoreSummary(asset)?.gamesPlayed ?? 0;
+  getRosterAssetGamesPlayed(asset: unknown): number | null {
+    return this.getRosterAssetScoreSummary(asset)?.gamesPlayed ?? null;
   }
 
-  getRosterAssetGamesLeft(asset: unknown): number {
+  getRosterAssetGamesLeft(asset: unknown): number | null {
     const summary = this.getRosterAssetScoreSummary(asset);
 
     if (summary) {
       return summary.gamesLeft;
     }
 
-    return (
+    return null;
+  }
+
+  getRosterAssetGameProgress(asset: unknown): string {
+    const summary = this.getRosterAssetScoreSummary(asset);
+
+    if (!summary) {
+      return '—';
+    }
+
+    const requiredGames =
       this.league()?.scoringRules?.requiredGamesPerCycle ??
-      defaultScoringRules.requiredGamesPerCycle
-    );
+      defaultScoringRules.requiredGamesPerCycle;
+
+    return `${summary.gamesPlayed} / ${requiredGames}`;
   }
 
   getRosterAssetStatusLabel(asset: unknown): string {
@@ -2715,9 +2735,7 @@ export class TeamSettings implements OnDestroy {
     ].includes(transaction.type);
   }
 
-  getTransactionAddedAsset(
-    transaction: FantasyTransaction,
-  ): DraftableAsset | RosterAsset | null {
+  getTransactionAddedAsset(transaction: FantasyTransaction): DraftableAsset | RosterAsset | null {
     if (transaction.type === 'waiver-award') {
       return transaction.waiverAsset ?? null;
     }
@@ -2880,9 +2898,7 @@ export class TeamSettings implements OnDestroy {
         ? `Matchup ${transaction.effectiveCycleNumber}`
         : 'Next matchup');
 
-    return storedLabel
-      .replace(/^Cycle\s+/i, 'Matchup ')
-      .replace(/^Next cycle$/i, 'Next matchup');
+    return storedLabel.replace(/^Cycle\s+/i, 'Matchup ').replace(/^Next cycle$/i, 'Next matchup');
   }
 
   getTransactionDateLabel(value: unknown): string {
@@ -2962,10 +2978,7 @@ export class TeamSettings implements OnDestroy {
       this.getRosterOperationFingerprint() !== previousRosterFingerprint;
     const deadline = Date.now() + 20_000;
 
-    while (
-      this.rosterOperationGeneration === generation &&
-      Date.now() <= deadline
-    ) {
+    while (this.rosterOperationGeneration === generation && Date.now() <= deadline) {
       if (rosterChanged()) {
         return settled && !rejected ? settledValue : null;
       }
@@ -2975,13 +2988,7 @@ export class TeamSettings implements OnDestroy {
           return settledValue;
         }
 
-        if (
-          await waitForOperationCondition(
-            rosterChanged,
-            2_500,
-            120,
-          )
-        ) {
+        if (await waitForOperationCondition(rosterChanged, 2_500, 120)) {
           return null;
         }
 
@@ -3044,10 +3051,7 @@ export class TeamSettings implements OnDestroy {
   ): Promise<boolean> {
     const deadline = Date.now() + Math.max(0, timeoutMs);
 
-    while (
-      this.rosterOperationGeneration === generation &&
-      Date.now() <= deadline
-    ) {
+    while (this.rosterOperationGeneration === generation && Date.now() <= deadline) {
       if (this.isRosterRemovalConfirmed(expectation)) {
         return true;
       }
@@ -3082,10 +3086,7 @@ export class TeamSettings implements OnDestroy {
 
     const deadline = Date.now() + 20_000;
 
-    while (
-      this.rosterOperationGeneration === generation &&
-      Date.now() <= deadline
-    ) {
+    while (this.rosterOperationGeneration === generation && Date.now() <= deadline) {
       if (this.isRosterRemovalConfirmed(expectation)) {
         return;
       }
@@ -3095,13 +3096,7 @@ export class TeamSettings implements OnDestroy {
           return;
         }
 
-        if (
-          await this.waitForRosterRemovalObservation(
-            expectation,
-            2_500,
-            generation,
-          )
-        ) {
+        if (await this.waitForRosterRemovalObservation(expectation, 2_500, generation)) {
           return;
         }
 
@@ -3225,17 +3220,12 @@ export class TeamSettings implements OnDestroy {
   }
 
   getTeamProfileIconId(ownerId: string | null | undefined): string {
-    const team = ownerId
-      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
-      : null;
+    const team = ownerId ? this.teams().find((candidate) => candidate.ownerId === ownerId) : null;
     return getFantasyTeamProfileIconId(team);
   }
 
   getTeamManagerLabel(ownerId: string | null | undefined): string {
-    const team = ownerId
-      ? this.teams().find((candidate) => candidate.ownerId === ownerId)
-      : null;
+    const team = ownerId ? this.teams().find((candidate) => candidate.ownerId === ownerId) : null;
     return team?.managerName?.trim() || team?.teamName?.trim() || 'Manager';
   }
-
 }

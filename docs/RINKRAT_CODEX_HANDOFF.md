@@ -164,6 +164,13 @@ that marker, and still lets its owner preserve or clear it. Read
 `docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md` and
 `docs/RINKRAT_FF1_41_AUTODRAFT_LIVENESS.md` before Draft release work.
 
+B1M is a later Hosting-only working candidate and is not deployed. It repairs
+the portaled Manage Roster Spot style scope, the mobile bench-swap grid
+collision, skater headshot/fallback identity, missing-versus-zero score
+presentation, and details-versus-Manage card interaction without changing
+roster authority or timing. Read
+`docs/RINKRAT_PRODUCT_B1M_ROSTER_MANAGEMENT_RESPONSIVE.md` before releasing it.
+
 ## Current capacity posture
 
 The live scoring queue was intentionally introduced with conservative worker
@@ -769,8 +776,8 @@ collection only; the final FF1.16 Draft go/no remains mandatory.
 9. After the formal FF1.16 Draft GO, begin the observed 2–4 league, 10–30
    manager season under the post-Draft competitive freeze.
 10. Continue 2,000/5,000 staging ramps, canonical fanout, Draft recovery
-   pagination/starvation protection, and App Check/abuse/queue-promotion proof
-   as separate reviewable work without changing Production rollout modes.
+    pagination/starvation protection, and App Check/abuse/queue-promotion proof
+    as separate reviewable work without changing Production rollout modes.
 
 ## Required update policy
 

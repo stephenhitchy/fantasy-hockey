@@ -92,7 +92,9 @@
   gap: 10px;
   overflow: hidden;
   border-color: color-mix(in srgb, var(--rr-color-border) 86%, transparent);
-  transition: border-color var(--rr-motion-fast), transform var(--rr-motion-fast);
+  transition:
+    border-color var(--rr-motion-fast),
+    transform var(--rr-motion-fast);
 }
 
 .unified-player-row:hover {
@@ -134,19 +136,17 @@
   width: 54px;
   height: 54px;
   place-items: center;
-  overflow: hidden;
-  border: 1px solid var(--rr-color-border);
-  border-radius: var(--rr-radius-md);
-  background: color-mix(in srgb, var(--rr-color-surface-raised) 88%, var(--rr-color-info) 12%);
+  overflow: visible;
+  border: 0;
+  background: transparent;
   color: var(--rr-color-text-secondary);
   font-size: 11px;
   font-weight: 900;
 }
 
-.unified-player-image img {
+.unified-player-image app-asset-portrait {
   width: 100%;
   height: 100%;
-  object-fit: contain;
 }
 
 .unified-player-identity {
@@ -323,7 +323,6 @@
   width: 100%;
   min-height: var(--rr-mobile-control-min-height);
 }
-
 
 .unified-fit-method {
   margin: 0;
@@ -768,7 +767,9 @@
 }
 
 @keyframes unified-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 980px) {
@@ -817,10 +818,20 @@
       'metrics metrics metrics';
   }
 
-  .unified-player-image { grid-area: image; width: 46px; height: 46px; }
-  .unified-player-identity { grid-area: identity; }
-  .unified-cycle-block { grid-area: cycle; }
-  .unified-player-metrics { grid-area: metrics; }
+  .unified-player-image {
+    grid-area: image;
+    width: 46px;
+    height: 46px;
+  }
+  .unified-player-identity {
+    grid-area: identity;
+  }
+  .unified-cycle-block {
+    grid-area: cycle;
+  }
+  .unified-player-metrics {
+    grid-area: metrics;
+  }
 
   .unified-player-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -916,7 +927,6 @@
   .unified-process-waiver {
     grid-column: 1 / -1;
   }
-
 
   .unified-fit-summary {
     align-items: flex-start;

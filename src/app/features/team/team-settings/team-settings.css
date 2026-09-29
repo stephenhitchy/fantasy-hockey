@@ -25,7 +25,12 @@
   min-height: 100vh;
   background:
     radial-gradient(circle at top left, rgba(69, 123, 157, 0.18), transparent 34rem),
-    linear-gradient(135deg, var(--rr-team-migration-color-09) 0%, #182536 48%, var(--rr-team-migration-color-09) 100%);
+    linear-gradient(
+      135deg,
+      var(--rr-team-migration-color-09) 0%,
+      #182536 48%,
+      var(--rr-team-migration-color-09) 100%
+    );
   color: var(--rr-team-migration-color-17);
 }
 
@@ -1040,11 +1045,14 @@
   }
 }
 
-
 .lineup-change-player-summary {
   margin-top: 18px;
   border-color: var(--rr-team-migration-color-11);
-  background: linear-gradient(145deg, var(--rr-team-migration-color-12), var(--rr-team-migration-color-13));
+  background: linear-gradient(
+    145deg,
+    var(--rr-team-migration-color-12),
+    var(--rr-team-migration-color-13)
+  );
 }
 
 .lineup-change-pill-row {
@@ -1124,7 +1132,6 @@
     grid-template-columns: 1fr;
   }
 }
-
 
 /* Player availability and IR eligibility V1 */
 .availability-policy-note {
@@ -1223,11 +1230,14 @@
   line-height: 1.35;
 }
 
-
 .lineup-change-player-summary {
   margin-top: 18px;
   border-color: var(--rr-team-migration-color-11);
-  background: linear-gradient(145deg, var(--rr-team-migration-color-12), var(--rr-team-migration-color-13));
+  background: linear-gradient(
+    145deg,
+    var(--rr-team-migration-color-12),
+    var(--rr-team-migration-color-13)
+  );
 }
 
 .lineup-change-pill-row {
@@ -1308,7 +1318,6 @@
   }
 }
 
-
 /* IR activation replacement flow */
 .ir-activation-backdrop {
   position: fixed;
@@ -1329,8 +1338,7 @@
   border: 1px solid rgba(155, 182, 212, 0.34);
   border-radius: 18px;
   background:
-    radial-gradient(circle at top left, rgba(69, 123, 157, 0.18), transparent 25rem),
-    #19283a;
+    radial-gradient(circle at top left, rgba(69, 123, 157, 0.18), transparent 25rem), #19283a;
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
 }
 
@@ -1433,7 +1441,10 @@
   border-radius: 12px;
   background: rgba(15, 27, 42, 0.62);
   cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
 }
 
 .disabled-ir-activation-target {
@@ -1642,11 +1653,14 @@
   opacity: 0.5;
 }
 
-
 .lineup-change-player-summary {
   margin-top: 18px;
   border-color: var(--rr-team-migration-color-11);
-  background: linear-gradient(145deg, var(--rr-team-migration-color-12), var(--rr-team-migration-color-13));
+  background: linear-gradient(
+    145deg,
+    var(--rr-team-migration-color-12),
+    var(--rr-team-migration-color-13)
+  );
 }
 
 .lineup-change-pill-row {
@@ -1769,8 +1783,7 @@
 .roster-drop-dialog {
   border-color: rgba(255, 157, 165, 0.42);
   background:
-    radial-gradient(circle at top left, rgba(142, 68, 79, 0.2), transparent 24rem),
-    #19283a;
+    radial-gradient(circle at top left, rgba(142, 68, 79, 0.2), transparent 24rem), #19283a;
 }
 
 .roster-drop-close {
@@ -1821,11 +1834,14 @@
   color: #271014;
 }
 
-
 .lineup-change-player-summary {
   margin-top: 18px;
   border-color: var(--rr-team-migration-color-11);
-  background: linear-gradient(145deg, var(--rr-team-migration-color-12), var(--rr-team-migration-color-13));
+  background: linear-gradient(
+    145deg,
+    var(--rr-team-migration-color-12),
+    var(--rr-team-migration-color-13)
+  );
 }
 
 .lineup-change-pill-row {
@@ -1913,7 +1929,6 @@
   }
 }
 
-
 .pending-slot-move-pill {
   width: 100%;
   box-sizing: border-box;
@@ -1927,7 +1942,6 @@
   line-height: 1.35;
   text-align: center;
 }
-
 
 .bench-cycle-guidance {
   margin: 0 0 14px;
@@ -1988,7 +2002,12 @@
 :host {
   background:
     radial-gradient(circle at top left, rgba(90, 153, 197, 0.2), transparent 36rem),
-    linear-gradient(135deg, var(--rr-team-migration-color-09) 0%, #182536 50%, var(--rr-team-migration-color-09) 100%);
+    linear-gradient(
+      135deg,
+      var(--rr-team-migration-color-09) 0%,
+      #182536 50%,
+      var(--rr-team-migration-color-09) 100%
+    );
 }
 
 .team-hero-card {
@@ -2240,8 +2259,7 @@
 .fantasy-player-card.injured-player-card,
 .bench-roster-card.injured-player-card {
   border-color: rgba(255, 115, 128, 0.68);
-  background:
-    linear-gradient(145deg, rgba(93, 38, 49, 0.68), rgba(34, 42, 58, 0.96));
+  background: linear-gradient(145deg, rgba(93, 38, 49, 0.68), rgba(34, 42, 58, 0.96));
   box-shadow:
     inset 4px 0 0 rgba(255, 102, 116, 0.8),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
@@ -2250,8 +2268,7 @@
 .fantasy-player-card.suspended-player-card,
 .bench-roster-card.suspended-player-card {
   border-color: rgba(255, 201, 92, 0.72);
-  background:
-    linear-gradient(145deg, rgba(104, 74, 19, 0.7), rgba(34, 42, 58, 0.96));
+  background: linear-gradient(145deg, rgba(104, 74, 19, 0.7), rgba(34, 42, 58, 0.96));
   box-shadow:
     inset 4px 0 0 rgba(255, 201, 92, 0.82),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
@@ -2609,7 +2626,6 @@
   }
 }
 
-
 /* Beta navigation pass: make team destinations large, scannable, and consistent. */
 .hero-add-drop-action {
   gap: 8px;
@@ -2850,5 +2866,72 @@
 
   .quick-actions-list .team-navigation-action {
     min-height: 56px;
+  }
+}
+
+/*
+ * Roster sheet repair: the generic mobile IR grid previously overrode the
+ * specialized lineup-change card after the cascade, trapping all occupant
+ * copy in a 30px column. Keep the radio and complete destination card in the
+ * two tracks this flow actually owns.
+ */
+.ir-activation-dialog {
+  max-height: calc(100vh - 44px);
+  max-height: calc(100dvh - 44px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ir-activation-target.lineup-change-target {
+  grid-template-columns: 18px minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.lineup-change-target-copy,
+.lineup-change-target-topline,
+.lineup-change-target-body,
+.lineup-change-target-body .ir-activation-target-copy {
+  min-width: 0;
+}
+
+.lineup-change-target .ir-activation-target-copy strong,
+.lineup-change-target .ir-activation-target-copy small {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.lineup-change-target-progress {
+  color: var(--rr-team-migration-color-05);
+}
+
+.ir-activation-dialog-actions,
+.ir-activation-dialog-actions > button {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 680px) {
+  .ir-activation-target.lineup-change-target {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .ir-activation-dialog {
+    max-height: 96vh;
+    max-height: 96dvh;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 390px) {
+  .lineup-change-target-body {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .lineup-change-pill {
+    width: 100%;
+    box-sizing: border-box;
   }
 }
