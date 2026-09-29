@@ -14,15 +14,16 @@ hierarchy, or any competitive behavior.
   runtime export.
 - `rinkrat-full-logo.png` is the untouched approved horizontal source.
   `rinkrat-full-logo-1024.png` is its proportional authentication-page export.
-- `rinkrat-minimalist-icon.png` is the untouched small-icon source. It produces
-  the 32-pixel PNG favicon, ICO favicon, and internal 128-pixel favicon asset.
+- `rinkrat-minimalist-icon.png` is the untouched small-icon source. Its white
+  field is removed in the runtime favicon exports so only the approved black
+  goalie silhouette remains over a transparent background.
 - Apple and Android installed-app icons use proportional, centered exports of
   the colored mascot with safe transparent padding. The horizontal logo is
   never stretched into an app icon.
 
 The source files are preserved byte-for-byte. Runtime exports resize the
 approved pixels without redrawing, recoloring, filtering, or substituting the
-artwork.
+artwork; only the minimalist favicon's white field is converted to alpha.
 
 ## Placement
 

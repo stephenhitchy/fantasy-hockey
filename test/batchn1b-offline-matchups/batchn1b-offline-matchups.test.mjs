@@ -223,7 +223,7 @@ test('the saved matchup interface is visibly stale, read-only, mobile-safe, and 
 
 test('the service worker remains GET-only under the current RC51 shell version', async () => {
   const worker = await read('public/rinkrat-sw.js');
-  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc65-brand-v1'/);
+  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc65-brand-v2'/);
   assert.match(worker, /request\.method !== 'GET'/);
   assert.doesNotMatch(worker, /addEventListener\(['"]sync['"]/);
   assert.doesNotMatch(worker, /indexedDB|competitive.*queue/i);

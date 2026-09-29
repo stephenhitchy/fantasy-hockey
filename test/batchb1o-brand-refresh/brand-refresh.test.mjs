@@ -31,6 +31,11 @@ function pngSize(value) {
   };
 }
 
+function pngColorType(value) {
+  pngSize(value);
+  return value[25];
+}
+
 async function walkTextFiles(directory) {
   const entries = await readdir(path.join(root, directory), { withFileTypes: true });
   const files = [];
@@ -86,6 +91,17 @@ test('favicons use the minimalist art and installed-app icons use padded colored
     assert.deepEqual(pngSize(await binary(relativePath)), expectedSize, relativePath);
   }
 
+  for (const relativePath of [
+    'public/assets/branding/rinkrat-favicon.png',
+    'public/favicon-32x32.png',
+  ]) {
+    assert.equal(
+      pngColorType(await binary(relativePath)),
+      6,
+      `${relativePath} must remain RGBA so the favicon background is transparent.`,
+    );
+  }
+
   const favicon = await binary('public/favicon.ico');
   assert.deepEqual([...favicon.subarray(0, 4)], [0, 0, 1, 0]);
 
@@ -120,7 +136,7 @@ test('runtime source and the offline cache no longer reference the retired masco
   }
 
   const worker = await source('public/rinkrat-sw.js');
-  assert.match(worker, /rc65-brand-v1/);
+  assert.match(worker, /rc65-brand-v2/);
   assert.match(worker, /rinkrat-colored-mascot-512\.png/);
   assert.match(worker, /rinkrat-full-logo-1024\.png/);
   assert.doesNotMatch(worker, /rinkrat-minimalist-icon\.png/);

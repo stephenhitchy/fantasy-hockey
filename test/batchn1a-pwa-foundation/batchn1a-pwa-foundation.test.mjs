@@ -108,7 +108,7 @@ test('the service worker handles only same-origin GET shell and stable assets', 
   assert.match(source, /precacheBuiltShellAssets/);
   assert.match(source, /extractBuiltShellAssetUrls/);
   assert.match(source, /\\.\(\?:js\|css\)\$/);
-  assert.match(source, /RINKRAT_CACHE_VERSION = 'rc65-brand-v1'/);
+  assert.match(source, /RINKRAT_CACHE_VERSION = 'rc65-brand-v2'/);
   assert.doesNotMatch(source, /addEventListener\(['"]sync['"]/);
   assert.doesNotMatch(source, /background\s*sync/i);
   assert.doesNotMatch(source, /indexedDB|postMessage\([^)]*transaction|queue.*(?:write|mutation)/i);

@@ -457,7 +457,7 @@ test('RC51 release identity and inherited safety controls are preserved', async 
   assert.equal(canary.automaticPromotion, false);
   assert.equal(cache.mode, 'shadow');
   assert.equal(cache.authoritativeReadsEnabled, false);
-  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc65-brand-v1'/);
+  assert.match(worker, /RINKRAT_CACHE_VERSION = 'rc65-brand-v2'/);
 });
 
 test('the permanent roadmap converts the launch gameplan into explicit product and operating gates', async () => {
