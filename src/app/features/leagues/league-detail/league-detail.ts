@@ -21,7 +21,7 @@ import { FantasyCycle, FantasyMatchup } from '../../../core/cycle/cycle.models';
 
 import {
   listenToCycleMatchups,
-  listenToEarliestUnfinishedOwnerMatchup,
+  listenToEarliestUnfinishedLeagueMatchups,
   listenToLatestCycle,
 } from '../../../core/cycle/cycle.service';
 
@@ -132,7 +132,7 @@ export class LeagueDetail implements OnDestroy {
   draft = signal<FantasyDraft | null>(null);
   cycle = signal<FantasyCycle | null>(null);
   matchups = signal<FantasyMatchup[]>([]);
-  currentOwnerMatchup = signal<FantasyMatchup | null>(null);
+  teamCurrentMatchups = signal<ReadonlyMap<string, FantasyMatchup>>(new Map());
   injurySyncState = signal<PlayerAvailabilitySyncState | null>(null);
 
   loading = signal(true);
@@ -202,6 +202,10 @@ export class LeagueDetail implements OnDestroy {
 
   readonly myTeam = computed(
     () => this.teams().find((team) => team.ownerId === this.userId) ?? null,
+  );
+
+  readonly currentOwnerMatchup = computed(
+    () => this.teamCurrentMatchups().get(this.userId) ?? null,
   );
 
   readonly removableMemberTeams = computed(() =>
@@ -530,14 +534,13 @@ export class LeagueDetail implements OnDestroy {
         this.listenToCurrentCycleMatchups(cycle);
       });
 
-      this.stopCurrentOwnerMatchupListener = listenToEarliestUnfinishedOwnerMatchup(
+      this.stopCurrentOwnerMatchupListener = listenToEarliestUnfinishedLeagueMatchups(
         leagueId,
-        user.uid,
-        (matchup) => {
-          this.currentOwnerMatchup.set(matchup);
+        (matchupsByOwnerId) => {
+          this.teamCurrentMatchups.set(matchupsByOwnerId);
         },
         (error) => {
-          console.warn('Unable to resolve the current owner matchup.', error);
+          console.warn('Unable to resolve current team matchups.', error);
         },
       );
     } catch (error: unknown) {
@@ -1367,6 +1370,31 @@ export class LeagueDetail implements OnDestroy {
     }
 
     return ['/leagues', this.leagueId, 'cycles', this.currentCycleNumber()];
+  }
+
+  getTeamRosterLink(team: FantasyTeam): Array<string> {
+    return ['/leagues', this.leagueId, 'teams', team.ownerId];
+  }
+
+  getTeamMatchupLink(team: FantasyTeam): Array<string | number> | null {
+    const matchup = this.teamCurrentMatchups().get(team.ownerId);
+
+    if (!matchup) {
+      return null;
+    }
+
+    return [
+      '/leagues',
+      this.leagueId,
+      'cycles',
+      matchup.cycleNumber,
+      'matchups',
+      matchup.id,
+    ];
+  }
+
+  isMyTeam(team: FantasyTeam): boolean {
+    return team.ownerId === this.userId;
   }
 
   getCurrentCycleStatusLabel(): string {

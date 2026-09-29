@@ -527,18 +527,28 @@
         @for (team of sortedTeams(); track team.id) {
           <article class="team-card rr-card rr-card--padded">
             <div class="team-card-heading">
-              <span class="manager-name-with-avatar">
+              <a
+                class="team-identity-link"
+                [routerLink]="getTeamRosterLink(team)"
+                [attr.aria-label]="'View ' + team.teamName + ' roster'"
+              >
                 <app-manager-avatar [profileIconId]="getTeamProfileIconId(team.ownerId)" [label]="getTeamManagerLabel(team.ownerId)" size="sm" />
                 <div class="team-name-stack">
+                  <span class="team-card-kicker">
+                    {{ isMyTeam(team) ? 'Your club' : 'League club' }}
+                  </span>
                   <h3>{{ team.teamName }}</h3>
-                  <small>{{ getTeamManagerLabel(team.ownerId) }}</small>
+                  <small>Managed by {{ getTeamManagerLabel(team.ownerId) }}</small>
                 </div>
+              </a>
+              <span class="team-win-chip">
+                <small>Win %</small>
+                <strong>{{ getWinPercentage(team) }}</strong>
               </span>
-              <span>{{ getWinPercentage(team) }}</span>
             </div>
 
             <div class="team-stat-grid">
-              <div>
+              <div class="team-record-stat">
                 <span>Record</span>
                 <strong>{{ getTeamRecord(team) }}</strong>
               </div>
@@ -563,6 +573,28 @@
                 </strong>
               </div>
             </div>
+
+            <nav class="team-card-actions" [attr.aria-label]="team.teamName + ' navigation'">
+              @if (getTeamMatchupLink(team); as matchupLink) {
+                <a class="team-card-action team-card-action--secondary" [routerLink]="matchupLink">
+                  <span>View Matchup</span>
+                  <span aria-hidden="true">↗</span>
+                </a>
+              } @else {
+                <span
+                  class="team-card-action team-card-action--disabled"
+                  aria-disabled="true"
+                  title="No current matchup is available for this team."
+                >
+                  Matchup Unavailable
+                </span>
+              }
+
+              <a class="team-card-action team-card-action--primary" [routerLink]="getTeamRosterLink(team)">
+                <span>View Roster</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </nav>
           </article>
         }
       </div>

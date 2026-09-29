@@ -359,7 +359,7 @@ test('roster writes block route changes and browser exit until the server operat
       read('src/app/features/free-agents/free-agents.html'),
     ]);
 
-  assert.equal((routes.match(/canDeactivate:\s*\[pendingRosterActionGuard\]/g) ?? []).length, 2);
+  assert.equal((routes.match(/canDeactivate:\s*\[pendingRosterActionGuard\]/g) ?? []).length, 3);
   assert.match(guard, /component\.canLeaveRosterPage\(\)/);
   assert.match(teamSource, /@HostListener\('window:beforeunload'/);
   assert.match(freeAgentSource, /@HostListener\('window:beforeunload'/);

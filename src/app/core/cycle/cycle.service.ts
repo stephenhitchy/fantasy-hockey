@@ -19,6 +19,10 @@ import {
 import { db } from '../firebase';
 
 import { FantasyCycle, FantasyMatchup } from './cycle.models';
+import {
+  selectCurrentMatchupCycles,
+  selectCurrentMatchupsByOwner,
+} from './current-matchup-selection.util';
 
 import { CycleScoringResult } from './cycle-scoring.service';
 
@@ -1083,18 +1087,17 @@ export function listenToCycleMatchups(
 }
 
 /**
- * Follows every currently active fantasy cycle and selects the user's earliest
- * unfinished matchup. This intentionally does not assume one league-wide cycle
- * is the only active period: independent roster-slot windows can leave several
- * matchup cycles open at the same time.
+ * Follows every currently active fantasy cycle and selects each participant's
+ * earliest unfinished matchup. This intentionally does not assume one
+ * league-wide cycle is the only active period: independent roster-slot windows
+ * can leave several matchup cycles open at the same time.
  *
- * When no unfinished matchup remains, the user's most recent completed matchup
- * is returned as a useful fallback.
+ * When no unfinished matchup remains, a participant's most recent completed
+ * matchup is returned as a useful fallback.
  */
-export function listenToEarliestUnfinishedOwnerMatchup(
+export function listenToEarliestUnfinishedLeagueMatchups(
   leagueId: string,
-  ownerId: string,
-  callback: (matchup: FantasyMatchup | null) => void,
+  callback: (matchupsByOwnerId: ReadonlyMap<string, FantasyMatchup>) => void,
   onError?: (error: Error) => void,
 ): () => void {
   let trackedCycles: FantasyCycle[] = [];
@@ -1114,61 +1117,13 @@ export function listenToEarliestUnfinishedOwnerMatchup(
       return;
     }
 
-    const ownerMatchups = trackedCycles
-      .flatMap((cycle) =>
-        (matchupsByCycle.get(cycle.cycleNumber) ?? [])
-          .filter(
-            (matchup) =>
-              matchup.teamAOwnerId === ownerId || matchup.teamBOwnerId === ownerId,
-          )
-          .map((matchup) => ({ cycleNumber: cycle.cycleNumber, matchup })),
-      )
-      .sort((first, second) => {
-        if (first.cycleNumber !== second.cycleNumber) {
-          return first.cycleNumber - second.cycleNumber;
-        }
-
-        return first.matchup.id.localeCompare(second.matchup.id);
-      });
-
-    const earliestUnfinished = ownerMatchups.find(
-      ({ matchup }) => matchup.status !== 'complete',
-    );
-
-    if (earliestUnfinished) {
-      callback(earliestUnfinished.matchup);
-      return;
-    }
-
-    callback(ownerMatchups.length > 0 ? ownerMatchups[ownerMatchups.length - 1].matchup : null);
+    callback(selectCurrentMatchupsByOwner(trackedCycles, matchupsByCycle));
   };
 
   const stopCyclesListener = listenToLeagueCycles(
     leagueId,
     (cycles) => {
-      const orderedCycles = [...cycles].sort(
-        (first, second) => first.cycleNumber - second.cycleNumber,
-      );
-      const activeCycles = orderedCycles.filter((cycle) => cycle.status === 'active');
-      const latestCompletedCycle = [...orderedCycles]
-        .reverse()
-        .find((cycle) => cycle.status === 'complete');
-      const nextTrackedCycles = [...activeCycles];
-
-      if (
-        latestCompletedCycle &&
-        !nextTrackedCycles.some(
-          (cycle) => cycle.cycleNumber === latestCompletedCycle.cycleNumber,
-        )
-      ) {
-        nextTrackedCycles.push(latestCompletedCycle);
-      }
-
-      if (nextTrackedCycles.length === 0 && orderedCycles.length > 0) {
-        nextTrackedCycles.push(orderedCycles[orderedCycles.length - 1]);
-      }
-
-      nextTrackedCycles.sort((first, second) => first.cycleNumber - second.cycleNumber);
+      const nextTrackedCycles = selectCurrentMatchupCycles(cycles);
       trackedCycles = nextTrackedCycles;
 
       const nextCycleNumbers = new Set(
@@ -1211,7 +1166,7 @@ export function listenToEarliestUnfinishedOwnerMatchup(
       }
 
       if (nextTrackedCycles.length === 0) {
-        callback(null);
+        callback(new Map());
         return;
       }
 
@@ -1232,6 +1187,23 @@ export function listenToEarliestUnfinishedOwnerMatchup(
     matchupsByCycle.clear();
     loadedCycleNumbers.clear();
   };
+}
+
+/**
+ * Owner-specific compatibility wrapper used by pages that need one manager's
+ * route while sharing the league-wide multi-cycle selection policy.
+ */
+export function listenToEarliestUnfinishedOwnerMatchup(
+  leagueId: string,
+  ownerId: string,
+  callback: (matchup: FantasyMatchup | null) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return listenToEarliestUnfinishedLeagueMatchups(
+    leagueId,
+    (matchupsByOwnerId) => callback(matchupsByOwnerId.get(ownerId) ?? null),
+    onError,
+  );
 }
 
 export function listenToCycleRosterPicks(

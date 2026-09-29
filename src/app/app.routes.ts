@@ -290,6 +290,16 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'leagues/:leagueId/teams/:ownerId',
+        title: 'Team Roster',
+        canActivate: [leagueMemberGuard],
+        canDeactivate: [pendingRosterActionGuard],
+        loadComponent: () =>
+          import('./features/team/team-settings/team-settings').then(
+            (module) => module.TeamSettings,
+          ),
+      },
+      {
         path: 'leagues/:leagueId/players/:assetKey',
         title: 'Player Intel',
         canActivate: [leagueMemberGuard],

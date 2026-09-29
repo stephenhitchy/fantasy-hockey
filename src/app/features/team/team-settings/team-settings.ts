@@ -3,6 +3,7 @@ import { Component, computed, HostListener, OnDestroy, signal } from '@angular/c
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { Subscription } from 'rxjs';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
 import {
@@ -158,6 +159,8 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
 export class TeamSettings implements OnDestroy {
   leagueId = '';
   userId = '';
+  viewedOwnerId = signal('');
+  viewerUserId = signal('');
 
   league = signal<League | null>(null);
   team = signal<FantasyTeam | null>(null);
@@ -215,19 +218,16 @@ export class TeamSettings implements OnDestroy {
   private stopSharedScoringListener: (() => void) | null = null;
   private rosterOperationGeneration = 0;
   private benchSwapReopenBlockedUntil = 0;
+  private loadGeneration = 0;
+  private readonly routeSubscription: Subscription;
+
+  readonly isOwnTeam = computed(() => {
+    const viewerUserId = this.viewerUserId();
+    return Boolean(viewerUserId && viewerUserId === this.viewedOwnerId());
+  });
 
   readonly currentMatchup = computed(() => {
-    const userId = this.userId;
-
-    if (!userId) {
-      return null;
-    }
-
-    return (
-      this.latestMatchups().find(
-        (matchup) => matchup.teamAOwnerId === userId || matchup.teamBOwnerId === userId,
-      ) ?? null
-    );
+    return this.currentNavigationMatchup();
   });
 
   readonly currentOpponentOwnerId = computed(() => {
@@ -237,7 +237,7 @@ export class TeamSettings implements OnDestroy {
       return null;
     }
 
-    if (matchup.teamAOwnerId === this.userId) {
+    if (matchup.teamAOwnerId === this.viewedOwnerId()) {
       return matchup.teamBOwnerId;
     }
 
@@ -286,7 +286,7 @@ export class TeamSettings implements OnDestroy {
   });
 
   readonly leagueRank = computed(() => {
-    const ownerId = this.userId;
+    const ownerId = this.viewedOwnerId();
 
     if (!ownerId) {
       return null;
@@ -330,6 +330,10 @@ export class TeamSettings implements OnDestroy {
   });
 
   readonly rosterManagerActions = computed((): RosterManagementAction[] => {
+    if (!this.isOwnTeam()) {
+      return [];
+    }
+
     const area = this.rosterManagerArea();
     const slotId = this.rosterManagerSlotId();
     const asset = this.rosterManagerAsset();
@@ -404,20 +408,16 @@ export class TeamSettings implements OnDestroy {
     readonly clientHealth: ClientHealthService,
     private readonly actionMonitor: CompetitiveActionMonitorService,
   ) {
-    this.loadTeam();
+    this.routeSubscription = this.route.paramMap.subscribe(() => {
+      void this.loadTeam();
+    });
   }
 
   ngOnDestroy(): void {
+    this.loadGeneration += 1;
     this.rosterOperationGeneration += 1;
-    this.stopRosterListener?.();
-    this.stopTeamListener?.();
-    this.stopPicksListener?.();
-    this.stopTransactionsListener?.();
-    this.stopCycleRosterPicksListener?.();
-    this.stopLatestCycleListener?.();
-    this.stopMatchupsListener?.();
-    this.stopCurrentNavigationMatchupListener?.();
-    this.stopSharedScoringListener?.();
+    this.routeSubscription.unsubscribe();
+    this.stopLiveListeners();
   }
 
   canLeaveRosterPage(): boolean {
@@ -451,6 +451,11 @@ export class TeamSettings implements OnDestroy {
   }
 
   private ensureCompetitiveActionReady(): boolean {
+    if (!this.isOwnTeam()) {
+      this.rosterMoveError.set('This roster is read-only. Only its manager can make changes.');
+      return false;
+    }
+
     if (this.clientHealth.competitiveActionsReady()) {
       return true;
     }
@@ -460,25 +465,52 @@ export class TeamSettings implements OnDestroy {
   }
 
   async loadTeam(): Promise<void> {
+    const loadGeneration = ++this.loadGeneration;
     const leagueId = this.route.snapshot.paramMap.get('leagueId');
     const user = await waitForAuthUser();
+
+    if (loadGeneration !== this.loadGeneration) {
+      return;
+    }
 
     if (!leagueId || !user) {
       await this.router.navigate(['/']);
       return;
     }
 
+    const viewedOwnerId = this.route.snapshot.paramMap.get('ownerId')?.trim() || user.uid;
+
+    this.stopLiveListeners();
     this.leagueId = leagueId;
     this.userId = user.uid;
+    this.viewerUserId.set(user.uid);
+    this.viewedOwnerId.set(viewedOwnerId);
+    this.loading.set(true);
+    this.league.set(null);
+    this.team.set(null);
+    this.profile.set(null);
+    this.teams.set([]);
+    this.roster.set(null);
+    this.picks.set([]);
+    this.transactions.set([]);
+    this.latestCycle.set(null);
+    this.latestMatchups.set([]);
+    this.currentNavigationMatchup.set(null);
+    this.cycleScoring.set(null);
+    this.closeAllRosterManagementState();
     this.errorMessage.set('');
     this.liveDataWarnings.set([]);
 
     try {
       const [league, team, profile] = await Promise.all([
         getLeagueById(leagueId),
-        getFantasyTeam(leagueId, user.uid),
-        getUserProfile(user.uid).catch(() => null),
+        getFantasyTeam(leagueId, viewedOwnerId),
+        viewedOwnerId === user.uid ? getUserProfile(user.uid).catch(() => null) : null,
       ]);
+
+      if (loadGeneration !== this.loadGeneration) {
+        return;
+      }
 
       if (!league) {
         this.errorMessage.set('League not found.');
@@ -497,15 +529,60 @@ export class TeamSettings implements OnDestroy {
 
       startPlayerAvailabilityListenerForLeague(leagueId);
 
-      await getOrCreateFantasyRoster(leagueId, user.uid);
+      if (viewedOwnerId === user.uid) {
+        await getOrCreateFantasyRoster(leagueId, user.uid);
 
-      this.startLiveListeners(leagueId, user.uid);
+        if (loadGeneration !== this.loadGeneration) {
+          return;
+        }
+      }
+
+      this.startLiveListeners(leagueId, viewedOwnerId, viewedOwnerId === user.uid);
       void this.loadPlayerPoolForProjectionFallback();
     } catch (error: unknown) {
-      this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load this team.');
+      if (loadGeneration === this.loadGeneration) {
+        this.errorMessage.set(error instanceof Error ? error.message : 'Unable to load this team.');
+      }
     } finally {
-      this.loading.set(false);
+      if (loadGeneration === this.loadGeneration) {
+        this.loading.set(false);
+      }
     }
+  }
+
+  private closeAllRosterManagementState(): void {
+    this.rosterManagerArea.set(null);
+    this.rosterManagerSlotId.set('');
+    this.irActivationSlotId.set('');
+    this.irActivationTargetSlotId.set('');
+    this.irActivationBenchSlotId.set('');
+    this.irBenchActivationSlotId.set('');
+    this.irBenchActivationTargetSlotId.set('');
+    this.benchSwapSlotId.set('');
+    this.benchSwapTargetSlotId.set('');
+    this.rosterDropSource.set(null);
+    this.rosterDropSlotId.set('');
+  }
+
+  private stopLiveListeners(): void {
+    this.stopRosterListener?.();
+    this.stopTeamListener?.();
+    this.stopPicksListener?.();
+    this.stopTransactionsListener?.();
+    this.stopCycleRosterPicksListener?.();
+    this.stopLatestCycleListener?.();
+    this.stopMatchupsListener?.();
+    this.stopCurrentNavigationMatchupListener?.();
+    this.stopSharedScoringListener?.();
+    this.stopRosterListener = null;
+    this.stopTeamListener = null;
+    this.stopPicksListener = null;
+    this.stopTransactionsListener = null;
+    this.stopCycleRosterPicksListener = null;
+    this.stopLatestCycleListener = null;
+    this.stopMatchupsListener = null;
+    this.stopCurrentNavigationMatchupListener = null;
+    this.stopSharedScoringListener = null;
   }
 
   private recordLiveDataWarning(label: string, error: Error): void {
@@ -523,24 +600,27 @@ export class TeamSettings implements OnDestroy {
     );
   }
 
-  private startLiveListeners(leagueId: string, userId: string): void {
-    this.stopRosterListener?.();
-    this.stopTeamListener?.();
-    this.stopPicksListener?.();
-    this.stopTransactionsListener?.();
-    this.stopCycleRosterPicksListener?.();
-    this.stopLatestCycleListener?.();
-    this.stopMatchupsListener?.();
-    this.stopCurrentNavigationMatchupListener?.();
+  private isCurrentTeamContext(leagueId: string, viewedOwnerId: string): boolean {
+    return this.leagueId === leagueId && this.viewedOwnerId() === viewedOwnerId;
+  }
+
+  private startLiveListeners(
+    leagueId: string,
+    viewedOwnerId: string,
+    isOwnTeam: boolean,
+  ): void {
+    this.stopLiveListeners();
 
     this.stopRosterListener = listenToFantasyRoster(
       leagueId,
-      userId,
+      viewedOwnerId,
       (roster) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.clearLiveDataWarning('Roster');
         this.roster.set(roster);
       },
       (error) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.recordLiveDataWarning('Roster', error);
       },
     );
@@ -548,16 +628,21 @@ export class TeamSettings implements OnDestroy {
     this.stopTeamListener = listenToLeagueTeams(
       leagueId,
       (teams) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.clearLiveDataWarning('League teams');
         this.teams.set(teams);
 
-        const currentTeam = teams.find((candidate) => candidate.ownerId === userId);
+        const currentTeam = teams.find((candidate) => candidate.ownerId === viewedOwnerId);
 
         if (currentTeam) {
           this.team.set(currentTeam);
+        } else {
+          this.team.set(null);
+          this.errorMessage.set('This team is no longer part of the league.');
         }
       },
       (error) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.recordLiveDataWarning('League teams', error);
       },
     );
@@ -565,35 +650,43 @@ export class TeamSettings implements OnDestroy {
     this.stopPicksListener = listenToDraftPicks(
       leagueId,
       (picks) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.clearLiveDataWarning('Draft picks');
         this.picks.set(picks);
         void this.loadCurrentCycleScoringIfReady();
       },
       (error) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.recordLiveDataWarning('Draft picks', error);
       },
     );
 
-    this.stopTransactionsListener = listenToOwnerTransactions(
-      leagueId,
-      userId,
-      (transactions) => {
-        this.clearLiveDataWarning('Transactions');
-        this.transactions.set(transactions);
-      },
-      (error) => {
-        this.recordLiveDataWarning('Transactions', error);
-      },
-    );
+    if (isOwnTeam) {
+      this.stopTransactionsListener = listenToOwnerTransactions(
+        leagueId,
+        this.userId,
+        (transactions) => {
+          if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
+          this.clearLiveDataWarning('Transactions');
+          this.transactions.set(transactions);
+        },
+        (error) => {
+          if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
+          this.recordLiveDataWarning('Transactions', error);
+        },
+      );
+    }
 
     this.stopCurrentNavigationMatchupListener = listenToEarliestUnfinishedOwnerMatchup(
       leagueId,
-      userId,
+      viewedOwnerId,
       (matchup) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.clearLiveDataWarning('Current matchup navigation');
         this.currentNavigationMatchup.set(matchup);
       },
       (error) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.recordLiveDataWarning('Current matchup navigation', error);
       },
     );
@@ -601,6 +694,7 @@ export class TeamSettings implements OnDestroy {
     this.stopLatestCycleListener = listenToLatestCycle(
       leagueId,
       (cycle) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.clearLiveDataWarning('Current matchup');
         this.latestCycle.set(cycle);
         this.latestMatchups.set([]);
@@ -623,12 +717,14 @@ export class TeamSettings implements OnDestroy {
           leagueId,
           cycle.cycleNumber,
           (snapshot) => {
+            if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
             this.clearLiveDataWarning('Shared scoring');
             this.cycleScoring.set(snapshot?.result ?? null);
             this.scoringLoading.set(false);
             this.scoringError.set('');
           },
           (error) => {
+            if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
             this.recordLiveDataWarning('Shared scoring', error);
             this.scoringLoading.set(false);
             this.scoringError.set(error.message);
@@ -639,11 +735,13 @@ export class TeamSettings implements OnDestroy {
           leagueId,
           cycle.cycleNumber,
           (picks) => {
+            if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
             this.clearLiveDataWarning('Matchup roster');
             this.cycleRosterPicks.set(picks);
             void this.loadCurrentCycleScoringIfReady();
           },
           (error) => {
+            if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
             this.recordLiveDataWarning('Matchup roster', error);
           },
         );
@@ -652,15 +750,18 @@ export class TeamSettings implements OnDestroy {
           leagueId,
           cycle.cycleNumber,
           (matchups) => {
+            if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
             this.clearLiveDataWarning('Current matchup');
             this.latestMatchups.set(matchups);
           },
           (error) => {
+            if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
             this.recordLiveDataWarning('Current matchup', error);
           },
         );
       },
       (error) => {
+        if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
         this.recordLiveDataWarning('Current matchup', error);
       },
     );
@@ -705,6 +806,11 @@ export class TeamSettings implements OnDestroy {
   async saveTeamName(): Promise<void> {
     this.errorMessage.set('');
     this.successMessage.set('');
+
+    if (!this.isOwnTeam()) {
+      this.errorMessage.set('Only this team’s manager can rename it.');
+      return;
+    }
 
     const user = auth.currentUser;
 
@@ -751,7 +857,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   openRosterManager(area: RosterManagementArea, slotId: string): void {
-    if (!slotId || this.isRosterOperationPending()) {
+    if (!this.isOwnTeam() || !slotId || this.isRosterOperationPending()) {
       return;
     }
 
@@ -843,6 +949,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   handleRosterManagerAction(actionId: RosterManagementActionId): void {
+    if (!this.isOwnTeam()) {
+      return;
+    }
+
     const action = this.rosterManagerActions().find((candidate) => candidate.id === actionId);
     const area = this.rosterManagerArea();
     const slotId = this.rosterManagerSlotId();
@@ -905,6 +1015,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   async openFreeAgentsForRosterSlot(area: RosterManagementArea, slotId: string): Promise<void> {
+    if (!this.isOwnTeam()) {
+      return;
+    }
+
     const roster = this.roster();
 
     if (!roster) {
@@ -1010,6 +1124,7 @@ export class TeamSettings implements OnDestroy {
 
   canMoveSlotToIr(slot: ActiveRosterSlot): boolean {
     return Boolean(
+      this.isOwnTeam() &&
       slot.asset &&
       slot.asset.assetType === 'skater' &&
       this.isPlayerIrEligible(slot.asset) &&
@@ -1047,7 +1162,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   canActivateIrSlot(slot: IrRosterSlot): boolean {
-    if (!slot.asset || this.rosterMoveLoading()) {
+    if (!this.isOwnTeam() || !slot.asset || this.rosterMoveLoading()) {
       return false;
     }
 
@@ -1172,6 +1287,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   beginIrActivation(irSlotId: string): void {
+    if (!this.isOwnTeam()) {
+      return;
+    }
+
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
     this.rosterDropSource.set(null);
@@ -1240,6 +1359,7 @@ export class TeamSettings implements OnDestroy {
     const targetSlotId = this.irActivationTargetSlotId();
 
     if (
+      !this.isOwnTeam() ||
       !irSlot?.asset ||
       !targetSlotId ||
       !this.clientHealth.competitiveActionsReady() ||
@@ -1336,6 +1456,11 @@ export class TeamSettings implements OnDestroy {
     this.rosterMoveMessage.set('');
     this.rosterMoveError.set('');
 
+    if (!this.isOwnTeam()) {
+      this.rosterMoveError.set('This roster is read-only. Only its manager can make changes.');
+      return;
+    }
+
     const roster = this.roster();
     const hasAsset =
       sourceRosterArea === 'active'
@@ -1373,6 +1498,7 @@ export class TeamSettings implements OnDestroy {
 
   canConfirmRosterDrop(): boolean {
     return Boolean(
+      this.isOwnTeam() &&
       this.clientHealth.competitiveActionsReady() &&
       this.getPendingRosterDrop() &&
       !this.rosterMoveLoading(),
@@ -1473,6 +1599,7 @@ export class TeamSettings implements OnDestroy {
 
   canMoveBenchSlotToIr(slot: BenchRosterSlot): boolean {
     return Boolean(
+      this.isOwnTeam() &&
       slot.asset &&
       slot.asset.assetType === 'skater' &&
       this.isPlayerIrEligible(slot.asset) &&
@@ -1538,7 +1665,11 @@ export class TeamSettings implements OnDestroy {
   }
 
   beginBenchSwap(benchSlotId: string): void {
-    if (this.isRosterOperationPending() || Date.now() < this.benchSwapReopenBlockedUntil) {
+    if (
+      !this.isOwnTeam() ||
+      this.isRosterOperationPending() ||
+      Date.now() < this.benchSwapReopenBlockedUntil
+    ) {
       return;
     }
 
@@ -1623,6 +1754,7 @@ export class TeamSettings implements OnDestroy {
 
   canConfirmBenchSwap(): boolean {
     return Boolean(
+      this.isOwnTeam() &&
       this.getPendingBenchSwapSlot()?.asset &&
       this.getBenchSwapTargetSlots().some((slot) => slot.slotId === this.benchSwapTargetSlotId()) &&
       this.clientHealth.competitiveActionsReady() &&
@@ -1708,6 +1840,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   beginIrBenchActivation(irSlotId: string): void {
+    if (!this.isOwnTeam()) {
+      return;
+    }
+
     const roster = this.roster();
     const irSlot = roster?.irSlots.find((slot) => slot.slotId === irSlotId);
     if (!irSlot?.asset) {
@@ -1781,6 +1917,7 @@ export class TeamSettings implements OnDestroy {
       (slot) => slot.slotId === this.irBenchActivationTargetSlotId(),
     );
     return (
+      this.isOwnTeam() &&
       !!irSlot?.asset &&
       !!targetSlot &&
       !this.isBenchSlotReservedForActiveSwap(targetSlot) &&
@@ -2065,6 +2202,10 @@ export class TeamSettings implements OnDestroy {
     const profile = this.profile();
     const currentUser = auth.currentUser;
 
+    if (!this.isOwnTeam()) {
+      return this.team()?.managerName?.trim() || this.team()?.teamName?.trim() || 'Manager';
+    }
+
     return (
       profile?.username?.trim() ||
       currentUser?.displayName?.trim() ||
@@ -2085,6 +2226,14 @@ export class TeamSettings implements OnDestroy {
       this.profile()?.favoriteTeamAbbreviation,
       this.profile()?.favoriteTeamVariantId,
     ).name;
+  }
+
+  getTeamContextLine(): string {
+    if (!this.isOwnTeam()) {
+      return `${this.league()?.name ?? 'League'} · Read-only roster`;
+    }
+
+    return `${this.league()?.name ?? 'League'} · ${this.getFavoriteTeamName()}`;
   }
 
   getLeagueRankLabel(): string {
@@ -2287,18 +2436,17 @@ export class TeamSettings implements OnDestroy {
   }
 
   getCurrentMatchupStatusText(): string {
-    const cycle = this.latestCycle();
     const matchup = this.currentMatchup();
 
-    if (!cycle) {
+    if (!this.latestCycle() && !matchup) {
       return 'No matchup has started yet.';
     }
 
     if (!matchup) {
-      return `${this.getCycleLabel()} does not have a matchup for your team yet.`;
+      return 'No current matchup is available for this team yet.';
     }
 
-    if (matchup.status === 'complete' || cycle.status === 'complete') {
+    if (matchup.status === 'complete') {
       return `${this.getCycleLabel()} matchup is complete.`;
     }
 
@@ -2306,9 +2454,9 @@ export class TeamSettings implements OnDestroy {
   }
 
   getCycleLabel(): string {
-    const cycle = this.latestCycle();
+    const cycleNumber = this.currentMatchup()?.cycleNumber ?? this.latestCycle()?.cycleNumber;
 
-    return cycle ? `Matchup ${cycle.cycleNumber}` : 'Current Matchup';
+    return cycleNumber ? `Matchup ${cycleNumber}` : 'Current Matchup';
   }
 
   getRosterAssetName(asset: unknown): string {
@@ -2369,7 +2517,7 @@ export class TeamSettings implements OnDestroy {
     }
 
     const assetKey = this.getRosterAssetKey(asset);
-    const userPicks = this.picks().filter((pick) => pick.ownerId === this.userId);
+    const userPicks = this.picks().filter((pick) => pick.ownerId === this.viewedOwnerId());
 
     if (assetKey) {
       const pickAsset = userPicks.find((pick) => pick.asset.assetKey === assetKey)?.asset;

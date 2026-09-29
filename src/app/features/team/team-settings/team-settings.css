@@ -2073,6 +2073,45 @@
   white-space: nowrap;
 }
 
+.spectator-mode-badge {
+  display: inline-flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--user-team-accent) 38%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--user-team-primary) 28%, var(--rr-team-migration-color-09));
+  color: var(--rr-color-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.spectator-mode-badge > span {
+  color: var(--user-team-accent);
+  font-size: 9px;
+}
+
+.spectator-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.spectator-team-page .team-hero-card,
+.spectator-team-page .quick-actions-card {
+  border-color: color-mix(in srgb, var(--user-team-accent) 28%, var(--rr-color-border));
+}
+
+.spectator-team-page .roster-section {
+  background:
+    linear-gradient(180deg, var(--rr-team-migration-color-13), var(--rr-team-migration-color-12));
+}
+
 .team-stat-bar {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -2441,6 +2480,39 @@
   .hero-add-drop-action {
     flex: 0 0 auto;
     padding-inline: 9px;
+  }
+
+  .spectator-mode-badge {
+    max-width: 118px;
+    white-space: normal;
+  }
+
+  .spectator-team-page .team-hero-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .spectator-team-page .manager-identity-copy h1 {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .spectator-team-page .spectator-mode-badge {
+    width: fit-content;
+    max-width: none;
+    align-self: flex-start;
+  }
+
+  .spectator-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .spectator-navigation .rr-button {
+    width: 100%;
   }
 
   .quick-actions-card {

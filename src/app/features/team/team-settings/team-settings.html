@@ -3,7 +3,7 @@
 } @else if (!team()) {
   <p class="page-loading">{{ errorMessage() || 'Team not found.' }}</p>
 } @else {
-  <section class="team-page rr-page-shell">
+  <section class="team-page rr-page-shell" [class.spectator-team-page]="!isOwnTeam()">
     <a
       class="league-return-link"
       [routerLink]="['/leagues', leagueId]"
@@ -24,17 +24,24 @@
         <div class="manager-identity-copy">
           <span class="manager-name">{{ getManagerName() }}</span>
           <h1>{{ team()?.teamName }}</h1>
-          <p>{{ league()?.name }} · {{ getFavoriteTeamName() }}</p>
+          <p>{{ getTeamContextLine() }}</p>
         </div>
       </div>
 
-      <a
-        class="hero-add-drop-action rr-button rr-button--primary"
-        [routerLink]="['/leagues', leagueId, 'players']"
-      >
-        <span class="pixel-icon icon-players icon-sm" aria-hidden="true"></span>
-        <span>Add / Drop</span>
-      </a>
+      @if (isOwnTeam()) {
+        <a
+          class="hero-add-drop-action rr-button rr-button--primary"
+          [routerLink]="['/leagues', leagueId, 'players']"
+        >
+          <span class="pixel-icon icon-players icon-sm" aria-hidden="true"></span>
+          <span>Add / Drop</span>
+        </a>
+      } @else {
+        <span class="spectator-mode-badge">
+          <span aria-hidden="true">◉</span>
+          Viewing roster
+        </span>
+      }
     </header>
 
     @if (liveDataWarnings().length > 0) {
@@ -91,16 +98,29 @@
 
     <section class="quick-actions-card rr-card rr-card--padded">
       <div>
-        <span class="eyebrow">Quick Actions</span>
-        <h2>Team Navigation</h2>
+        <span class="eyebrow">{{ isOwnTeam() ? 'Quick Actions' : 'League Scouting' }}</span>
+        <h2>{{ isOwnTeam() ? 'Team Navigation' : 'Viewing ' + (team()?.teamName ?? 'Team') }}</h2>
       </div>
 
-      <app-league-quick-navigation
-        [leagueId]="leagueId"
-        [cycleNumber]="latestCycle()?.cycleNumber ?? null"
-        [currentMatchupRoute]="currentMatchup() ? getCurrentMatchupLink() : null"
-        currentDestination="team"
-      />
+      @if (isOwnTeam()) {
+        <app-league-quick-navigation
+          [leagueId]="leagueId"
+          [cycleNumber]="latestCycle()?.cycleNumber ?? null"
+          [currentMatchupRoute]="currentMatchup() ? getCurrentMatchupLink() : null"
+          currentDestination="team"
+        />
+      } @else {
+        <nav class="spectator-navigation" aria-label="Spectator roster navigation">
+          <a class="rr-button rr-button--quiet" [routerLink]="['/leagues', leagueId]">
+            League HQ
+          </a>
+          @if (currentMatchup()) {
+            <a class="rr-button rr-button--primary" [routerLink]="getCurrentMatchupLink()">
+              View Matchup
+            </a>
+          }
+        </nav>
+      }
     </section>
 
     <section class="current-matchup-card rr-card rr-card--padded">
@@ -110,13 +130,13 @@
           <h2>{{ getCycleLabel() }}</h2>
         </div>
 
-        @if (latestCycle()) {
+        @if (currentMatchup(); as statusMatchup) {
           <span
             class="status-pill rr-badge"
-            [class.status-complete]="latestCycle()?.status === 'complete'"
-            [class.status-active]="latestCycle()?.status === 'active'"
+            [class.status-complete]="statusMatchup.status === 'complete'"
+            [class.status-active]="statusMatchup.status === 'active'"
           >
-            {{ latestCycle()?.status === 'complete' ? 'Complete' : 'Active' }}
+            {{ statusMatchup.status === 'complete' ? 'Complete' : 'Active' }}
           </span>
         }
       </div>
@@ -126,9 +146,9 @@
       @if (currentMatchup(); as matchup) {
         <div class="scoreboard-row">
           <article class="score-team-card rr-stat-card" [class.my-team-score-card]="true">
-            <span>Your Team</span>
+            <span>{{ isOwnTeam() ? 'Your Team' : 'Selected Team' }}</span>
             <strong>{{ team()?.teamName }}</strong>
-            <em>{{ getDisplayNumber(getMatchupScore(matchup, userId)) }}</em>
+            <em>{{ getDisplayNumber(getMatchupScore(matchup, viewedOwnerId())) }}</em>
           </article>
 
           <div class="score-vs">vs</div>
@@ -140,11 +160,12 @@
           </article>
         </div>
       } @else {
-        <div class="empty-state-card rr-state">No active matchup found for your team yet.</div>
+        <div class="empty-state-card rr-state">No current matchup is available for this team yet.</div>
       }
     </section>
 
-    <section class="transaction-ledger-card rr-card rr-card--padded">
+    @if (isOwnTeam()) {
+      <section class="transaction-ledger-card rr-card rr-card--padded">
       <div class="transaction-ledger-heading rr-section-heading">
         <div>
           <span class="eyebrow">Roster Moves</span>
@@ -189,9 +210,9 @@
           }
         </div>
       }
-    </section>
+      </section>
 
-    <section class="team-name-card rr-card rr-card--padded">
+      <section class="team-name-card rr-card rr-card--padded">
       <div>
         <span class="eyebrow">Team Settings</span>
         <h2>Team Name</h2>
@@ -225,7 +246,8 @@
           <small class="error-message rr-field-error">{{ errorMessage() }}</small>
         }
       </div>
-    </section>
+      </section>
+    }
 
     <section class="roster-section rr-card rr-card--padded">
       <div class="section-heading rr-section-heading">
@@ -275,7 +297,9 @@
       }
 
       @if (!roster()) {
-        <div class="empty-state-card rr-state">Your roster is still loading.</div>
+        <div class="empty-state-card rr-state">
+          {{ isOwnTeam() ? 'Your roster is still loading.' : 'This roster is still loading.' }}
+        </div>
       } @else {
         <div class="active-roster-board">
           <div class="forward-row">
@@ -382,32 +406,36 @@
                           </div>
                         </div>
 
-                        <div class="roster-card-actions">
-                          <div class="roster-card-primary-actions">
-                            <button
-                              type="button"
-                              class="roster-manage-button rr-button rr-button--primary"
-                              (click)="
-                                $event.stopPropagation(); openRosterManager('active', slot.slotId)
-                              "
-                              [disabled]="isRosterOperationPending()"
-                            >
-                              Manage / Move
-                            </button>
+                        @if (isOwnTeam()) {
+                          <div class="roster-card-actions">
+                            <div class="roster-card-primary-actions">
+                              <button
+                                type="button"
+                                class="roster-manage-button rr-button rr-button--primary"
+                                (click)="
+                                  $event.stopPropagation(); openRosterManager('active', slot.slotId)
+                                "
+                                [disabled]="isRosterOperationPending()"
+                              >
+                                Manage / Move
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        }
                       } @else {
                         <div class="empty-slot-copy">
                           <strong>Open {{ group.position }} Slot</strong>
                           <span>Choose an available {{ group.position }} player.</span>
-                          <button
-                            type="button"
-                            class="roster-empty-find-action rr-button rr-button--primary"
-                            (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
-                            [disabled]="isRosterOperationPending()"
-                          >
-                            Find Player
-                          </button>
+                          @if (isOwnTeam()) {
+                            <button
+                              type="button"
+                              class="roster-empty-find-action rr-button rr-button--primary"
+                              (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
+                              [disabled]="isRosterOperationPending()"
+                            >
+                              Find Player
+                            </button>
+                          }
                         </div>
                       }
                     </article>
@@ -505,32 +533,36 @@
                         </div>
                       </div>
 
-                      <div class="roster-card-actions">
-                        <div class="roster-card-primary-actions">
-                          <button
-                            type="button"
-                            class="roster-manage-button rr-button rr-button--primary"
-                            (click)="
-                              $event.stopPropagation(); openRosterManager('active', slot.slotId)
-                            "
-                            [disabled]="isRosterOperationPending()"
-                          >
-                            Manage / Move
-                          </button>
+                      @if (isOwnTeam()) {
+                        <div class="roster-card-actions">
+                          <div class="roster-card-primary-actions">
+                            <button
+                              type="button"
+                              class="roster-manage-button rr-button rr-button--primary"
+                              (click)="
+                                $event.stopPropagation(); openRosterManager('active', slot.slotId)
+                              "
+                              [disabled]="isRosterOperationPending()"
+                            >
+                              Manage / Move
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      }
                     } @else {
                       <div class="empty-slot-copy">
                         <strong>Open D Slot</strong>
                         <span>Choose an available defenseman.</span>
-                        <button
-                          type="button"
-                          class="roster-empty-find-action rr-button rr-button--primary"
-                          (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
-                          [disabled]="isRosterOperationPending()"
-                        >
-                          Find Player
-                        </button>
+                        @if (isOwnTeam()) {
+                          <button
+                            type="button"
+                            class="roster-empty-find-action rr-button rr-button--primary"
+                            (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
+                            [disabled]="isRosterOperationPending()"
+                          >
+                            Find Player
+                          </button>
+                        }
                       </div>
                     }
                   </article>
@@ -625,32 +657,36 @@
                         </div>
                       </div>
 
-                      <div class="roster-card-actions">
-                        <div class="roster-card-primary-actions">
-                          <button
-                            type="button"
-                            class="roster-manage-button rr-button rr-button--primary"
-                            (click)="
-                              $event.stopPropagation(); openRosterManager('active', slot.slotId)
-                            "
-                            [disabled]="isRosterOperationPending()"
-                          >
-                            Manage / Move
-                          </button>
+                      @if (isOwnTeam()) {
+                        <div class="roster-card-actions">
+                          <div class="roster-card-primary-actions">
+                            <button
+                              type="button"
+                              class="roster-manage-button rr-button rr-button--primary"
+                              (click)="
+                                $event.stopPropagation(); openRosterManager('active', slot.slotId)
+                              "
+                              [disabled]="isRosterOperationPending()"
+                            >
+                              Manage / Move
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      }
                     } @else {
                       <div class="empty-slot-copy">
                         <strong>Open G Slot</strong>
                         <span>Choose an available team goalie unit.</span>
-                        <button
-                          type="button"
-                          class="roster-empty-find-action rr-button rr-button--primary"
-                          (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
-                          [disabled]="isRosterOperationPending()"
-                        >
-                          Find Goalie Unit
-                        </button>
+                        @if (isOwnTeam()) {
+                          <button
+                            type="button"
+                            class="roster-empty-find-action rr-button rr-button--primary"
+                            (click)="openFreeAgentsForRosterSlot('active', slot.slotId)"
+                            [disabled]="isRosterOperationPending()"
+                          >
+                            Find Goalie Unit
+                          </button>
+                        }
                       </div>
                     }
                   </article>
@@ -672,8 +708,13 @@
       </div>
 
       <p class="bench-cycle-guidance rr-guidance-new-only">
-        Bench players and goalie units are owned but do not score. Starting a bench player schedules
-        a fair lineup swap; already-played NHL games are never backfilled.
+        @if (isOwnTeam()) {
+          Bench players and goalie units are owned but do not score. Starting a bench player schedules
+          a fair lineup swap; already-played NHL games are never backfilled.
+        } @else {
+          Bench players and goalie units are owned by this manager but do not score until they enter
+          an active lineup slot.
+        }
       </p>
 
       <div class="bench-slot-grid">
@@ -749,30 +790,34 @@
                 </div>
               </div>
 
-              <div class="roster-card-actions">
-                <div class="roster-card-primary-actions">
-                  <button
-                    type="button"
-                    class="roster-manage-button rr-button rr-button--primary"
-                    (click)="$event.stopPropagation(); openRosterManager('bench', slot.slotId)"
-                    [disabled]="isRosterOperationPending()"
-                  >
-                    Manage / Move
-                  </button>
+              @if (isOwnTeam()) {
+                <div class="roster-card-actions">
+                  <div class="roster-card-primary-actions">
+                    <button
+                      type="button"
+                      class="roster-manage-button rr-button rr-button--primary"
+                      (click)="$event.stopPropagation(); openRosterManager('bench', slot.slotId)"
+                      [disabled]="isRosterOperationPending()"
+                    >
+                      Manage / Move
+                    </button>
+                  </div>
                 </div>
-              </div>
+              }
             } @else {
               <div class="empty-slot-copy">
                 <strong>Open Bench {{ slot.slotNumber }}</strong>
                 <span>Any skater or team goalie unit</span>
-                <button
-                  type="button"
-                  class="roster-empty-find-action rr-button rr-button--primary"
-                  (click)="openFreeAgentsForRosterSlot('bench', slot.slotId)"
-                  [disabled]="isRosterOperationPending()"
-                >
-                  Find Player
-                </button>
+                @if (isOwnTeam()) {
+                  <button
+                    type="button"
+                    class="roster-empty-find-action rr-button rr-button--primary"
+                    (click)="openFreeAgentsForRosterSlot('bench', slot.slotId)"
+                    [disabled]="isRosterOperationPending()"
+                  >
+                    Find Player
+                  </button>
+                }
               </div>
             }
           </article>
@@ -849,16 +894,18 @@
                   }
                 </div>
 
-                <div class="ir-slot-primary-actions">
-                  <button
-                    type="button"
-                    class="roster-manage-button rr-button rr-button--primary"
-                    (click)="$event.stopPropagation(); openRosterManager('ir', slot.slotId)"
-                    [disabled]="isRosterOperationPending()"
-                  >
-                    Manage / Move
-                  </button>
-                </div>
+                @if (isOwnTeam()) {
+                  <div class="ir-slot-primary-actions">
+                    <button
+                      type="button"
+                      class="roster-manage-button rr-button rr-button--primary"
+                      (click)="$event.stopPropagation(); openRosterManager('ir', slot.slotId)"
+                      [disabled]="isRosterOperationPending()"
+                    >
+                      Manage / Move
+                    </button>
+                  </div>
+                }
               } @else {
                 <div class="empty-slot-copy">
                   <strong>{{ slot.slotId }}</strong>
@@ -872,7 +919,7 @@
     </section>
 
     <app-action-sheet
-      [open]="rosterManagerOpen()"
+      [open]="isOwnTeam() && rosterManagerOpen()"
       [title]="getRosterManagerTitle()"
       eyebrow="Manage Roster Spot"
       [description]="getRosterManagerDescription()"
