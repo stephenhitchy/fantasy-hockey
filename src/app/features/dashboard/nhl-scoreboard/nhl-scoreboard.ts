@@ -7,7 +7,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {
   NhlScoreGame,
   getNhlScoreForDate,
@@ -100,9 +100,22 @@ export class NhlScoreboard implements OnDestroy {
   private rosterRefreshGeneration = 0;
   private rosterTrigger: HTMLElement | null = null;
   private restoreRosterTriggerFocus = true;
+  private pendingScrollRestore: number | null = null;
+  private gameCardPointer: {
+    gameId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null = null;
+  private lastGameCardDragAt = 0;
 
-  constructor() {
-    void this.loadScores();
+  constructor(private readonly router: Router) {
+    const restoredState = this.consumeSavedScoreboardState();
+    this.pendingScrollRestore = restoredState?.scrollLeft ?? null;
+    const targetDate = restoredState?.date && !isNhlScoreboardDateToday(restoredState.date)
+      ? restoredState.date
+      : null;
+    void this.loadScores(false, targetDate);
   }
 
   ngOnDestroy(): void {
@@ -126,6 +139,7 @@ export class NhlScoreboard implements OnDestroy {
   }
 
   async openTodayScoreDate(): Promise<void> {
+    this.pendingScrollRestore = null;
     await this.loadScores(false, null);
   }
 
@@ -147,6 +161,62 @@ export class NhlScoreboard implements OnDestroy {
 
   isFavoriteGame(game: NhlScoreGame): boolean {
     return isFavoriteTeamGame(game, this.favoriteTeamAbbreviation());
+  }
+
+  getGameDetailsLabel(game: NhlScoreGame): string {
+    return `Open ${game.awayTeam.abbrev} at ${game.homeTeam.abbrev} NHL game details`;
+  }
+
+  beginGameCardPointer(game: NhlScoreGame, event: PointerEvent): void {
+    if (!event.isPrimary) {
+      return;
+    }
+
+    this.gameCardPointer = {
+      gameId: game.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+  }
+
+  trackGameCardPointer(game: NhlScoreGame, event: PointerEvent): void {
+    const pointer = this.gameCardPointer;
+
+    if (!pointer || pointer.gameId !== game.id) {
+      return;
+    }
+
+    const horizontalDistance = Math.abs(event.clientX - pointer.startX);
+    const verticalDistance = Math.abs(event.clientY - pointer.startY);
+
+    if (horizontalDistance > 10 || verticalDistance > 10) {
+      pointer.moved = true;
+    }
+  }
+
+  finishGameCardPointer(): void {
+    if (this.gameCardPointer?.moved) {
+      this.lastGameCardDragAt = Date.now();
+    }
+
+    this.gameCardPointer = null;
+  }
+
+  openGameDetails(game: NhlScoreGame, event: MouseEvent): void {
+    const isKeyboardActivation = event.detail === 0;
+    const followedDrag = Date.now() - this.lastGameCardDragAt < 700;
+
+    if (!isKeyboardActivation && followedDrag) {
+      event.preventDefault();
+      return;
+    }
+
+    this.saveScoreboardState();
+    void this.router.navigate(['/nhl', 'games', game.id], {
+      queryParams: this.focusedDate() ? { date: this.focusedDate() } : undefined,
+      state: { fromNhlScoreboard: true },
+    });
   }
 
   getTeamScore(game: NhlScoreGame, side: 'away' | 'home'): string {
@@ -347,6 +417,7 @@ export class NhlScoreboard implements OnDestroy {
       return;
     }
 
+    this.pendingScrollRestore = null;
     await this.loadScores(false, isNhlScoreboardDateToday(date) ? null : date);
   }
 
@@ -382,7 +453,10 @@ export class NhlScoreboard implements OnDestroy {
       this.nextDate.set(response.nextDate ?? '');
       this.lastUpdatedAt.set(new Date());
 
-      if (dateChanged) {
+      if (this.pendingScrollRestore !== null) {
+        this.restoreGameStripScroll(this.pendingScrollRestore);
+        this.pendingScrollRestore = null;
+      } else if (dateChanged) {
         this.resetGameStripScroll();
       }
     } catch (error: unknown) {
@@ -465,5 +539,80 @@ export class NhlScoreboard implements OnDestroy {
         strip.scrollLeft = 0;
       }
     });
+  }
+
+  private restoreGameStripScroll(scrollLeft: number): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const strip = this.gameStrip()?.nativeElement;
+
+        if (strip) {
+          strip.scrollLeft = Math.max(0, scrollLeft);
+        }
+      });
+    });
+  }
+
+  private saveScoreboardState(): void {
+    if (typeof sessionStorage === 'undefined') {
+      return;
+    }
+
+    try {
+      sessionStorage.setItem('rinkrat:nhl-scoreboard-view:v1', JSON.stringify({
+        date: this.focusedDate(),
+        scrollLeft: Math.max(0, this.gameStrip()?.nativeElement.scrollLeft ?? 0),
+        savedAt: Date.now(),
+      }));
+    } catch {
+      // Browser privacy settings can disable session storage. Navigation still works.
+    }
+  }
+
+  private consumeSavedScoreboardState(): {
+    date: string;
+    scrollLeft: number;
+  } | null {
+    if (typeof sessionStorage === 'undefined') {
+      return null;
+    }
+
+    try {
+      const key = 'rinkrat:nhl-scoreboard-view:v1';
+      const rawValue = sessionStorage.getItem(key);
+      sessionStorage.removeItem(key);
+
+      if (!rawValue) {
+        return null;
+      }
+
+      const value = JSON.parse(rawValue) as {
+        date?: unknown;
+        scrollLeft?: unknown;
+        savedAt?: unknown;
+      };
+
+      if (
+        typeof value.date !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value.date) ||
+        typeof value.scrollLeft !== 'number' ||
+        !Number.isFinite(value.scrollLeft) ||
+        typeof value.savedAt !== 'number' ||
+        Date.now() - value.savedAt > 30 * 60 * 1000
+      ) {
+        return null;
+      }
+
+      return {
+        date: value.date,
+        scrollLeft: Math.max(0, value.scrollLeft),
+      };
+    } catch {
+      return null;
+    }
   }
 }

@@ -382,6 +382,14 @@ utilities where possible. When a card links to a league-specific destination,
 carry the exact league/cycle/matchup identity instead of inferring it later
 from a player alone.
 
+The Dashboard NHL rail opens `/nhl/games/:gameId` with the stable provider game
+id. That route uses only the approved on-demand box-score and play-by-play
+proxy reads, performs no competitive write, and polls only while the selected
+game is live. Its player links carry the same game id into `/players/:playerId`
+so real NHL identities resolve against the exact single-game data rather than
+the legacy demo fixture. Do not substitute season totals, fantasy-window
+totals, or inferred official stars into either surface.
+
 ### Releases and updates
 
 The bundled manifest and live manifest are different evidence. The root app

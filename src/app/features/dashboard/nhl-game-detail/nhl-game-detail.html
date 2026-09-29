@@ -1,0 +1,422 @@
+<main class="nhl-game-detail" aria-labelledby="nhl-game-detail-title">
+  <header class="nhl-game-detail-toolbar">
+    <button
+      type="button"
+      class="rr-button rr-button--quiet nhl-game-detail-back"
+      (click)="goBack()"
+    >
+      <span aria-hidden="true">←</span>
+      NHL games
+    </button>
+
+    <div class="nhl-game-detail-refresh" aria-live="polite">
+      @if (refreshing()) {
+        <span>Updating live game…</span>
+      } @else if (lastUpdatedAt()) {
+        <span>Updated {{ getUpdatedLabel() }}</span>
+      }
+    </div>
+  </header>
+
+  @if (loading()) {
+    <section class="nhl-game-detail-state rr-card" aria-live="polite">
+      <span class="pixel-icon icon-loading" aria-hidden="true"></span>
+      <h1 id="nhl-game-detail-title">Loading NHL game</h1>
+      <p>Getting the exact game summary and box score.</p>
+    </section>
+  } @else if (hasCompleteFailure()) {
+    <section class="nhl-game-detail-state rr-card" role="alert">
+      <span class="pixel-icon icon-warning" aria-hidden="true"></span>
+      <h1 id="nhl-game-detail-title">Game details unavailable</h1>
+      <p>The NHL data provider did not return this game. Fantasy scores and rosters are unaffected.</p>
+      <button type="button" class="rr-button rr-button--primary" (click)="retry()">
+        Try again
+      </button>
+    </section>
+  } @else if (boxscore(); as game) {
+    @if (boxscoreError() || playByPlayError()) {
+      <aside class="rr-notice rr-notice--warning nhl-game-detail-partial" role="status">
+        <strong>Some game details could not update.</strong>
+        <span>
+          {{ boxscoreError() || playByPlayError() }} The available NHL data below is still shown.
+        </span>
+        <button type="button" class="rr-button rr-button--quiet" (click)="retry()">Retry</button>
+      </aside>
+    }
+
+    <section class="nhl-game-hero rr-card">
+      <h1 id="nhl-game-detail-title" class="rr-visually-hidden">
+        {{ awayTeam()?.abbrev }} at {{ homeTeam()?.abbrev }} NHL game details
+      </h1>
+      <div class="nhl-game-hero-kicker">
+        <span>Single NHL game</span>
+        <strong [class.nhl-game-status--live]="game.gameState === 'LIVE' || game.gameState === 'CRIT'">
+          {{ gameStatus() }}
+        </strong>
+      </div>
+
+      <div class="nhl-game-hero-teams">
+        @if (awayTeam(); as away) {
+          <div class="nhl-game-hero-team">
+            <img
+              [src]="away.logo || ''"
+              [alt]="getTeamName(away) + ' logo'"
+              width="72"
+              height="72"
+              decoding="async"
+              (error)="hideBrokenImage($event)"
+            />
+            <span>{{ away.abbrev }}</span>
+            <strong>{{ getTeamScore(away) }}</strong>
+            <small>{{ getTeamName(away) }}</small>
+          </div>
+        }
+
+        <div class="nhl-game-hero-versus" aria-hidden="true">
+          <span>at</span>
+        </div>
+
+        @if (homeTeam(); as home) {
+          <div class="nhl-game-hero-team">
+            <img
+              [src]="home.logo || ''"
+              [alt]="getTeamName(home) + ' logo'"
+              width="72"
+              height="72"
+              decoding="async"
+              (error)="hideBrokenImage($event)"
+            />
+            <span>{{ home.abbrev }}</span>
+            <strong>{{ getTeamScore(home) }}</strong>
+            <small>{{ getTeamName(home) }}</small>
+          </div>
+        }
+      </div>
+
+      <div class="nhl-game-hero-meta">
+        <span>{{ gameDate() }}</span>
+        @if (getVenueLabel()) {
+          <span>{{ getVenueLabel() }}</span>
+        }
+      </div>
+
+      @if (periodScores().length > 0) {
+        <div class="nhl-period-score-wrap" tabindex="0" aria-label="Period-by-period score">
+          <table class="nhl-period-score">
+            <thead>
+              <tr>
+                <th scope="col">Team</th>
+                @for (period of periodScores(); track period.key) {
+                  <th scope="col">{{ period.label }}</th>
+                }
+                <th scope="col">T</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (awayTeam(); as away) {
+                <tr>
+                  <th scope="row">{{ away.abbrev }}</th>
+                  @for (period of periodScores(); track period.key) {
+                    <td>{{ period.away }}</td>
+                  }
+                  <td>{{ getTeamScore(away) }}</td>
+                </tr>
+              }
+              @if (homeTeam(); as home) {
+                <tr>
+                  <th scope="row">{{ home.abbrev }}</th>
+                  @for (period of periodScores(); track period.key) {
+                    <td>{{ period.home }}</td>
+                  }
+                  <td>{{ getTeamScore(home) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <p class="nhl-game-stat-scope">
+      NHL single-game statistics only. These numbers do not indicate whether a performance counted in a RinkRat matchup.
+    </p>
+
+    <div class="nhl-game-detail-grid">
+      <section class="nhl-game-section rr-card" aria-labelledby="nhl-scoring-summary-title">
+        <header class="nhl-game-section-heading">
+          <div>
+            <span>Goal log</span>
+            <h2 id="nhl-scoring-summary-title">Scoring summary</h2>
+          </div>
+          <strong>{{ scoringEvents().length }}</strong>
+        </header>
+
+        @if (playByPlayError()) {
+          <div class="nhl-game-empty">Scoring events are unavailable from the NHL provider.</div>
+        } @else if (scoringEvents().length === 0) {
+          <div class="nhl-game-empty">
+            {{ game.gameState === 'FUT' || game.gameState === 'PRE' ? 'Scoring events will appear after puck drop.' : 'No scoring events are available.' }}
+          </div>
+        } @else {
+          <ol class="nhl-scoring-list">
+            @for (event of scoringEvents(); track event.id) {
+              <li>
+                <div class="nhl-scoring-moment">
+                  <strong>{{ event.periodLabel }}</strong>
+                  <span>{{ event.timeInPeriod }}</span>
+                </div>
+                <div class="nhl-scoring-copy">
+                  <div class="nhl-scoring-title">
+                    <span class="nhl-scoring-team">{{ event.teamAbbreviation }}</span>
+                    @if (event.scorerId !== null) {
+                      <a
+                        [routerLink]="['/players', event.scorerId]"
+                        [queryParams]="{ nhlGameId: gameId() }"
+                      >{{ event.scorerName }}</a>
+                    } @else {
+                      <strong>{{ event.scorerName }}</strong>
+                    }
+                    <b>{{ event.scoreLabel }}</b>
+                  </div>
+                  @if (event.assists.length > 0) {
+                    <p>
+                      Assists:
+                      @for (assist of event.assists; track assist.id; let last = $last) {
+                        <a
+                          [routerLink]="['/players', assist.id]"
+                          [queryParams]="{ nhlGameId: gameId() }"
+                        >{{ assist.name }}</a>{{ last ? '' : ', ' }}
+                      }
+                    </p>
+                  } @else if (!event.isShootout) {
+                    <p>Unassisted</p>
+                  }
+                  @if (event.tags.length > 0) {
+                    <div class="nhl-scoring-tags">
+                      @for (tag of event.tags; track tag) {
+                        <span>{{ tag }}</span>
+                      }
+                    </div>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        }
+      </section>
+
+      <div class="nhl-game-side-stack">
+        <section class="nhl-game-section rr-card" aria-labelledby="nhl-leaders-title">
+          <header class="nhl-game-section-heading">
+            <div>
+              <span>Not official NHL stars</span>
+              <h2 id="nhl-leaders-title">Statistical leaders</h2>
+            </div>
+          </header>
+
+          <p class="nhl-game-section-note">
+            Determined from this game’s points, goals, shots, and goalie results. The current feed does not provide official game stars.
+          </p>
+
+          @if (topPerformers().length === 0) {
+            <div class="nhl-game-empty">Leaders will appear when player statistics are available.</div>
+          } @else {
+            <div class="nhl-leaders-list">
+              @for (performer of topPerformers(); track performer.playerId) {
+                <a
+                  class="nhl-leader"
+                  [routerLink]="['/players', performer.playerId]"
+                  [queryParams]="{ nhlGameId: gameId() }"
+                >
+                  <span class="nhl-player-avatar">
+                    <span class="pixel-icon icon-players" aria-hidden="true"></span>
+                    @if (performer.headshotUrl) {
+                      <img
+                        [src]="performer.headshotUrl"
+                        [alt]="performer.name + ' headshot'"
+                        width="48"
+                        height="48"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="hideBrokenImage($event)"
+                      />
+                    }
+                  </span>
+                  <span class="nhl-leader-copy">
+                    <strong>{{ performer.name }}</strong>
+                    <small>{{ performer.teamAbbreviation }} · {{ performer.position }}</small>
+                    <b>{{ performer.headline }}</b>
+                    <small>{{ performer.basis }}</small>
+                  </span>
+                  <span aria-hidden="true">→</span>
+                </a>
+              }
+            </div>
+          }
+        </section>
+
+        <section class="nhl-game-section rr-card" aria-labelledby="nhl-team-comparison-title">
+          <header class="nhl-game-section-heading">
+            <div>
+              <span>Game totals</span>
+              <h2 id="nhl-team-comparison-title">Team comparison</h2>
+            </div>
+          </header>
+
+          @if (teamComparison().length === 0) {
+            <div class="nhl-game-empty">Team totals are not available yet.</div>
+          } @else {
+            <div class="nhl-team-comparison">
+              <div class="nhl-team-comparison-head" aria-hidden="true">
+                <strong>{{ awayTeam()?.abbrev }}</strong>
+                <span>Stat</span>
+                <strong>{{ homeTeam()?.abbrev }}</strong>
+              </div>
+              @for (row of teamComparison(); track row.label) {
+                <div class="nhl-team-comparison-row">
+                  <strong>{{ row.away }}</strong>
+                  <span>{{ row.label }}</span>
+                  <strong>{{ row.home }}</strong>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      </div>
+    </div>
+
+    <section class="nhl-game-section nhl-boxscore rr-card" aria-labelledby="nhl-boxscore-title">
+      <header class="nhl-game-section-heading nhl-boxscore-heading">
+        <div>
+          <span>Individual NHL players</span>
+          <h2 id="nhl-boxscore-title">Player box score</h2>
+        </div>
+
+        <div class="nhl-team-tabs" role="tablist" aria-label="Box score team">
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="selectedTeamSide() === 'awayTeam'"
+            [class.is-active]="selectedTeamSide() === 'awayTeam'"
+            (click)="selectTeam('awayTeam')"
+          >
+            {{ awayTeam()?.abbrev || 'Away' }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="selectedTeamSide() === 'homeTeam'"
+            [class.is-active]="selectedTeamSide() === 'homeTeam'"
+            (click)="selectTeam('homeTeam')"
+          >
+            {{ homeTeam()?.abbrev || 'Home' }}
+          </button>
+        </div>
+      </header>
+
+      @if (!selectedTeamStats()) {
+        <div class="nhl-game-empty">
+          {{ game.gameState === 'FUT' || game.gameState === 'PRE' ? 'Player box scores will appear after puck drop.' : 'Player box scores are unavailable for this game.' }}
+        </div>
+      } @else {
+        <div class="nhl-player-group">
+          <h3>Skaters</h3>
+          <div class="nhl-player-list">
+            @for (player of selectedSkaters(); track player.playerId) {
+              <article class="nhl-player-line">
+                <a
+                  class="nhl-player-identity"
+                  [routerLink]="['/players', player.playerId]"
+                  [queryParams]="{ nhlGameId: gameId() }"
+                >
+                  <span class="nhl-player-avatar">
+                    <span class="pixel-icon icon-players" aria-hidden="true"></span>
+                    @if (getPlayerHeadshot(player.playerId); as headshot) {
+                      <img
+                        [src]="headshot"
+                        [alt]="getPlayerName(player) + ' headshot'"
+                        width="48"
+                        height="48"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="hideBrokenImage($event)"
+                      />
+                    }
+                  </span>
+                  <span>
+                    <strong>{{ getPlayerName(player) }}</strong>
+                    <small>{{ selectedTeam()?.abbrev }} · {{ player.position }} · #{{ player.sweaterNumber ?? '—' }}</small>
+                  </span>
+                </a>
+                <dl class="nhl-player-stats">
+                  <div><dt>G</dt><dd>{{ player.goals }}</dd></div>
+                  <div><dt>A</dt><dd>{{ player.assists }}</dd></div>
+                  <div><dt>P</dt><dd>{{ player.points }}</dd></div>
+                  <div><dt>SOG</dt><dd>{{ player.sog }}</dd></div>
+                  <div><dt>TOI</dt><dd>{{ player.toi || '—' }}</dd></div>
+                  <div><dt>+/-</dt><dd>{{ getPlusMinus(player.plusMinus) }}</dd></div>
+                  <div><dt>HIT</dt><dd>{{ player.hits }}</dd></div>
+                  <div><dt>BLK</dt><dd>{{ player.blockedShots }}</dd></div>
+                  <div><dt>PIM</dt><dd>{{ getPenaltyMinutes(player) }}</dd></div>
+                  <div><dt>FO</dt><dd>{{ getFaceoffPercentage(player.faceoffWinningPctg) }}</dd></div>
+                </dl>
+              </article>
+            } @empty {
+              <div class="nhl-game-empty">No skater lines are available.</div>
+            }
+          </div>
+        </div>
+
+        <div class="nhl-player-group">
+          <h3>Goalies <small>Individual NHL goalies, not RinkRat team-goalie units</small></h3>
+          <div class="nhl-player-list">
+            @for (player of selectedGoalies(); track player.playerId) {
+              <article class="nhl-player-line">
+                <a
+                  class="nhl-player-identity"
+                  [routerLink]="['/players', player.playerId]"
+                  [queryParams]="{ nhlGameId: gameId() }"
+                >
+                  <span class="nhl-player-avatar">
+                    <span class="pixel-icon icon-players" aria-hidden="true"></span>
+                    @if (getPlayerHeadshot(player.playerId); as headshot) {
+                      <img
+                        [src]="headshot"
+                        [alt]="getPlayerName(player) + ' headshot'"
+                        width="48"
+                        height="48"
+                        loading="lazy"
+                        decoding="async"
+                        (error)="hideBrokenImage($event)"
+                      />
+                    }
+                  </span>
+                  <span>
+                    <strong>{{ getPlayerName(player) }}</strong>
+                    <small>{{ selectedTeam()?.abbrev }} · G · #{{ player.sweaterNumber ?? '—' }}{{ player.starter ? ' · Starter' : '' }}</small>
+                  </span>
+                </a>
+                <dl class="nhl-player-stats nhl-player-stats--goalie">
+                  <div><dt>SV</dt><dd>{{ player.saves }}</dd></div>
+                  <div><dt>SA</dt><dd>{{ player.shotsAgainst }}</dd></div>
+                  <div><dt>GA</dt><dd>{{ player.goalsAgainst }}</dd></div>
+                  <div><dt>SV%</dt><dd>{{ getSavePercentage(player.savePctg) }}</dd></div>
+                  <div><dt>TOI</dt><dd>{{ player.toi || '—' }}</dd></div>
+                  <div><dt>PIM</dt><dd>{{ getPenaltyMinutes(player) }}</dd></div>
+                </dl>
+              </article>
+            } @empty {
+              <div class="nhl-game-empty">No goalie lines are available.</div>
+            }
+          </div>
+        </div>
+      }
+    </section>
+  } @else {
+    <section class="nhl-game-detail-state rr-card" role="alert">
+      <h1 id="nhl-game-detail-title">Game overview unavailable</h1>
+      <p>The scoring feed responded, but the NHL box score did not. Try again for the complete game view.</p>
+      <button type="button" class="rr-button rr-button--primary" (click)="retry()">Try again</button>
+    </section>
+  }
+</main>

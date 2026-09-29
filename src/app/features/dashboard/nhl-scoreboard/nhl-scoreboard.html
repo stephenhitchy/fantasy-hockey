@@ -87,6 +87,17 @@
           [class.nhl-game-card--final]="isFinal(game)"
           [class.nhl-game-card--favorite]="isFavoriteGame(game)"
         >
+          <button
+            type="button"
+            class="nhl-game-card-open"
+            [attr.aria-label]="getGameDetailsLabel(game)"
+            (pointerdown)="beginGameCardPointer(game, $event)"
+            (pointermove)="trackGameCardPointer(game, $event)"
+            (pointerup)="finishGameCardPointer()"
+            (pointercancel)="finishGameCardPointer()"
+            (click)="openGameDetails(game, $event)"
+          ></button>
+
           <div class="nhl-game-meta">
             <span [class.nhl-game-live-label]="isLive(game)">{{ getGameStatus(game) }}</span>
             <span class="nhl-game-meta-secondary">

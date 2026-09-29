@@ -126,11 +126,33 @@
 }
 
 .nhl-game-card {
+  position: relative;
   min-width: 0;
   padding: 11px;
   border: 2px solid var(--border-strong);
   background: var(--surface-2);
   scroll-snap-align: start;
+}
+
+.nhl-game-card-open {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  touch-action: pan-x pan-y;
+  cursor: pointer;
+}
+
+.nhl-game-card-open:hover {
+  background: color-mix(in srgb, var(--user-team-accent) 5%, transparent);
+}
+
+.nhl-game-card-open:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: -5px;
 }
 
 .nhl-game-card--live {
@@ -229,6 +251,7 @@
 
 .nhl-roster-presence {
   position: relative;
+  z-index: 2;
   display: inline-flex;
   min-width: 0;
   align-items: center;

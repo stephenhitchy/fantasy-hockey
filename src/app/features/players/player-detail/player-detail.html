@@ -8,7 +8,79 @@
     Back
   </button>
 
-  @if (playerDetail; as detail) {
+  @if (nhlGameLoading) {
+    <section class="nhl-player-state rr-card" aria-live="polite">
+      <span class="pixel-icon icon-loading" aria-hidden="true"></span>
+      <h1>Loading player game</h1>
+      <p>Getting this player’s official NHL box-score line.</p>
+    </section>
+  } @else if (nhlGamePlayer; as player) {
+    <header class="nhl-player-header rr-card">
+      <span class="nhl-player-headshot">
+        <span class="pixel-icon icon-players" aria-hidden="true"></span>
+        @if (player.headshotUrl) {
+          <img
+            [src]="player.headshotUrl"
+            [alt]="player.name + ' headshot'"
+            width="104"
+            height="104"
+            decoding="async"
+            (error)="hideBrokenImage($event)"
+          />
+        }
+      </span>
+
+      <div class="nhl-player-heading-copy">
+        <p class="eyebrow">NHL single-game player detail</p>
+        <h1>{{ player.name }}</h1>
+        <p>
+          {{ player.teamAbbreviation }} · {{ player.position }}
+          @if (player.sweaterNumber !== null) {
+            · #{{ player.sweaterNumber }}
+          }
+        </p>
+      </div>
+
+      @if (player.teamLogoUrl) {
+        <img
+          class="nhl-player-team-logo"
+          [src]="player.teamLogoUrl"
+          [alt]="player.teamAbbreviation + ' logo'"
+          width="54"
+          height="54"
+          decoding="async"
+          (error)="hideBrokenImage($event)"
+        />
+      }
+    </header>
+
+    <section class="nhl-player-game rr-card" aria-labelledby="nhl-player-game-title">
+      <header>
+        <div>
+          <span>Exact NHL game</span>
+          <h2 id="nhl-player-game-title">{{ player.gameLabel }}</h2>
+        </div>
+        <strong>{{ player.gameStatus }}</strong>
+      </header>
+
+      <dl class="nhl-player-game-stats">
+        @for (stat of player.stats; track stat.label) {
+          <div>
+            <dt>{{ stat.label }}</dt>
+            <dd>{{ stat.value }}</dd>
+          </div>
+        }
+      </dl>
+
+      <p>
+        NHL box-score statistics only. This does not indicate whether the performance counted in a fantasy lineup.
+      </p>
+
+      <a class="rr-button rr-button--secondary" [routerLink]="['/nhl', 'games', player.gameId]">
+        Return to game details
+      </a>
+    </section>
+  } @else if (playerDetail; as detail) {
     <header class="player-header">
       @if (detail.player.teamLogoUrl) {
         <img
@@ -74,7 +146,7 @@
   } @else {
     <section class="missing-player">
       <h1>Player not found</h1>
-      <p>This demo player does not have a mock game log yet.</p>
+      <p>{{ nhlGameError || 'This player does not have a saved detail view yet.' }}</p>
     </section>
   }
 </section>

@@ -1,0 +1,943 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.nhl-game-detail {
+  width: min(1180px, 100%);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 18px 18px calc(104px + env(safe-area-inset-bottom));
+}
+
+.nhl-game-detail-toolbar {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.nhl-game-detail-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.nhl-game-detail-refresh {
+  min-width: 0;
+  color: var(--text-muted);
+  font-family: var(--rr-font-numeric);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.nhl-game-detail-state {
+  display: grid;
+  min-height: min(540px, 65dvh);
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 28px;
+  border: 3px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.nhl-game-detail-state h1,
+.nhl-game-detail-state p {
+  margin: 0;
+}
+
+.nhl-game-detail-state p {
+  max-width: 520px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.nhl-game-detail-partial {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.nhl-game-detail-partial strong,
+.nhl-game-detail-partial span {
+  min-width: 0;
+}
+
+.nhl-game-detail-partial span {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.nhl-game-detail-partial button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 44px;
+}
+
+.nhl-game-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 3px solid var(--border-strong);
+  border-top-color: var(--user-team-accent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--user-team-primary) 12%, transparent), transparent 55%),
+    var(--surface-1);
+  box-shadow: var(--rr-shadow-card);
+}
+
+.nhl-game-hero::after {
+  position: absolute;
+  inset: auto -50px -70px auto;
+  width: 190px;
+  height: 190px;
+  border: 24px solid color-mix(in srgb, var(--user-team-accent) 7%, transparent);
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+}
+
+.nhl-game-hero-kicker {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.nhl-game-hero-kicker strong {
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.nhl-game-hero-kicker .nhl-game-status--live {
+  border-color: var(--rr-color-success);
+  color: var(--rr-color-success);
+}
+
+.nhl-game-hero-teams {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  max-width: 760px;
+  margin: 18px auto 12px;
+}
+
+.nhl-game-hero-team {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.nhl-game-hero-team:last-child {
+  grid-template-columns: auto minmax(0, 1fr) 72px;
+  text-align: right;
+}
+
+.nhl-game-hero-team:last-child img {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.nhl-game-hero-team:last-child span,
+.nhl-game-hero-team:last-child small {
+  grid-column: 2;
+}
+
+.nhl-game-hero-team:last-child strong {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.nhl-game-hero-team img {
+  width: 72px;
+  height: 72px;
+  grid-row: 1 / span 2;
+  object-fit: contain;
+}
+
+.nhl-game-hero-team span {
+  align-self: end;
+  color: var(--text-primary);
+  font-size: clamp(20px, 4vw, 32px);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.nhl-game-hero-team strong {
+  grid-row: 1 / span 2;
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: clamp(38px, 7vw, 62px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.nhl-game-hero-team small {
+  align-self: start;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nhl-game-hero-versus {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.nhl-game-hero-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+}
+
+.nhl-period-score-wrap {
+  position: relative;
+  z-index: 1;
+  width: min(620px, 100%);
+  margin: 16px auto 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+}
+
+.nhl-period-score-wrap:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: 3px;
+}
+
+.nhl-period-score {
+  width: 100%;
+  min-width: 260px;
+  border-collapse: collapse;
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.nhl-period-score th,
+.nhl-period-score td {
+  padding: 7px 10px;
+  border-right: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.nhl-period-score tr:last-child th,
+.nhl-period-score tr:last-child td {
+  border-bottom: 0;
+}
+
+.nhl-period-score th:first-child {
+  text-align: left;
+}
+
+.nhl-game-stat-scope {
+  margin: 10px 2px 18px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.nhl-game-detail-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+  gap: 14px;
+}
+
+.nhl-game-side-stack {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 14px;
+}
+
+.nhl-game-section {
+  min-width: 0;
+  padding: 16px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: var(--rr-shadow-card);
+}
+
+.nhl-game-section-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--border-soft);
+}
+
+.nhl-game-section-heading > div {
+  min-width: 0;
+}
+
+.nhl-game-section-heading span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.nhl-game-section-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(19px, 3vw, 25px);
+  line-height: 1.1;
+}
+
+.nhl-game-section-heading > strong {
+  display: grid;
+  min-width: 38px;
+  min-height: 38px;
+  place-items: center;
+  border: 2px solid var(--user-team-accent);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.nhl-game-section-note {
+  margin: 11px 0 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.nhl-game-empty {
+  padding: 22px 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.nhl-scoring-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nhl-scoring-list li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.nhl-scoring-list li:last-child {
+  border-bottom: 0;
+}
+
+.nhl-scoring-moment {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding-top: 2px;
+  color: var(--text-muted);
+  font-family: var(--rr-font-numeric);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nhl-scoring-moment strong {
+  color: var(--user-team-accent);
+  font-size: 12px;
+}
+
+.nhl-scoring-copy,
+.nhl-scoring-title {
+  min-width: 0;
+}
+
+.nhl-scoring-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.nhl-scoring-title a,
+.nhl-scoring-title > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.nhl-scoring-title a:hover,
+.nhl-scoring-title a:focus-visible {
+  color: var(--user-team-accent);
+}
+
+.nhl-scoring-title b {
+  margin-left: auto;
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nhl-scoring-team {
+  flex: 0 0 auto;
+  padding: 3px 5px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 8px;
+  font-weight: 950;
+}
+
+.nhl-scoring-copy p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.nhl-scoring-copy p a {
+  color: inherit;
+}
+
+.nhl-scoring-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.nhl-scoring-tags span {
+  padding: 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--user-team-accent) 55%, var(--border-strong));
+  color: var(--text-secondary);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.nhl-leaders-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.nhl-leader {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 68px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nhl-leader:hover,
+.nhl-leader:focus-visible {
+  border-color: var(--user-team-accent);
+  outline: none;
+}
+
+.nhl-player-avatar {
+  position: relative;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-1) 72%, var(--surface-2));
+}
+
+.nhl-player-avatar .pixel-icon {
+  width: 22px;
+  height: 22px;
+  opacity: 0.45;
+}
+
+.nhl-player-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.nhl-leader-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.nhl-leader-copy strong,
+.nhl-leader-copy b,
+.nhl-leader-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nhl-leader-copy strong {
+  font-size: 13px;
+}
+
+.nhl-leader-copy b {
+  color: var(--user-team-accent);
+  font-family: var(--rr-font-numeric);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nhl-leader-copy small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.nhl-team-comparison {
+  margin-top: 12px;
+}
+
+.nhl-team-comparison-head,
+.nhl-team-comparison-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  align-items: center;
+  text-align: center;
+}
+
+.nhl-team-comparison-head {
+  padding: 5px 0 8px;
+  color: var(--text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.nhl-team-comparison-row {
+  min-height: 38px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.nhl-team-comparison-row strong {
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nhl-team-comparison-row span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.nhl-boxscore {
+  margin-top: 14px;
+}
+
+.nhl-boxscore-heading {
+  align-items: center;
+}
+
+.nhl-team-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(64px, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+}
+
+.nhl-team-tabs button {
+  min-height: 40px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.nhl-team-tabs button:hover,
+.nhl-team-tabs button:focus-visible {
+  color: var(--text-primary);
+  outline: 2px solid var(--user-team-accent);
+  outline-offset: -2px;
+}
+
+.nhl-team-tabs button.is-active {
+  background: var(--user-team-accent);
+  color: var(--rr-color-ink-on-accent, #09121d);
+}
+
+.nhl-player-group {
+  min-width: 0;
+  margin-top: 16px;
+}
+
+.nhl-player-group h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 9px;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.nhl-player-group h3 small {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.nhl-player-list {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.nhl-player-line {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(210px, 0.75fr) minmax(420px, 1.25fr);
+  align-items: center;
+  gap: 12px;
+  padding: 9px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+}
+
+.nhl-player-identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nhl-player-identity > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.nhl-player-identity strong,
+.nhl-player-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nhl-player-identity strong {
+  font-size: 13px;
+}
+
+.nhl-player-identity small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.nhl-player-identity:hover strong,
+.nhl-player-identity:focus-visible strong {
+  color: var(--user-team-accent);
+}
+
+.nhl-player-identity:focus-visible {
+  outline: 2px solid var(--user-team-accent);
+  outline-offset: 3px;
+}
+
+.nhl-player-stats {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(10, minmax(36px, 1fr));
+  margin: 0;
+}
+
+.nhl-player-stats--goalie {
+  grid-template-columns: repeat(6, minmax(48px, 1fr));
+}
+
+.nhl-player-stats div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 4px 6px;
+  border-left: 1px solid var(--border-soft);
+  text-align: center;
+}
+
+.nhl-player-stats dt {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.nhl-player-stats dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .nhl-game-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nhl-game-side-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nhl-player-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nhl-player-stats div:first-child {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .nhl-game-detail {
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .nhl-game-detail-toolbar {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    margin: -10px -10px 10px;
+    padding: max(8px, env(safe-area-inset-top)) 10px 8px;
+    border-bottom: 2px solid var(--border-strong);
+    background: color-mix(in srgb, var(--page-bg) 94%, transparent);
+    backdrop-filter: blur(8px);
+  }
+
+  .nhl-game-detail-refresh {
+    font-size: 8px;
+  }
+
+  .nhl-game-hero {
+    padding: 14px 10px;
+  }
+
+  .nhl-game-hero-teams {
+    gap: 7px;
+    margin-top: 16px;
+  }
+
+  .nhl-game-hero-team,
+  .nhl-game-hero-team:last-child {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+  }
+
+  .nhl-game-hero-team img,
+  .nhl-game-hero-team:last-child img {
+    width: 52px;
+    height: 52px;
+    grid-column: 1 / span 2;
+    grid-row: 1;
+    justify-self: start;
+  }
+
+  .nhl-game-hero-team:last-child img {
+    justify-self: end;
+  }
+
+  .nhl-game-hero-team span,
+  .nhl-game-hero-team:last-child span {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: center;
+    font-size: 20px;
+    text-align: left;
+  }
+
+  .nhl-game-hero-team:last-child span {
+    grid-column: 2;
+    text-align: right;
+  }
+
+  .nhl-game-hero-team strong,
+  .nhl-game-hero-team:last-child strong {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 36px;
+  }
+
+  .nhl-game-hero-team:last-child strong {
+    grid-column: 1;
+  }
+
+  .nhl-game-hero-team small,
+  .nhl-game-hero-team:last-child small {
+    grid-column: 1 / span 2;
+    grid-row: 3;
+    font-size: 8px;
+    text-align: left;
+  }
+
+  .nhl-game-hero-team:last-child small {
+    text-align: right;
+  }
+
+  .nhl-game-side-stack {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nhl-game-section {
+    padding: 13px;
+  }
+
+  .nhl-boxscore-heading {
+    display: grid;
+  }
+
+  .nhl-team-tabs {
+    width: 100%;
+  }
+
+  .nhl-scoring-list li {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .nhl-scoring-title {
+    flex-wrap: wrap;
+  }
+
+  .nhl-scoring-title b {
+    flex: 0 0 auto;
+  }
+
+  .nhl-player-stats,
+  .nhl-player-stats--goalie {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .nhl-player-stats--goalie {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nhl-player-stats div {
+    min-height: 42px;
+    place-content: center;
+    padding-inline: 2px;
+    border-top: 1px solid var(--border-soft);
+  }
+
+  .nhl-player-stats div:nth-child(5n + 1),
+  .nhl-player-stats--goalie div:nth-child(3n + 1) {
+    border-left: 0;
+  }
+
+  .nhl-game-detail-partial {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nhl-game-detail-partial button {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 360px) {
+  .nhl-game-detail-refresh {
+    max-width: 96px;
+  }
+
+  .nhl-game-hero-kicker {
+    align-items: flex-start;
+  }
+
+  .nhl-game-hero-kicker > span {
+    max-width: 76px;
+  }
+
+  .nhl-game-hero-team img,
+  .nhl-game-hero-team:last-child img {
+    width: 46px;
+    height: 46px;
+  }
+
+  .nhl-game-section-heading h2 {
+    font-size: 18px;
+  }
+
+  .nhl-player-line {
+    padding-inline: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nhl-game-detail-toolbar {
+    scroll-behavior: auto;
+  }
+}

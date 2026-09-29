@@ -133,6 +133,14 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard').then((module) => module.Dashboard),
       },
       {
+        path: 'nhl/games/:gameId',
+        title: 'NHL Game Details',
+        loadComponent: () =>
+          import('./features/dashboard/nhl-game-detail/nhl-game-detail').then(
+            (module) => module.NhlGameDetail,
+          ),
+      },
+      {
         path: 'training-camp',
         title: 'Training Camp',
         loadComponent: () =>

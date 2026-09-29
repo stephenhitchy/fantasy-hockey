@@ -332,6 +332,7 @@ export interface NhlTeamSeasonScheduleResponse {
 
 export interface NhlSkaterBoxscoreLine {
   playerId: number;
+  sweaterNumber?: number;
   name: {
     default: string;
   };
@@ -340,15 +341,21 @@ export interface NhlSkaterBoxscoreLine {
   assists: number;
   points: number;
   plusMinus: number;
+  pim?: number;
   hits: number;
   powerPlayGoals: number;
   sog: number;
+  faceoffWinningPctg?: number;
   toi: string;
   blockedShots: number;
+  shifts?: number;
+  giveaways?: number;
+  takeaways?: number;
 }
 
 export interface NhlGoalieBoxscoreLine {
   playerId: number;
+  sweaterNumber?: number;
   name: {
     default: string;
   };
@@ -360,19 +367,61 @@ export interface NhlGoalieBoxscoreLine {
   shotsAgainst: number;
   saves: number;
   savePctg?: number;
+  pim?: number;
 }
 
 export interface NhlPlayByPlayEvent {
+  eventId?: number;
   typeDescKey?: string;
+  sortOrder?: number;
+  timeInPeriod?: string;
+  timeRemaining?: string;
+  situationCode?: string;
+  periodDescriptor?: NhlScorePeriodDescriptor;
   details?: {
     scoringPlayerId?: number;
     assist1PlayerId?: number;
     assist2PlayerId?: number;
+    shootingPlayerId?: number;
+    committedByPlayerId?: number;
+    drawnByPlayerId?: number;
+    goalieInNetId?: number;
+    eventOwnerTeamId?: number;
+    awayScore?: number;
+    homeScore?: number;
+    duration?: number;
+    descKey?: string;
+    shotType?: string;
   };
 }
 
+export interface NhlGameRosterSpot {
+  teamId?: number;
+  playerId: number;
+  firstName?: NhlScoreLocalizedName;
+  lastName?: NhlScoreLocalizedName;
+  sweaterNumber?: number;
+  positionCode?: string;
+  headshot?: string;
+}
+
 export interface NhlGamePlayByPlayResponse {
+  id?: number;
+  season?: number;
+  gameDate?: string;
+  startTimeUTC?: string;
+  gameState?: string;
+  gameScheduleState?: string;
+  periodDescriptor?: NhlScorePeriodDescriptor;
+  clock?: NhlScoreClock;
+  gameOutcome?: NhlScoreGameOutcome;
+  venue?: NhlScoreLocalizedName;
+  venueLocation?: NhlScoreLocalizedName;
+  awayTeam?: NhlGameTeamSummary;
+  homeTeam?: NhlGameTeamSummary;
   plays?: NhlPlayByPlayEvent[];
+  rosterSpots?: NhlGameRosterSpot[];
+  summary?: Record<string, unknown>;
 }
 
 export interface NhlAssistBreakdown {
@@ -387,11 +436,28 @@ export interface NhlTeamBoxscore {
 }
 
 export interface NhlGameTeamSummary {
+  id?: number;
   abbrev: string;
-  score: number;
+  score?: number;
+  sog?: number;
+  logo?: string;
+  darkLogo?: string;
+  commonName?: NhlScoreLocalizedName;
+  placeName?: NhlScoreLocalizedName;
 }
 
 export interface NhlGameBoxscoreResponse {
+  id?: number;
+  season?: number;
+  gameDate?: string;
+  startTimeUTC?: string;
+  gameState?: string;
+  gameScheduleState?: string;
+  periodDescriptor?: NhlScorePeriodDescriptor;
+  clock?: NhlScoreClock;
+  gameOutcome?: NhlScoreGameOutcome;
+  venue?: NhlScoreLocalizedName;
+  venueLocation?: NhlScoreLocalizedName;
   homeTeam?: NhlGameTeamSummary;
   awayTeam?: NhlGameTeamSummary;
   playerByGameStats?: {
@@ -517,19 +583,22 @@ export async function getNhlTeamSeasonSchedule(
 }
 
 export async function getGameBoxscore(
-  gameId: number
+  gameId: number,
+  forceRefresh: boolean = false
 ): Promise<NhlGameBoxscoreResponse> {
   const url = `${NHL_API_BASE_URL}/gamecenter/${gameId}/boxscore`;
 
   return getCachedApiJson<NhlGameBoxscoreResponse>(
     url,
     NHL_GAME_DATA_CACHE_MILLISECONDS,
-    'NHL boxscore request failed'
+    'NHL boxscore request failed',
+    forceRefresh
   );
 }
 
 export async function getGamePlayByPlay(
-  gameId: number
+  gameId: number,
+  forceRefresh: boolean = false
 ): Promise<NhlGamePlayByPlayResponse> {
   const url =
     `${NHL_API_BASE_URL}/gamecenter/${gameId}/play-by-play`;
@@ -537,7 +606,8 @@ export async function getGamePlayByPlay(
   return getCachedApiJson<NhlGamePlayByPlayResponse>(
     url,
     NHL_GAME_DATA_CACHE_MILLISECONDS,
-    'NHL play-by-play request failed'
+    'NHL play-by-play request failed',
+    forceRefresh
   );
 }
 
@@ -615,7 +685,13 @@ export function getTeamGoalieUnitResult(
     ? boxscore.playerByGameStats?.homeTeam
     : boxscore.playerByGameStats?.awayTeam;
 
-  if (!teamSummary || !opponentSummary || !teamStats) {
+  if (
+    !teamSummary ||
+    !opponentSummary ||
+    !teamStats ||
+    typeof teamSummary.score !== 'number' ||
+    typeof opponentSummary.score !== 'number'
+  ) {
     return null;
   }
 

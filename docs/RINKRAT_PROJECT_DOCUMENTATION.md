@@ -13094,3 +13094,24 @@ even when the persisted lock worker is delayed.
 Immediate start is intentionally unsupported. Full behavior, compatibility,
 verification, deployment, and rollback guidance is in
 `docs/RINKRAT_FF1_40_DRAFT_MEMBERSHIP_CUTOFF.md`.
+
+---
+
+## Beta Batch B1N — Dashboard NHL Game Details
+
+B1N makes the non-badge area of a Dashboard NHL game card open a stable-id,
+read-only NHL single-game view. It uses the already approved on-demand
+gamecenter box-score and play-by-play proxy routes for overview, chronological
+goals, period scoring, deterministic non-official statistical leaders, team
+comparison, and individual skater/goalie box scores. Live games poll every 30
+seconds with cleanup; non-live games do not poll. Scoreboard swipes and roster
+badges remain separate, while browser Back restores the scoreboard date and
+rail offset.
+
+The provider does not currently expose official game stars or trustworthy
+power-play opportunity totals through these routes, so the UI does not claim
+either. Real player links carry the exact game id into the existing player
+route and show raw NHL single-game statistics, never fantasy-window totals.
+No competitive authority or Firebase backend resource changes. Full details,
+verification, omissions, deployment, and rollback are in
+`docs/RINKRAT_PRODUCT_B1N_NHL_GAME_DETAILS.md`.
