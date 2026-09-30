@@ -25,6 +25,38 @@ export interface NhlPlayerTeamIdentitySnapshot {
   byPlayerId: ReadonlyMap<number, string>;
 }
 
+export interface NhlPlayerTeamIdentityCoverage {
+  complete: boolean;
+  requiredPlayerCount: number;
+  missingPlayerIds: number[];
+}
+
+export interface LoadNhlPlayerTeamIdentityOptions {
+  /** Stable NHL skater ids whose current-team identity this caller requires. */
+  requiredPlayerIds?: Iterable<number>;
+}
+
+export class NhlPlayerTeamIdentityCoverageError extends Error {
+  readonly code = 'nhl-player-team-identity-coverage-incomplete';
+
+  constructor(
+    readonly missingPlayerIds: number[],
+    readonly identityHash: string,
+    readonly generatedAt: string,
+  ) {
+    const shownIds = missingPlayerIds.slice(0, 20).join(', ');
+    const omittedCount = Math.max(0, missingPlayerIds.length - 20);
+
+    super(
+      `NHL current-team identity is missing ${missingPlayerIds.length} required ` +
+      `rostered skater${missingPlayerIds.length === 1 ? '' : 's'}: ${shownIds}` +
+      `${omittedCount > 0 ? ` (+${omittedCount} more)` : ''}. ` +
+      'Scoring was left unchanged and will retry.',
+    );
+    this.name = 'NhlPlayerTeamIdentityCoverageError';
+  }
+}
+
 interface StoredNhlPlayerTeamIdentityEntry {
   playerId: number;
   teamAbbreviation: string;
@@ -75,6 +107,64 @@ function normalizeTeamAbbreviation(value: unknown): string | null {
 
   const normalized = value.trim().toUpperCase();
   return supportedTeams.has(normalized) ? normalized : null;
+}
+
+function normalizeRequiredPlayerIds(
+  values: Iterable<number> | undefined,
+): number[] {
+  if (!values) {
+    return [];
+  }
+
+  const playerIds = new Set<number>();
+
+  for (const playerId of values) {
+    if (!Number.isSafeInteger(playerId) || playerId <= 0) {
+      throw new Error(
+        `NHL current-team identity received an invalid required player id: ${String(playerId)}.`,
+      );
+    }
+
+    playerIds.add(playerId);
+  }
+
+  return [...playerIds].sort((first, second) => first - second);
+}
+
+export function inspectNhlPlayerTeamIdentityCoverage(
+  snapshot: NhlPlayerTeamIdentitySnapshot,
+  requiredPlayerIds: Iterable<number> = [],
+): NhlPlayerTeamIdentityCoverage {
+  const required = normalizeRequiredPlayerIds(requiredPlayerIds);
+  const missingPlayerIds = required.filter(
+    (playerId) => !snapshot.byPlayerId.has(playerId),
+  );
+
+  return {
+    complete: missingPlayerIds.length === 0,
+    requiredPlayerCount: required.length,
+    missingPlayerIds,
+  };
+}
+
+export function requireNhlPlayerTeamIdentityCoverage(
+  snapshot: NhlPlayerTeamIdentitySnapshot,
+  requiredPlayerIds: Iterable<number> = [],
+): NhlPlayerTeamIdentitySnapshot {
+  const coverage = inspectNhlPlayerTeamIdentityCoverage(
+    snapshot,
+    requiredPlayerIds,
+  );
+
+  if (!coverage.complete) {
+    throw new NhlPlayerTeamIdentityCoverageError(
+      coverage.missingPlayerIds,
+      snapshot.identityHash,
+      snapshot.generatedAt,
+    );
+  }
+
+  return snapshot;
 }
 
 function normalizeStoredSnapshot(
@@ -356,7 +446,7 @@ async function waitForClaimedRefresh(): Promise<NhlPlayerTeamIdentitySnapshot> {
  * scoring run. A stale or incomplete catalog blocks the new scoring pass
  * instead of allowing an old-team nonappearance to settle as zero.
  */
-export async function loadCurrentNhlPlayerTeamIdentity(): Promise<NhlPlayerTeamIdentitySnapshot> {
+async function loadCurrentNhlPlayerTeamIdentitySnapshot(): Promise<NhlPlayerTeamIdentitySnapshot> {
   const nowMilliseconds = Date.now();
 
   if (snapshotIsFresh(cachedSnapshot, nowMilliseconds)) {
@@ -391,4 +481,21 @@ export async function loadCurrentNhlPlayerTeamIdentity(): Promise<NhlPlayerTeamI
     await recordRefreshFailure(claim.attemptId, error).catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * Loads the shared identity map and, when supplied, proves that every exact
+ * rostered skater required by this scoring run is present. Missing coverage
+ * fails the run visibly instead of letting the cycle resolver use a stale team
+ * copied into the roster asset.
+ */
+export async function loadCurrentNhlPlayerTeamIdentity(
+  options: LoadNhlPlayerTeamIdentityOptions = {},
+): Promise<NhlPlayerTeamIdentitySnapshot> {
+  const snapshot = await loadCurrentNhlPlayerTeamIdentitySnapshot();
+
+  return requireNhlPlayerTeamIdentityCoverage(
+    snapshot,
+    options.requiredPlayerIds,
+  );
 }

@@ -667,7 +667,7 @@ export interface NhlDraftSkater {
   birthDate?: string;
 }
 
-interface NhlCurrentRosterPlayer {
+export interface NhlCurrentRosterPlayer {
   id?: number;
   playerId?: number;
   firstName?: {
@@ -685,9 +685,14 @@ interface NhlCurrentRosterPlayer {
   birthDate?: string;
 }
 
-interface NhlCurrentRosterResponse {
+export interface NhlCurrentRosterResponse {
   forwards?: NhlCurrentRosterPlayer[];
   defensemen?: NhlCurrentRosterPlayer[];
+}
+
+export interface NhlDraftClubRosterSnapshot {
+  club: NhlDraftClub;
+  roster: NhlCurrentRosterResponse;
 }
 
 const NHL_ROSTER_BATCH_SIZE = 1;
@@ -823,6 +828,8 @@ function addRosterSkaters(
     ...(roster.defensemen ?? [])
   ];
 
+  let draftableSkaterCount = 0;
+
   for (const player of rosterPlayers) {
     const playerId = player.id ?? player.playerId;
     const position = getDraftPosition(player.positionCode);
@@ -841,8 +848,29 @@ function addRosterSkaters(
       player.fullName?.default ||
       'Unknown Player';
 
-    const teamAbbreviation =
-      player.currentTeamAbbrev ?? club.abbreviation;
+    const teamAbbreviation = (
+      player.currentTeamAbbrev ?? club.abbreviation
+    ).trim().toUpperCase();
+    const existing = skaters.get(playerId);
+
+    if (
+      existing &&
+      existing.nhlTeamAbbreviation.trim().toUpperCase() !== teamAbbreviation
+    ) {
+      throw new Error(
+        `NHL current rosters assigned player ${playerId} to both ` +
+        `${existing.nhlTeamAbbreviation} and ${teamAbbreviation}.`
+      );
+    }
+
+    draftableSkaterCount += 1;
+
+    if (existing) {
+      // Duplicate rows that agree on current club do not change identity. Keep
+      // the first normalized record so a later club response cannot silently
+      // replace it based only on request order.
+      continue;
+    }
 
     skaters.set(playerId, {
       id: playerId,
@@ -854,10 +882,56 @@ function addRosterSkaters(
       birthDate: player.birthDate
     });
   }
+
+  if (draftableSkaterCount === 0) {
+    throw new Error(
+      `The NHL roster response for ${club.abbreviation} contained no draftable skaters.`
+    );
+  }
+}
+
+/**
+ * Builds one deterministic skater catalog only after every raw club roster is
+ * available. Conflicting player-to-team assignments fail closed before a
+ * request-order-dependent Map overwrite can become scoring identity.
+ */
+export function buildCurrentNhlDraftSkaterCatalog(
+  snapshots: readonly NhlDraftClubRosterSnapshot[]
+): NhlDraftSkater[] {
+  const skaters = new Map<number, NhlDraftSkater>();
+  const seenClubs = new Set<string>();
+
+  for (const snapshot of [...snapshots].sort((first, second) =>
+    first.club.abbreviation.localeCompare(second.club.abbreviation)
+  )) {
+    const clubAbbreviation = snapshot.club.abbreviation.trim().toUpperCase();
+
+    if (seenClubs.has(clubAbbreviation)) {
+      throw new Error(
+        `The NHL roster catalog received duplicate ${clubAbbreviation} club responses.`
+      );
+    }
+
+    seenClubs.add(clubAbbreviation);
+    addRosterSkaters(skaters, snapshot.club, snapshot.roster);
+  }
+
+  if (skaters.size === 0) {
+    throw new Error(
+      'The NHL roster service responded, but no draftable skaters were found.'
+    );
+  }
+
+  return [...skaters.values()].sort((first, second) =>
+    first.fullName.localeCompare(second.fullName)
+  );
 }
 
 async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
-  const skaters = new Map<number, NhlDraftSkater>();
+  const rosterSnapshotsByClub = new Map<
+    string,
+    NhlDraftClubRosterSnapshot
+  >();
   const retryClubs: NhlDraftClub[] = [];
   const failedClubs = new Map<string, string>();
 
@@ -879,10 +953,9 @@ async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
       const club = batch[resultIndex];
 
       if (result.status === 'fulfilled') {
-        addRosterSkaters(
-          skaters,
-          result.value.club,
-          result.value.roster
+        rosterSnapshotsByClub.set(
+          result.value.club.abbreviation,
+          result.value
         );
         return;
       }
@@ -908,10 +981,9 @@ async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
     try {
       const result = await getDraftClubRoster(club);
 
-      addRosterSkaters(
-        skaters,
-        result.club,
-        result.roster
+      rosterSnapshotsByClub.set(
+        result.club.abbreviation,
+        result
       );
 
       failedClubs.delete(club.abbreviation);
@@ -937,14 +1009,18 @@ async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
     );
   }
 
-  if (skaters.size === 0) {
-    throw new Error(
-      'The NHL roster service responded, but no draftable skaters were found.'
-    );
-  }
+  return buildCurrentNhlDraftSkaterCatalog(
+    NHL_DRAFT_CLUBS.map((club) => {
+      const snapshot = rosterSnapshotsByClub.get(club.abbreviation);
 
-  return [...skaters.values()].sort((first, second) =>
-    first.fullName.localeCompare(second.fullName)
+      if (!snapshot) {
+        throw new Error(
+          `The NHL roster response for ${club.abbreviation} is unavailable.`
+        );
+      }
+
+      return snapshot;
+    })
   );
 }
 

@@ -13,6 +13,9 @@ const { resolveLivePlayerTeamWindow } = require(
 );
 const cycleScoring = require(`${ROOT_PATH}functions/lib/shared/core/cycle/cycle-scoring.service.js`);
 const nhlApi = require(`${ROOT_PATH}functions/lib/shared/core/nhl/nhl-api.service.js`);
+const playerTeamIdentity = require(
+  `${ROOT_PATH}functions/lib/shared/core/nhl/nhl-player-team-identity.service.js`,
+);
 const scoringRules = require(`${ROOT_PATH}functions/lib/shared/core/scoring/scoring-rules.js`);
 
 const PLAYER_ID = 8482720;
@@ -108,8 +111,142 @@ function boxscoreForCurrentTeam() {
   };
 }
 
+function rosterSnapshot({
+  feedClub,
+  currentTeam,
+  playerId = PLAYER_ID,
+  fullName = 'Trade Test Skater',
+}) {
+  const [firstName, ...lastNameParts] = fullName.split(' ');
+
+  return {
+    club: {
+      abbreviation: feedClub,
+      name: `${feedClub} Test Club`,
+    },
+    roster: {
+      forwards: [{
+        id: playerId,
+        firstName: { default: firstName },
+        lastName: { default: lastNameParts.join(' ') },
+        positionCode: 'L',
+        currentTeamAbbrev: currentTeam,
+      }],
+      defensemen: [],
+    },
+  };
+}
+
+test('conflicting raw club roster rows fail closed in either input order', () => {
+  const oldClubRow = rosterSnapshot({
+    feedClub: 'TOR',
+    currentTeam: 'TOR',
+  });
+  const newClubRow = rosterSnapshot({
+    feedClub: 'CBJ',
+    currentTeam: 'CBJ',
+  });
+
+  for (const snapshots of [
+    [oldClubRow, newClubRow],
+    [newClubRow, oldClubRow],
+  ]) {
+    assert.throws(
+      () => nhlApi.buildCurrentNhlDraftSkaterCatalog(snapshots),
+      /assigned player 8482720 to both CBJ and TOR/,
+    );
+  }
+});
+
+test('agreeing duplicate rows produce one deterministic current-team identity', () => {
+  const currentClubRow = rosterSnapshot({
+    feedClub: 'CBJ',
+    currentTeam: 'CBJ',
+    fullName: 'Current Club Name',
+  });
+  const staleClubRowWithCurrentIdentity = rosterSnapshot({
+    feedClub: 'TOR',
+    currentTeam: 'CBJ',
+    fullName: 'Stale Club Name',
+  });
+  const first = nhlApi.buildCurrentNhlDraftSkaterCatalog([
+    staleClubRowWithCurrentIdentity,
+    currentClubRow,
+  ]);
+  const second = nhlApi.buildCurrentNhlDraftSkaterCatalog([
+    currentClubRow,
+    staleClubRowWithCurrentIdentity,
+  ]);
+
+  assert.deepEqual(first, second);
+  assert.equal(first.length, 1);
+  assert.equal(first[0].id, PLAYER_ID);
+  assert.equal(first[0].nhlTeamAbbreviation, 'CBJ');
+  assert.equal(first[0].fullName, 'Current Club Name');
+});
+
+test('a successful but empty club roster cannot publish a partial catalog', () => {
+  assert.throws(
+    () => nhlApi.buildCurrentNhlDraftSkaterCatalog([{
+      club: { abbreviation: 'CBJ', name: 'Columbus Blue Jackets' },
+      roster: { forwards: [], defensemen: [] },
+    }]),
+    /CBJ contained no draftable skaters/,
+  );
+});
+
+test('exact rostered-player coverage reports and rejects every missing stable id', () => {
+  const snapshot = {
+    generatedAt: '2026-09-30T12:00:00.000Z',
+    identityHash: 'a'.repeat(64),
+    playerCount: 2,
+    byPlayerId: new Map([
+      [PLAYER_ID, 'CBJ'],
+      [8478402, 'VGK'],
+    ]),
+  };
+  const coverage = playerTeamIdentity.inspectNhlPlayerTeamIdentityCoverage(
+    snapshot,
+    [8478402, 9999999, 9999999, PLAYER_ID],
+  );
+
+  assert.deepEqual(coverage, {
+    complete: false,
+    requiredPlayerCount: 3,
+    missingPlayerIds: [9999999],
+  });
+  assert.throws(
+    () => playerTeamIdentity.requireNhlPlayerTeamIdentityCoverage(
+      snapshot,
+      [PLAYER_ID, 9999999],
+    ),
+    (error) => {
+      assert.equal(
+        error.code,
+        'nhl-player-team-identity-coverage-incomplete',
+      );
+      assert.deepEqual(error.missingPlayerIds, [9999999]);
+      assert.equal(error.identityHash, snapshot.identityHash);
+      assert.equal(error.generatedAt, snapshot.generatedAt);
+      assert.match(error.message, /Scoring was left unchanged and will retry/);
+      return true;
+    },
+  );
+  assert.equal(
+    playerTeamIdentity.requireNhlPlayerTeamIdentityCoverage(
+      snapshot,
+      [PLAYER_ID, 8478402],
+    ),
+    snapshot,
+  );
+  assert.throws(
+    () => playerTeamIdentity.inspectNhlPlayerTeamIdentityCoverage(snapshot, [0]),
+    /invalid required player id: 0/,
+  );
+});
+
 test('a stale zero-game window moves entirely to the current NHL club', () => {
-  const tor = schedule('TOR', 1, ['LIVE', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
+  const tor = schedule('TOR', 1, ['FUT', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
   const cbj = schedule('CBJ', 101, ['FINAL', 'LIVE', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
   const resolved = resolveLivePlayerTeamWindow({
     asset: tradedAsset,
@@ -286,6 +423,10 @@ test('server scoring loads one shared current-team catalog and historical replay
   assert.match(scorer, /sourceTeamAbbreviationByGameId/);
   assert.match(identityService, /Scoring was left unchanged and will retry/);
   assert.match(identityService, /getCurrentNhlDraftSkaters\(true\)/);
+  assert.match(
+    identityService,
+    /return requireNhlPlayerTeamIdentityCoverage\([\s\S]*?options\.requiredPlayerIds/,
+  );
   assert.match(dashboard, /assetWindow\?\.scheduleTeamAbbreviation/);
   assert.match(detail, /this\.scoreSummary\(\)\?\.scheduleTeamAbbreviation/);
 });
