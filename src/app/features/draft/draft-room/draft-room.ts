@@ -62,7 +62,6 @@ import {
   loadSharedProjectionSnapshotById,
   PRE_DRAFT_PROJECTION_WARMUP_MINUTES,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
-  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   SHARED_PROJECTION_VERSION,
 } from '../../../core/projection/projection-snapshot.service';
 
@@ -126,6 +125,7 @@ import { matchesDraftPlayerSearch } from './draft-player-search.util';
 import {
   getDraftProjectionPoolBindingKey,
   getDraftProjectionPoolSource,
+  isDraftProjectionSnapshotSchemaCompatible,
   shouldReloadDraftProjectionPool,
 } from './draft-projection-pool-binding.util';
 
@@ -2286,8 +2286,7 @@ export class DraftRoom implements OnDestroy {
         snapshot.metadata.generatedByAuthority === 'server' &&
         snapshot.metadata.authoritySchemaVersion ===
           PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION &&
-        snapshot.metadata.snapshotHashSchemaVersion ===
-          PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+        isDraftProjectionSnapshotSchemaCompatible(draft, snapshot.metadata) &&
         snapshot.metadata.snapshotHashAlgorithm === 'sha256' &&
         snapshot.metadata.snapshotIntegrityStatus === 'verified' &&
         /^[a-f0-9]{64}$/.test(snapshot.metadata.snapshotContentHash ?? '');

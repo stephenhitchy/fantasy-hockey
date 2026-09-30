@@ -17,6 +17,17 @@ import {
   SCORING_RULES_V3_VERSION,
 } from '../scoring/scoring-rules';
 import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
+import {
+  isSupportedProjectionSnapshotHashSchemaVersion,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+} from './projection-snapshot-schema.util';
+
+export {
+  isSupportedProjectionSnapshotHashSchemaVersion,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+} from './projection-snapshot-schema.util';
 
 /**
  * Client boundary for server-published projection snapshots. It accepts only
@@ -26,8 +37,6 @@ import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
  */
 export const SHARED_PROJECTION_VERSION = 11;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
-export const PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION = 2;
-export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -540,10 +549,8 @@ export function isSharedProjectionSnapshotFreshForDraft(
     metadata.generatedByAuthority !== 'server' ||
     metadata.authoritySchemaVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     metadata.catalogValidationStatus !== 'validated' ||
-    (
-      metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
-      metadata.snapshotHashSchemaVersion !==
-        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION
+    !isSupportedProjectionSnapshotHashSchemaVersion(
+      metadata.snapshotHashSchemaVersion,
     ) ||
     metadata.snapshotHashAlgorithm !== 'sha256' ||
     metadata.snapshotIntegrityStatus !== 'verified' ||
@@ -863,11 +870,8 @@ async function loadServerGeneratedSnapshot(
     snapshot.metadata.catalogValidationStatus !== 'validated' ||
     !snapshot.metadata.catalogSnapshotId ||
     !snapshot.metadata.catalogHash ||
-    (
-      snapshot.metadata.snapshotHashSchemaVersion !==
-        PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
-      snapshot.metadata.snapshotHashSchemaVersion !==
-        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION
+    !isSupportedProjectionSnapshotHashSchemaVersion(
+      snapshot.metadata.snapshotHashSchemaVersion,
     ) ||
     snapshot.metadata.snapshotHashAlgorithm !== 'sha256' ||
     snapshot.metadata.snapshotIntegrityStatus !== 'verified' ||

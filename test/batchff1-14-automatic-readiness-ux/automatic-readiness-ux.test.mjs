@@ -6,6 +6,7 @@ import {
   getDraftProjectionPoolBinding,
   getDraftProjectionPoolBindingKey,
   getDraftProjectionPoolSource,
+  isDraftProjectionSnapshotSchemaCompatible,
   shouldReloadDraftProjectionPool,
 } from '../../src/app/features/draft/draft-room/draft-projection-pool-binding.util.ts';
 
@@ -14,6 +15,7 @@ const read = (path) => readFile(new URL(path, ROOT), 'utf8');
 const START = Date.parse('2026-10-06T01:00:00.000Z');
 const HASH = 'a'.repeat(64);
 const AVAILABILITY = 'b'.repeat(64);
+const ANCHOR_HASH = 'c'.repeat(64);
 
 function timestamp(milliseconds) {
   return {
@@ -53,6 +55,42 @@ test('scheduled Draft pool binding requires exact complete server readiness', ()
   assert.equal(getDraftProjectionPoolBinding(readyScheduledDraft({
     serverDraftReadinessProjectionSnapshotHash: 'incomplete',
   })), null);
+});
+
+test('mixed-version Draft boards accept legacy schema 2 only before an anchor is frozen', () => {
+  const legacyDraft = readyScheduledDraft();
+
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(legacyDraft, {
+    snapshotHashSchemaVersion: 2,
+  }), true);
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(legacyDraft, {
+    snapshotHashSchemaVersion: 3,
+  }), true);
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(legacyDraft, {
+    snapshotHashSchemaVersion: 1,
+  }), false);
+
+  const anchoredDraft = readyScheduledDraft({
+    seasonWindowAnchorStatus: 'ready',
+    seasonWindowAnchorEvidenceHash: ANCHOR_HASH,
+  });
+
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(anchoredDraft, {
+    snapshotHashSchemaVersion: 2,
+    seasonWindowAnchorEvidenceHash: ANCHOR_HASH,
+  }), false);
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(anchoredDraft, {
+    snapshotHashSchemaVersion: 3,
+    seasonWindowAnchorEvidenceHash: 'd'.repeat(64),
+  }), false);
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(anchoredDraft, {
+    snapshotHashSchemaVersion: 3,
+    seasonWindowAnchorEvidenceHash: ANCHOR_HASH,
+  }), true);
+  assert.equal(isDraftProjectionSnapshotSchemaCompatible(
+    readyScheduledDraft({ seasonWindowAnchorStatus: 'ready' }),
+    { snapshotHashSchemaVersion: 3 },
+  ), false);
 });
 
 test('live and complete Drafts use only their frozen server binding', () => {

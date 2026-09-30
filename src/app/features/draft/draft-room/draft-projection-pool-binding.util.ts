@@ -1,8 +1,18 @@
 import type { FantasyDraft } from '../../../core/draft/draft.models';
 
+// Keep this utility dependency-free so its Draft binding decisions can be
+// exercised directly by the Node regression suite as well as Angular.
+const LEGACY_PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2;
+const ANCHORED_PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3;
+
 export interface DraftProjectionPoolBinding {
   snapshotId: string;
   snapshotHash: string;
+}
+
+export interface DraftProjectionSnapshotSchemaEvidence {
+  snapshotHashSchemaVersion?: number;
+  seasonWindowAnchorEvidenceHash?: string | null;
 }
 
 export type DraftProjectionPoolSource =
@@ -51,6 +61,32 @@ function getNonEmptyString(value: unknown): string | null {
 function getSha256(value: unknown): string | null {
   const normalized = getNonEmptyString(value);
   return normalized && /^[a-f0-9]{64}$/.test(normalized) ? normalized : null;
+}
+
+/**
+ * Existing unanchored Drafts may keep using their verified schema-2 board
+ * during a mixed-version release. Once a season-window anchor is ready, only
+ * schema 3 with the exact frozen anchor hash is valid.
+ */
+export function isDraftProjectionSnapshotSchemaCompatible(
+  draft: FantasyDraft | null,
+  evidence: DraftProjectionSnapshotSchemaEvidence,
+): boolean {
+  const draftAnchorHash = getSha256(draft?.seasonWindowAnchorEvidenceHash);
+  const anchorIsRequired = draft?.seasonWindowAnchorStatus === 'ready' ||
+    draftAnchorHash !== null;
+
+  if (anchorIsRequired) {
+    return draftAnchorHash !== null &&
+      evidence.snapshotHashSchemaVersion ===
+        ANCHORED_PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+      getSha256(evidence.seasonWindowAnchorEvidenceHash) === draftAnchorHash;
+  }
+
+  return evidence.snapshotHashSchemaVersion ===
+      LEGACY_PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    evidence.snapshotHashSchemaVersion ===
+      ANCHORED_PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION;
 }
 
 /**

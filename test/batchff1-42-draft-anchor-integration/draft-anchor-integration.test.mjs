@@ -421,10 +421,18 @@ test('production wiring retains immutable snapshots and uses guarded publication
   assert.doesNotMatch(draftAutomation, /leagueTeamCount/);
 });
 
-test('new Hosting accepts legacy schema 2 and anchored schema 3 while Functions seals anchors only in schema 3', async () => {
-  const [browserSource, serverHashSource] = await Promise.all([
+test('new Hosting accepts legacy schema 2 and requires exact schema 3 anchor evidence', async () => {
+  const [browserSource, draftRoomSource, bindingSource, serverHashSource] = await Promise.all([
     readFile(new URL(
       'src/app/core/projection/projection-snapshot.service.ts',
+      ROOT,
+    ), 'utf8'),
+    readFile(new URL(
+      'src/app/features/draft/draft-room/draft-room.ts',
+      ROOT,
+    ), 'utf8'),
+    readFile(new URL(
+      'src/app/features/draft/draft-room/draft-projection-pool-binding.util.ts',
       ROOT,
     ), 'utf8'),
     readFile(new URL(
@@ -433,9 +441,10 @@ test('new Hosting accepts legacy schema 2 and anchored schema 3 while Functions 
     ), 'utf8'),
   ]);
 
-  assert.match(browserSource, /PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION = 2/);
-  assert.match(browserSource, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3/);
-  assert.match(browserSource, /snapshotHashSchemaVersion !==[\s\S]*?SCORING_HASH_SCHEMA_VERSION[\s\S]*?snapshotHashSchemaVersion !==[\s\S]*?HASH_SCHEMA_VERSION/);
+  assert.match(browserSource, /isSupportedProjectionSnapshotHashSchemaVersion/);
+  assert.match(draftRoomSource, /isDraftProjectionSnapshotSchemaCompatible\(draft, snapshot\.metadata\)/);
+  assert.match(bindingSource, /snapshotHashSchemaVersion ===[\s\S]*?ANCHORED_PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION/);
+  assert.match(bindingSource, /seasonWindowAnchorEvidenceHash\) === draftAnchorHash/);
   assert.match(serverHashSource, /targetSourceBlockNumber/);
   assert.match(serverHashSource, /seasonWindowAnchorEvidenceHash/);
 });
