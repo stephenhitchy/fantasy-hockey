@@ -1,6 +1,9 @@
 import type { DraftableAsset } from '../draft/draft.models';
 import type { NhlTeamSeasonGame } from '../nhl/nhl-api.service';
-import { selectCycleWindowGames } from './cycle-window-selection.util';
+import {
+  selectCycleWindowGames,
+  selectGamesByStableIds,
+} from './cycle-window-selection.util';
 
 export interface PreviousLivePlayerWindowSummary {
   status?: 'scheduled' | 'active' | 'complete';
@@ -149,6 +152,8 @@ export function resolveLivePlayerTeamWindow(input: {
   requiredGamesPerCycle: number;
   previous?: PreviousLivePlayerWindowSummary;
   currentTeamAbbreviation?: string;
+  /** Exact game ids frozen for the currently resolved NHL club. */
+  sourceNhlTargetGameIds?: number[];
 }): ResolvedLivePlayerWindow {
   const storedTeamAbbreviation = getAssetTeamAbbreviation(input.asset);
   const currentTeamAbbreviation = input.asset.assetType === 'skater'
@@ -187,11 +192,16 @@ export function resolveLivePlayerTeamWindow(input: {
       );
     }
 
-    const games = selectCycleWindowGames(
-      input.schedulesByTeam[currentTeamAbbreviation],
-      input.cycleNumber,
-      input.requiredGamesPerCycle,
-    );
+    const games = input.sourceNhlTargetGameIds?.length
+      ? selectGamesByStableIds(
+          input.schedulesByTeam[currentTeamAbbreviation],
+          input.sourceNhlTargetGameIds,
+        )
+      : selectCycleWindowGames(
+          input.schedulesByTeam[currentTeamAbbreviation],
+          input.cycleNumber,
+          input.requiredGamesPerCycle,
+        );
 
     return {
       games,
@@ -239,9 +249,17 @@ export function resolveLivePlayerTeamWindow(input: {
     0,
     input.requiredGamesPerCycle - protectedGames.length,
   );
-  const replacementGames = [...input.schedulesByTeam[currentTeamAbbreviation]]
-    .filter((game) => !protectedGameIds.has(game.id) && !gameIsFinal(game))
-    .sort(gameOrder)
+  const replacementGames = (
+    previousWindow.games.length === 0 && input.sourceNhlTargetGameIds?.length
+      ? selectGamesByStableIds(
+          input.schedulesByTeam[currentTeamAbbreviation],
+          input.sourceNhlTargetGameIds,
+        )
+      : [...input.schedulesByTeam[currentTeamAbbreviation]]
+          .filter((game) => !protectedGameIds.has(game.id) && !gameIsFinal(game))
+          .sort(gameOrder)
+  )
+    .filter((game) => !protectedGameIds.has(game.id))
     .slice(0, remainingGameCount);
   const games = [...protectedGames, ...replacementGames];
 

@@ -491,6 +491,17 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/nhl/final-score-reconciliation.util.ts',
     // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
     'shared/core/draft/draft-player-pool.service.ts',
+    // FF1.42 freezes the first unfinished all-club six-game source block
+    // and propagates its exact provider IDs through later windows.
+    'shared/core/draft/anchored-season-capacity.util.ts',
+    'shared/core/draft/projection-target-games.util.ts',
+    'shared/core/draft/season-window-anchor.util.ts',
+    'shared/core/draft/season-window-source-plan.util.ts',
+    'shared/core/cycle/cycle-window-selection.util.ts',
+    'shared/core/playoffs/playoff-format.ts',
+    'shared/core/playoffs/playoff-window-bank.models.ts',
+    'shared/core/projection/projection-publication-guard.util.ts',
+    'shared/core/projection/window-projection.service.ts',
     'shared/core/projection/team-schedule-input-completeness.util.ts',
     // FF1.28 adds isolated pacing and a bounded failure budget for those strict loads.
     'shared/core/projection/team-schedule-request-pacing.util.ts',
@@ -502,7 +513,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-ranking.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 22,
-    digest: '5b425f543f50343dae623c865dad86427db26bfaeb45fdea39c040069a573fb0',
+    count: 18,
+    digest: '03731668e1767ab18aa82e9750d160ac4fe7dd1398e7d74877ddc51bffdb4ed3',
   });
 });

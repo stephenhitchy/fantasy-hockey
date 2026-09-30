@@ -359,6 +359,33 @@ export interface FantasyDraft {
   orderRandomizationSeedHash?: string | null;
   serverDraftReadinessScheduleGeneration?: number | null;
 
+  /** First NHL six-game block used by Fantasy Matchup 1. */
+  initialNhlBlockNumber?: number | null;
+  seasonWindowAnchorStatus?: 'pending' | 'ready' | 'error' | null;
+  seasonWindowAnchorSeason?: string | null;
+  seasonWindowAnchorScheduleGeneration?: number | null;
+  seasonWindowAnchorEvidenceHash?: string | null;
+  seasonWindowAnchorEvidenceHashAlgorithm?: 'sha256' | null;
+  seasonWindowAnchorFinalPrefixGameCount?: number | null;
+  seasonWindowAnchorSourceGameStart?: number | null;
+  seasonWindowAnchorSourceGameEnd?: number | null;
+  seasonWindowAnchorTeams?: Array<{
+    teamAbbreviation: string;
+    regularSeasonGameCount: number;
+    finalPrefixGameCount: number;
+    targetGameIds: number[];
+    regularSeasonGameIds: number[];
+  }> | null;
+  /**
+   * Immutable, provider-ID schedule plan captured with the season anchor.
+   * Arrays retain absolute NHL regular-season order (Game 1 first) through
+   * the last source block required by this league's regular season/playoffs.
+   */
+  seasonWindowSourceGameIdsByTeam?: Record<string, number[]> | null;
+  seasonWindowAnchorUpdatedAt?: unknown;
+  seasonWindowAnchorFrozenAt?: unknown;
+  seasonWindowAnchorLastError?: string | null;
+
   /** Server-owned background request preparing the verified Draft board. */
   projectionPreparationRequestId?: string | null;
   /** Latest known preparation state when Draft settings were saved. */
@@ -413,6 +440,15 @@ export interface DraftPick extends DraftPickPreview {
   rosterSlotId?: string;
   cycleWindowId?: string;
   snapshotCycleNumber?: number;
+  /** NHL schedule block used to score this immutable slot snapshot. */
+  sourceNhlBlockNumber?: number;
+  /** Exact provider game ids frozen for this asset's source NHL club. */
+  sourceNhlTargetGameIds?: number[];
+  /**
+   * Exact all-club provider IDs for this pick's source block. This preserves
+   * trade handling when a banked playoff pick is assigned in a later cycle.
+   */
+  sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
   snapshotOrder?: number;
   playoffWindowNumber?: number;
 

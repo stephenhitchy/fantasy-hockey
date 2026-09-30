@@ -1279,6 +1279,10 @@ test('duplicate roster-move reconciliation activates once and writes one transac
   assert.equal(savedRoster.data().activeSlots[0].pendingMove, null);
   assert.equal(savedPick.data().asset.assetKey, 'skater-12');
   assert.equal(savedPick.data().snapshotSource, 'queued-slot-move-reconciled');
+  assert.equal(
+    Object.hasOwn(savedPick.data(), 'sourceNhlTargetGameIds'),
+    false,
+  );
   assert.equal(transactions.size, 1);
   assert.equal(transactions.docs[0].data().queuedMoveId, 'queued-move-1');
 });

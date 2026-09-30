@@ -25,6 +25,9 @@ import {
   resolveServerRosterMoveReplayContext,
   type ServerRosterMoveReplayContext,
 } from './shared/core/replay/roster-move-replay-context.util';
+import {
+  buildSourceNhlTargetGameIdsByTeam,
+} from './shared/core/cycle/cycle-window-selection.util';
 
 const FUNCTION_REGION = 'us-central1';
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
@@ -62,6 +65,12 @@ interface NhlScheduleGame {
   gameState?: string;
   homeTeam?: { score?: number };
   awayTeam?: { score?: number };
+}
+
+interface RosterMoveSeasonWindowAnchor {
+  initialNhlBlockNumber: number;
+  anchorReady: boolean;
+  sourceGameIdsByTeam: unknown;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -348,18 +357,164 @@ async function loadRosterMoveReplayContext(
   );
 }
 
+async function loadRosterMoveSeasonWindowAnchor(
+  leagueId: string | null,
+): Promise<RosterMoveSeasonWindowAnchor> {
+  if (!leagueId) {
+    return {
+      initialNhlBlockNumber: 1,
+      anchorReady: false,
+      sourceGameIdsByTeam: null,
+    };
+  }
+
+  const draftSnapshot = await db.doc(`leagues/${leagueId}/draft/current`).get();
+  const data = draftSnapshot.data() ?? {};
+  const value = data['initialNhlBlockNumber'];
+  const initialNhlBlockNumber =
+    typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+      ? value
+      : 1;
+
+  return {
+    initialNhlBlockNumber,
+    anchorReady: data['seasonWindowAnchorStatus'] === 'ready',
+    sourceGameIdsByTeam: data['seasonWindowSourceGameIdsByTeam'] ?? null,
+  };
+}
+
+export function toLeagueRelativeCycleNumber(
+  sourceNhlBlockNumber: number,
+  initialNhlBlockNumber: number,
+): number {
+  return Math.max(1, sourceNhlBlockNumber - initialNhlBlockNumber + 1);
+}
+
+/**
+ * Resolves the first fair source block without allowing a provider reorder to
+ * replace any game frozen by the Draft season-window plan.
+ */
+export function determineEarliestEligibleSourceBlock(input: {
+  schedule: NhlScheduleGame[];
+  gamesPerCycle: number;
+  initialNhlBlockNumber?: number;
+  frozenSourceGameIdsByTeam?: unknown;
+  teamAbbreviation?: string;
+  completedThroughDate?: string | null;
+}): number {
+  const gamesPerCycle = Math.max(1, Math.floor(input.gamesPerCycle));
+  const initialNhlBlockNumber =
+    typeof input.initialNhlBlockNumber === 'number' &&
+    Number.isSafeInteger(input.initialNhlBlockNumber) &&
+    input.initialNhlBlockNumber > 0
+      ? input.initialNhlBlockNumber
+      : 1;
+  const openingIndex = initialNhlBlockNumber - 1;
+  const hasFrozenSourcePlan =
+    input.frozenSourceGameIdsByTeam !== null &&
+    input.frozenSourceGameIdsByTeam !== undefined;
+  const teamAbbreviation = asString(input.teamAbbreviation).toUpperCase();
+  const gameById = new Map(
+    input.schedule
+      .filter((game) => typeof game.id === 'number' && Number.isSafeInteger(game.id))
+      .map((game) => [game.id as number, game] as const),
+  );
+
+  if (hasFrozenSourcePlan && !/^[A-Z0-9]{2,4}$/.test(teamAbbreviation)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The NHL team identity is missing from the frozen season-window plan. RinkRat cannot safely time this move.',
+    );
+  }
+
+  const totalBlockCount = Math.max(
+    initialNhlBlockNumber,
+    Math.ceil(input.schedule.length / gamesPerCycle),
+  );
+
+  for (let index = openingIndex; index < totalBlockCount; index += 1) {
+    const sourceNhlBlockNumber = index + 1;
+    let blockGames: NhlScheduleGame[];
+
+    if (hasFrozenSourcePlan) {
+      let frozenIds: number[];
+
+      try {
+        const targetGameIdsByTeam = buildSourceNhlTargetGameIdsByTeam(
+          input.frozenSourceGameIdsByTeam,
+          sourceNhlBlockNumber,
+          gamesPerCycle,
+        );
+        frozenIds = targetGameIdsByTeam[teamAbbreviation] ?? [];
+      } catch (error: unknown) {
+        const message = error instanceof Error
+          ? error.message
+          : 'The frozen NHL source-game plan is malformed.';
+
+        throw new HttpsError(
+          'failed-precondition',
+          `${message} RinkRat cannot safely time this move.`,
+        );
+      }
+
+      if (frozenIds.length !== gamesPerCycle) {
+        throw new HttpsError(
+          'failed-precondition',
+          `The frozen NHL source-game plan is missing ${teamAbbreviation} for source block ${sourceNhlBlockNumber}. RinkRat cannot safely time this move.`,
+        );
+      }
+
+      const missingGameIds = frozenIds.filter((gameId) => !gameById.has(gameId));
+
+      if (missingGameIds.length > 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          `The NHL schedule is missing frozen game id(s) for ${teamAbbreviation} source block ${sourceNhlBlockNumber}: ${missingGameIds.join(', ')}.`,
+        );
+      }
+
+      blockGames = frozenIds.map((gameId) => gameById.get(gameId)!);
+    } else {
+      blockGames = input.schedule.slice(
+        index * gamesPerCycle,
+        (index + 1) * gamesPerCycle,
+      );
+    }
+
+    const states = blockGames.map((game) =>
+      getScheduleGameState(game, input.completedThroughDate ?? null),
+    );
+    const complete = blockGames.length > 0 &&
+      states.every((state) => state === 'final');
+
+    if (complete) {
+      continue;
+    }
+
+    const started = states.some((state) => state === 'final' || state === 'live');
+
+    return started ? index + 2 : index + 1;
+  }
+
+  return totalBlockCount + 1;
+}
+
 export async function getEarliestEligibleCycleNumber(
   asset: DraftableAsset | RosterAsset,
   gamesPerCycle: number,
   leagueId: string | null = null,
 ): Promise<number> {
-  const replayContext = await loadRosterMoveReplayContext(leagueId);
+  const [replayContext, seasonWindowAnchor] = await Promise.all([
+    loadRosterMoveReplayContext(leagueId),
+    loadRosterMoveSeasonWindowAnchor(leagueId),
+  ]);
 
   if (replayContext.mode === 'blocked') {
     throw new HttpsError('failed-precondition', replayContext.message);
   }
 
-  const team = getAssetTeamAbbreviation(asset).toLowerCase();
+  const teamAbbreviation = getAssetTeamAbbreviation(asset).trim().toUpperCase();
+  const team = teamAbbreviation.toLowerCase();
   const season = replayContext.mode === 'historical-replay'
     ? replayContext.seasonOverride
     : getNhlSeasonForDate(new Date());
@@ -396,28 +551,39 @@ export async function getEarliestEligibleCycleNumber(
     );
   }
 
-  const normalizedGamesPerCycle = Math.max(1, Math.floor(gamesPerCycle));
-  const totalCycleCount = Math.max(1, Math.ceil(schedule.length / normalizedGamesPerCycle));
-
-  for (let index = 0; index < totalCycleCount; index += 1) {
-    const cycleGames = schedule.slice(
-      index * normalizedGamesPerCycle,
-      (index + 1) * normalizedGamesPerCycle,
+  const initialNhlBlockNumber = replayContext.mode === 'historical-replay'
+    ? 1
+    : seasonWindowAnchor.initialNhlBlockNumber;
+  if (
+    replayContext.mode !== 'historical-replay' &&
+    seasonWindowAnchor.anchorReady &&
+    (seasonWindowAnchor.sourceGameIdsByTeam === null ||
+      seasonWindowAnchor.sourceGameIdsByTeam === undefined)
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The frozen NHL season-window plan is unavailable. RinkRat cannot safely time this move.',
     );
-    const states = cycleGames.map((game) =>
-      getScheduleGameState(game, completedThroughDate),
-    );
-    const complete = cycleGames.length > 0 && states.every((state) => state === 'final');
-
-    if (complete) {
-      continue;
-    }
-
-    const started = states.some((state) => state === 'final' || state === 'live');
-    return started ? index + 2 : index + 1;
   }
 
-  return totalCycleCount + 1;
+  const sourceNhlBlockNumber = determineEarliestEligibleSourceBlock({
+    schedule,
+    gamesPerCycle,
+    initialNhlBlockNumber,
+    frozenSourceGameIdsByTeam:
+      replayContext.mode !== 'historical-replay' && seasonWindowAnchor.anchorReady
+        ? seasonWindowAnchor.sourceGameIdsByTeam
+        : undefined,
+    teamAbbreviation,
+    completedThroughDate,
+  });
+
+  return replayContext.mode === 'historical-replay'
+    ? sourceNhlBlockNumber
+    : toLeagueRelativeCycleNumber(
+        sourceNhlBlockNumber,
+        seasonWindowAnchor.initialNhlBlockNumber,
+      );
 }
 
 async function findSlotWindowContext(

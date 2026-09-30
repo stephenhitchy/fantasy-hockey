@@ -4,10 +4,13 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import {
+  createProjectionSnapshotChunkHash,
+  createProjectionSnapshotContentHash,
   createProjectionSnapshotHashBundle,
   PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_HASH_ALGORITHM,
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
   verifyProjectionSnapshotHashChain,
 } from '../../functions/src/shared/core/projection/projection-snapshot-hash.util.ts';
 
@@ -61,6 +64,8 @@ function buildHashFixture() {
     projectionSeason: '20262027',
     teamCount: 6,
     targetCycleNumber: 1,
+    targetSourceBlockNumber: 2,
+    seasonWindowAnchorEvidenceHash: 'c'.repeat(64),
     requiredGamesPerCycle: 6,
     assetCount: assets.length,
     assetDocumentCount: chunks.length,
@@ -193,6 +198,23 @@ test('projection snapshot verification rejects asset, chunk, catalog, and matchu
   );
   assert.throws(
     () => verifyProjectionSnapshotHashChain(
+      { ...fixture.storedMetadata, targetSourceBlockNumber: 3 },
+      fixture.storedChunks,
+    ),
+    /root hash failed integrity verification/,
+  );
+  assert.throws(
+    () => verifyProjectionSnapshotHashChain(
+      {
+        ...fixture.storedMetadata,
+        seasonWindowAnchorEvidenceHash: 'd'.repeat(64),
+      },
+      fixture.storedChunks,
+    ),
+    /root hash failed integrity verification/,
+  );
+  assert.throws(
+    () => verifyProjectionSnapshotHashChain(
       { ...fixture.storedMetadata, catalogHash: 'b'.repeat(64) },
       fixture.storedChunks,
     ),
@@ -207,9 +229,44 @@ test('projection snapshot verification rejects asset, chunk, catalog, and matchu
   );
 });
 
+test('schema 2 scoring hashes remain verifiable during mixed-version deployment', () => {
+  const fixture = buildHashFixture();
+  const chunkHash = createProjectionSnapshotChunkHash(
+    fixture.metadataInput.snapshotId,
+    fixture.chunks[0],
+    PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+  );
+  const snapshotContentHash = createProjectionSnapshotContentHash(
+    {
+      ...fixture.metadataInput,
+      chunkHashes: [chunkHash],
+    },
+    PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+  );
+  const verified = verifyProjectionSnapshotHashChain(
+    {
+      ...fixture.storedMetadata,
+      snapshotHashSchemaVersion:
+        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+      snapshotContentHash,
+      snapshotChunkHashes: [chunkHash],
+    },
+    [{
+      ...fixture.storedChunks[0],
+      snapshotHashSchemaVersion:
+        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+      snapshotContentHash,
+      chunkHash,
+    }],
+  );
+
+  assert.equal(verified.snapshotContentHash, snapshotContentHash);
+});
+
 test('normal and emergency server projection generation writes versioned chunk and root hashes', () => {
   assert.match(hashSource, /PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION = 1/);
-  assert.match(hashSource, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2/);
+  assert.match(hashSource, /PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION = 2/);
+  assert.match(hashSource, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3/);
   assert.match(hashSource, /PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2/);
   assert.match(hashSource, /stableProjectionSnapshotJson/);
   assert.match(hashSource, /createProjectionSnapshotChunkHash/);

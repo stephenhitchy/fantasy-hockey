@@ -27,6 +27,12 @@ export interface EnsureWindowProjectionBundleInput {
   teamCount: number;
   requiredGamesPerCycle: number;
   targetCycleNumber: number;
+  /** NHL schedule block projected while targetCycleNumber stays fantasy-local. */
+  targetSourceBlockNumber?: number;
+  /** Exact all-club provider IDs frozen for targetSourceBlockNumber. */
+  targetGameIdsByTeam?: Readonly<Record<string, readonly number[]>>;
+  /** Hash binding the target IDs to the immutable draft season anchor. */
+  seasonWindowAnchorEvidenceHash?: string;
   forceRefresh?: boolean;
   now?: Date;
 
@@ -69,6 +75,20 @@ function getErrorMessage(error: unknown): string {
     : 'Unable to generate the next-window projection snapshot.';
 }
 
+export function doesWindowProjectionSnapshotMatchSource(
+  snapshot: SharedProjectionSnapshot | null,
+  targetSourceBlockNumber: number,
+  seasonWindowAnchorEvidenceHash?: string,
+): boolean {
+  return Boolean(
+    snapshot &&
+    (snapshot.metadata.targetSourceBlockNumber ??
+      snapshot.metadata.targetCycleNumber) === Math.max(1, Math.floor(targetSourceBlockNumber)) &&
+    (!seasonWindowAnchorEvidenceHash ||
+      snapshot.metadata.seasonWindowAnchorEvidenceHash === seasonWindowAnchorEvidenceHash),
+  );
+}
+
 /**
  * Returns one projection pool for one exact fantasy window number. The first
  * slot to enter a target window refreshes the pool when needed; later slots
@@ -79,6 +99,10 @@ export async function ensureWindowProjectionBundle(
   input: EnsureWindowProjectionBundleInput,
 ): Promise<WindowProjectionBundle> {
   const targetCycleNumber = Math.max(1, Math.floor(input.targetCycleNumber));
+  const targetSourceBlockNumber = Math.max(
+    1,
+    Math.floor(input.targetSourceBlockNumber ?? targetCycleNumber),
+  );
   const expectedContext = await getExpectedProjectionSnapshotContext(
     input.leagueId,
     input.now,
@@ -95,9 +119,15 @@ export async function ensureWindowProjectionBundle(
     input.leagueId,
     targetCycleNumber,
   );
+  const targetSnapshotMatchesSource = doesWindowProjectionSnapshotMatchSource(
+    targetSnapshot,
+    targetSourceBlockNumber,
+    input.seasonWindowAnchorEvidenceHash,
+  );
 
   const targetSnapshotIsFresh =
     !input.forceRefresh &&
+    targetSnapshotMatchesSource &&
     isSharedProjectionSnapshotFreshForWindow(
       targetSnapshot?.metadata ?? null,
       freshnessInput,
@@ -115,7 +145,7 @@ export async function ensureWindowProjectionBundle(
   }
 
   if (input.refreshPolicy === 'saved-only') {
-    if (targetSnapshot?.metadata.status === 'ready') {
+    if (targetSnapshotMatchesSource && targetSnapshot?.metadata.status === 'ready') {
       return {
         metadata: targetSnapshot.metadata,
         assetsByKey: toAssetMap(targetSnapshot),
@@ -130,16 +160,21 @@ export async function ensureWindowProjectionBundle(
     const currentSnapshot = await loadSharedProjectionSnapshot(
       input.leagueId,
     ).catch(() => null);
+    const currentSnapshotMatchesSource = doesWindowProjectionSnapshotMatchSource(
+      currentSnapshot,
+      targetSourceBlockNumber,
+      input.seasonWindowAnchorEvidenceHash,
+    );
 
     return {
-      metadata: currentSnapshot?.metadata ?? null,
-      assetsByKey: toAssetMap(currentSnapshot),
-      source: currentSnapshot ? 'current-snapshot-fallback' : 'none',
+      metadata: currentSnapshotMatchesSource ? currentSnapshot?.metadata ?? null : null,
+      assetsByKey: toAssetMap(currentSnapshotMatchesSource ? currentSnapshot : null),
+      source: currentSnapshotMatchesSource ? 'current-snapshot-fallback' : 'none',
       refreshed: false,
       usedFallback: true,
-      errorMessage: currentSnapshot
+      errorMessage: currentSnapshotMatchesSource
         ? 'Historical replay used the latest saved projection pool so the scoring worker did not wait for a league-wide projection rebuild.'
-        : 'Historical replay opened the roster window with roster or draft projection fallbacks because no saved shared projection pool was available.',
+        : 'Historical replay opened the roster window with roster or draft projection fallbacks because no saved shared projection pool matched its NHL source block.',
     };
   }
 
@@ -150,6 +185,9 @@ export async function ensureWindowProjectionBundle(
       requiredGamesPerCycle: input.requiredGamesPerCycle,
       generationReason: 'window-boundary',
       targetCycleNumber,
+      targetSourceBlockNumber,
+      targetGameIdsByTeam: input.targetGameIdsByTeam,
+      seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash,
     });
 
     return {
@@ -161,7 +199,7 @@ export async function ensureWindowProjectionBundle(
       errorMessage: '',
     };
   } catch (error: unknown) {
-    if (targetSnapshot?.metadata.status === 'ready') {
+    if (targetSnapshotMatchesSource && targetSnapshot?.metadata.status === 'ready') {
       return {
         metadata: targetSnapshot.metadata,
         assetsByKey: toAssetMap(targetSnapshot),
@@ -173,14 +211,21 @@ export async function ensureWindowProjectionBundle(
     }
 
     const currentSnapshot = await loadSharedProjectionSnapshot(input.leagueId).catch(() => null);
+    const currentSnapshotMatchesSource = doesWindowProjectionSnapshotMatchSource(
+      currentSnapshot,
+      targetSourceBlockNumber,
+      input.seasonWindowAnchorEvidenceHash,
+    );
 
     return {
-      metadata: currentSnapshot?.metadata ?? null,
-      assetsByKey: toAssetMap(currentSnapshot),
-      source: currentSnapshot ? 'current-snapshot-fallback' : 'none',
+      metadata: currentSnapshotMatchesSource ? currentSnapshot?.metadata ?? null : null,
+      assetsByKey: toAssetMap(currentSnapshotMatchesSource ? currentSnapshot : null),
+      source: currentSnapshotMatchesSource ? 'current-snapshot-fallback' : 'none',
       refreshed: false,
       usedFallback: true,
-      errorMessage: getErrorMessage(error),
+      errorMessage: currentSnapshotMatchesSource
+        ? getErrorMessage(error)
+        : `${getErrorMessage(error)} No saved shared projection pool matched NHL source block ${targetSourceBlockNumber}.`,
     };
   }
 }

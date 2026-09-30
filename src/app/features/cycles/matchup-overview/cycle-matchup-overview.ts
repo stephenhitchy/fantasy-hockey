@@ -32,7 +32,7 @@ import { getFrozenCycleProjection } from '../../../core/projection/cycle-project
 
 import { getLeagueById, League } from '../../../core/league/league.service';
 
-import { getStandardRegularSeasonCycleCount } from '../../../core/playoffs/playoff-format';
+import { getAnchoredRegularSeasonCycleCount } from '../../../core/playoffs/playoff-format';
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
@@ -78,6 +78,7 @@ export class CycleMatchupOverview implements OnDestroy {
   cycleScoring = signal<CycleScoringResult | null>(null);
   sharedScoringSnapshot = signal<SharedCycleScoringSnapshot | null>(null);
   liveScoringControl = signal<SharedLiveScoringControl | null>(null);
+  initialNhlBlockNumber = signal(1);
 
   loading = signal(true);
   scoringLoading = signal(false);
@@ -140,6 +141,11 @@ export class CycleMatchupOverview implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
       this.playerPool.set(playerPool);
+      this.initialNhlBlockNumber.set(
+        typeof draft?.initialNhlBlockNumber === 'number'
+          ? Math.max(1, Math.floor(draft.initialNhlBlockNumber))
+          : 1,
+      );
 
       this.scoringLoading.set(true);
       this.stopSharedScoringListener = listenToSharedCycleScoring(
@@ -163,7 +169,10 @@ export class CycleMatchupOverview implements OnDestroy {
         (error) => this.scoringError.set(error.message),
       );
 
-      const regularSeasonCycleCount = getStandardRegularSeasonCycleCount(teams.length);
+      const regularSeasonCycleCount = getAnchoredRegularSeasonCycleCount(
+        teams.length,
+        this.initialNhlBlockNumber(),
+      );
       const preview =
         this.cycleNumber <= regularSeasonCycleCount
           ? buildCycleSchedulePreview(teams, draft, this.cycleNumber)
@@ -212,6 +221,16 @@ export class CycleMatchupOverview implements OnDestroy {
     }
 
     return `Matchup ${this.cycleNumber}`;
+  }
+
+  getNhlGameRangeLabel(): string {
+    const savedSourceBlock = this.cycle()?.sourceNhlBlockNumber;
+    const sourceBlock = typeof savedSourceBlock === 'number'
+      ? Math.max(1, Math.floor(savedSourceBlock))
+      : this.initialNhlBlockNumber() + this.cycleNumber - 1;
+    const firstGameNumber = (sourceBlock - 1) * 6 + 1;
+
+    return `NHL games ${firstGameNumber}–${firstGameNumber + 5} by club`;
   }
 
   getCycleStatusLabel(): string {

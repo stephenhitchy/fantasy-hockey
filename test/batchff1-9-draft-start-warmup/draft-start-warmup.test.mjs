@@ -157,7 +157,7 @@ test('warm task waits for zero, rereads authority, and never opens early', async
   assert.match(handler, /timer returned early/);
 });
 
-test('queue warmups preserve start identity, retry, rate, and worker limits', async () => {
+test('queue warmups preserve start identity, retry, rate, and bounded worker limits', async () => {
   const source = await read('functions/src/draft-automation.ts');
   const scheduleIndex = source.indexOf('async function scheduleScheduledDraftStartTask(');
   const scheduleEnd = source.indexOf('function isTaskAlreadyExistsError', scheduleIndex);
@@ -188,7 +188,11 @@ test('queue warmups preserve start identity, retry, rate, and worker limits', as
   assert.match(warmupHandler, /authority prime failed open/);
   assert.match(warmupHandler, /catch \{/);
   assert.doesNotMatch(warmupHandler, /runTransaction|\.set\(|\.update\(|sleep\(|openScheduledDraft/);
-  assert.match(functionBody, /timeoutSeconds: 120/);
+  assert.match(source, /const DRAFT_FINALIZATION_TASK_DISPATCH_DEADLINE_SECONDS = 540/);
+  assert.match(
+    functionBody,
+    /timeoutSeconds: DRAFT_FINALIZATION_TASK_DISPATCH_DEADLINE_SECONDS/,
+  );
   assert.match(functionBody, /maxAttempts: 5/);
   assert.match(functionBody, /maxConcurrentDispatches: 60/);
   assert.doesNotMatch(functionBody, /minInstances/);

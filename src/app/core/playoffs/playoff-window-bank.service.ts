@@ -9,7 +9,12 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
-import { DraftPick, DraftProjection, DraftableAsset } from '../draft/draft.models';
+import {
+  DraftPick,
+  DraftProjection,
+  DraftableAsset,
+  FantasyDraft,
+} from '../draft/draft.models';
 import { getRawCycleProjection } from '../projection/cycle-projection.util';
 import {
   createFrozenWindowProjectionFields,
@@ -21,6 +26,10 @@ import { normalizeFantasyRoster } from '../team/roster.service';
 import { calculateCycleScoring, CycleScoringResult } from '../cycle/cycle-scoring.service';
 import { defaultScoringRules, ScoringRules } from '../scoring/scoring-rules';
 import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
+import {
+  buildSourceNhlTargetGameIdsByTeam,
+  resolveSourceNhlBlockNumber,
+} from '../cycle/cycle-window-selection.util';
 import { FantasyPlayoffWindowBank } from './playoff-window-bank.models';
 import { FantasyPlayoffs } from './playoff.models';
 
@@ -42,6 +51,10 @@ function getTeamRosterRef(leagueId: string, ownerId: string) {
 
 function getDraftPicksRef(leagueId: string) {
   return collection(db, 'leagues', leagueId, 'draft', 'current', 'picks');
+}
+
+function getDraftRef(leagueId: string) {
+  return doc(db, 'leagues', leagueId, 'draft', 'current');
 }
 
 function getWaiverRef(leagueId: string, waiverId: string) {
@@ -77,6 +90,29 @@ function normalizeNumberRecord(value: unknown): Record<string, number> {
   );
 }
 
+function normalizeSourceNhlTargetGameIdsByTeam(
+  value: unknown,
+): Record<string, number[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([teamAbbreviation, gameIds]) => [
+        teamAbbreviation.trim().toUpperCase(),
+        Array.isArray(gameIds)
+          ? gameIds.filter(
+              (gameId): gameId is number =>
+                typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+            )
+          : [],
+      ] as const)
+      .filter(([teamAbbreviation, gameIds]) =>
+        /^[A-Z0-9]{2,4}$/.test(teamAbbreviation) && gameIds.length > 0),
+  );
+}
+
 function normalizeGameStateRecord(value: unknown): Record<string, 'scheduled' | 'live' | 'final'> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
@@ -91,11 +127,17 @@ function normalizeGameStateRecord(value: unknown): Record<string, 'scheduled' | 
 }
 
 function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAssetCycleWindow {
+  const cycleNumber = typeof value.cycleNumber === 'number' ? value.cycleNumber : 0;
+
   return {
     id: value.id ?? '',
     ownerId: value.ownerId ?? '',
     rosterSlotId: value.rosterSlotId ?? '',
-    cycleNumber: typeof value.cycleNumber === 'number' ? value.cycleNumber : 0,
+    cycleNumber,
+    sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+      value.sourceNhlBlockNumber,
+      cycleNumber,
+    ),
     position: value.position ?? 'C',
     assetKey: value.assetKey ?? value.asset?.assetKey ?? '',
     asset: value.asset as FantasyAssetCycleWindow['asset'],
@@ -161,11 +203,25 @@ export function normalizePlayoffWindowBank(
   windowNumber: number,
   regularSeasonCycleCount: number,
 ): FantasyPlayoffWindowBank {
+  const sourceCycleNumber = value.sourceCycleNumber ?? regularSeasonCycleCount + windowNumber;
+  const firstPickSourceNhlBlockNumber = Array.isArray(value.picks)
+    ? (value.picks as DraftPick[]).find(
+        (pick) => typeof pick.sourceNhlBlockNumber === 'number',
+      )?.sourceNhlBlockNumber
+    : undefined;
+
   return {
     id: value.id ?? `window-${windowNumber}`,
     ownerId: value.ownerId ?? ownerId,
     windowNumber: value.windowNumber ?? windowNumber,
-    sourceCycleNumber: value.sourceCycleNumber ?? regularSeasonCycleCount + windowNumber,
+    sourceCycleNumber,
+    sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+      value.sourceNhlBlockNumber ?? firstPickSourceNhlBlockNumber,
+      sourceCycleNumber,
+    ),
+    sourceNhlTargetGameIdsByTeam: normalizeSourceNhlTargetGameIdsByTeam(
+      value.sourceNhlTargetGameIdsByTeam,
+    ),
     status:
       value.status === 'complete' ? 'complete' : value.status === 'active' ? 'active' : 'scheduled',
     assignmentStatus:
@@ -247,6 +303,67 @@ function getRosterAssetKey(asset: RosterAsset | null): string {
   }
 
   return `goalie-unit-${asset.teamAbbreviation}`;
+}
+
+function getAssetTeamAbbreviation(asset: DraftableAsset | RosterAsset): string {
+  return (
+    asset.assetType === 'skater'
+      ? asset.player.nhlTeamAbbreviation
+      : asset.teamAbbreviation
+  ).trim().toUpperCase();
+}
+
+function getDraftSourceNhlTargetGameIdsByTeam(
+  draft: FantasyDraft,
+  sourceNhlBlockNumber: number,
+): Record<string, number[]> {
+  const plannedTargets = buildSourceNhlTargetGameIdsByTeam(
+    draft.seasonWindowSourceGameIdsByTeam,
+    sourceNhlBlockNumber,
+    defaultScoringRules.requiredGamesPerCycle,
+  );
+
+  if (Object.keys(plannedTargets).length > 0) {
+    return plannedTargets;
+  }
+
+  const initialNhlBlockNumber = resolveSourceNhlBlockNumber(
+    draft.initialNhlBlockNumber,
+    1,
+  );
+
+  if (sourceNhlBlockNumber === initialNhlBlockNumber) {
+    const openingTargets = Object.fromEntries(
+      (draft.seasonWindowAnchorTeams ?? []).map((team) => [
+        team.teamAbbreviation.trim().toUpperCase(),
+        team.targetGameIds.filter(
+          (gameId) => Number.isSafeInteger(gameId) && gameId > 0,
+        ),
+      ] as const),
+    );
+
+    if (
+      draft.seasonWindowAnchorStatus === 'ready' &&
+      (
+        Object.keys(openingTargets).length === 0 ||
+        Object.values(openingTargets).some(
+          (gameIds) => gameIds.length !== defaultScoringRules.requiredGamesPerCycle,
+        )
+      )
+    ) {
+      throw new Error('The frozen opening NHL source-game evidence is incomplete.');
+    }
+
+    return openingTargets;
+  }
+
+  if (draft.seasonWindowAnchorStatus === 'ready') {
+    throw new Error(
+      `The frozen NHL source-game plan is unavailable for playoff source block ${sourceNhlBlockNumber}.`,
+    );
+  }
+
+  return {};
 }
 
 function projectionFields(asset: DraftableAsset | RosterAsset): DraftProjection {
@@ -401,12 +518,19 @@ async function loadWindowProjectionAssetsByKey(
   leagueId: string,
   playoffs: FantasyPlayoffs,
   sourceCycleNumber: number,
+  sourceNhlBlockNumber: number,
+  sourceNhlTargetGameIdsByTeam: Readonly<Record<string, readonly number[]>>,
+  seasonWindowAnchorEvidenceHash?: string | null,
 ): Promise<Map<string, DraftableAsset>> {
   const bundle = await ensureWindowProjectionBundle({
     leagueId,
     teamCount: Math.max(2, playoffs.seeds.length),
     requiredGamesPerCycle: defaultScoringRules.requiredGamesPerCycle,
     targetCycleNumber: sourceCycleNumber,
+    targetSourceBlockNumber: sourceNhlBlockNumber,
+    targetGameIdsByTeam: sourceNhlTargetGameIdsByTeam,
+    seasonWindowAnchorEvidenceHash:
+      seasonWindowAnchorEvidenceHash?.trim() || undefined,
   });
 
   if (bundle.errorMessage) {
@@ -438,6 +562,10 @@ function buildSlotWindows(
       ownerId: pick.ownerId,
       rosterSlotId,
       cycleNumber: bank.sourceCycleNumber,
+      sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+        summary?.sourceNhlBlockNumber ?? pick.sourceNhlBlockNumber ?? bank.sourceNhlBlockNumber,
+        bank.sourceCycleNumber,
+      ),
       position: pick.asset.position,
       assetKey: pick.asset.assetKey,
       asset: pick.asset,
@@ -535,6 +663,10 @@ function buildPreviousScoringResultFromBanks(
       ownerId: window.ownerId,
       rosterSlotId: window.rosterSlotId,
       windowId: window.id,
+      sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+        window.sourceNhlBlockNumber,
+        window.cycleNumber,
+      ),
       currentScore: window.fantasyPoints,
       gamesPlayed: window.gamesPlayed,
       actualGamesPlayed: window.actualGamesPlayed,
@@ -592,7 +724,13 @@ export async function syncPlayoffWindowBankScores(input: {
   assignedPicks?: DraftPick[];
   assignedScoring?: CycleScoringResult | null;
 }): Promise<FantasyPlayoffWindowBank[]> {
-  const banks = await getAllPlayoffWindowBanks(input.leagueId, input.playoffs);
+  const [banks, draftAuthoritySnapshot] = await Promise.all([
+    getAllPlayoffWindowBanks(input.leagueId, input.playoffs),
+    getDoc(getDraftRef(input.leagueId)),
+  ]);
+  const draftAuthority = draftAuthoritySnapshot.exists()
+    ? (draftAuthoritySnapshot.data() as FantasyDraft)
+    : null;
   const scoringByOwnerWindow = new Map<string, CycleScoringResult>();
 
   if (input.assignedPicks?.length && input.assignedScoring) {
@@ -610,23 +748,59 @@ export async function syncPlayoffWindowBankScores(input: {
   );
 
   if (unassignedBanks.length > 0) {
-    const unassignedPicks = unassignedBanks.flatMap((bank) => bank.picks);
-    const expectedRosterSlotIdsByOwner = Object.fromEntries(
-      unassignedBanks.map((bank) => [bank.ownerId, bank.expectedRosterSlotIds]),
-    );
-    const previousResult = buildPreviousScoringResultFromBanks(unassignedBanks);
-    const scoring = await calculateCycleScoring({
-      picks: unassignedPicks,
-      cycleNumber: input.playoffs.regularSeasonCycleCount + 1,
-      season: input.season,
-      requiredGamesPerCycle: input.requiredGamesPerCycle,
-      scoringRules: input.scoringRules,
-      expectedRosterSlotIdsByOwner,
-      previousResult,
-    });
+    const banksBySourceBlock = new Map<number, FantasyPlayoffWindowBank[]>();
 
     for (const bank of unassignedBanks) {
-      scoringByOwnerWindow.set(`${bank.ownerId}::${bank.windowNumber}`, scoring);
+      const sourceNhlBlockNumber = resolveSourceNhlBlockNumber(
+        bank.sourceNhlBlockNumber,
+        bank.sourceCycleNumber,
+      );
+      const groupedBanks = banksBySourceBlock.get(sourceNhlBlockNumber) ?? [];
+      groupedBanks.push(bank);
+      banksBySourceBlock.set(sourceNhlBlockNumber, groupedBanks);
+    }
+
+    for (const [sourceNhlBlockNumber, groupedBanks] of banksBySourceBlock) {
+      const sourceNhlTargetGameIdsByTeam =
+        groupedBanks.find(
+          (bank) => Object.keys(bank.sourceNhlTargetGameIdsByTeam ?? {}).length > 0,
+        )?.sourceNhlTargetGameIdsByTeam ??
+        (draftAuthority
+          ? getDraftSourceNhlTargetGameIdsByTeam(
+              draftAuthority,
+              sourceNhlBlockNumber,
+            )
+          : {});
+      const unassignedPicks = groupedBanks.flatMap((bank) =>
+        bank.picks.map((pick) => ({
+          ...pick,
+          sourceNhlBlockNumber,
+          sourceNhlTargetGameIds:
+            sourceNhlTargetGameIdsByTeam[getAssetTeamAbbreviation(pick.asset)] ??
+            pick.sourceNhlTargetGameIds,
+          sourceNhlTargetGameIdsByTeam: {
+            ...sourceNhlTargetGameIdsByTeam,
+          },
+        })),
+      );
+      const expectedRosterSlotIdsByOwner = Object.fromEntries(
+        groupedBanks.map((bank) => [bank.ownerId, bank.expectedRosterSlotIds]),
+      );
+      const previousResult = buildPreviousScoringResultFromBanks(groupedBanks);
+      const scoring = await calculateCycleScoring({
+        picks: unassignedPicks,
+        cycleNumber: input.playoffs.regularSeasonCycleCount + 1,
+        season: input.season,
+        requiredGamesPerCycle: input.requiredGamesPerCycle,
+        scoringRules: input.scoringRules,
+        expectedRosterSlotIdsByOwner,
+        previousResult,
+        sourceNhlTargetGameIdsByTeam,
+      });
+
+      for (const bank of groupedBanks) {
+        scoringByOwnerWindow.set(`${bank.ownerId}::${bank.windowNumber}`, scoring);
+      }
     }
   }
 
@@ -684,16 +858,39 @@ export async function syncPlayoffWindowBankScores(input: {
 export function createInitialPlayoffBankPayloads(
   playoffs: FantasyPlayoffs,
   picks: DraftPick[],
+  sourceNhlTargetGameIdsByTeam: Readonly<Record<string, number[]>> = {},
 ): FantasyPlayoffWindowBank[] {
   return playoffs.seeds.map((seed) => {
+    const sourceCycleNumber = playoffs.regularSeasonCycleCount + 1;
+    const seedPicks = picks.filter((pick) => pick.ownerId === seed.ownerId);
+    const sourceNhlBlockNumber = resolveSourceNhlBlockNumber(
+      seedPicks.find((pick) => typeof pick.sourceNhlBlockNumber === 'number')
+        ?.sourceNhlBlockNumber,
+      sourceCycleNumber,
+    );
     const ownerPicks = picks
       .filter((pick) => pick.ownerId === seed.ownerId)
-      .map((pick) => ({
-        ...pick,
-        snapshotCycleNumber: playoffs.regularSeasonCycleCount + 1,
-        playoffWindowNumber: 1,
-        cycleWindowId: `${seed.ownerId}__${pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`}__cycle-${playoffs.regularSeasonCycleCount + 1}`,
-      }));
+      .map((pick) => {
+        const {
+          sourceNhlTargetGameIds: existingSourceNhlTargetGameIds,
+          ...persistedPick
+        } = pick;
+        const sourceNhlTargetGameIds =
+          sourceNhlTargetGameIdsByTeam[getAssetTeamAbbreviation(pick.asset)] ??
+          existingSourceNhlTargetGameIds;
+
+        return {
+          ...persistedPick,
+          snapshotCycleNumber: sourceCycleNumber,
+          sourceNhlBlockNumber,
+          ...(sourceNhlTargetGameIds === undefined
+            ? {}
+            : { sourceNhlTargetGameIds }),
+          sourceNhlTargetGameIdsByTeam: { ...sourceNhlTargetGameIdsByTeam },
+          playoffWindowNumber: 1,
+          cycleWindowId: `${seed.ownerId}__${pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`}__cycle-${sourceCycleNumber}`,
+        };
+      });
     const expectedRosterSlotIds = ownerPicks.map(
       (pick) => pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`,
     );
@@ -702,7 +899,9 @@ export function createInitialPlayoffBankPayloads(
       id: 'window-1',
       ownerId: seed.ownerId,
       windowNumber: 1,
-      sourceCycleNumber: playoffs.regularSeasonCycleCount + 1,
+      sourceCycleNumber,
+      sourceNhlBlockNumber,
+      sourceNhlTargetGameIdsByTeam: { ...sourceNhlTargetGameIdsByTeam },
       status: 'scheduled',
       assignmentStatus: 'unassigned',
       assignedMatchupId: null,
@@ -764,6 +963,10 @@ export async function ensureNextPlayoffBankWindows(input: {
       input.playoffs,
       bank.ownerId,
       nextWindowNumber,
+      resolveSourceNhlBlockNumber(
+        bank.sourceNhlBlockNumber,
+        bank.sourceCycleNumber,
+      ) + 1,
     );
   }
 }
@@ -798,13 +1001,34 @@ async function createNextPlayoffBankWindow(
   playoffs: FantasyPlayoffs,
   ownerId: string,
   windowNumber: number,
+  sourceNhlBlockNumber: number,
 ): Promise<void> {
   const sourceCycleNumber = playoffs.regularSeasonCycleCount + windowNumber;
-  const [draftSnapshot, projectionAssetsByKey] = await Promise.all([
+  const [draftSnapshot, draftAuthoritySnapshot] = await Promise.all([
     getDocs(getDraftPicksRef(leagueId)),
-    loadWindowProjectionAssetsByKey(leagueId, playoffs, sourceCycleNumber),
+    getDoc(getDraftRef(leagueId)),
   ]);
   const draftPicks = draftSnapshot.docs.map((document) => document.data() as DraftPick);
+  const draftAuthority = draftAuthoritySnapshot.exists()
+    ? (draftAuthoritySnapshot.data() as FantasyDraft)
+    : null;
+
+  if (!draftAuthority || draftAuthority.status !== 'complete') {
+    throw new Error('The completed draft is required to open a playoff window.');
+  }
+
+  const sourceNhlTargetGameIdsByTeam = getDraftSourceNhlTargetGameIdsByTeam(
+    draftAuthority,
+    sourceNhlBlockNumber,
+  );
+  const projectionAssetsByKey = await loadWindowProjectionAssetsByKey(
+    leagueId,
+    playoffs,
+    sourceCycleNumber,
+    sourceNhlBlockNumber,
+    sourceNhlTargetGameIdsByTeam,
+    draftAuthority.seasonWindowAnchorEvidenceHash,
+  );
   const draftByAssetKey = new Map(
     draftPicks
       .filter((pick) => pick.ownerId === ownerId)
@@ -814,13 +1038,31 @@ async function createNextPlayoffBankWindow(
   const bankRef = getPlayoffWindowBankRef(leagueId, ownerId, windowNumber);
 
   await runTransaction(db, async (transaction) => {
-    const [rosterSnapshot, bankSnapshot] = await Promise.all([
+    const [rosterSnapshot, bankSnapshot, savedDraftSnapshot] = await Promise.all([
       transaction.get(rosterRef),
       transaction.get(bankRef),
+      transaction.get(getDraftRef(leagueId)),
     ]);
 
     if (bankSnapshot.exists()) {
       return;
+    }
+
+    if (!savedDraftSnapshot.exists()) {
+      throw new Error('The completed draft is required to open a playoff window.');
+    }
+
+    const savedDraft = savedDraftSnapshot.data() as FantasyDraft;
+
+    if (
+      savedDraft.status !== 'complete' ||
+      JSON.stringify(
+        getDraftSourceNhlTargetGameIdsByTeam(savedDraft, sourceNhlBlockNumber),
+      ) !== JSON.stringify(sourceNhlTargetGameIdsByTeam)
+    ) {
+      throw new Error(
+        'The frozen NHL source-game plan changed while the playoff window was opening.',
+      );
     }
 
     if (!rosterSnapshot.exists()) {
@@ -851,6 +1093,14 @@ async function createNextPlayoffBankWindow(
         rosterSlotId: slot.slotId,
         cycleWindowId: `${ownerId}__${slot.slotId}__cycle-${sourceCycleNumber}`,
         snapshotCycleNumber: sourceCycleNumber,
+        sourceNhlBlockNumber,
+        ...(sourceNhlTargetGameIdsByTeam[getAssetTeamAbbreviation(incomingAsset)]
+          ? {
+              sourceNhlTargetGameIds:
+                sourceNhlTargetGameIdsByTeam[getAssetTeamAbbreviation(incomingAsset)],
+            }
+          : {}),
+        sourceNhlTargetGameIdsByTeam: { ...sourceNhlTargetGameIdsByTeam },
         playoffWindowNumber: windowNumber,
         snapshotOrder: draftByAssetKey.get(incomingAssetKey)?.overallPick ?? 100000 + slotIndex + 1,
         asset: rosterAssetToDraftableAsset(
@@ -949,6 +1199,8 @@ async function createNextPlayoffBankWindow(
       ownerId,
       windowNumber,
       sourceCycleNumber,
+      sourceNhlBlockNumber,
+      sourceNhlTargetGameIdsByTeam,
       status: 'scheduled',
       assignmentStatus: 'unassigned',
       assignedMatchupId: null,

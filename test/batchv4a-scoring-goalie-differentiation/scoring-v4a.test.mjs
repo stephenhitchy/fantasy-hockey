@@ -236,7 +236,8 @@ test('Projection V11 and Draft math carry Scoring V4 identity without changing P
 
   assert.equal(sha256(projectionV11), PROTECTED_SOURCE_HASHES.projectionV11);
   assert.match(hashUtility, /PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION = 1/);
-  assert.match(hashUtility, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2/);
+  assert.match(hashUtility, /PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION = 2/);
+  assert.match(hashUtility, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3/);
   assert.match(hashUtility, /canonical\['scoringRulesVersion'\] = input\.scoringRulesVersion/);
   assert.match(serverSnapshot, /must be migrated to Production Scoring V\$\{CURRENT_SCORING_RULES_VERSION\}/);
   assert.match(serverSnapshot, /before emergency Projection V\$\{SHARED_PROJECTION_VERSION\} rankings can be generated/);
@@ -417,8 +418,8 @@ test('the six-game window remains frozen and server scoring matches the D1L-D ga
   ]);
 
   assert.equal(serverSelection, clientSelection);
-  assert.equal(sha256(serverSelection), 'fbd0683f7dda81406248921545a3dfaa8e247818b06366e821763615e7eb063c');
-  assert.equal(sha256(serverScoring), 'b6084f4416b4a075479f712141e55766224d6484c6ac7701d387ab5fea816168');
+  assert.equal(sha256(serverSelection), 'c2847d55182e29e738518ed0a82fa2a8db57ca7bf3657963ac20796d75837f97');
+  assert.equal(sha256(serverScoring), '0afbd5cc2af779b557c73469df1036da26362bbe267db0c5b3dc18954f1e2e20');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

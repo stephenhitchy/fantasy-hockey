@@ -24,6 +24,8 @@ export interface FantasyAssetCycleWindow {
   ownerId: string;
   rosterSlotId: string;
   cycleNumber: number;
+  /** NHL six-game schedule block supplying this fantasy window. */
+  sourceNhlBlockNumber?: number;
   position: DraftPosition;
   assetKey: string;
   asset: DraftableAsset;
@@ -82,6 +84,13 @@ export interface FantasyTeamCycleWindows {
 export interface FantasyCycle {
   id: string;
   cycleNumber: number;
+  /**
+   * NHL six-game schedule block supplying this fantasy matchup. It differs
+   * from cycleNumber for leagues whose season begins after an earlier block.
+   */
+  sourceNhlBlockNumber?: number;
+  /** Exact initial-block game ids frozen for every NHL club at the cutoff. */
+  sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
   status: FantasyCycleStatus;
   phase: FantasySeasonPhase;
   playoffRoundNumber?: number | null;

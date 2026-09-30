@@ -18,6 +18,7 @@ import {
   FantasyTeamCycleWindows,
 } from './cycle.models';
 import { CycleAssetScoreSummary, CycleScoringResult } from './cycle-scoring.service';
+import { resolveSourceNhlBlockNumber } from './cycle-window-selection.util';
 
 function getCycleDocumentId(cycleNumber: number): string {
   return `cycle-${cycleNumber}`;
@@ -117,6 +118,10 @@ function normalizeAssetCycleWindow(
     ownerId: value.ownerId ?? ownerId,
     rosterSlotId: value.rosterSlotId ?? '',
     cycleNumber: value.cycleNumber ?? cycleNumber,
+    sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+      value.sourceNhlBlockNumber,
+      value.cycleNumber ?? cycleNumber,
+    ),
     position: value.position ?? 'C',
     assetKey: value.assetKey ?? value.asset?.assetKey ?? '',
     asset: value.asset as FantasyAssetCycleWindow['asset'],
@@ -237,6 +242,10 @@ function buildWindow(
     ownerId: pick.ownerId,
     rosterSlotId,
     cycleNumber: pickWindowCycleNumber,
+    sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+      summary?.sourceNhlBlockNumber ?? pick.sourceNhlBlockNumber,
+      pickWindowCycleNumber,
+    ),
     position: pick.asset.position,
     assetKey: pick.asset.assetKey,
     asset: pick.asset,

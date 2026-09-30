@@ -28,7 +28,7 @@ import { getFantasyDraft, listenToDraftPicks } from '../../../core/draft/draft.s
 
 import { getLeagueById, League } from '../../../core/league/league.service';
 
-import { getStandardRegularSeasonCycleCount } from '../../../core/playoffs/playoff-format';
+import { getAnchoredRegularSeasonCycleCount } from '../../../core/playoffs/playoff-format';
 
 import { FantasyTeam, getLeagueTeams } from '../../../core/team/team.service';
 
@@ -63,6 +63,7 @@ export class CycleSchedulePreview implements OnDestroy {
   existingCycles = signal<Record<number, FantasyCycle | null>>({});
   existingMatchups = signal<Record<number, FantasyMatchup[]>>({});
   selectedOwnerId = signal('');
+  initialNhlBlockNumber = signal(1);
 
   loading = signal(true);
   errorMessage = signal('');
@@ -76,7 +77,10 @@ export class CycleSchedulePreview implements OnDestroy {
   readonly hasByeWeeks = computed(() => this.teams().length % 2 === 1);
 
   readonly regularSeasonCycleCount = computed(() =>
-    getStandardRegularSeasonCycleCount(this.teams().length),
+    getAnchoredRegularSeasonCycleCount(
+      this.teams().length,
+      this.initialNhlBlockNumber(),
+    ),
   );
 
   readonly selectedTeamName = computed(() => this.getTeamName(this.selectedOwnerId()));
@@ -136,6 +140,11 @@ export class CycleSchedulePreview implements OnDestroy {
       this.league.set(league);
       this.teams.set(teams);
       this.playerPool.set(playerPool);
+      this.initialNhlBlockNumber.set(
+        typeof draft?.initialNhlBlockNumber === 'number'
+          ? Math.max(1, Math.floor(draft.initialNhlBlockNumber))
+          : 1,
+      );
 
       const defaultOwnerId = teams.some((team) => team.ownerId === user.uid)
         ? user.uid
@@ -143,7 +152,10 @@ export class CycleSchedulePreview implements OnDestroy {
 
       this.selectedOwnerId.set(defaultOwnerId);
 
-      const previewCycleCount = getStandardRegularSeasonCycleCount(teams.length);
+      const previewCycleCount = getAnchoredRegularSeasonCycleCount(
+        teams.length,
+        this.initialNhlBlockNumber(),
+      );
 
       const schedulePreview = buildCycleSchedulePreview(teams, draft, previewCycleCount);
 
@@ -251,6 +263,16 @@ export class CycleSchedulePreview implements OnDestroy {
     }
 
     return `Matchup ${cycleNumber}`;
+  }
+
+  getNhlGameRangeLabel(cycleNumber: number): string {
+    const savedSourceBlock = this.existingCycles()[cycleNumber]?.sourceNhlBlockNumber;
+    const sourceBlock = typeof savedSourceBlock === 'number'
+      ? Math.max(1, Math.floor(savedSourceBlock))
+      : this.initialNhlBlockNumber() + cycleNumber - 1;
+    const firstGameNumber = (sourceBlock - 1) * 6 + 1;
+
+    return `NHL games ${firstGameNumber}–${firstGameNumber + 5} by club`;
   }
 
   getCycleStatusLabel(cycleNumber: number): string {

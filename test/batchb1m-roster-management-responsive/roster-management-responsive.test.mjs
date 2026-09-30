@@ -186,7 +186,7 @@ test('roster authority, scoring, Projection V11, Rules, and indexes remain uncha
     ],
     [
       'src/app/core/draft/draft.service.ts',
-      '45d3a535db9f75986e7a99ad35f2e5541ad5229c20d57b52b5d32d4ec9ac2244',
+      '8a36d39a02d09c5b5b29f4168e41adee94fa4a6e6e313e09a1e7df73da086cbe',
     ],
     [
       'src/app/core/scoring/scoring-rules.ts',

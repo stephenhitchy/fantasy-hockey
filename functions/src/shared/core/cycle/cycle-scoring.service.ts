@@ -6,7 +6,11 @@ import {
   SkaterGameStats
 } from '../scoring/scoring-engine';
 import { ScoringRules } from '../scoring/scoring-rules';
-import { selectCycleWindowGames } from './cycle-window-selection.util';
+import {
+  resolveSourceNhlBlockNumber,
+  selectCycleWindowGames,
+  selectGamesByStableIds,
+} from './cycle-window-selection.util';
 import {
   compareDirectAndCanonicalGameScore,
   shouldCompareCanonicalScoringParityGame,
@@ -69,6 +73,8 @@ export interface CycleAssetScoreSummary {
   ownerId: string;
   rosterSlotId: string;
   windowId: string;
+  /** NHL six-game schedule block used by this immutable fantasy window. */
+  sourceNhlBlockNumber?: number;
   currentScore: number;
 
   /** Final NHL team games that control six-game window progress. */
@@ -156,6 +162,12 @@ export interface CalculateCycleScoringInput {
    * live club schedule after a trade.
    */
   currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>;
+
+  /**
+   * Exact initial-block game ids frozen for every NHL club. This lets a
+   * pre-bootstrap trade choose the new club's already-frozen schedule.
+   */
+  sourceNhlTargetGameIdsByTeam?: Readonly<Record<string, number[]>>;
 
   /**
    * Optional commissioner historical-replay schedules. Each asset receives a
@@ -296,6 +308,32 @@ function getAssetTeamAbbreviation(asset: DraftableAsset): string {
     : asset.teamAbbreviation;
 }
 
+/**
+ * Resolves exact provider IDs for one pick without allowing a later fantasy
+ * cycle's all-team map to overwrite an older banked playoff window. If the
+ * player's NHL club changed, the pick-level all-team map supplies the new
+ * club's IDs for the pick's own immutable source block.
+ */
+export function resolveFrozenTargetGameIdsForPick(
+  pick: DraftPick,
+  scheduleTeamAbbreviation: string,
+  fallbackTargetGameIdsByTeam?: Readonly<Record<string, number[]>>,
+): number[] | undefined {
+  const storedTeamAbbreviation = getAssetTeamAbbreviation(pick.asset)
+    .trim()
+    .toUpperCase();
+  const targetTeamAbbreviation = scheduleTeamAbbreviation.trim().toUpperCase();
+
+  if (targetTeamAbbreviation === storedTeamAbbreviation) {
+    return pick.sourceNhlTargetGameIds ??
+      pick.sourceNhlTargetGameIdsByTeam?.[targetTeamAbbreviation] ??
+      fallbackTargetGameIdsByTeam?.[targetTeamAbbreviation];
+  }
+
+  return pick.sourceNhlTargetGameIdsByTeam?.[targetTeamAbbreviation] ??
+    fallbackTargetGameIdsByTeam?.[targetTeamAbbreviation];
+}
+
 function getRosterSlotId(pick: DraftPick): string {
   return pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
 }
@@ -310,6 +348,16 @@ function getPickWindowCycleNumber(
   fallbackCycleNumber: number
 ): number {
   return pick.snapshotCycleNumber ?? fallbackCycleNumber;
+}
+
+function getPickSourceNhlBlockNumber(
+  pick: DraftPick,
+  fallbackCycleNumber: number,
+): number {
+  return resolveSourceNhlBlockNumber(
+    pick.sourceNhlBlockNumber,
+    getPickWindowCycleNumber(pick, fallbackCycleNumber),
+  );
 }
 
 function getMinutesFromToi(toi: string | undefined): number {
@@ -749,19 +797,24 @@ function getFinalGameInputCompleteness(input: {
 function getRelevantAssetGames(
   pick: DraftPick,
   schedulesByTeam: Record<string, NhlTeamSeasonGame[]>,
-  cycleNumber: number,
+  sourceNhlBlockNumber: number,
   requiredGamesPerCycle: number,
   previous: CycleAssetScoreSummary | undefined,
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>,
   currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+  sourceNhlTargetGameIdsByTeam?: Readonly<Record<string, number[]>>,
 ): ResolvedLivePlayerWindow {
   const replaySchedule = replayGamesByAssetKey?.[pick.asset.assetKey];
 
   if (replaySchedule) {
     const teamAbbreviation = getAssetTeamAbbreviation(pick.asset);
+    // Replay schedules are explicit historical evidence assembled for that
+    // replay. Initial live-season anchor ids belong to the provider schedule
+    // frozen at draft cutoff and must never be resolved against synthetic or
+    // historical replay fixtures whose ids can come from a different season.
     const games = selectCycleWindowGames(
       replaySchedule,
-      cycleNumber,
+      sourceNhlBlockNumber,
       requiredGamesPerCycle,
     );
 
@@ -775,16 +828,27 @@ function getRelevantAssetGames(
     };
   }
 
+  const storedTeamAbbreviation = getAssetTeamAbbreviation(pick.asset).trim().toUpperCase();
+  const currentTeamAbbreviation = pick.asset.assetType === 'skater'
+    ? currentTeamAbbreviationByPlayerId?.get(pick.asset.player.id)?.trim().toUpperCase() ||
+      storedTeamAbbreviation
+    : storedTeamAbbreviation;
+  const frozenTargetGameIds = replayGamesByAssetKey
+    ? undefined
+    : resolveFrozenTargetGameIdsForPick(
+        pick,
+        currentTeamAbbreviation,
+        sourceNhlTargetGameIdsByTeam,
+      );
+
   return resolveLivePlayerTeamWindow({
     asset: pick.asset,
     schedulesByTeam,
-    cycleNumber,
+    cycleNumber: sourceNhlBlockNumber,
     requiredGamesPerCycle,
     previous,
-    currentTeamAbbreviation:
-      pick.asset.assetType === 'skater'
-        ? currentTeamAbbreviationByPlayerId?.get(pick.asset.player.id)
-        : undefined,
+    currentTeamAbbreviation,
+    sourceNhlTargetGameIds: frozenTargetGameIds,
   });
 }
 
@@ -955,6 +1019,7 @@ function buildResultFingerprint(
       .sort((first, second) => first.windowId.localeCompare(second.windowId))
       .map((summary) => [
         summary.windowId,
+        `nhl-block-${resolveSourceNhlBlockNumber(summary.sourceNhlBlockNumber, cycleNumber)}`,
         summary.currentScore.toFixed(1),
         summary.gamesPlayed,
         summary.actualGamesPlayed ?? 0,
@@ -1021,17 +1086,42 @@ export async function calculateCycleScoring(
 
   for (const teamAbbreviation of draftedTeams) {
     const representativePick = input.picks.find(
-      (pick) => getAssetTeamAbbreviation(pick.asset) === teamAbbreviation
+      (pick) => {
+        if (getAssetTeamAbbreviation(pick.asset) === teamAbbreviation) {
+          return true;
+        }
+
+        return pick.asset.assetType === 'skater' &&
+          input.currentTeamAbbreviationByPlayerId
+            ?.get(pick.asset.player.id)
+            ?.trim()
+            .toUpperCase() === teamAbbreviation;
+      },
     );
     const schedule = representativePick
       ? input.replayGamesByAssetKey?.[representativePick.asset.assetKey] ??
         schedulesByTeam[teamAbbreviation] ?? []
       : schedulesByTeam[teamAbbreviation] ?? [];
 
-    teamGameCounts[teamAbbreviation] = selectCycleWindowGames(
-      schedule,
-      input.cycleNumber,
-      input.requiredGamesPerCycle
+    const targetGameIds = input.replayGamesByAssetKey
+      ? undefined
+      : representativePick
+        ? resolveFrozenTargetGameIdsForPick(
+            representativePick,
+            teamAbbreviation,
+            input.sourceNhlTargetGameIdsByTeam,
+          )
+        : input.sourceNhlTargetGameIdsByTeam?.[teamAbbreviation];
+    teamGameCounts[teamAbbreviation] = (
+      targetGameIds?.length
+        ? selectGamesByStableIds(schedule, targetGameIds)
+        : selectCycleWindowGames(
+            schedule,
+            representativePick
+              ? getPickSourceNhlBlockNumber(representativePick, input.cycleNumber)
+              : input.cycleNumber,
+            input.requiredGamesPerCycle,
+          )
     ).length;
   }
 
@@ -1039,6 +1129,10 @@ export async function calculateCycleScoring(
     const pickWindowCycleNumber = getPickWindowCycleNumber(
       pick,
       input.cycleNumber
+    );
+    const sourceNhlBlockNumber = getPickSourceNhlBlockNumber(
+      pick,
+      input.cycleNumber,
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
     const previous = getPreviousWindowSummary(
@@ -1049,11 +1143,12 @@ export async function calculateCycleScoring(
     const resolvedWindow = getRelevantAssetGames(
       pick,
       schedulesByTeam,
-      pickWindowCycleNumber,
+      sourceNhlBlockNumber,
       input.requiredGamesPerCycle,
       previous,
       input.replayGamesByAssetKey,
       input.currentTeamAbbreviationByPlayerId,
+      input.sourceNhlTargetGameIdsByTeam,
     );
     const games = resolvedWindow.games;
 
@@ -1195,6 +1290,10 @@ export async function calculateCycleScoring(
     const pickWindowCycleNumber = getPickWindowCycleNumber(
       pick,
       input.cycleNumber
+    );
+    const sourceNhlBlockNumber = getPickSourceNhlBlockNumber(
+      pick,
+      input.cycleNumber,
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
     const games = gamesByWindowId.get(windowId) ?? [];
@@ -1427,6 +1526,7 @@ export async function calculateCycleScoring(
       ownerId: pick.ownerId,
       rosterSlotId,
       windowId,
+      sourceNhlBlockNumber,
       currentScore: rounded(currentScore),
       gamesPlayed,
       actualGamesPlayed,

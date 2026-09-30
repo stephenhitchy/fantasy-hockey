@@ -13,6 +13,11 @@ import { listenToDraftPicks } from '../../../core/draft/draft.service';
 import { FantasyCycle } from '../../../core/cycle/cycle.models';
 
 import { CycleAssetScoreSummary } from '../../../core/cycle/cycle-scoring.service';
+import {
+  resolveSourceNhlBlockNumber,
+  selectCycleWindowGames,
+  selectGamesByStableIds,
+} from '../../../core/cycle/cycle-window-selection.util';
 
 import { listenToCycle, listenToCycleRosterPicks } from '../../../core/cycle/cycle.service';
 
@@ -1467,11 +1472,22 @@ export class CycleAssetDetail implements OnDestroy {
     schedule: NhlTeamSeasonGame[],
     requiredGamesPerCycle: number,
   ): NhlTeamSeasonGame[] {
-    const startIndex = Math.max(0, (this.cycleNumber - 1) * requiredGamesPerCycle);
+    const frozenTargetGameIds = this.draftPick()?.sourceNhlTargetGameIds;
 
-    const endIndex = this.cycleNumber * requiredGamesPerCycle;
+    if (frozenTargetGameIds?.length) {
+      return selectGamesByStableIds(schedule, frozenTargetGameIds);
+    }
 
-    return schedule.slice(startIndex, endIndex);
+    const sourceNhlBlockNumber = resolveSourceNhlBlockNumber(
+      this.draftPick()?.sourceNhlBlockNumber ?? this.cycle()?.sourceNhlBlockNumber,
+      this.cycleNumber,
+    );
+
+    return selectCycleWindowGames(
+      schedule,
+      sourceNhlBlockNumber,
+      requiredGamesPerCycle,
+    );
   }
 
   private getTeamGameNumber(schedule: NhlTeamSeasonGame[], game: NhlTeamSeasonGame): number {

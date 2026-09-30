@@ -26,7 +26,8 @@ import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
  */
 export const SHARED_PROJECTION_VERSION = 11;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
-export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2;
+export const PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION = 2;
+export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3;
 export const PRE_DRAFT_PROJECTION_WARMUP_MINUTES = 20;
 export const PRE_DRAFT_PROJECTION_FRESH_MINUTES = 45;
 export const WINDOW_PROJECTION_FRESH_MINUTES = 6 * 60;
@@ -83,6 +84,9 @@ export interface SharedProjectionSnapshotMetadata {
   assetDocumentCount?: number;
   assetStorageVersion?: number;
   teamCount: number;
+  /** NHL schedule block used for exact target-game selection. */
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string;
   targetCycleNumber: number;
   requiredGamesPerCycle: number;
   generationReason: SharedProjectionGenerationReason;
@@ -130,6 +134,8 @@ export interface GenerateSharedProjectionSnapshotInput {
    * generation must not infer the target from the league's latest cycle.
    */
   targetCycleNumber?: number;
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string;
 }
 
 export interface DraftSnapshotFreshnessInput {
@@ -229,6 +235,14 @@ function normalizeMetadata(
     assetStorageVersion:
       typeof data.assetStorageVersion === 'number' ? data.assetStorageVersion : undefined,
     teamCount: typeof data.teamCount === 'number' ? data.teamCount : 0,
+    targetSourceBlockNumber:
+      typeof data.targetSourceBlockNumber === 'number'
+        ? Math.max(1, Math.floor(data.targetSourceBlockNumber))
+        : undefined,
+    seasonWindowAnchorEvidenceHash:
+      typeof data.seasonWindowAnchorEvidenceHash === 'string'
+        ? data.seasonWindowAnchorEvidenceHash
+        : undefined,
     targetCycleNumber: typeof data.targetCycleNumber === 'number' ? data.targetCycleNumber : 1,
     requiredGamesPerCycle:
       typeof data.requiredGamesPerCycle === 'number' ? data.requiredGamesPerCycle : 6,
@@ -526,7 +540,11 @@ export function isSharedProjectionSnapshotFreshForDraft(
     metadata.generatedByAuthority !== 'server' ||
     metadata.authoritySchemaVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     metadata.catalogValidationStatus !== 'validated' ||
-    metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    (
+      metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+      metadata.snapshotHashSchemaVersion !==
+        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION
+    ) ||
     metadata.snapshotHashAlgorithm !== 'sha256' ||
     metadata.snapshotIntegrityStatus !== 'verified' ||
     !/^[a-f0-9]{64}$/.test(metadata.snapshotContentHash ?? '')
@@ -683,6 +701,8 @@ interface ProjectionGenerationCallableRequest {
   leagueId: string;
   generationReason: SharedProjectionGenerationReason;
   targetCycleNumber?: number;
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string;
 }
 
 export interface ProjectionGenerationQueueResult {
@@ -690,6 +710,7 @@ export interface ProjectionGenerationQueueResult {
   status: 'queued' | 'ready';
   snapshotId: string | null;
   targetCycleNumber: number;
+  targetSourceBlockNumber?: number;
   message: string;
   reusedFreshSnapshot: boolean;
 }
@@ -842,7 +863,12 @@ async function loadServerGeneratedSnapshot(
     snapshot.metadata.catalogValidationStatus !== 'validated' ||
     !snapshot.metadata.catalogSnapshotId ||
     !snapshot.metadata.catalogHash ||
-    snapshot.metadata.snapshotHashSchemaVersion !== PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+    (
+      snapshot.metadata.snapshotHashSchemaVersion !==
+        PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION &&
+      snapshot.metadata.snapshotHashSchemaVersion !==
+        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION
+    ) ||
     snapshot.metadata.snapshotHashAlgorithm !== 'sha256' ||
     snapshot.metadata.snapshotIntegrityStatus !== 'verified' ||
     !/^[a-f0-9]{64}$/.test(snapshot.metadata.snapshotContentHash ?? '')
@@ -912,6 +938,12 @@ export async function queueSharedProjectionSnapshotGeneration(
       typeof input.targetCycleNumber === 'number'
         ? Math.max(1, Math.floor(input.targetCycleNumber))
         : undefined,
+    targetSourceBlockNumber:
+      typeof input.targetSourceBlockNumber === 'number'
+        ? Math.max(1, Math.floor(input.targetSourceBlockNumber))
+        : undefined,
+    seasonWindowAnchorEvidenceHash:
+      input.seasonWindowAnchorEvidenceHash?.trim() || undefined,
   });
 
   return response.data;
@@ -938,7 +970,11 @@ export async function generateSharedProjectionSnapshot(
     typeof input.targetCycleNumber === 'number'
       ? String(Math.max(1, Math.floor(input.targetCycleNumber)))
       : 'auto';
-  const generationKey = `${leagueId}::${targetKey}`;
+  const sourceKey =
+    typeof input.targetSourceBlockNumber === 'number'
+      ? String(Math.max(1, Math.floor(input.targetSourceBlockNumber)))
+      : targetKey;
+  const generationKey = `${leagueId}::${targetKey}::${sourceKey}`;
   const existing = generationByLeague.get(generationKey);
 
   if (existing) {

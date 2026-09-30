@@ -41,12 +41,22 @@ import {
   PROJECTION_SNAPSHOT_HASH_ALGORITHM,
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
 } from './shared/core/projection/projection-snapshot-hash.util';
 import { DRAFT_RANKING_MODEL_VERSION } from './shared/core/projection/projection-ranking.util';
 import {
   isClientProjectionGenerationReason,
   projectionGenerationRequiresCommissioner,
 } from './shared/core/projection/projection-generation-access.util';
+import {
+  shouldMutateProjectionControl,
+  shouldPublishProjectionResult,
+  shouldReuseActiveProjectionRequest,
+} from './shared/core/projection/projection-publication-guard.util';
+import { NHL_DRAFT_CLUBS } from './shared/core/nhl/nhl-api.service';
+import {
+  buildSourceNhlTargetGameIdsByTeam,
+} from './shared/core/cycle/cycle-window-selection.util';
 
 const FUNCTION_REGION = 'us-central1';
 const PROJECTION_REQUEST_SCHEMA_VERSION = 1;
@@ -68,6 +78,7 @@ interface ProjectionGenerationTaskPayload {
   leagueId: string;
   requestedBy: string;
   targetCycleNumber: number;
+  targetSourceBlockNumber?: number;
 }
 
 interface ProjectionGenerationRequestInput {
@@ -75,6 +86,11 @@ interface ProjectionGenerationRequestInput {
   leagueId: string;
   generationReason: SharedProjectionGenerationReason;
   targetCycleNumber?: number;
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string | null;
+  draftScheduleGeneration?: number | null;
+  draftScheduledStartMilliseconds?: number | null;
+  seasonWindowSourceGamePlanHash?: string | null;
   availabilityRevision?: string | null;
 }
 
@@ -83,6 +99,7 @@ interface ProjectionGenerationRequestResult {
   status: 'queued' | 'ready';
   snapshotId: string | null;
   targetCycleNumber: number;
+  targetSourceBlockNumber: number;
   message: string;
   reusedFreshSnapshot: boolean;
 }
@@ -114,6 +131,7 @@ interface ProjectionRequestDocument {
   requestedBy: string;
   generationReason: SharedProjectionGenerationReason;
   targetCycleNumber: number;
+  targetSourceBlockNumber: number;
   teamCount: number;
   requiredGamesPerCycle: number;
   status: 'queued' | 'processing' | 'ready' | 'error';
@@ -122,6 +140,12 @@ interface ProjectionRequestDocument {
   message: string;
   lastError: string;
   availabilityRevision?: string | null;
+  seasonWindowAnchorEvidenceHash?: string | null;
+  draftScheduleGeneration?: number | null;
+  draftScheduledStartMilliseconds?: number | null;
+  targetGameIdsByTeam?: Record<string, number[]> | null;
+  seasonWindowSourceGameIdsByTeam?: Record<string, number[]> | null;
+  seasonWindowSourceGamePlanHash?: string | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -210,6 +234,8 @@ function isIntegrityVerifiedSnapshot(
     metadata.catalogValidationStatus === 'validated' &&
     (
       metadata.snapshotHashSchemaVersion === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION ||
+      metadata.snapshotHashSchemaVersion ===
+        PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION ||
       (expectedScoringRulesVersion === SCORING_RULES_V3_VERSION &&
         metadata.snapshotHashSchemaVersion ===
           PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION)
@@ -263,6 +289,30 @@ function requestPayloadHash(
       leagueId: input.leagueId,
       generationReason: input.generationReason,
       targetCycleNumber: input.targetCycleNumber ?? null,
+      ...(
+        input.targetSourceBlockNumber &&
+        input.targetSourceBlockNumber !== input.targetCycleNumber
+          ? { targetSourceBlockNumber: input.targetSourceBlockNumber }
+          : {}
+      ),
+      ...(input.seasonWindowAnchorEvidenceHash
+        ? { seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash }
+        : {}),
+      ...(typeof input.draftScheduleGeneration === 'number'
+        ? { draftScheduleGeneration: input.draftScheduleGeneration }
+        : {}),
+      ...(typeof input.draftScheduledStartMilliseconds === 'number'
+        ? {
+            draftScheduledStartMilliseconds:
+              input.draftScheduledStartMilliseconds,
+          }
+        : {}),
+      ...(input.seasonWindowSourceGamePlanHash
+        ? {
+            seasonWindowSourceGamePlanHash:
+              input.seasonWindowSourceGamePlanHash,
+          }
+        : {}),
       ...(input.availabilityRevision
         ? { availabilityRevision: input.availabilityRevision }
         : {}),
@@ -270,9 +320,17 @@ function requestPayloadHash(
     .digest('hex');
 }
 
-function controlId(leagueId: string, targetCycleNumber: number): string {
+function controlId(
+  leagueId: string,
+  targetCycleNumber: number,
+  targetSourceBlockNumber = targetCycleNumber,
+): string {
   return createHash('sha256')
-    .update(`${leagueId}:${targetCycleNumber}`)
+    .update(
+      targetSourceBlockNumber === targetCycleNumber
+        ? `${leagueId}:${targetCycleNumber}`
+        : `${leagueId}:${targetCycleNumber}:source-block:${targetSourceBlockNumber}`,
+    )
     .digest('hex')
     .slice(0, 40);
 }
@@ -286,8 +344,18 @@ function getRequestRef(requestId: string) {
   return db.doc(`projectionGenerationRequests/${safeRequestId}`);
 }
 
-function getControlRef(leagueId: string, targetCycleNumber: number) {
-  return db.doc(`projectionGenerationControls/${controlId(leagueId, targetCycleNumber)}`);
+function getControlRef(
+  leagueId: string,
+  targetCycleNumber: number,
+  targetSourceBlockNumber = targetCycleNumber,
+) {
+  return db.doc(
+    `projectionGenerationControls/${controlId(
+      leagueId,
+      targetCycleNumber,
+      targetSourceBlockNumber,
+    )}`,
+  );
 }
 
 function getProjectionTaskQueue() {
@@ -297,8 +365,15 @@ function getProjectionTaskQueue() {
 }
 
 function buildProjectionTaskId(payload: ProjectionGenerationTaskPayload): string {
+  const targetSourceBlockNumber =
+    payload.targetSourceBlockNumber ?? payload.targetCycleNumber;
+
   return createHash('sha256')
-    .update(`${payload.requestId}:${payload.leagueId}:${payload.targetCycleNumber}`)
+    .update(
+      targetSourceBlockNumber === payload.targetCycleNumber
+        ? `${payload.requestId}:${payload.leagueId}:${payload.targetCycleNumber}`
+        : `${payload.requestId}:${payload.leagueId}:${payload.targetCycleNumber}:${targetSourceBlockNumber}`,
+    )
     .digest('hex')
     .slice(0, 40);
 }
@@ -357,16 +432,145 @@ function getLeagueRequiredGames(data: Record<string, unknown>): number {
     : 6;
 }
 
+function normalizeAnchorTargetGameIdsByTeam(
+  value: unknown,
+  requiredGamesPerCycle: number,
+): Record<string, number[]> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const byTeam = new Map<string, number[]>();
+
+  for (const entry of value) {
+    const record = asRecord(entry);
+    const teamAbbreviation = asString(record['teamAbbreviation']).toUpperCase();
+    const rawGameIds = record['targetGameIds'];
+
+    if (
+      !/^[A-Z0-9]{2,4}$/.test(teamAbbreviation) ||
+      !Array.isArray(rawGameIds) ||
+      rawGameIds.length !== requiredGamesPerCycle
+    ) {
+      return null;
+    }
+
+    const gameIds = rawGameIds.filter(
+      (gameId): gameId is number =>
+        typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+    );
+
+    if (
+      gameIds.length !== requiredGamesPerCycle ||
+      new Set(gameIds).size !== requiredGamesPerCycle ||
+      byTeam.has(teamAbbreviation)
+    ) {
+      return null;
+    }
+
+    byTeam.set(teamAbbreviation, gameIds);
+  }
+
+  const expectedTeams = NHL_DRAFT_CLUBS
+    .map((club) => club.abbreviation)
+    .sort((left, right) => left.localeCompare(right));
+
+  if (
+    byTeam.size !== expectedTeams.length ||
+    expectedTeams.some((teamAbbreviation) => !byTeam.has(teamAbbreviation))
+  ) {
+    return null;
+  }
+
+  return Object.fromEntries(
+    expectedTeams.map((teamAbbreviation) => [
+      teamAbbreviation,
+      [...byTeam.get(teamAbbreviation)!],
+    ]),
+  );
+}
+
+function targetGameIdsMatch(
+  left: Record<string, number[]> | null | undefined,
+  right: Record<string, number[]> | null | undefined,
+): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function normalizeSourceGameIdsByTeam(
+  value: unknown,
+): Record<string, number[]> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const expectedTeams = NHL_DRAFT_CLUBS
+    .map((club) => club.abbreviation)
+    .sort((left, right) => left.localeCompare(right));
+
+  if (
+    Object.keys(record).length !== expectedTeams.length ||
+    expectedTeams.some((teamAbbreviation) => !Array.isArray(record[teamAbbreviation]))
+  ) {
+    return null;
+  }
+
+  const normalized: Record<string, number[]> = {};
+
+  for (const teamAbbreviation of expectedTeams) {
+    const rawGameIds = record[teamAbbreviation] as unknown[];
+    const gameIds = rawGameIds.filter(
+      (gameId): gameId is number =>
+        typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+    );
+
+    if (
+      gameIds.length === 0 ||
+      gameIds.length !== rawGameIds.length ||
+      new Set(gameIds).size !== gameIds.length
+    ) {
+      return null;
+    }
+
+    normalized[teamAbbreviation] = gameIds;
+  }
+
+  const length = normalized[expectedTeams[0]]?.length ?? 0;
+
+  return expectedTeams.every(
+    (teamAbbreviation) => normalized[teamAbbreviation].length === length,
+  )
+    ? normalized
+    : null;
+}
+
+function hashSourceGamePlan(
+  plan: Record<string, number[]> | null,
+): string | null {
+  return plan
+    ? createHash('sha256').update(JSON.stringify(plan)).digest('hex')
+    : null;
+}
+
 async function resolveProjectionRequestContext(
   leagueId: string,
   userId: string,
   token: Record<string, unknown>,
   generationReason: SharedProjectionGenerationReason,
   requestedTargetCycleNumber: number | null,
+  requestedTargetSourceBlockNumber: number | null = null,
 ): Promise<{
   teamCount: number;
   requiredGamesPerCycle: number;
   targetCycleNumber: number;
+  targetSourceBlockNumber: number;
+  seasonWindowAnchorEvidenceHash: string | null;
+  draftScheduleGeneration: number | null;
+  draftScheduledStartMilliseconds: number | null;
+  targetGameIdsByTeam: Record<string, number[]> | null;
+  seasonWindowSourceGameIdsByTeam: Record<string, number[]> | null;
+  seasonWindowSourceGamePlanHash: string | null;
 }> {
   const [leagueSnapshot, memberSnapshot, teamSnapshot, draftSnapshot, teamsSnapshot, latestCycle] =
     await Promise.all([
@@ -405,6 +609,87 @@ async function resolveProjectionRequestContext(
     : 'setup';
   const inferredTarget = latestCycle > 0 ? latestCycle + 1 : 1;
   const targetCycleNumber = requestedTargetCycleNumber ?? inferredTarget;
+  const rawDraft = draftSnapshot.data() ?? {};
+  const initialNhlBlockNumber = normalizePositiveInteger(
+    rawDraft['initialNhlBlockNumber'],
+  );
+  const anchorScheduleGeneration =
+    typeof rawDraft['seasonWindowAnchorScheduleGeneration'] === 'number' &&
+    Number.isSafeInteger(rawDraft['seasonWindowAnchorScheduleGeneration']) &&
+    rawDraft['seasonWindowAnchorScheduleGeneration'] >= 0
+      ? rawDraft['seasonWindowAnchorScheduleGeneration']
+      : null;
+  const draftScheduleGeneration = typeof rawDraft['scheduleGeneration'] === 'number' &&
+    Number.isFinite(rawDraft['scheduleGeneration'])
+    ? Math.max(0, Math.trunc(rawDraft['scheduleGeneration']))
+    : 0;
+  const anchorEvidenceHash = isProjectionSha256(
+    rawDraft['seasonWindowAnchorEvidenceHash'],
+  )
+    ? rawDraft['seasonWindowAnchorEvidenceHash']
+    : null;
+  const requiredGamesPerCycle = getLeagueRequiredGames(league);
+  const openingTargetGameIdsByTeam = normalizeAnchorTargetGameIdsByTeam(
+    rawDraft['seasonWindowAnchorTeams'],
+    requiredGamesPerCycle,
+  );
+  const seasonWindowSourceGameIdsByTeam = normalizeSourceGameIdsByTeam(
+    rawDraft['seasonWindowSourceGameIdsByTeam'],
+  );
+  const seasonWindowSourceGamePlanHash = hashSourceGamePlan(
+    seasonWindowSourceGameIdsByTeam,
+  );
+  const hasReadyAnchor =
+    rawDraft['seasonWindowAnchorStatus'] === 'ready' &&
+    initialNhlBlockNumber !== null &&
+    anchorScheduleGeneration === draftScheduleGeneration &&
+    anchorEvidenceHash !== null &&
+    openingTargetGameIdsByTeam !== null &&
+    seasonWindowSourceGameIdsByTeam !== null &&
+    seasonWindowSourceGamePlanHash !== null;
+  const expectedTargetSourceBlockNumber = hasReadyAnchor
+    ? initialNhlBlockNumber + targetCycleNumber - 1
+    : targetCycleNumber;
+  let targetGameIdsByTeam: Record<string, number[]> | null = null;
+
+  if (hasReadyAnchor) {
+    try {
+      targetGameIdsByTeam = buildSourceNhlTargetGameIdsByTeam(
+        seasonWindowSourceGameIdsByTeam,
+        expectedTargetSourceBlockNumber,
+        requiredGamesPerCycle,
+      );
+
+      if (
+        expectedTargetSourceBlockNumber === initialNhlBlockNumber &&
+        !targetGameIdsMatch(
+          targetGameIdsByTeam,
+          openingTargetGameIdsByTeam,
+        )
+      ) {
+        throw new Error(
+          'The frozen opening NHL source block does not match the complete source-game plan.',
+        );
+      }
+    } catch (error: unknown) {
+      throw new HttpsError(
+        'failed-precondition',
+        error instanceof Error
+          ? error.message
+          : 'The immutable NHL source-game plan is incomplete.',
+      );
+    }
+  }
+
+  if (
+    requestedTargetSourceBlockNumber !== null &&
+    requestedTargetSourceBlockNumber !== expectedTargetSourceBlockNumber
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The requested NHL source block does not match this league\'s immutable season-window anchor.',
+    );
+  }
   const maximumAllowedTarget = Math.max(1, latestCycle + 1);
 
   if (!platformAdmin && targetCycleNumber > maximumAllowedTarget) {
@@ -429,8 +714,27 @@ async function resolveProjectionRequestContext(
         ? Math.floor(league['maxTeams'])
         : 2,
     ),
-    requiredGamesPerCycle: getLeagueRequiredGames(league),
+    requiredGamesPerCycle,
     targetCycleNumber,
+    targetSourceBlockNumber: expectedTargetSourceBlockNumber,
+    seasonWindowAnchorEvidenceHash: hasReadyAnchor
+      ? anchorEvidenceHash
+      : null,
+    draftScheduleGeneration:
+      hasReadyAnchor && draftStatus === 'scheduled'
+        ? draftScheduleGeneration
+        : null,
+    draftScheduledStartMilliseconds:
+      hasReadyAnchor && draftStatus === 'scheduled'
+        ? toMilliseconds(rawDraft['scheduledStartAt']) || null
+        : null,
+    targetGameIdsByTeam: hasReadyAnchor ? targetGameIdsByTeam : null,
+    seasonWindowSourceGameIdsByTeam: hasReadyAnchor
+      ? seasonWindowSourceGameIdsByTeam
+      : null,
+    seasonWindowSourceGamePlanHash: hasReadyAnchor
+      ? seasonWindowSourceGamePlanHash
+      : null,
   };
 }
 
@@ -446,6 +750,8 @@ function isReusableProjectionPointer(
     teamCount: number;
     requiredGamesPerCycle: number;
     targetCycleNumber: number;
+    targetSourceBlockNumber: number;
+    seasonWindowAnchorEvidenceHash?: string | null;
     generationReason: SharedProjectionGenerationReason;
   },
 ): boolean {
@@ -463,7 +769,14 @@ function isReusableProjectionPointer(
     !isProjectionSha256(data['snapshotContentHash']) ||
     data['teamCount'] !== input.teamCount ||
     data['requiredGamesPerCycle'] !== input.requiredGamesPerCycle ||
-    data['targetCycleNumber'] !== input.targetCycleNumber
+    data['targetCycleNumber'] !== input.targetCycleNumber ||
+    (typeof data['targetSourceBlockNumber'] === 'number'
+      ? data['targetSourceBlockNumber']
+      : data['targetCycleNumber']) !== input.targetSourceBlockNumber ||
+    (input.seasonWindowAnchorEvidenceHash
+      ? data['seasonWindowAnchorEvidenceHash'] !==
+        input.seasonWindowAnchorEvidenceHash
+      : false)
   ) {
     return false;
   }
@@ -493,6 +806,8 @@ async function findReusableProjection(
     teamCount: number;
     requiredGamesPerCycle: number;
     targetCycleNumber: number;
+    targetSourceBlockNumber?: number;
+    seasonWindowAnchorEvidenceHash?: string | null;
   },
   generationReason: SharedProjectionGenerationReason,
 ): Promise<SharedProjectionSnapshotMetadata | null> {
@@ -510,7 +825,12 @@ async function findReusableProjection(
 
   const data = pointerSnapshot.data() ?? {};
 
-  if (!isReusableProjectionPointer(data, { ...context, generationReason })) {
+  if (!isReusableProjectionPointer(data, {
+    ...context,
+    targetSourceBlockNumber:
+      context.targetSourceBlockNumber ?? context.targetCycleNumber,
+    generationReason,
+  })) {
     return null;
   }
 
@@ -522,6 +842,7 @@ export interface ServerProjectionRefreshQueueResult {
   requestId: string;
   status: 'queued' | 'ready' | 'already-queued';
   targetCycleNumber: number;
+  targetSourceBlockNumber: number;
 }
 
 interface ServerProjectionRefreshQueueInput {
@@ -529,6 +850,10 @@ interface ServerProjectionRefreshQueueInput {
   requestedBy: string;
   requestKey: string;
   targetCycleNumber?: number | null;
+  targetSourceBlockNumber?: number | null;
+  seasonWindowAnchorEvidenceHash?: string | null;
+  draftScheduleGeneration?: number | null;
+  draftScheduledStartMilliseconds?: number | null;
   generationReason: 'manual' | 'pre-draft';
   requestPrefix: 'projection-replay' | 'projection-draft';
   availabilityRevision?: string | null;
@@ -610,12 +935,46 @@ async function queueServerProjectionSnapshotRefreshInternal(
     { platformAdmin: true },
     generationReason,
     normalizePositiveInteger(input.targetCycleNumber),
+    normalizePositiveInteger(input.targetSourceBlockNumber),
   );
+  const targetSourceBlockNumber = context.targetSourceBlockNumber;
+  const seasonWindowAnchorEvidenceHash =
+    input.seasonWindowAnchorEvidenceHash ??
+    context.seasonWindowAnchorEvidenceHash;
+  const draftScheduleGeneration =
+    input.draftScheduleGeneration ?? context.draftScheduleGeneration;
+  const draftScheduledStartMilliseconds =
+    input.draftScheduledStartMilliseconds ??
+    context.draftScheduledStartMilliseconds;
+
+  if (
+    generationReason === 'pre-draft' &&
+    (
+      !context.seasonWindowAnchorEvidenceHash ||
+      seasonWindowAnchorEvidenceHash !==
+        context.seasonWindowAnchorEvidenceHash ||
+      !Number.isSafeInteger(draftScheduleGeneration) ||
+      draftScheduleGeneration !== context.draftScheduleGeneration ||
+      !Number.isSafeInteger(draftScheduledStartMilliseconds) ||
+      draftScheduledStartMilliseconds !==
+        context.draftScheduledStartMilliseconds ||
+      !context.targetGameIdsByTeam ||
+      !context.seasonWindowSourceGameIdsByTeam ||
+      !context.seasonWindowSourceGamePlanHash
+    )
+  ) {
+    throw new Error(
+      'Draft projection preparation no longer matches the immutable season-window anchor.',
+    );
+  }
   const requestId = createServerProjectionRequestId({
     requestPrefix: input.requestPrefix,
     leagueId,
     requestKey,
     targetCycleNumber: context.targetCycleNumber,
+    targetSourceBlockNumber,
+    seasonWindowAnchorEvidenceHash:
+      seasonWindowAnchorEvidenceHash ?? null,
     availabilityRevision: input.availabilityRevision,
   });
   const payloadHash = requestPayloadHash({
@@ -623,10 +982,21 @@ async function queueServerProjectionSnapshotRefreshInternal(
     leagueId,
     generationReason,
     targetCycleNumber: context.targetCycleNumber,
+    targetSourceBlockNumber,
+    seasonWindowAnchorEvidenceHash:
+      seasonWindowAnchorEvidenceHash ?? null,
     availabilityRevision: input.availabilityRevision ?? null,
+    draftScheduleGeneration,
+    draftScheduledStartMilliseconds,
+    seasonWindowSourceGamePlanHash:
+      context.seasonWindowSourceGamePlanHash,
   }, requestedBy);
   const requestRef = getRequestRef(requestId);
-  const controlRef = getControlRef(leagueId, context.targetCycleNumber);
+  const controlRef = getControlRef(
+    leagueId,
+    context.targetCycleNumber,
+    targetSourceBlockNumber,
+  );
   const now = Date.now();
   const leaseExpiresAt = Timestamp.fromMillis(
     now + PROJECTION_REQUEST_LEASE_MILLISECONDS,
@@ -659,7 +1029,25 @@ async function queueServerProjectionSnapshotRefreshInternal(
       (activeStatus === 'queued' || activeStatus === 'processing') &&
       activeLeaseExpiresAt > now
     ) {
-      return { status: 'already-queued' as const, requestId: activeRequestId };
+      const safeActiveRequestId = resolveSafeFirestoreDocumentId(
+        activeRequestId,
+        FIRESTORE_REQUEST_ID_OPTIONS,
+      );
+      const activeRequest = safeActiveRequestId
+        ? await transaction.get(getRequestRef(safeActiveRequestId))
+        : null;
+
+      if (shouldReuseActiveProjectionRequest({
+        activeRequestId,
+        nextRequestId: requestId,
+        activeStatus,
+        activeLeaseExpiresAt,
+        now,
+        activePayloadHash: activeRequest?.data()?.['payloadHash'],
+        nextPayloadHash: payloadHash,
+      })) {
+        return { status: 'already-queued' as const, requestId: activeRequestId };
+      }
     }
 
     const requestDocument: ProjectionRequestDocument = {
@@ -669,6 +1057,7 @@ async function queueServerProjectionSnapshotRefreshInternal(
       requestedBy,
       generationReason,
       targetCycleNumber: context.targetCycleNumber,
+      targetSourceBlockNumber,
       teamCount: context.teamCount,
       requiredGamesPerCycle: context.requiredGamesPerCycle,
       status: 'queued',
@@ -677,6 +1066,15 @@ async function queueServerProjectionSnapshotRefreshInternal(
       message: input.queuedMessage,
       lastError: '',
       availabilityRevision: input.availabilityRevision ?? null,
+      seasonWindowAnchorEvidenceHash:
+        seasonWindowAnchorEvidenceHash ?? null,
+      draftScheduleGeneration,
+      draftScheduledStartMilliseconds,
+      targetGameIdsByTeam: context.targetGameIdsByTeam,
+      seasonWindowSourceGameIdsByTeam:
+        context.seasonWindowSourceGameIdsByTeam,
+      seasonWindowSourceGamePlanHash:
+        context.seasonWindowSourceGamePlanHash,
     };
 
     transaction.set(requestRef, {
@@ -692,11 +1090,18 @@ async function queueServerProjectionSnapshotRefreshInternal(
       schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
       leagueId,
       targetCycleNumber: context.targetCycleNumber,
+      targetSourceBlockNumber,
       activeRequestId: requestId,
       status: 'queued',
       requestedBy,
       generationReason,
       availabilityRevision: input.availabilityRevision ?? null,
+      seasonWindowAnchorEvidenceHash:
+        seasonWindowAnchorEvidenceHash ?? null,
+      draftScheduleGeneration,
+      draftScheduledStartMilliseconds,
+      seasonWindowSourceGamePlanHash:
+        context.seasonWindowSourceGamePlanHash,
       leaseExpiresAt,
       createdAt: existingControl.exists
         ? control['createdAt'] ?? FieldValue.serverTimestamp()
@@ -712,6 +1117,7 @@ async function queueServerProjectionSnapshotRefreshInternal(
       requestId: queueState.requestId,
       status: queueState.status,
       targetCycleNumber: context.targetCycleNumber,
+      targetSourceBlockNumber,
     };
   }
 
@@ -720,6 +1126,7 @@ async function queueServerProjectionSnapshotRefreshInternal(
     leagueId,
     requestedBy,
     targetCycleNumber: context.targetCycleNumber,
+    targetSourceBlockNumber,
   };
 
   try {
@@ -734,21 +1141,30 @@ async function queueServerProjectionSnapshotRefreshInternal(
         ? error.message
         : input.queueErrorMessage;
 
-      await Promise.all([
-        requestRef.set({
+      await db.runTransaction(async (transaction) => {
+        const controlSnapshot = await transaction.get(controlRef);
+        const control = controlSnapshot.data() ?? {};
+
+        transaction.set(requestRef, {
           status: 'error',
           message,
           lastError: message.slice(0, 500),
           failedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-        controlRef.set({
-          status: 'error',
-          lastError: message.slice(0, 500),
-          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-      ]).catch(() => undefined);
+        }, { merge: true });
+
+        if (shouldMutateProjectionControl(
+          control['activeRequestId'],
+          requestId,
+        )) {
+          transaction.set(controlRef, {
+            status: 'error',
+            lastError: message.slice(0, 500),
+            leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+      }).catch(() => undefined);
 
       throw error;
     }
@@ -758,6 +1174,7 @@ async function queueServerProjectionSnapshotRefreshInternal(
     requestId,
     status: 'queued',
     targetCycleNumber: context.targetCycleNumber,
+    targetSourceBlockNumber,
   };
 }
 
@@ -782,14 +1199,32 @@ export async function queueServerDraftProjectionSnapshotRefresh(input: {
   requestedBy: string;
   requestKey: string;
   availabilityRevision: string;
+  targetSourceBlockNumber: number;
+  seasonWindowAnchorEvidenceHash: string;
+  draftScheduleGeneration: number;
+  draftScheduledStartMilliseconds: number;
 }): Promise<ServerProjectionRefreshQueueResult> {
   if (!/^[a-f0-9]{64}$/.test(input.availabilityRevision)) {
     throw new Error('Draft readiness requires a valid player-availability revision.');
   }
 
+  if (
+    !Number.isSafeInteger(input.targetSourceBlockNumber) ||
+    input.targetSourceBlockNumber < 1 ||
+    !/^[a-f0-9]{64}$/.test(input.seasonWindowAnchorEvidenceHash) ||
+    !Number.isSafeInteger(input.draftScheduleGeneration) ||
+    input.draftScheduleGeneration < 0 ||
+    !Number.isSafeInteger(input.draftScheduledStartMilliseconds) ||
+    input.draftScheduledStartMilliseconds <= 0
+  ) {
+    throw new Error('Draft readiness requires immutable season-window anchor evidence.');
+  }
+
   return queueServerProjectionSnapshotRefreshInternal({
     ...input,
     targetCycleNumber: 1,
+    targetSourceBlockNumber: input.targetSourceBlockNumber,
+    seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash,
     generationReason: 'pre-draft',
     requestPrefix: 'projection-draft',
     queuedMessage:
@@ -1144,18 +1579,30 @@ export const requestProjectionSnapshotGeneration = onCall(
     const requestId = requireRequestId(data['requestId']);
     const generationReason = requireGenerationReason(data['generationReason']);
     const requestedTargetCycleNumber = normalizePositiveInteger(data['targetCycleNumber']);
+    const requestedTargetSourceBlockNumber = normalizePositiveInteger(
+      data['targetSourceBlockNumber'],
+    );
     const context = await resolveProjectionRequestContext(
       leagueId,
       userId,
       request.auth?.token ?? {},
       generationReason,
       requestedTargetCycleNumber,
+      requestedTargetSourceBlockNumber,
     );
     const payloadHash = requestPayloadHash({
       requestId,
       leagueId,
       generationReason,
       targetCycleNumber: context.targetCycleNumber,
+      targetSourceBlockNumber: context.targetSourceBlockNumber,
+      seasonWindowAnchorEvidenceHash:
+        context.seasonWindowAnchorEvidenceHash,
+      draftScheduleGeneration: context.draftScheduleGeneration,
+      draftScheduledStartMilliseconds:
+        context.draftScheduledStartMilliseconds,
+      seasonWindowSourceGamePlanHash:
+        context.seasonWindowSourceGamePlanHash,
     }, userId);
     const reusable = await findReusableProjection(leagueId, context, generationReason);
 
@@ -1165,13 +1612,18 @@ export const requestProjectionSnapshotGeneration = onCall(
         status: 'ready',
         snapshotId: reusable.activeSnapshotId,
         targetCycleNumber: context.targetCycleNumber,
+        targetSourceBlockNumber: context.targetSourceBlockNumber,
         message: 'Using the newest server-validated Projection V11 snapshot.',
         reusedFreshSnapshot: true,
       };
     }
 
     const requestRef = getRequestRef(requestId);
-    const controlRef = getControlRef(leagueId, context.targetCycleNumber);
+    const controlRef = getControlRef(
+      leagueId,
+      context.targetCycleNumber,
+      context.targetSourceBlockNumber,
+    );
     const now = Date.now();
     const leaseExpiresAt = Timestamp.fromMillis(
       now + PROJECTION_REQUEST_LEASE_MILLISECONDS,
@@ -1212,10 +1664,28 @@ export const requestProjectionSnapshotGeneration = onCall(
         (activeStatus === 'queued' || activeStatus === 'processing') &&
         activeLeaseExpiresAt > now
       ) {
-        return {
-          requestId: activeRequestId,
-          alreadyQueued: true,
-        };
+        const safeActiveRequestId = resolveSafeFirestoreDocumentId(
+          activeRequestId,
+          FIRESTORE_REQUEST_ID_OPTIONS,
+        );
+        const activeRequest = safeActiveRequestId
+          ? await transaction.get(getRequestRef(safeActiveRequestId))
+          : null;
+
+        if (shouldReuseActiveProjectionRequest({
+          activeRequestId,
+          nextRequestId: requestId,
+          activeStatus,
+          activeLeaseExpiresAt,
+          now,
+          activePayloadHash: activeRequest?.data()?.['payloadHash'],
+          nextPayloadHash: payloadHash,
+        })) {
+          return {
+            requestId: activeRequestId,
+            alreadyQueued: true,
+          };
+        }
       }
 
       const requestDocument: ProjectionRequestDocument = {
@@ -1225,6 +1695,7 @@ export const requestProjectionSnapshotGeneration = onCall(
         requestedBy: userId,
         generationReason,
         targetCycleNumber: context.targetCycleNumber,
+        targetSourceBlockNumber: context.targetSourceBlockNumber,
         teamCount: context.teamCount,
         requiredGamesPerCycle: context.requiredGamesPerCycle,
         status: 'queued',
@@ -1232,6 +1703,16 @@ export const requestProjectionSnapshotGeneration = onCall(
         snapshotId: null,
         message: 'Projection generation is queued.',
         lastError: '',
+        seasonWindowAnchorEvidenceHash:
+          context.seasonWindowAnchorEvidenceHash,
+        draftScheduleGeneration: context.draftScheduleGeneration,
+        draftScheduledStartMilliseconds:
+          context.draftScheduledStartMilliseconds,
+        targetGameIdsByTeam: context.targetGameIdsByTeam,
+        seasonWindowSourceGameIdsByTeam:
+          context.seasonWindowSourceGameIdsByTeam,
+        seasonWindowSourceGamePlanHash:
+          context.seasonWindowSourceGamePlanHash,
       };
 
       transaction.set(requestRef, {
@@ -1245,10 +1726,18 @@ export const requestProjectionSnapshotGeneration = onCall(
         schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
         leagueId,
         targetCycleNumber: context.targetCycleNumber,
+        targetSourceBlockNumber: context.targetSourceBlockNumber,
         activeRequestId: requestId,
         status: 'queued',
         requestedBy: userId,
         generationReason,
+        seasonWindowAnchorEvidenceHash:
+          context.seasonWindowAnchorEvidenceHash,
+        draftScheduleGeneration: context.draftScheduleGeneration,
+        draftScheduledStartMilliseconds:
+          context.draftScheduledStartMilliseconds,
+        seasonWindowSourceGamePlanHash:
+          context.seasonWindowSourceGamePlanHash,
         leaseExpiresAt,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -1265,6 +1754,7 @@ export const requestProjectionSnapshotGeneration = onCall(
       leagueId,
       requestedBy: userId,
       targetCycleNumber: context.targetCycleNumber,
+      targetSourceBlockNumber: context.targetSourceBlockNumber,
     };
 
     if (!queued.alreadyQueued || queued.requestId === requestId) {
@@ -1280,21 +1770,32 @@ export const requestProjectionSnapshotGeneration = onCall(
             ? error.message
             : 'The projection queue could not accept this request.';
 
-          await Promise.all([
-            getRequestRef(queued.requestId).set({
+          const failedRequestRef = getRequestRef(queued.requestId);
+
+          await db.runTransaction(async (transaction) => {
+            const controlSnapshot = await transaction.get(controlRef);
+            const control = controlSnapshot.data() ?? {};
+
+            transaction.set(failedRequestRef, {
               status: 'error',
               message,
               lastError: message.slice(0, 500),
               failedAt: FieldValue.serverTimestamp(),
               updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true }),
-            controlRef.set({
-              status: 'error',
-              lastError: message.slice(0, 500),
-              leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-              updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true }),
-          ]).catch(() => undefined);
+            }, { merge: true });
+
+            if (shouldMutateProjectionControl(
+              control['activeRequestId'],
+              queued.requestId,
+            )) {
+              transaction.set(controlRef, {
+                status: 'error',
+                lastError: message.slice(0, 500),
+                leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+                updatedAt: FieldValue.serverTimestamp(),
+              }, { merge: true });
+            }
+          }).catch(() => undefined);
 
           throw new HttpsError('unavailable', message);
         }
@@ -1306,6 +1807,7 @@ export const requestProjectionSnapshotGeneration = onCall(
       status: 'queued',
       snapshotId: null,
       targetCycleNumber: context.targetCycleNumber,
+      targetSourceBlockNumber: context.targetSourceBlockNumber,
       message: queued.alreadyQueued
         ? 'RinkRat is already building this server-validated projection snapshot.'
         : 'Server-validated Projection V11 generation is queued.',
@@ -1348,14 +1850,28 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
       !leagueId ||
       !requestedBy ||
       !Number.isFinite(payload.targetCycleNumber) ||
-      payload.targetCycleNumber < 1
+      payload.targetCycleNumber < 1 ||
+      (
+        payload.targetSourceBlockNumber !== undefined &&
+        (
+          !Number.isFinite(payload.targetSourceBlockNumber) ||
+          payload.targetSourceBlockNumber < 1
+        )
+      )
     ) {
       console.warn('Ignored malformed projection generation task.', { payload });
       return;
     }
 
+    const targetSourceBlockNumber = normalizePositiveInteger(
+      payload.targetSourceBlockNumber,
+    ) ?? payload.targetCycleNumber;
     const requestRef = getRequestRef(requestId);
-    const controlRef = getControlRef(leagueId, payload.targetCycleNumber);
+    const controlRef = getControlRef(
+      leagueId,
+      payload.targetCycleNumber,
+      targetSourceBlockNumber,
+    );
     const now = Date.now();
     const processingLease = Timestamp.fromMillis(
       now + PROJECTION_REQUEST_LEASE_MILLISECONDS,
@@ -1383,6 +1899,8 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         requestData['leagueId'] !== leagueId ||
         requestData['requestedBy'] !== requestedBy ||
         requestData['targetCycleNumber'] !== payload.targetCycleNumber ||
+        (normalizePositiveInteger(requestData['targetSourceBlockNumber']) ??
+          payload.targetCycleNumber) !== targetSourceBlockNumber ||
         controlData['activeRequestId'] !== requestId
       ) {
         transaction.set(requestRef, {
@@ -1424,16 +1942,178 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         requiredGamesPerCycle: claimed.requiredGamesPerCycle,
         generationReason: claimed.generationReason,
         targetCycleNumber: claimed.targetCycleNumber,
+        targetSourceBlockNumber,
+        ...(claimed.seasonWindowAnchorEvidenceHash
+          ? {
+              seasonWindowAnchorEvidenceHash:
+                claimed.seasonWindowAnchorEvidenceHash,
+            }
+          : {}),
+        ...(claimed.targetGameIdsByTeam
+          ? { targetGameIdsByTeam: claimed.targetGameIdsByTeam }
+          : {}),
         requestedBy: claimed.requestedBy,
         generationRequestId: claimed.requestId,
+        publishPointers: false,
         ...(claimed.availabilityRevision
           ? { expectedAvailabilityRevision: claimed.availabilityRevision }
           : {}),
       });
       const durationMilliseconds = Date.now() - startedAt;
+      const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+      const targetPointerRef = db.doc(
+        `leagues/${leagueId}/projectionSnapshots/target-cycle-${claimed.targetCycleNumber}`,
+      );
+      const currentPointerRef = db.doc(
+        `leagues/${leagueId}/projectionSnapshots/current`,
+      );
+      const pointerMetadata = Object.fromEntries(
+        Object.entries(snapshot.metadata).filter(([, value]) => value !== undefined),
+      );
+      const published = await db.runTransaction(async (transaction) => {
+        const [latestRequestSnapshot, latestControlSnapshot, latestDraftSnapshot] =
+          await Promise.all([
+            transaction.get(requestRef),
+            transaction.get(controlRef),
+            transaction.get(draftRef),
+          ]);
+        const latestRequest = latestRequestSnapshot.data() ?? {};
+        const latestControl = latestControlSnapshot.data() ?? {};
+        const latestDraft = latestDraftSnapshot.data() ?? {};
+        const requiresDraftScheduleBinding =
+          Boolean(claimed.seasonWindowAnchorEvidenceHash) &&
+          (
+            claimed.generationReason === 'pre-draft' ||
+            typeof claimed.draftScheduleGeneration === 'number' ||
+            typeof claimed.draftScheduledStartMilliseconds === 'number'
+          );
+        const latestAnchorTargets = normalizeAnchorTargetGameIdsByTeam(
+          latestDraft['seasonWindowAnchorTeams'],
+          claimed.requiredGamesPerCycle,
+        );
+        const latestRequestSourceGamePlan = normalizeSourceGameIdsByTeam(
+          latestRequest['seasonWindowSourceGameIdsByTeam'],
+        );
+        const latestDraftSourceGamePlan = normalizeSourceGameIdsByTeam(
+          latestDraft['seasonWindowSourceGameIdsByTeam'],
+        );
+        const claimedSourceGamePlan = claimed.seasonWindowSourceGameIdsByTeam
+          ? normalizeSourceGameIdsByTeam(
+              claimed.seasonWindowSourceGameIdsByTeam,
+            )
+          : null;
+        const claimedSourceGamePlanHash =
+          claimed.seasonWindowSourceGamePlanHash ?? null;
+        const canPublish = shouldPublishProjectionResult({
+          requestExists: latestRequestSnapshot.exists,
+          requestStatus: latestRequest['status'],
+          requestLeagueId: latestRequest['leagueId'],
+          requestRequestedBy: latestRequest['requestedBy'],
+          requestTargetCycleNumber: latestRequest['targetCycleNumber'],
+          requestTargetSourceBlockNumber:
+            normalizePositiveInteger(latestRequest['targetSourceBlockNumber']) ??
+            claimed.targetCycleNumber,
+          requestSeasonWindowAnchorEvidenceHash:
+            latestRequest['seasonWindowAnchorEvidenceHash'],
+          requestTargetGameIdsMatch: targetGameIdsMatch(
+            latestRequest['targetGameIdsByTeam'] as Record<string, number[]> | null,
+            claimed.targetGameIdsByTeam,
+          ),
+          requestSourceGamePlanMatches:
+            targetGameIdsMatch(
+              latestRequestSourceGamePlan,
+              claimedSourceGamePlan,
+            ) &&
+            (latestRequest['seasonWindowSourceGamePlanHash'] ?? null) ===
+              claimedSourceGamePlanHash &&
+            hashSourceGamePlan(latestRequestSourceGamePlan) ===
+              claimedSourceGamePlanHash,
+          activeRequestId: latestControl['activeRequestId'],
+          expectedRequestId: requestId,
+          expectedLeagueId: leagueId,
+          expectedRequestedBy: requestedBy,
+          expectedTargetCycleNumber: claimed.targetCycleNumber,
+          expectedTargetSourceBlockNumber: targetSourceBlockNumber,
+          expectedSeasonWindowAnchorEvidenceHash:
+            claimed.seasonWindowAnchorEvidenceHash ?? null,
+          requiresDraftScheduleBinding,
+          draftExists: latestDraftSnapshot.exists,
+          draftStatus: latestDraft['status'],
+          expectedDraftScheduleGeneration:
+            claimed.draftScheduleGeneration ?? null,
+          expectedDraftScheduledStartMilliseconds:
+            claimed.draftScheduledStartMilliseconds ?? null,
+          draftScheduleGeneration: latestDraft['scheduleGeneration'],
+          draftScheduledStartMilliseconds:
+            toMilliseconds(latestDraft['scheduledStartAt']),
+          draftAnchorScheduleGeneration:
+            latestDraft['seasonWindowAnchorScheduleGeneration'],
+          draftAnchorStatus: latestDraft['seasonWindowAnchorStatus'],
+          draftInitialNhlBlockNumber: latestDraft['initialNhlBlockNumber'],
+          draftSeasonWindowAnchorEvidenceHash:
+            latestDraft['seasonWindowAnchorEvidenceHash'],
+          draftTargetGameIdsMatch: targetGameIdsMatch(
+            latestAnchorTargets,
+            claimed.targetGameIdsByTeam,
+          ),
+          draftSourceGamePlanMatches:
+            targetGameIdsMatch(
+              latestDraftSourceGamePlan,
+              claimedSourceGamePlan,
+            ) &&
+            hashSourceGamePlan(latestDraftSourceGamePlan) ===
+              claimedSourceGamePlanHash,
+          generationReason: claimed.generationReason,
+        });
 
-      await Promise.all([
-        requestRef.set({
+        if (!canPublish) {
+          if (
+            latestRequestSnapshot.exists &&
+            latestRequest['status'] === 'processing'
+          ) {
+            transaction.set(requestRef, {
+              status: 'error',
+              message:
+                'Projection generation finished after the active Draft schedule or request changed. The immutable result was retained but was not published.',
+              lastError: 'Stale projection publication rejected.',
+              unpublishedSnapshotId: snapshot.metadata.activeSnapshotId,
+              failedAt: FieldValue.serverTimestamp(),
+              durationMilliseconds,
+              leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+              updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+
+          if (shouldMutateProjectionControl(
+            latestControl['activeRequestId'],
+            requestId,
+          )) {
+            transaction.set(controlRef, {
+              status: 'error',
+              lastError: 'Stale projection publication rejected.',
+              lastFailedAt: FieldValue.serverTimestamp(),
+              lastDurationMilliseconds: durationMilliseconds,
+              leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+              updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+          }
+
+          return false;
+        }
+
+        const pointerPayload = {
+          ...pointerMetadata,
+          generatedAtServer: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        transaction.set(targetPointerRef, pointerPayload);
+
+        if (claimed.generationReason !== 'window-boundary') {
+          transaction.set(currentPointerRef, pointerPayload);
+        }
+
+        transaction.set(requestRef, {
           status: 'ready',
           snapshotId: snapshot.metadata.activeSnapshotId,
           message: snapshot.metadata.message,
@@ -1444,12 +2124,14 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           canonicalAssetCount: snapshot.metadata.canonicalAssetCount ?? null,
           catalogCacheHit: snapshot.metadata.catalogCacheHit ?? null,
           snapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
-          snapshotHashSchemaVersion: snapshot.metadata.snapshotHashSchemaVersion ?? null,
-          snapshotChunkCount: snapshot.metadata.snapshotChunkHashes?.length ?? null,
+          snapshotHashSchemaVersion:
+            snapshot.metadata.snapshotHashSchemaVersion ?? null,
+          snapshotChunkCount:
+            snapshot.metadata.snapshotChunkHashes?.length ?? null,
           leaseExpiresAt: Timestamp.fromMillis(Date.now()),
           updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-        controlRef.set({
+        }, { merge: true });
+        transaction.set(controlRef, {
           status: 'ready',
           activeRequestId: requestId,
           lastSnapshotId: snapshot.metadata.activeSnapshotId,
@@ -1459,23 +2141,37 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           lastError: '',
           leaseExpiresAt: Timestamp.fromMillis(Date.now()),
           updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-        db.doc('appData/projectionGeneration').set({
-          schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
-          lastStatus: 'success',
-          lastLeagueId: leagueId,
-          lastTargetCycleNumber: payload.targetCycleNumber,
-          lastSnapshotId: snapshot.metadata.activeSnapshotId,
-          lastCatalogSnapshotId: snapshot.metadata.catalogSnapshotId ?? null,
-          lastCatalogCacheHit: snapshot.metadata.catalogCacheHit ?? null,
-          lastSnapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
-          lastSnapshotChunkCount: snapshot.metadata.snapshotChunkHashes?.length ?? null,
-          lastDurationMilliseconds: durationMilliseconds,
-          successfulGenerationCount: FieldValue.increment(1),
-          lastCompletedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-      ]);
+        }, { merge: true });
+
+        return true;
+      });
+
+      if (!published) {
+        console.warn('Projection result was retained but not published after a stale-request compare-and-set.', {
+          leagueId,
+          requestId,
+          targetCycleNumber: claimed.targetCycleNumber,
+          targetSourceBlockNumber,
+          snapshotId: snapshot.metadata.activeSnapshotId,
+        });
+        return;
+      }
+
+      await db.doc('appData/projectionGeneration').set({
+        schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
+        lastStatus: 'success',
+        lastLeagueId: leagueId,
+        lastTargetCycleNumber: payload.targetCycleNumber,
+        lastSnapshotId: snapshot.metadata.activeSnapshotId,
+        lastCatalogSnapshotId: snapshot.metadata.catalogSnapshotId ?? null,
+        lastCatalogCacheHit: snapshot.metadata.catalogCacheHit ?? null,
+        lastSnapshotContentHash: snapshot.metadata.snapshotContentHash ?? null,
+        lastSnapshotChunkCount: snapshot.metadata.snapshotChunkHashes?.length ?? null,
+        lastDurationMilliseconds: durationMilliseconds,
+        successfulGenerationCount: FieldValue.increment(1),
+        lastCompletedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
 
 
       try {
@@ -1501,25 +2197,51 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         : 'Unable to generate the server projection snapshot.';
       const durationMilliseconds = Date.now() - startedAt;
 
-      await Promise.all([
-        requestRef.set({
-          status: 'error',
-          message,
-          lastError: message.slice(0, 500),
-          failedAt: FieldValue.serverTimestamp(),
-          durationMilliseconds,
-          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-        controlRef.set({
-          status: 'error',
-          lastError: message.slice(0, 500),
-          lastFailedAt: FieldValue.serverTimestamp(),
-          lastDurationMilliseconds: durationMilliseconds,
-          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-        db.doc('appData/projectionGeneration').set({
+      const failureWasActive = await db.runTransaction(async (transaction) => {
+        const [latestRequestSnapshot, latestControlSnapshot] =
+          await Promise.all([
+            transaction.get(requestRef),
+            transaction.get(controlRef),
+          ]);
+        const latestRequest = latestRequestSnapshot.data() ?? {};
+        const latestControl = latestControlSnapshot.data() ?? {};
+
+        if (
+          latestRequestSnapshot.exists &&
+          latestRequest['status'] !== 'ready'
+        ) {
+          transaction.set(requestRef, {
+            status: 'error',
+            message,
+            lastError: message.slice(0, 500),
+            failedAt: FieldValue.serverTimestamp(),
+            durationMilliseconds,
+            leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+
+        const controlStillBelongsToRequest = shouldMutateProjectionControl(
+          latestControl['activeRequestId'],
+          requestId,
+        );
+
+        if (controlStillBelongsToRequest) {
+          transaction.set(controlRef, {
+            status: 'error',
+            lastError: message.slice(0, 500),
+            lastFailedAt: FieldValue.serverTimestamp(),
+            lastDurationMilliseconds: durationMilliseconds,
+            leaseExpiresAt: Timestamp.fromMillis(Date.now()),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+
+        return controlStillBelongsToRequest;
+      }).catch(() => false);
+
+      if (failureWasActive) {
+        await db.doc('appData/projectionGeneration').set({
           schemaVersion: PROJECTION_REQUEST_SCHEMA_VERSION,
           lastStatus: 'error',
           lastLeagueId: leagueId,
@@ -1529,8 +2251,8 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           failedGenerationCount: FieldValue.increment(1),
           lastFailedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true }),
-      ]).catch(() => undefined);
+        }, { merge: true }).catch(() => undefined);
+      }
 
       console.error('Projection generation task failed.', {
         leagueId: leagueId,

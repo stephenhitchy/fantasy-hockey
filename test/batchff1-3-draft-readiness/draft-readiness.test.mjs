@@ -199,6 +199,21 @@ test('Draft request identity extends but does not change legacy replay identitie
     requestKey: 'replay-key',
     targetCycleNumber: 1,
   });
+  const explicitLegacySourceId = createServerProjectionRequestId({
+    requestPrefix: 'projection-replay',
+    leagueId: 'league-1',
+    requestKey: 'replay-key',
+    targetCycleNumber: 1,
+    targetSourceBlockNumber: 1,
+  });
+  const offsetSourceId = createServerProjectionRequestId({
+    requestPrefix: 'projection-replay',
+    leagueId: 'league-1',
+    requestKey: 'replay-key',
+    targetCycleNumber: 1,
+    targetSourceBlockNumber: 2,
+    seasonWindowAnchorEvidenceHash: 'c'.repeat(64),
+  });
   const draftId = createServerProjectionRequestId({
     requestPrefix: 'projection-draft',
     leagueId: 'league-1',
@@ -208,6 +223,8 @@ test('Draft request identity extends but does not change legacy replay identitie
   });
 
   assert.equal(replayId, expectedLegacyId);
+  assert.equal(explicitLegacySourceId, expectedLegacyId);
+  assert.notEqual(offsetSourceId, replayId);
   assert.notEqual(draftId, replayId.replace('projection-replay-', 'projection-draft-'));
 });
 

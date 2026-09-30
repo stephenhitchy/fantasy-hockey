@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import type { DraftableAsset } from '../draft/draft.models';
 
 export const PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION = 1;
-export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2;
+export const PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION = 2;
+export const PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 3;
 export const PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION = 2;
 export const PROJECTION_SNAPSHOT_HASH_ALGORITHM = 'sha256' as const;
 
@@ -24,6 +25,8 @@ export interface ProjectionSnapshotHashMetadataInput {
   projectionSeason?: string;
   teamCount: number;
   targetCycleNumber: number;
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string;
   requiredGamesPerCycle: number;
   assetCount: number;
   assetDocumentCount: number;
@@ -129,6 +132,8 @@ export function createServerProjectionRequestId(input: {
   leagueId: string;
   requestKey: string;
   targetCycleNumber: number;
+  targetSourceBlockNumber?: number | null;
+  seasonWindowAnchorEvidenceHash?: string | null;
   availabilityRevision?: string | null;
 }): string {
   const legacyIdentity = [
@@ -136,15 +141,25 @@ export function createServerProjectionRequestId(input: {
     input.requestKey,
     String(input.targetCycleNumber),
   ].join(':');
-  const identity = input.availabilityRevision
-    ? `${legacyIdentity}:${input.availabilityRevision}`
-    : legacyIdentity;
+  const sourceBlockSuffix =
+    input.targetSourceBlockNumber &&
+    input.targetSourceBlockNumber !== input.targetCycleNumber
+      ? `:source-block:${input.targetSourceBlockNumber}`
+      : '';
+  const anchorSuffix = input.seasonWindowAnchorEvidenceHash
+    ? `:anchor:${input.seasonWindowAnchorEvidenceHash}`
+    : '';
+  const availabilitySuffix = input.availabilityRevision
+    ? `:${input.availabilityRevision}`
+    : '';
+  const identity = `${legacyIdentity}${sourceBlockSuffix}${anchorSuffix}${availabilitySuffix}`;
 
   return `${input.requestPrefix}-${sha256(identity).slice(0, 32)}`;
 }
 
-function isSupportedHashSchema(value: unknown): value is 1 | 2 {
+function isSupportedHashSchema(value: unknown): value is 1 | 2 | 3 {
   return value === PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION ||
+    value === PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION ||
     value === PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION;
 }
 
@@ -194,8 +209,15 @@ export function createProjectionSnapshotContentHash(
     chunkHashes: input.chunkHashes,
   };
 
-  if (hashSchemaVersion >= PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION) {
+  if (hashSchemaVersion >= PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION) {
     canonical['scoringRulesVersion'] = input.scoringRulesVersion;
+  }
+
+  if (hashSchemaVersion >= PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION) {
+    canonical['targetSourceBlockNumber'] =
+      input.targetSourceBlockNumber ?? input.targetCycleNumber;
+    canonical['seasonWindowAnchorEvidenceHash'] =
+      input.seasonWindowAnchorEvidenceHash ?? '';
   }
 
   return sha256(stableProjectionSnapshotJson(canonical));
@@ -362,6 +384,9 @@ export function verifyProjectionSnapshotHashChain(
       projectionSeason: metadata.projectionSeason,
       teamCount: metadata.teamCount,
       targetCycleNumber: metadata.targetCycleNumber,
+      targetSourceBlockNumber: metadata.targetSourceBlockNumber,
+      seasonWindowAnchorEvidenceHash:
+        metadata.seasonWindowAnchorEvidenceHash,
       requiredGamesPerCycle: metadata.requiredGamesPerCycle,
       assetCount: metadata.assetCount,
       assetDocumentCount: metadata.assetDocumentCount,

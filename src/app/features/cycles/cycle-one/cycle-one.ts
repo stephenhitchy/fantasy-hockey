@@ -50,11 +50,12 @@ import { getLeagueById, League } from '../../../core/league/league.service';
 
 import {
   STANDARD_FULL_CYCLE_SEASON_COUNT,
+  getAnchoredRegularSeasonCycleCount,
   getPlayoffRoundLabel,
   getStandardPlayoffRoundCount,
   getStandardPlayoffTeamCount,
-  getStandardRegularSeasonCycleCount,
 } from '../../../core/playoffs/playoff-format';
+import { resolveSourceNhlBlockNumber } from '../../../core/cycle/cycle-window-selection.util';
 
 import {
   getNhlTeamSeasonSchedule,
@@ -1594,7 +1595,9 @@ export class CycleOne implements OnDestroy {
     }
   }
 
-  private async hasAnyRosterGamesForCycle(cycleNumber: number): Promise<boolean> {
+  private async hasAnyRosterGamesForSourceBlock(
+    sourceNhlBlockNumber: number,
+  ): Promise<boolean> {
     const league = this.league();
     const picks = this.picks();
 
@@ -1606,8 +1609,8 @@ export class CycleOne implements OnDestroy {
     const requiredGamesPerCycle =
       scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
 
-    const startIndex = (cycleNumber - 1) * requiredGamesPerCycle;
-    const endIndex = cycleNumber * requiredGamesPerCycle;
+    const startIndex = (sourceNhlBlockNumber - 1) * requiredGamesPerCycle;
+    const endIndex = sourceNhlBlockNumber * requiredGamesPerCycle;
     const season = this.getNhlSeasonForDate(this.getProjectionWindowStartDate() ?? new Date());
 
     const teamAbbreviations = [
@@ -1660,6 +1663,10 @@ export class CycleOne implements OnDestroy {
     }
 
     const nextCycleNumber = this.cycleNumber + 1;
+    const nextSourceNhlBlockNumber = resolveSourceNhlBlockNumber(
+      cycle.sourceNhlBlockNumber,
+      cycle.cycleNumber,
+    ) + 1;
 
     // Every standard fantasy season uses exactly 13 complete six-game
     // periods (78 NHL team games). Playoff cycles may contain only a
@@ -1667,8 +1674,8 @@ export class CycleOne implements OnDestroy {
     // the current cycle's roster snapshots could incorrectly stop the
     // season before a bye team returns in the following round.
     const nextCycleHasGames =
-      nextCycleNumber <= STANDARD_FULL_CYCLE_SEASON_COUNT ||
-      (await this.hasAnyRosterGamesForCycle(nextCycleNumber));
+      nextSourceNhlBlockNumber <= STANDARD_FULL_CYCLE_SEASON_COUNT ||
+      (await this.hasAnyRosterGamesForSourceBlock(nextSourceNhlBlockNumber));
 
     if (!nextCycleHasGames) {
       const message = `No NHL team games were found for ${this.getNextCycleLabel()}. The season flow is stopping instead of creating an empty matchup period.`;
@@ -2587,7 +2594,15 @@ export class CycleOne implements OnDestroy {
     }
 
     const teamCount = this.teams().length;
-    const regularSeasonCycleCount = getStandardRegularSeasonCycleCount(teamCount);
+    const sourceNhlBlockNumber = resolveSourceNhlBlockNumber(
+      cycle?.sourceNhlBlockNumber,
+      this.cycleNumber,
+    );
+    const initialNhlBlockNumber = sourceNhlBlockNumber - (this.cycleNumber - 1);
+    const regularSeasonCycleCount = getAnchoredRegularSeasonCycleCount(
+      teamCount,
+      initialNhlBlockNumber,
+    );
 
     if (this.cycleNumber >= regularSeasonCycleCount) {
       const playoffTeamCount = getStandardPlayoffTeamCount(teamCount);
@@ -3582,8 +3597,12 @@ export class CycleOne implements OnDestroy {
     const scoringRules = this.league()?.scoringRules ?? defaultScoringRules;
     const requiredGamesPerCycle =
       scoringRules.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
-    const firstGameNumber = (this.cycleNumber - 1) * requiredGamesPerCycle + 1;
-    const lastGameNumber = this.cycleNumber * requiredGamesPerCycle;
+    const sourceNhlBlockNumber = resolveSourceNhlBlockNumber(
+      this.cycle()?.sourceNhlBlockNumber,
+      this.cycleNumber,
+    );
+    const firstGameNumber = (sourceNhlBlockNumber - 1) * requiredGamesPerCycle + 1;
+    const lastGameNumber = sourceNhlBlockNumber * requiredGamesPerCycle;
 
     return `Current scores use NHL team games ${firstGameNumber}-${lastGameNumber} for each roster spot. Missed games count as 0-point games.`;
   }

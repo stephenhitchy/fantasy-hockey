@@ -10,6 +10,7 @@ import {
   getSkaterSeasonRealtimeStats,
   getSkaterSeasonSummaryStats,
   NHL_DRAFT_CLUBS,
+  NhlApiRefreshProfile,
   NhlStatsRecord,
   NhlTeamSeasonGame
 } from '../nhl/nhl-api.service';
@@ -76,12 +77,22 @@ import {
   alignHistoricalReplaySkaterData,
   alignHistoricalReplayTeamData,
 } from './historical-replay-player-data.util';
+import {
+  determineSeasonWindowAnchor,
+  type SeasonWindowAnchor,
+} from './season-window-anchor.util';
+import { selectProjectionTargetGames } from './projection-target-games.util';
 
 let cachedPlayerPool: DraftableAsset[] | null = null;
 
 export interface DraftPlayerPoolProjectionOptions {
   forceRefresh?: boolean;
+  /** Fantasy matchup number retained for display and Projection V11 metadata. */
   targetCycleNumber?: number;
+  /** NHL six-game block used to select exact schedule games for this projection. */
+  targetSourceBlockNumber?: number;
+  /** Frozen all-club NHL game IDs for an anchored Draft-opening snapshot. */
+  targetGameIdsByTeam?: Readonly<Record<string, readonly number[]>>;
   requiredGamesPerCycle?: number;
   availabilityByPlayerId?: ReadonlyMap<
     number,
@@ -338,7 +349,7 @@ const POSITION_BASELINES: Record<DraftPosition, PositionProjectionBaseline> = {
   }
 };
 
-function getCurrentNhlSeason(now: Date = new Date()): string {
+export function getCurrentNhlSeason(now: Date = new Date()): string {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const startYear = month >= 7 ? year : year - 1;
@@ -408,6 +419,8 @@ function normalizeProjectionOptions(
     return {
       forceRefresh: input,
       targetCycleNumber: undefined,
+      targetSourceBlockNumber: undefined,
+      targetGameIdsByTeam: undefined,
       requiredGamesPerCycle:
         defaultScoringRules.requiredGamesPerCycle,
       availabilityByPlayerId: undefined,
@@ -436,6 +449,11 @@ function normalizeProjectionOptions(
       typeof input.targetCycleNumber === 'number'
         ? Math.max(1, Math.floor(input.targetCycleNumber))
         : undefined,
+    targetSourceBlockNumber:
+      typeof input.targetSourceBlockNumber === 'number'
+        ? Math.max(1, Math.floor(input.targetSourceBlockNumber))
+        : undefined,
+    targetGameIdsByTeam: input.targetGameIdsByTeam,
     requiredGamesPerCycle:
       typeof input.requiredGamesPerCycle === 'number'
         ? Math.max(1, Math.floor(input.requiredGamesPerCycle))
@@ -585,7 +603,8 @@ function getAvailabilityProbabilityForGame(
 
 async function loadTeamProjectionSchedules(
   season: string,
-  requireCompleteInput: boolean
+  requireCompleteInput: boolean,
+  refreshProfile: NhlApiRefreshProfile = 'standard'
 ): Promise<Map<string, NhlTeamSeasonGame[]>> {
   const schedules = new Map<string, NhlTeamSeasonGame[]>();
   let failedTeamCount = 0;
@@ -596,7 +615,8 @@ async function loadTeamProjectionSchedules(
     teamAbbreviation: club.abbreviation,
     schedule: (await getNhlTeamSeasonSchedule(
       club.abbreviation,
-      season
+      season,
+      refreshProfile,
     ))
       .filter((game) =>
         typeof game.gameType !== 'number' ||
@@ -662,22 +682,31 @@ async function loadTeamProjectionSchedules(
   return schedules;
 }
 
-function getTargetCycleGames(
-  schedule: NhlTeamSeasonGame[],
-  targetCycleNumber: number | undefined,
-  requiredGamesPerCycle: number
-): NhlTeamSeasonGame[] {
-  if (!targetCycleNumber) {
-    return [];
-  }
-
-  const startIndex =
-    (targetCycleNumber - 1) * requiredGamesPerCycle;
-
-  return schedule.slice(
-    startIndex,
-    startIndex + requiredGamesPerCycle
+/**
+ * Loads one strict, all-club schedule evidence set and derives the immutable
+ * NHL block that a newly finalized league must use for Fantasy Matchup 1.
+ * This deliberately shares the Projection V11 schedule pacing/cache path so
+ * T-40 preparation does not create a second unbounded NHL request fan-out.
+ */
+export async function loadDraftSeasonWindowAnchorEvidence(input: {
+  season: string;
+  requiredGames: number;
+}): Promise<SeasonWindowAnchor> {
+  const schedules = await loadTeamProjectionSchedules(
+    input.season,
+    true,
+    'near-live-canary',
   );
+
+  return determineSeasonWindowAnchor({
+    season: input.season,
+    requiredGames: input.requiredGames,
+    activeTeamAbbreviations: NHL_DRAFT_CLUBS.map((club) => club.abbreviation),
+    teamSchedules: NHL_DRAFT_CLUBS.map((club) => ({
+      teamAbbreviation: club.abbreviation,
+      games: schedules.get(club.abbreviation) ?? [],
+    })),
+  });
 }
 
 function getAvailabilityReliabilityPenalty(
@@ -4663,6 +4692,7 @@ export async function loadDraftPlayerPool(
   const options = normalizeProjectionOptions(input);
   const hasProjectionContext = Boolean(
     options.targetCycleNumber ||
+    options.targetSourceBlockNumber ||
     options.availabilityByPlayerId ||
     options.currentSeasonOverride ||
     options.previousSeasonOverride ||
@@ -4672,6 +4702,7 @@ export async function loadDraftPlayerPool(
     options.historicalReplayAlignment ||
     options.ignoreAvailability ||
     options.requireCompleteTeamScheduleInput ||
+    options.targetGameIdsByTeam ||
     options.expectedNhlRosterIdentityHash ||
     options.prospectPriorByPlayerId
   );
@@ -4918,12 +4949,14 @@ export async function loadDraftPlayerPool(
         currentTeamSchedules.get(skater.nhlTeamAbbreviation) ?? [];
       const currentPlayerSchedule =
         replaySkaterSchedulesByPlayerId.get(skater.id) ?? currentTeamSchedule;
-      const targetGames = getTargetCycleGames(
+      const targetGames = selectProjectionTargetGames(
         currentTeamSchedule,
-        options.targetCycleNumber,
-        options.requiredGamesPerCycle
+        options.targetSourceBlockNumber ?? options.targetCycleNumber,
+        options.requiredGamesPerCycle,
+        options.targetGameIdsByTeam?.[skater.nhlTeamAbbreviation],
+        skater.nhlTeamAbbreviation,
       );
-      const scheduleContext = options.targetCycleNumber
+      const scheduleContext = (options.targetSourceBlockNumber ?? options.targetCycleNumber)
         ? calculateProjectionScheduleContext({
             teamAbbreviation: skater.nhlTeamAbbreviation,
             position: skater.position,
@@ -5260,12 +5293,14 @@ export async function loadDraftPlayerPool(
     NHL_DRAFT_CLUBS.map((club) => {
       const currentTeamSchedule =
         currentTeamSchedules.get(club.abbreviation) ?? [];
-      const targetGames = getTargetCycleGames(
+      const targetGames = selectProjectionTargetGames(
         currentTeamSchedule,
-        options.targetCycleNumber,
-        options.requiredGamesPerCycle
+        options.targetSourceBlockNumber ?? options.targetCycleNumber,
+        options.requiredGamesPerCycle,
+        options.targetGameIdsByTeam?.[club.abbreviation],
+        club.abbreviation,
       );
-      const scheduleContext = options.targetCycleNumber
+      const scheduleContext = (options.targetSourceBlockNumber ?? options.targetCycleNumber)
         ? calculateProjectionScheduleContext({
             teamAbbreviation: club.abbreviation,
             position: 'G',

@@ -574,6 +574,35 @@ function normalizeDraftQueue(ownerId: string, data: Partial<DraftQueue> | undefi
   };
 }
 
+function normalizeSeasonWindowSourceGameIdsByTeam(
+  value: unknown,
+): Record<string, number[]> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const normalized: Record<string, number[]> = {};
+
+  for (const [teamAbbreviation, rawGameIds] of Object.entries(value)) {
+    if (!/^[A-Z0-9]{2,4}$/.test(teamAbbreviation) || !Array.isArray(rawGameIds)) {
+      return null;
+    }
+
+    const gameIds = rawGameIds.filter(
+      (gameId): gameId is number =>
+        typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+    );
+
+    if (gameIds.length !== rawGameIds.length || new Set(gameIds).size !== gameIds.length) {
+      return null;
+    }
+
+    normalized[teamAbbreviation] = gameIds;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
   const scheduledStartAt = data.scheduledStartAt ?? null;
   const status = data.status ?? (scheduledStartAt ? 'scheduled' : 'setup');
@@ -633,6 +662,91 @@ function normalizeDraft(data: Partial<FantasyDraft>): FantasyDraft {
       typeof data.scheduleGeneration === 'number' && Number.isFinite(data.scheduleGeneration)
         ? Math.max(0, Math.trunc(data.scheduleGeneration))
         : 0,
+    initialNhlBlockNumber:
+      typeof data.initialNhlBlockNumber === 'number' &&
+      Number.isFinite(data.initialNhlBlockNumber) &&
+      data.initialNhlBlockNumber >= 1
+        ? Math.trunc(data.initialNhlBlockNumber)
+        : null,
+    seasonWindowAnchorStatus:
+      data.seasonWindowAnchorStatus === 'pending' ||
+      data.seasonWindowAnchorStatus === 'ready' ||
+      data.seasonWindowAnchorStatus === 'error'
+        ? data.seasonWindowAnchorStatus
+        : null,
+    seasonWindowAnchorSeason:
+      typeof data.seasonWindowAnchorSeason === 'string'
+        ? data.seasonWindowAnchorSeason
+        : null,
+    seasonWindowAnchorScheduleGeneration:
+      typeof data.seasonWindowAnchorScheduleGeneration === 'number' &&
+      Number.isFinite(data.seasonWindowAnchorScheduleGeneration)
+        ? Math.max(0, Math.trunc(data.seasonWindowAnchorScheduleGeneration))
+        : null,
+    seasonWindowAnchorEvidenceHash:
+      typeof data.seasonWindowAnchorEvidenceHash === 'string'
+        ? data.seasonWindowAnchorEvidenceHash
+        : null,
+    seasonWindowAnchorEvidenceHashAlgorithm:
+      data.seasonWindowAnchorEvidenceHashAlgorithm === 'sha256' ? 'sha256' : null,
+    seasonWindowAnchorFinalPrefixGameCount:
+      typeof data.seasonWindowAnchorFinalPrefixGameCount === 'number' &&
+      Number.isFinite(data.seasonWindowAnchorFinalPrefixGameCount)
+        ? Math.max(0, Math.trunc(data.seasonWindowAnchorFinalPrefixGameCount))
+        : null,
+    seasonWindowAnchorSourceGameStart:
+      typeof data.seasonWindowAnchorSourceGameStart === 'number' &&
+      Number.isFinite(data.seasonWindowAnchorSourceGameStart) &&
+      data.seasonWindowAnchorSourceGameStart >= 1
+        ? Math.trunc(data.seasonWindowAnchorSourceGameStart)
+        : null,
+    seasonWindowAnchorSourceGameEnd:
+      typeof data.seasonWindowAnchorSourceGameEnd === 'number' &&
+      Number.isFinite(data.seasonWindowAnchorSourceGameEnd) &&
+      data.seasonWindowAnchorSourceGameEnd >= 1
+        ? Math.trunc(data.seasonWindowAnchorSourceGameEnd)
+        : null,
+    seasonWindowAnchorTeams: Array.isArray(data.seasonWindowAnchorTeams)
+      ? data.seasonWindowAnchorTeams
+          .filter(
+            (team) =>
+              team !== null &&
+              typeof team === 'object' &&
+              typeof team.teamAbbreviation === 'string' &&
+              typeof team.regularSeasonGameCount === 'number' &&
+              Number.isFinite(team.regularSeasonGameCount) &&
+              typeof team.finalPrefixGameCount === 'number' &&
+              Number.isFinite(team.finalPrefixGameCount) &&
+              Array.isArray(team.regularSeasonGameIds) &&
+              Array.isArray(team.targetGameIds),
+          )
+          .map((team) => ({
+            teamAbbreviation: team.teamAbbreviation,
+            regularSeasonGameCount: Math.max(0, Math.trunc(team.regularSeasonGameCount)),
+            regularSeasonGameIds: team.regularSeasonGameIds
+              .filter(
+                (gameId): gameId is number =>
+                  typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+              ),
+            finalPrefixGameCount: Math.max(0, Math.trunc(team.finalPrefixGameCount)),
+            targetGameIds: team.targetGameIds
+              .filter(
+                (gameId): gameId is number =>
+                  typeof gameId === 'number' && Number.isFinite(gameId) && gameId > 0,
+              )
+              .map((gameId) => Math.trunc(gameId)),
+          }))
+      : null,
+    seasonWindowSourceGameIdsByTeam:
+      normalizeSeasonWindowSourceGameIdsByTeam(
+        data.seasonWindowSourceGameIdsByTeam,
+      ),
+    seasonWindowAnchorUpdatedAt: data.seasonWindowAnchorUpdatedAt,
+    seasonWindowAnchorFrozenAt: data.seasonWindowAnchorFrozenAt ?? null,
+    seasonWindowAnchorLastError:
+      typeof data.seasonWindowAnchorLastError === 'string'
+        ? data.seasonWindowAnchorLastError
+        : null,
     orderEpoch:
       typeof data.orderEpoch === 'number' && Number.isFinite(data.orderEpoch)
         ? Math.max(0, Math.trunc(data.orderEpoch))

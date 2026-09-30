@@ -4934,6 +4934,8 @@ async function runLeagueAutomation(
               : null,
           currentTeamAbbreviationByPlayerId:
             livePlayerTeamIdentity?.byPlayerId,
+          sourceNhlTargetGameIdsByTeam:
+            cycle.sourceNhlTargetGameIdsByTeam,
           replayGamesByAssetKey: replayContext?.gamesByAssetKey,
           replaySourceTeamAbbreviationByAssetGameId:
             replayContext?.sourceTeamAbbreviationByAssetGameId,

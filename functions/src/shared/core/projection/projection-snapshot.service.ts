@@ -96,6 +96,10 @@ export interface SharedProjectionSnapshotMetadata {
   assetDocumentCount?: number;
   assetStorageVersion?: number;
   teamCount: number;
+  /** NHL schedule block used for exact target-game selection. */
+  targetSourceBlockNumber?: number;
+  /** Immutable late-start anchor evidence bound to this snapshot, when used. */
+  seasonWindowAnchorEvidenceHash?: string;
   targetCycleNumber: number;
   requiredGamesPerCycle: number;
   generationReason: SharedProjectionGenerationReason;
@@ -143,10 +147,20 @@ export interface GenerateSharedProjectionSnapshotInput {
   requiredGamesPerCycle: number;
   generationReason?: SharedProjectionGenerationReason;
   targetCycleNumber?: number;
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string;
+  /** Exact per-club opening game IDs frozen with the Draft anchor. */
+  targetGameIdsByTeam?: Readonly<Record<string, readonly number[]>>;
   requestedBy?: string;
   generationRequestId?: string;
   /** Fails closed if availability changed after a server request was queued. */
   expectedAvailabilityRevision?: string;
+  /**
+   * Projection-authority workers publish pointers only after a final
+   * generation/schedule compare-and-set. The immutable snapshot can still be
+   * retained when that compare-and-set proves the request became stale.
+   */
+  publishPointers?: boolean;
 }
 
 export interface WindowSnapshotFreshnessInput {
@@ -237,6 +251,15 @@ function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): Sh
     assetStorageVersion:
       typeof value.assetStorageVersion === 'number' ? value.assetStorageVersion : undefined,
     teamCount: typeof value.teamCount === 'number' ? value.teamCount : 0,
+    targetSourceBlockNumber:
+      typeof value.targetSourceBlockNumber === 'number' &&
+      Number.isFinite(value.targetSourceBlockNumber)
+        ? Math.max(1, Math.floor(value.targetSourceBlockNumber))
+        : undefined,
+    seasonWindowAnchorEvidenceHash:
+      typeof value.seasonWindowAnchorEvidenceHash === 'string'
+        ? value.seasonWindowAnchorEvidenceHash
+        : undefined,
     targetCycleNumber:
       typeof value.targetCycleNumber === 'number' ? value.targetCycleNumber : 1,
     requiredGamesPerCycle:
@@ -659,6 +682,9 @@ export async function sealSharedProjectionSnapshotIntegrity(
       projectionSeason: metadata.projectionSeason,
       teamCount: metadata.teamCount,
       targetCycleNumber: metadata.targetCycleNumber,
+      targetSourceBlockNumber: metadata.targetSourceBlockNumber,
+      seasonWindowAnchorEvidenceHash:
+        metadata.seasonWindowAnchorEvidenceHash,
       requiredGamesPerCycle: metadata.requiredGamesPerCycle,
       assetCount: assets.length,
       assetDocumentCount: chunks.length,
@@ -797,6 +823,8 @@ function prepareProjectionSnapshotIntegrity(input: {
   projectionSeason?: string;
   teamCount: number;
   targetCycleNumber: number;
+  targetSourceBlockNumber?: number;
+  seasonWindowAnchorEvidenceHash?: string;
   requiredGamesPerCycle: number;
   catalogSnapshotId: string;
   catalogHash: string;
@@ -821,6 +849,8 @@ function prepareProjectionSnapshotIntegrity(input: {
     projectionSeason: input.projectionSeason,
     teamCount: input.teamCount,
     targetCycleNumber: input.targetCycleNumber,
+    targetSourceBlockNumber: input.targetSourceBlockNumber,
+    seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash,
     requiredGamesPerCycle: input.requiredGamesPerCycle,
     assetCount: input.assets.length,
     assetDocumentCount: chunks.length,
@@ -1329,6 +1359,10 @@ async function generateSnapshotInternal(
     1,
     Math.floor(input.targetCycleNumber ?? 1),
   );
+  const targetSourceBlockNumber = Math.max(
+    1,
+    Math.floor(input.targetSourceBlockNumber ?? targetCycleNumber),
+  );
   const generationReason = input.generationReason ?? 'window-boundary';
   const requireCompleteTeamScheduleInput =
     requiresCompleteTeamScheduleInputForGeneration(generationReason);
@@ -1399,6 +1433,10 @@ async function generateSnapshotInternal(
     assetCount: 0,
     teamCount,
     targetCycleNumber,
+    targetSourceBlockNumber,
+    ...(input.seasonWindowAnchorEvidenceHash
+      ? { seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash }
+      : {}),
     requiredGamesPerCycle,
     generationReason,
     draftReadyUntil,
@@ -1431,6 +1469,8 @@ async function generateSnapshotInternal(
       // retain their strict fresh-input behavior below.
       forceRefresh: generationReason !== 'player-directory',
       targetCycleNumber,
+      targetSourceBlockNumber,
+      targetGameIdsByTeam: input.targetGameIdsByTeam,
       requiredGamesPerCycle,
       availabilityByPlayerId: context.availabilityByPlayerId,
       currentSeasonOverride: context.currentSeasonOverride,
@@ -1471,6 +1511,10 @@ async function generateSnapshotInternal(
       projectionSeason: context.projectionSeason,
       teamCount,
       targetCycleNumber,
+      targetSourceBlockNumber,
+      ...(input.seasonWindowAnchorEvidenceHash
+        ? { seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash }
+        : {}),
       requiredGamesPerCycle,
       catalogSnapshotId: catalogValidation.catalogId,
       catalogHash: catalogValidation.catalogHash,
@@ -1532,6 +1576,10 @@ async function generateSnapshotInternal(
       assetStorageVersion: 3,
       teamCount,
       targetCycleNumber,
+      targetSourceBlockNumber,
+      ...(input.seasonWindowAnchorEvidenceHash
+        ? { seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash }
+        : {}),
       requiredGamesPerCycle,
       generationReason,
       draftReadyUntil,
@@ -1582,22 +1630,24 @@ async function generateSnapshotInternal(
     const finalBatch = writeBatch(db);
 
     finalBatch.set(snapshotRef, pointerPayload);
-    finalBatch.set(
-      doc(
-        db,
-        'leagues',
-        leagueId,
-        'projectionSnapshots',
-        `target-cycle-${targetCycleNumber}`,
-      ),
-      pointerPayload,
-    );
-
-    if (generationReason !== 'window-boundary') {
+    if (input.publishPointers !== false) {
       finalBatch.set(
-        doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
+        doc(
+          db,
+          'leagues',
+          leagueId,
+          'projectionSnapshots',
+          `target-cycle-${targetCycleNumber}`,
+        ),
         pointerPayload,
       );
+
+      if (generationReason !== 'window-boundary') {
+        finalBatch.set(
+          doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
+          pointerPayload,
+        );
+      }
     }
 
     await finalBatch.commit();
@@ -1648,7 +1698,11 @@ export async function generateSharedProjectionSnapshot(
     1,
     Math.floor(input.targetCycleNumber ?? 1),
   );
-  const key = `${leagueId}::${targetCycleNumber}`;
+  const targetSourceBlockNumber = Math.max(
+    1,
+    Math.floor(input.targetSourceBlockNumber ?? targetCycleNumber),
+  );
+  const key = `${leagueId}::${targetCycleNumber}::${targetSourceBlockNumber}::${input.seasonWindowAnchorEvidenceHash ?? 'legacy'}::${input.publishPointers === false ? 'immutable-only' : 'publish'}`;
   const existing = generationByLeagueAndCycle.get(key);
 
   if (existing) {
@@ -1867,6 +1921,10 @@ export async function createEmergencyDraftProjectionSnapshot(
   const teamCount = Math.max(2, Math.floor(input.teamCount));
   const requiredGamesPerCycle = Math.max(1, Math.floor(input.requiredGamesPerCycle));
   const targetCycleNumber = Math.max(1, Math.floor(input.targetCycleNumber ?? 1));
+  const targetSourceBlockNumber = Math.max(
+    1,
+    Math.floor(input.targetSourceBlockNumber ?? targetCycleNumber),
+  );
   const generatedAt = new Date().toISOString();
   const snapshotId = `server-emergency-${Date.now()}`;
   const draftReadyUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -1988,6 +2046,10 @@ export async function createEmergencyDraftProjectionSnapshot(
     scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
     teamCount,
     targetCycleNumber,
+    targetSourceBlockNumber,
+    ...(input.seasonWindowAnchorEvidenceHash
+      ? { seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash }
+      : {}),
     requiredGamesPerCycle,
     catalogSnapshotId: catalogValidation.catalogId,
     catalogHash: catalogValidation.catalogHash,
@@ -2032,6 +2094,10 @@ export async function createEmergencyDraftProjectionSnapshot(
     assetStorageVersion: 3,
     teamCount,
     targetCycleNumber,
+    targetSourceBlockNumber,
+    ...(input.seasonWindowAnchorEvidenceHash
+      ? { seasonWindowAnchorEvidenceHash: input.seasonWindowAnchorEvidenceHash }
+      : {}),
     requiredGamesPerCycle,
     generationReason: 'server-emergency',
     draftReadyUntil,

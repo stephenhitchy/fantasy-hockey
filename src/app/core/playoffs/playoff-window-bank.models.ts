@@ -10,7 +10,12 @@ export interface FantasyPlayoffWindowBank {
   id: string;
   ownerId: string;
   windowNumber: number;
+  /** Fantasy lifecycle cycle used for roster moves and matchup ownership. */
   sourceCycleNumber: number;
+  /** NHL six-game schedule block used to score this banked window. */
+  sourceNhlBlockNumber?: number;
+  /** Exact all-club provider IDs frozen for this bank's NHL source block. */
+  sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
   status: 'scheduled' | 'active' | 'complete';
   assignmentStatus: FantasyPlayoffWindowAssignmentStatus;
   assignedMatchupId: string | null;

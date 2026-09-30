@@ -144,7 +144,11 @@ test('server roster actions evaluate the NHL schedule through the authoritative 
   assert.match(moves, /resolveServerRosterMoveReplayContext/);
   assert.match(moves, /historicalReplay\/control/);
   assert.match(moves, /completedThroughDate/);
-  assert.match(moves, /getScheduleGameState\(game, completedThroughDate\)/);
+  assert.match(
+    moves,
+    /getScheduleGameState\(game, input\.completedThroughDate \?\? null\)/,
+  );
+  assert.match(moves, /completedThroughDate,\s*\}\);/);
   assert.match(
     moves,
     /getEarliestEligibleCycleNumber\(addAsset, gamesPerCycle, leagueId\)/,

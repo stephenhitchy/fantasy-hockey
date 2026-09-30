@@ -62,6 +62,10 @@ import {
   getEarliestSafeUnpreparedDraftStartMilliseconds,
 } from './draft-readiness.util';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
+import {
+  validateSeasonWindowSourcePlan,
+} from './shared/core/draft/season-window-source-plan.util';
+import { NHL_DRAFT_CLUBS } from './shared/core/nhl/nhl-api.service';
 
 const FUNCTION_REGION = 'us-central1';
 const DRAFT_DOCUMENT_PATH_SUFFIX = 'draft/current';
@@ -77,6 +81,20 @@ const DEFAULT_ROSTER_REQUIREMENTS: DraftRosterRequirements = {
 const DEFAULT_BENCH_SLOTS = 3;
 const DEFAULT_TOTAL_ROUNDS = 17;
 const MAX_LEAGUE_TEAMS = 32;
+
+function getLeagueRequiredGamesPerCycle(data: Record<string, unknown>): number {
+  const scoringRules = data['scoringRules'];
+  const nested = scoringRules && typeof scoringRules === 'object'
+    ? (scoringRules as Record<string, unknown>)['requiredGamesPerCycle']
+    : undefined;
+  const value = typeof nested === 'number'
+    ? nested
+    : data['requiredGamesPerCycle'];
+
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(1, Math.floor(value))
+    : 6;
+}
 const MAX_ASSET_KEY_LENGTH = 180;
 const MAX_DRAFT_SUBMISSION_ID_LENGTH = 120;
 
@@ -256,6 +274,35 @@ function normalizePickSeconds(value: unknown): number {
     : DEFAULT_DRAFT_PICK_SECONDS;
 }
 
+function normalizeSeasonWindowSourceGameIdsByTeam(
+  value: unknown,
+): Record<string, number[]> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const normalized: Record<string, number[]> = {};
+
+  for (const [teamAbbreviation, rawGameIds] of Object.entries(value)) {
+    if (!/^[A-Z0-9]{2,4}$/.test(teamAbbreviation) || !Array.isArray(rawGameIds)) {
+      return null;
+    }
+
+    const gameIds = rawGameIds.filter(
+      (gameId): gameId is number =>
+        typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+    );
+
+    if (gameIds.length !== rawGameIds.length || new Set(gameIds).size !== gameIds.length) {
+      return null;
+    }
+
+    normalized[teamAbbreviation] = gameIds;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
   const scheduledStartAt = value.scheduledStartAt ?? null;
   const status = value.status ?? (scheduledStartAt ? 'scheduled' : 'setup');
@@ -321,6 +368,62 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
       typeof value.scheduleGeneration === 'number' && Number.isFinite(value.scheduleGeneration)
         ? Math.max(0, Math.trunc(value.scheduleGeneration))
         : 0,
+    initialNhlBlockNumber:
+      typeof value.initialNhlBlockNumber === 'number' &&
+      Number.isFinite(value.initialNhlBlockNumber)
+        ? Math.max(1, Math.trunc(value.initialNhlBlockNumber))
+        : null,
+    seasonWindowAnchorStatus:
+      value.seasonWindowAnchorStatus === 'pending' ||
+      value.seasonWindowAnchorStatus === 'ready' ||
+      value.seasonWindowAnchorStatus === 'error'
+        ? value.seasonWindowAnchorStatus
+        : null,
+    seasonWindowAnchorSeason:
+      typeof value.seasonWindowAnchorSeason === 'string'
+        ? value.seasonWindowAnchorSeason
+        : null,
+    seasonWindowAnchorScheduleGeneration:
+      typeof value.seasonWindowAnchorScheduleGeneration === 'number' &&
+      Number.isFinite(value.seasonWindowAnchorScheduleGeneration)
+        ? Math.max(0, Math.trunc(value.seasonWindowAnchorScheduleGeneration))
+        : null,
+    seasonWindowAnchorEvidenceHash:
+      typeof value.seasonWindowAnchorEvidenceHash === 'string'
+        ? value.seasonWindowAnchorEvidenceHash
+        : null,
+    seasonWindowAnchorEvidenceHashAlgorithm:
+      value.seasonWindowAnchorEvidenceHashAlgorithm === 'sha256'
+        ? 'sha256'
+        : null,
+    seasonWindowAnchorFinalPrefixGameCount:
+      typeof value.seasonWindowAnchorFinalPrefixGameCount === 'number' &&
+      Number.isFinite(value.seasonWindowAnchorFinalPrefixGameCount)
+        ? Math.max(0, Math.trunc(value.seasonWindowAnchorFinalPrefixGameCount))
+        : null,
+    seasonWindowAnchorSourceGameStart:
+      typeof value.seasonWindowAnchorSourceGameStart === 'number' &&
+      Number.isFinite(value.seasonWindowAnchorSourceGameStart)
+        ? Math.max(1, Math.trunc(value.seasonWindowAnchorSourceGameStart))
+        : null,
+    seasonWindowAnchorSourceGameEnd:
+      typeof value.seasonWindowAnchorSourceGameEnd === 'number' &&
+      Number.isFinite(value.seasonWindowAnchorSourceGameEnd)
+        ? Math.max(1, Math.trunc(value.seasonWindowAnchorSourceGameEnd))
+        : null,
+    seasonWindowAnchorTeams: Array.isArray(value.seasonWindowAnchorTeams)
+      ? value.seasonWindowAnchorTeams
+      : null,
+    seasonWindowSourceGameIdsByTeam:
+      normalizeSeasonWindowSourceGameIdsByTeam(
+        value.seasonWindowSourceGameIdsByTeam,
+      ),
+    seasonWindowAnchorUpdatedAt: value.seasonWindowAnchorUpdatedAt,
+    seasonWindowAnchorFrozenAt: value.seasonWindowAnchorFrozenAt,
+    seasonWindowAnchorLastError:
+      typeof value.seasonWindowAnchorLastError === 'string'
+        ? value.seasonWindowAnchorLastError
+        : null,
     orderEpoch:
       typeof value.orderEpoch === 'number' && Number.isFinite(value.orderEpoch)
         ? Math.max(0, Math.trunc(value.orderEpoch))
@@ -808,6 +911,20 @@ export async function saveDraftSettings(
           orderRandomizationSeedHash: orderChanged
             ? null
             : existingDraft?.orderRandomizationSeedHash ?? null,
+          initialNhlBlockNumber: null,
+          seasonWindowAnchorStatus: null,
+          seasonWindowAnchorSeason: null,
+          seasonWindowAnchorScheduleGeneration: null,
+          seasonWindowAnchorEvidenceHash: null,
+          seasonWindowAnchorEvidenceHashAlgorithm: null,
+          seasonWindowAnchorFinalPrefixGameCount: null,
+          seasonWindowAnchorSourceGameStart: null,
+          seasonWindowAnchorSourceGameEnd: null,
+          seasonWindowAnchorTeams: null,
+          seasonWindowSourceGameIdsByTeam: null,
+          seasonWindowAnchorUpdatedAt: timestamp,
+          seasonWindowAnchorFrozenAt: null,
+          seasonWindowAnchorLastError: null,
           projectionPreparationRequestId: null,
           projectionPreparationStatus: null,
           serverDraftReadinessStatus: null,
@@ -1033,6 +1150,20 @@ export async function cancelDraftSchedule(
       membershipLockedAt: null,
       orderFinalizedAt: null,
       finalizedScheduleGeneration: null,
+      initialNhlBlockNumber: null,
+      seasonWindowAnchorStatus: null,
+      seasonWindowAnchorSeason: null,
+      seasonWindowAnchorScheduleGeneration: null,
+      seasonWindowAnchorEvidenceHash: null,
+      seasonWindowAnchorEvidenceHashAlgorithm: null,
+      seasonWindowAnchorFinalPrefixGameCount: null,
+      seasonWindowAnchorSourceGameStart: null,
+      seasonWindowAnchorSourceGameEnd: null,
+      seasonWindowAnchorTeams: null,
+      seasonWindowSourceGameIdsByTeam: null,
+      seasonWindowAnchorUpdatedAt: timestamp,
+      seasonWindowAnchorFrozenAt: null,
+      seasonWindowAnchorLastError: null,
       clockStatus: 'stopped',
       pickStartedAt: null,
       pausedRemainingSeconds: null,
@@ -1150,12 +1281,14 @@ async function activateScheduledDraft(
 
   await db.runTransaction(async (transaction) => {
     const teamsQuery = db.collection(`leagues/${leagueId}/teams`).limit(MAX_LEAGUE_TEAMS + 1);
-    const [snapshot, teamsSnapshot] = await Promise.all([
+    const leagueRef = db.doc(`leagues/${leagueId}`);
+    const [snapshot, teamsSnapshot, leagueSnapshot] = await Promise.all([
       transaction.get(draftRef),
       transaction.get(teamsQuery),
+      transaction.get(leagueRef),
     ]);
 
-    if (!snapshot.exists) {
+    if (!snapshot.exists || !leagueSnapshot.exists) {
       throw new HttpsError('not-found', 'Draft setup was not found.');
     }
 
@@ -1187,12 +1320,40 @@ async function activateScheduledDraft(
       );
     }
 
+    try {
+      validateSeasonWindowSourcePlan({
+        finalizedTeamCount: participantIds.length,
+        initialNhlBlockNumber: draft.initialNhlBlockNumber ?? 0,
+        requiredGamesPerCycle: getLeagueRequiredGamesPerCycle(
+          leagueSnapshot.data() ?? {},
+        ),
+        activeNhlTeamAbbreviations:
+          NHL_DRAFT_CLUBS.map((club) => club.abbreviation),
+        anchorTeams: draft.seasonWindowAnchorTeams ?? [],
+        sourceGameIdsByTeam: draft.seasonWindowSourceGameIdsByTeam,
+      });
+    } catch (error: unknown) {
+      throw new HttpsError(
+        'failed-precondition',
+        error instanceof Error
+          ? error.message
+          : 'The immutable NHL source plan is incomplete.',
+      );
+    }
+
     const readinessScheduledStart = asTimestampDate(
       draft.serverDraftReadinessScheduledStartAt,
     );
 
     if (
       draft.serverDraftReadinessStatus !== 'ready' ||
+      draft.seasonWindowAnchorStatus !== 'ready' ||
+      draft.seasonWindowAnchorScheduleGeneration !==
+        (draft.scheduleGeneration ?? 0) ||
+      typeof draft.initialNhlBlockNumber !== 'number' ||
+      !Number.isSafeInteger(draft.initialNhlBlockNumber) ||
+      draft.initialNhlBlockNumber < 1 ||
+      !isProjectionSha256(draft.seasonWindowAnchorEvidenceHash) ||
       readinessScheduledStart?.getTime() !== scheduledStart.getTime() ||
       draft.serverDraftReadinessProjectionSnapshotId !==
         projection.metadata.activeSnapshotId ||
@@ -1202,6 +1363,11 @@ async function activateScheduledDraft(
         projection.metadata.generationRequestId ||
       draft.serverDraftReadinessAvailabilityRevision !==
         projection.metadata.availabilityRevision ||
+      (projection.metadata.targetSourceBlockNumber ??
+        projection.metadata.targetCycleNumber) !==
+        draft.initialNhlBlockNumber ||
+      projection.metadata.seasonWindowAnchorEvidenceHash !==
+        draft.seasonWindowAnchorEvidenceHash ||
       (
         draft.membershipLockStatus !== undefined &&
         draft.serverDraftReadinessScheduleGeneration !== (draft.scheduleGeneration ?? 0)

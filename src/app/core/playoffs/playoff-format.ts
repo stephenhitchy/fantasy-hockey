@@ -86,6 +86,32 @@ export function getStandardRegularSeasonCycleCount(
   );
 }
 
+/**
+ * Keeps the standard playoff rounds inside the NHL's thirteen complete
+ * six-game blocks when a league begins after one or more earlier blocks.
+ * A draft that starts too late for one full regular matchup plus every
+ * standard playoff round fails visibly instead of creating phantom windows.
+ */
+export function getAnchoredRegularSeasonCycleCount(
+  teamCount: number,
+  initialNhlBlockNumber: number,
+): number {
+  const normalizedInitialBlock = Number.isInteger(initialNhlBlockNumber) &&
+    initialNhlBlockNumber > 0
+      ? initialNhlBlockNumber
+      : 1;
+  const regularSeasonCycleCount =
+    getStandardRegularSeasonCycleCount(teamCount) - (normalizedInitialBlock - 1);
+
+  if (regularSeasonCycleCount < 1) {
+    throw new Error(
+      `NHL block ${normalizedInitialBlock} starts too late for one full regular matchup and the league's standard playoffs.`,
+    );
+  }
+
+  return regularSeasonCycleCount;
+}
+
 export function getPlayoffRoundLabel(
   roundNumber: number,
   roundCount: number

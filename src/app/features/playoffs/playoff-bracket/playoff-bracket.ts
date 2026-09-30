@@ -12,6 +12,7 @@ import { areDeveloperToolsEnabled } from '../../../core/cycle/cycle-runtime.conf
 import { getLatestCycle } from '../../../core/cycle/cycle.service';
 
 import { getLeagueById, League } from '../../../core/league/league.service';
+import { getFantasyDraft } from '../../../core/draft/draft.service';
 
 import {
   buildFantasyStandings,
@@ -20,10 +21,10 @@ import {
 
 import {
   getPlacementGameLabel,
+  getAnchoredRegularSeasonCycleCount,
   getPlayoffRoundLabel,
   getStandardPlayoffRoundCount,
   getStandardPlayoffTeamCount,
-  getStandardRegularSeasonCycleCount,
 } from '../../../core/playoffs/playoff-format';
 
 import {
@@ -64,6 +65,7 @@ export class PlayoffBracket implements OnDestroy {
   teams = signal<FantasyTeam[]>([]);
   playoffs = signal<FantasyPlayoffs | null>(null);
   latestCycleNumber = signal<number | null>(null);
+  initialNhlBlockNumber = signal(1);
   loading = signal(true);
   errorMessage = signal('');
 
@@ -85,7 +87,10 @@ export class PlayoffBracket implements OnDestroy {
   readonly regularSeasonCycleCount = computed(
     () =>
       this.playoffs()?.regularSeasonCycleCount ??
-      getStandardRegularSeasonCycleCount(this.teams().length),
+      getAnchoredRegularSeasonCycleCount(
+        this.teams().length,
+        this.initialNhlBlockNumber(),
+      ),
   );
 
   readonly roundNumbers = computed(() =>
@@ -476,9 +481,10 @@ export class PlayoffBracket implements OnDestroy {
     this.userId = user.uid;
 
     try {
-      const [league, teams] = await Promise.all([
+      const [league, teams, draft] = await Promise.all([
         getLeagueById(leagueId),
         getLeagueTeams(leagueId),
+        getFantasyDraft(leagueId),
       ]);
 
       if (!league) {
@@ -487,6 +493,11 @@ export class PlayoffBracket implements OnDestroy {
 
       this.league.set(league);
       this.teams.set(teams);
+      this.initialNhlBlockNumber.set(
+        typeof draft?.initialNhlBlockNumber === 'number'
+          ? Math.max(1, Math.floor(draft.initialNhlBlockNumber))
+          : 1,
+      );
       this.loadLatestCycleForNavigation(leagueId);
 
       this.stopPlayoffsListener = listenToFantasyPlayoffs(
