@@ -251,8 +251,14 @@
 }
 
 .offline-marker-live {
-  border-color: color-mix(in srgb, var(--rr-color-warning) 68%, var(--rr-color-border)) !important;
-  background: color-mix(in srgb, var(--rr-color-warning) 22%, var(--rr-color-surface-raised)) !important;
+  border-color: color-mix(in srgb, var(--rr-color-info) 68%, var(--rr-color-border)) !important;
+  background: color-mix(in srgb, var(--rr-color-info) 22%, var(--rr-color-surface-raised)) !important;
+  color: var(--rr-color-text) !important;
+}
+
+.offline-marker-finalizing {
+  border-color: color-mix(in srgb, #9c83f6 62%, var(--rr-color-border)) !important;
+  background: color-mix(in srgb, #9c83f6 18%, var(--rr-color-surface-raised)) !important;
   color: var(--rr-color-text) !important;
 }
 

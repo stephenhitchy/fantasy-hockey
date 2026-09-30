@@ -2267,20 +2267,23 @@
 }
 
 .g .marker-played {
-  color: #05070a;
-  border-color: #3fbf7b;
   background: #9ff3c6;
 }
 
 .g .marker-missed {
-  color: #05070a;
-  border-color: #ff8f8f;
   background: #ffd2d2;
 }
 
+.g .marker-live {
+  background: #79d9ff;
+  box-shadow: 0 0 0 2px #70d8ff;
+}
+
+.g .marker-finalizing {
+  background: #cbbaff;
+}
+
 .g .marker-upcoming {
-  color: #05070a;
-  border-color: #f4d35e;
   background: #fff1ae;
 }
 

@@ -128,6 +128,7 @@ import { BUNDLED_RELEASE_MANIFEST } from '../../../../environments/generated-rel
 import { CycleMatchupCard } from './components/cycle-matchup-card/cycle-matchup-card';
 import { CycleMatchupToolbar } from './components/cycle-matchup-toolbar/cycle-matchup-toolbar';
 import { CycleMobileScorebar } from './components/cycle-mobile-scorebar/cycle-mobile-scorebar';
+import { resolveCycleWindowGameMarkerState } from './cycle-window-game-marker.util';
 import { CycleMatchupFinishCard } from './components/cycle-matchup-finish-card/cycle-matchup-finish-card';
 import { CyclePageHeader } from './components/cycle-page-header/cycle-page-header';
 import { CycleStatusBanners } from './components/cycle-status-banners/cycle-status-banners';
@@ -2950,38 +2951,32 @@ export class CycleOne implements OnDestroy {
 
   getWindowGameMarkers(pick: DraftPick): CycleWindowGameMarker[] {
     const window = this.getWindowForPick(pick);
+    const scoreSummary = this.getAssetScoreSummary(pick.asset);
+    const liveSummary = scoreSummary &&
+      (!pick.rosterSlotId || scoreSummary.rosterSlotId === pick.rosterSlotId)
+      ? scoreSummary
+      : null;
     const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
 
     return Array.from({ length: requiredGames }, (_, index) => {
-      const gameId = window?.scheduledGameIds[index] ?? null;
-      const gameDate = window?.scheduledGameDates[index] ?? null;
-      const gameLabel = window?.scheduledGameLabels[index] ?? 'Schedule pending';
-      const completed = Boolean(gameId && window?.completedGameIds.includes(gameId));
-      const hasAppearanceData = Boolean(window?.appearanceGameIds.length);
-      const inferredAllAppearances = Boolean(
-        window &&
-        window.actualGamesPlayed === window.completedGameIds.length &&
-        window.completedGameIds.length > 0,
-      );
-      const appeared = Boolean(
-        gameId &&
-        (window?.appearanceGameIds.includes(gameId) ||
-          (!hasAppearanceData && inferredAllAppearances)),
-      );
-
-      let status: CycleWindowGameMarker['status'] = 'unavailable';
-      let statusLabel = 'Not scheduled';
-
-      if (gameId && completed && appeared) {
-        status = 'played';
-        statusLabel = 'Played';
-      } else if (gameId && completed) {
-        status = 'missed';
-        statusLabel = 'Counted team game · no appearance';
-      } else if (gameId) {
-        status = 'upcoming';
-        statusLabel = 'Upcoming';
-      }
+      const gameId = liveSummary?.scheduledGameIds[index] ??
+        window?.scheduledGameIds[index] ??
+        null;
+      const gameDate = liveSummary?.scheduledGameDates[index] ??
+        window?.scheduledGameDates[index] ??
+        null;
+      const gameLabel = liveSummary?.scheduledGameLabels[index] ??
+        window?.scheduledGameLabels[index] ??
+        'Schedule pending';
+      const markerState = resolveCycleWindowGameMarkerState({
+        gameId,
+        completedGameIds: liveSummary?.completedGameIds ?? window?.completedGameIds ?? [],
+        appearanceGameIds: liveSummary?.appearanceGameIds ?? window?.appearanceGameIds ?? [],
+        liveGameIds: liveSummary?.liveGameIds ?? window?.liveGameIds ?? [],
+        gameStates: liveSummary?.gameStates ?? window?.gameStates ?? {},
+        actualGamesPlayed:
+          liveSummary?.actualGamesPlayed ?? window?.actualGamesPlayed ?? 0,
+      });
 
       const dateLabel = gameDate
         ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
@@ -2992,9 +2987,9 @@ export class CycleOne implements OnDestroy {
         gameId,
         gameDate,
         gameLabel,
-        status,
-        statusLabel,
-        title: `Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${statusLabel}${gameId ? ` · NHL game ${gameId}` : ''}`,
+        status: markerState.status,
+        statusLabel: markerState.statusLabel,
+        title: `Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${markerState.statusLabel}${gameId ? ` · NHL game ${gameId}` : ''}`,
       };
     });
   }

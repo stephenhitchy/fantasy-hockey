@@ -363,6 +363,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // D1D intentionally changes only the measured near-live scoring path.
     'shared/core/cycle/cycle-scoring.service.ts',
     'shared/core/nhl/nhl-api.service.ts',
+    // D1L-D adds the isolated live-to-final runtime-state resolver.
+    'shared/core/nhl/nhl-game-runtime-state.util.ts',
     'shared/core/live-scoring/live-scoring-cadence.util.ts',
     // D1F adds isolated canonical facts and affected-league routing.
     'nhl-canonical-impact-feed.ts',

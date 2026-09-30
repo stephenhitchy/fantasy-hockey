@@ -2,6 +2,7 @@ export type OfflineMatchupMarkerStatus =
   | 'played'
   | 'missed'
   | 'live'
+  | 'finalizing'
   | 'upcoming'
   | 'unavailable';
 

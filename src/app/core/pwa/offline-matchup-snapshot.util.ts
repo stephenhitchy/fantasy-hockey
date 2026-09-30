@@ -21,6 +21,7 @@ const ALLOWED_MARKER_STATUSES = new Set<OfflineMatchupMarkerStatus>([
   'played',
   'missed',
   'live',
+  'finalizing',
   'upcoming',
   'unavailable',
 ]);

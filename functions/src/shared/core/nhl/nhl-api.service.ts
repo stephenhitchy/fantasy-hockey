@@ -363,6 +363,8 @@ export interface NhlGameTeamSummary {
 }
 
 export interface NhlGameBoxscoreResponse {
+  gameState?: string;
+  gameScheduleState?: string;
   homeTeam?: NhlGameTeamSummary;
   awayTeam?: NhlGameTeamSummary;
   playerByGameStats?: {
