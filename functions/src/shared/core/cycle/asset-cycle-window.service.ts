@@ -71,6 +71,19 @@ function normalizeNumberRecord(value: unknown): Record<string, number> {
   );
 }
 
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' && entry[1].trim().length > 0,
+    ),
+  );
+}
+
 function normalizeGameStateRecord(value: unknown): Record<string, 'scheduled' | 'live' | 'final'> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
@@ -112,6 +125,14 @@ function normalizeAssetCycleWindow(
     scheduledGameIds: normalizeNumberArray(value.scheduledGameIds),
     scheduledGameDates: normalizeStringArray(value.scheduledGameDates),
     scheduledGameLabels: normalizeStringArray(value.scheduledGameLabels),
+    scheduleTeamAbbreviation:
+      typeof value.scheduleTeamAbbreviation === 'string'
+        ? value.scheduleTeamAbbreviation
+        : undefined,
+    sourceTeamAbbreviationByGameId: normalizeStringRecord(
+      value.sourceTeamAbbreviationByGameId,
+    ),
+    teamIdentityChanged: value.teamIdentityChanged === true,
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -236,6 +257,13 @@ function buildWindow(
       summary?.scheduledGameDates ?? normalizeStringArray(previous?.scheduledGameDates),
     scheduledGameLabels:
       summary?.scheduledGameLabels ?? normalizeStringArray(previous?.scheduledGameLabels),
+    scheduleTeamAbbreviation:
+      summary?.scheduleTeamAbbreviation ?? previous?.scheduleTeamAbbreviation,
+    sourceTeamAbbreviationByGameId:
+      summary?.sourceTeamAbbreviationByGameId ??
+      normalizeStringRecord(previous?.sourceTeamAbbreviationByGameId),
+    teamIdentityChanged:
+      summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
     completedGameIds: summary?.completedGameIds ?? normalizeNumberArray(previous?.completedGameIds),
     liveGameIds: summary?.liveGameIds ?? normalizeNumberArray(previous?.liveGameIds),
     appearanceGameIds:
@@ -294,6 +322,10 @@ function stableWindowFingerprint(teamWindows: FantasyTeamCycleWindows): string {
       scheduledGameIds: window.scheduledGameIds,
       scheduledGameDates: window.scheduledGameDates,
       scheduledGameLabels: window.scheduledGameLabels,
+      scheduleTeamAbbreviation: window.scheduleTeamAbbreviation ?? null,
+      sourceTeamAbbreviationByGameId:
+        window.sourceTeamAbbreviationByGameId ?? {},
+      teamIdentityChanged: window.teamIdentityChanged === true,
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,

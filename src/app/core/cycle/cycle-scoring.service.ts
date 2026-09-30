@@ -44,6 +44,9 @@ export interface CycleAssetScoreSummary {
   scheduledGameIds: number[];
   scheduledGameDates: string[];
   scheduledGameLabels: string[];
+  scheduleTeamAbbreviation?: string;
+  sourceTeamAbbreviationByGameId?: Record<string, string>;
+  teamIdentityChanged?: boolean;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -733,8 +736,11 @@ export async function calculateCycleScoring(
       gameScores[gameIdKey] = scoreResult.points;
       currentScore += scoreResult.points;
 
-      if (state === 'final' && scoreResult.appeared) {
-        actualGamesPlayed += 1;
+      if (scoreResult.appeared) {
+        if (state === 'final') {
+          actualGamesPlayed += 1;
+        }
+
         appearanceGameIds.push(game.id);
       }
     }

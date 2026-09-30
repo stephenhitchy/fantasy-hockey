@@ -30,6 +30,9 @@ export interface FantasyAssetCycleWindow {
   scheduledGameIds: number[];
   scheduledGameDates: string[];
   scheduledGameLabels: string[];
+  scheduleTeamAbbreviation?: string;
+  sourceTeamAbbreviationByGameId?: Record<string, string>;
+  teamIdentityChanged?: boolean;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];

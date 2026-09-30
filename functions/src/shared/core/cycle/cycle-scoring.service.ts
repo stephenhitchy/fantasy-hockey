@@ -44,6 +44,10 @@ import {
   type NhlFinalInputCompleteness,
   type NhlFinalInputSourceState,
 } from '../nhl/nhl-final-input-completeness.util';
+import {
+  resolveLivePlayerTeamWindow,
+  type ResolvedLivePlayerWindow,
+} from './live-player-team-window.util';
 
 export type CycleGameRuntimeState =
   | 'scheduled'
@@ -74,6 +78,12 @@ export interface CycleAssetScoreSummary {
   scheduledGameIds: number[];
   scheduledGameDates: string[];
   scheduledGameLabels: string[];
+  /** Current NHL club whose unsettled schedule owns this player window. */
+  scheduleTeamAbbreviation?: string;
+  /** Per-game club identity preserves games already earned before a trade. */
+  sourceTeamAbbreviationByGameId?: Record<string, string>;
+  /** True when stable NHL player identity overrode stale roster metadata. */
+  teamIdentityChanged?: boolean;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -135,6 +145,13 @@ export interface CalculateCycleScoringInput {
 
   /** Previous shared result used for incremental final-game reuse. */
   previousResult?: CycleScoringResult | null;
+
+  /**
+   * One server-owned current NHL roster catalog shared by the whole scoring
+   * run. Stable player id, rather than mutable roster metadata, chooses the
+   * live club schedule after a trade.
+   */
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>;
 
   /**
    * Optional commissioner historical-replay schedules. Each asset receives a
@@ -319,12 +336,43 @@ function getMinutesFromToi(toi: string | undefined): number {
   return Number((minutes + seconds / 60).toFixed(2));
 }
 
-function getUniqueDraftedTeams(picks: DraftPick[]): string[] {
-  return [
-    ...new Set(
-      picks.map((pick) => getAssetTeamAbbreviation(pick.asset))
-    )
-  ].sort();
+function getUniqueDraftedTeams(
+  input: CalculateCycleScoringInput,
+): string[] {
+  const teams = new Set<string>();
+
+  for (const pick of input.picks) {
+    teams.add(getAssetTeamAbbreviation(pick.asset));
+
+    if (pick.asset.assetType === 'skater') {
+      const currentTeam = input.currentTeamAbbreviationByPlayerId
+        ?.get(pick.asset.player.id)
+        ?.trim()
+        .toUpperCase();
+
+      if (currentTeam) {
+        teams.add(currentTeam);
+      }
+    }
+  }
+
+  for (const summary of Object.values(
+    input.previousResult?.windowScores ?? {},
+  )) {
+    if (summary.scheduleTeamAbbreviation) {
+      teams.add(summary.scheduleTeamAbbreviation.trim().toUpperCase());
+    }
+
+    for (const sourceTeam of Object.values(
+      summary.sourceTeamAbbreviationByGameId ?? {},
+    )) {
+      if (sourceTeam) {
+        teams.add(sourceTeam.trim().toUpperCase());
+      }
+    }
+  }
+
+  return [...teams].filter(Boolean).sort();
 }
 
 function getUniqueSkaterAssets(picks: DraftPick[]): DraftableAsset[] {
@@ -707,20 +755,45 @@ function getFinalGameInputCompleteness(input: {
 }
 
 function getRelevantAssetGames(
-  asset: DraftableAsset,
+  pick: DraftPick,
   schedulesByTeam: Record<string, NhlTeamSeasonGame[]>,
   cycleNumber: number,
   requiredGamesPerCycle: number,
-  replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>
-): NhlTeamSeasonGame[] {
-  const schedule = replayGamesByAssetKey?.[asset.assetKey] ??
-    schedulesByTeam[getAssetTeamAbbreviation(asset)] ?? [];
+  previous: CycleAssetScoreSummary | undefined,
+  replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>,
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+): ResolvedLivePlayerWindow {
+  const replaySchedule = replayGamesByAssetKey?.[pick.asset.assetKey];
 
-  return selectCycleWindowGames(
-    schedule,
+  if (replaySchedule) {
+    const teamAbbreviation = getAssetTeamAbbreviation(pick.asset);
+    const games = selectCycleWindowGames(
+      replaySchedule,
+      cycleNumber,
+      requiredGamesPerCycle,
+    );
+
+    return {
+      games,
+      scheduleTeamAbbreviation: teamAbbreviation,
+      sourceTeamAbbreviationByGameId: Object.fromEntries(
+        games.map((game) => [String(game.id), teamAbbreviation]),
+      ),
+      teamIdentityChanged: false,
+    };
+  }
+
+  return resolveLivePlayerTeamWindow({
+    asset: pick.asset,
+    schedulesByTeam,
     cycleNumber,
-    requiredGamesPerCycle
-  );
+    requiredGamesPerCycle,
+    previous,
+    currentTeamAbbreviation:
+      pick.asset.assetType === 'skater'
+        ? currentTeamAbbreviationByPlayerId?.get(pick.asset.player.id)
+        : undefined,
+  });
 }
 
 function calculateSkaterGameScore(
@@ -897,6 +970,12 @@ function buildResultFingerprint(
         summary.completedGameIds.join(','),
         summary.incompleteFinalGameIds.join(','),
         summary.liveGameIds.join(','),
+        summary.scheduleTeamAbbreviation ?? '',
+        summary.teamIdentityChanged ? 'team-updated' : 'team-stored',
+        Object.entries(summary.sourceTeamAbbreviationByGameId ?? {})
+          .sort(([first], [second]) => first.localeCompare(second))
+          .map(([gameId, team]) => `${gameId}:${team}`)
+          .join(','),
         Object.entries(summary.gameScores)
           .sort(([first], [second]) => first.localeCompare(second))
           .map(([gameId, score]) => `${gameId}:${score.toFixed(1)}`)
@@ -919,7 +998,7 @@ export async function calculateCycleScoring(
   input: CalculateCycleScoringInput
 ): Promise<CycleScoringResult> {
   const nhlRefreshProfile = input.nhlRefreshProfile ?? 'standard';
-  const draftedTeams = getUniqueDraftedTeams(input.picks);
+  const draftedTeams = getUniqueDraftedTeams(input);
   let schedulesByTeam: Record<string, NhlTeamSeasonGame[]> = {};
 
   if (!input.replayGamesByAssetKey) {
@@ -939,6 +1018,9 @@ export async function calculateCycleScoring(
     }
   }
   const gamesByWindowId = new Map<string, NhlTeamSeasonGame[]>();
+  const scheduleTeamByWindowId = new Map<string, string>();
+  const sourceTeamByWindowGameId = new Map<string, Record<string, string>>();
+  const teamIdentityChangedByWindowId = new Map<string, boolean>();
   const previousByWindowId = new Map<string, CycleAssetScoreSummary | undefined>();
   const gameIdsToLoad = new Set<number>();
   const skaterAssetKeysNeedingFinalLogs = new Set<string>();
@@ -967,20 +1049,35 @@ export async function calculateCycleScoring(
       input.cycleNumber
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
-    const games = getRelevantAssetGames(
-      pick.asset,
-      schedulesByTeam,
-      pickWindowCycleNumber,
-      input.requiredGamesPerCycle,
-      input.replayGamesByAssetKey
-    );
     const previous = getPreviousWindowSummary(
       input.previousResult,
       windowId,
       pick.asset.assetKey
     );
+    const resolvedWindow = getRelevantAssetGames(
+      pick,
+      schedulesByTeam,
+      pickWindowCycleNumber,
+      input.requiredGamesPerCycle,
+      previous,
+      input.replayGamesByAssetKey,
+      input.currentTeamAbbreviationByPlayerId,
+    );
+    const games = resolvedWindow.games;
 
     gamesByWindowId.set(windowId, games);
+    scheduleTeamByWindowId.set(
+      windowId,
+      resolvedWindow.scheduleTeamAbbreviation,
+    );
+    sourceTeamByWindowGameId.set(
+      windowId,
+      resolvedWindow.sourceTeamAbbreviationByGameId,
+    );
+    teamIdentityChangedByWindowId.set(
+      windowId,
+      resolvedWindow.teamIdentityChanged,
+    );
     previousByWindowId.set(windowId, previous);
 
     for (const game of games) {
@@ -1060,6 +1157,11 @@ export async function calculateCycleScoring(
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
     const games = gamesByWindowId.get(windowId) ?? [];
+    const scheduleTeamAbbreviation =
+      scheduleTeamByWindowId.get(windowId) ??
+      getAssetTeamAbbreviation(pick.asset);
+    const sourceTeamAbbreviationByGameId =
+      sourceTeamByWindowGameId.get(windowId) ?? {};
     const previous = previousByWindowId.get(windowId);
     const gameScores: Record<string, number> = {};
     const gameStates: Record<string, CycleGameRuntimeState> = {};
@@ -1154,9 +1256,11 @@ export async function calculateCycleScoring(
           gameData,
           playerLogLoad,
           sourceTeamAbbreviation:
-            input.replaySourceTeamAbbreviationByAssetGameId
-              ?.[pick.asset.assetKey]
-              ?.[gameIdKey],
+            input.replayGamesByAssetKey
+              ? input.replaySourceTeamAbbreviationByAssetGameId
+                  ?.[pick.asset.assetKey]
+                  ?.[gameIdKey]
+              : sourceTeamAbbreviationByGameId[gameIdKey],
           requireSourceTeamAbbreviation: Boolean(input.replayGamesByAssetKey),
         });
 
@@ -1261,8 +1365,11 @@ export async function calculateCycleScoring(
       gameScores[gameIdKey] = effectiveScoreResult.points;
       currentScore += effectiveScoreResult.points;
 
-      if (state === 'final' && effectiveScoreResult.appeared) {
-        actualGamesPlayed += 1;
+      if (effectiveScoreResult.appeared) {
+        if (state === 'final') {
+          actualGamesPlayed += 1;
+        }
+
         appearanceGameIds.push(game.id);
       }
     }
@@ -1287,11 +1394,17 @@ export async function calculateCycleScoring(
       scheduledGameIds: games.map((game) => game.id),
       scheduledGameDates: games.map((game) => game.gameDate),
       scheduledGameLabels: games.map((game) => {
-        const teamAbbreviation = getAssetTeamAbbreviation(pick.asset);
+        const teamAbbreviation =
+          sourceTeamAbbreviationByGameId[String(game.id)] ??
+          scheduleTeamAbbreviation;
         return game.homeTeam.abbrev === teamAbbreviation
           ? `vs ${game.awayTeam.abbrev}`
           : `@ ${game.homeTeam.abbrev}`;
       }),
+      scheduleTeamAbbreviation,
+      sourceTeamAbbreviationByGameId,
+      teamIdentityChanged:
+        teamIdentityChangedByWindowId.get(windowId) === true,
       completedGameIds,
       incompleteFinalGameIds,
       liveGameIds,

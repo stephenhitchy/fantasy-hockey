@@ -451,6 +451,14 @@ function buildSlotWindows(
       scheduledGameIds: summary?.scheduledGameIds ?? [],
       scheduledGameDates: summary?.scheduledGameDates ?? [],
       scheduledGameLabels: summary?.scheduledGameLabels ?? [],
+      scheduleTeamAbbreviation:
+        summary?.scheduleTeamAbbreviation ?? previous?.scheduleTeamAbbreviation,
+      sourceTeamAbbreviationByGameId:
+        summary?.sourceTeamAbbreviationByGameId ??
+        previous?.sourceTeamAbbreviationByGameId ??
+        {},
+      teamIdentityChanged:
+        summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
       completedGameIds: summary?.completedGameIds ?? previous?.completedGameIds ?? [],
       liveGameIds: summary?.liveGameIds ?? previous?.liveGameIds ?? [],
       appearanceGameIds: summary?.appearanceGameIds ?? previous?.appearanceGameIds ?? [],
@@ -514,6 +522,10 @@ function bankFingerprint(bank: FantasyPlayoffWindowBank): string {
       appearanceGameIds: window.appearanceGameIds,
       gameScores: window.gameScores,
       gameStates: window.gameStates,
+      scheduleTeamAbbreviation: window.scheduleTeamAbbreviation ?? '',
+      sourceTeamAbbreviationByGameId:
+        window.sourceTeamAbbreviationByGameId ?? {},
+      teamIdentityChanged: window.teamIdentityChanged === true,
       gameInputCompleteness: window.gameInputCompleteness ?? {},
       incompleteFinalGameIds: window.incompleteFinalGameIds ?? [],
       fantasyPoints: window.fantasyPoints,
@@ -556,6 +568,10 @@ function buildPreviousScoringResultFromBanks(
       scheduledGameIds: window.scheduledGameIds,
       scheduledGameDates: window.scheduledGameDates,
       scheduledGameLabels: window.scheduledGameLabels,
+      scheduleTeamAbbreviation: window.scheduleTeamAbbreviation,
+      sourceTeamAbbreviationByGameId:
+        window.sourceTeamAbbreviationByGameId ?? {},
+      teamIdentityChanged: window.teamIdentityChanged === true,
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,
@@ -612,6 +628,7 @@ export async function syncPlayoffWindowBankScores(input: {
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>;
   replaySourceTeamAbbreviationByAssetGameId?: Record<string, Record<string, string>>;
   gameLogSeason?: string;
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>;
 }): Promise<FantasyPlayoffWindowBank[]> {
   const banks = await getAllPlayoffWindowBanks(input.leagueId, input.playoffs);
   const scoringByOwnerWindow = new Map<string, CycleScoringResult>();
@@ -648,6 +665,8 @@ export async function syncPlayoffWindowBankScores(input: {
       replaySourceTeamAbbreviationByAssetGameId:
         input.replaySourceTeamAbbreviationByAssetGameId,
       gameLogSeason: input.gameLogSeason,
+      currentTeamAbbreviationByPlayerId:
+        input.currentTeamAbbreviationByPlayerId,
     });
 
     for (const bank of unassignedBanks) {

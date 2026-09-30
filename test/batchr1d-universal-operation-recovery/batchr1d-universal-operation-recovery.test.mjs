@@ -482,6 +482,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/nhl/nhl-canonical-publication-outbox.service.ts',
     'shared/core/nhl/nhl-final-input-completeness.util.ts',
     'shared/core/playoffs/playoff-window-bank.service.ts',
+    // D1L-C follows stable player identity across live NHL team changes.
+    'shared/core/cycle/live-player-team-window.util.ts',
+    'shared/core/nhl/nhl-player-team-identity.service.ts',
     // D1M adds an isolated, detect-only final-score reconciliation classifier.
     'shared/core/nhl/final-score-reconciliation.util.ts',
     // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.

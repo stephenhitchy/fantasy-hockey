@@ -1026,7 +1026,13 @@ export function clearCurrentNhlDraftSkaterCache(): void {
   }
 }
 
-export async function getCurrentNhlDraftSkaters(): Promise<NhlDraftSkater[]> {
+export async function getCurrentNhlDraftSkaters(
+  forceRefresh: boolean = false,
+): Promise<NhlDraftSkater[]> {
+  if (forceRefresh) {
+    clearCurrentNhlDraftSkaterCache();
+  }
+
   const season = getCurrentDraftRosterSeason();
   const now = Date.now();
   const cached = cachedDraftSkaters ?? readDraftSkatersFromBrowserCache();
@@ -1173,4 +1179,3 @@ export async function getGoalieGameSummaryStats(
     cayenneExp: `seasonId=${season} and gameTypeId=2`
   });
 }
-

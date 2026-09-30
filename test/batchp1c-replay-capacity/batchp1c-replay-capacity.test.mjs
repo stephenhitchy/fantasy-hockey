@@ -271,6 +271,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         'src/shared/core/nhl/nhl-canonical-publication-outbox.service.ts',
         'src/shared/core/nhl/nhl-final-input-completeness.util.ts',
         'src/shared/core/playoffs/playoff-window-bank.service.ts',
+        // D1L-C follows stable player identity across live NHL team changes.
+        'src/shared/core/cycle/live-player-team-window.util.ts',
+        'src/shared/core/nhl/nhl-player-team-identity.service.ts',
         // D1M adds an isolated, detect-only final-score reconciliation classifier.
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
         // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.

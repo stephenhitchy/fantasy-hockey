@@ -126,6 +126,10 @@ import {
   NhlTeamSeasonGame,
 } from './shared/core/nhl/nhl-api.service';
 import {
+  loadCurrentNhlPlayerTeamIdentity,
+  type NhlPlayerTeamIdentitySnapshot,
+} from './shared/core/nhl/nhl-player-team-identity.service';
+import {
   CANONICAL_NHL_FACTS_SCHEMA_VERSION,
   canonicalNhlSha256,
   type CanonicalNhlGameFacts,
@@ -4445,6 +4449,7 @@ async function persistServerScoring(
   replaySourceTeamAbbreviationByAssetGameId?: Record<string, Record<string, string>>,
   gameLogSeason?: string,
   projectionRefreshPolicy: 'refresh-if-needed' | 'saved-only' = 'refresh-if-needed',
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
 ): Promise<boolean> {
   const matchups = await getCycleMatchupsOnce(
     leagueId,
@@ -4515,6 +4520,7 @@ async function persistServerScoring(
       replayGamesByAssetKey,
       replaySourceTeamAbbreviationByAssetGameId,
       gameLogSeason,
+      currentTeamAbbreviationByPlayerId,
     });
 
     await ensureNextPlayoffBankWindows({
@@ -4778,6 +4784,7 @@ async function runLeagueAutomation(
   let activeCycleNumbers: number[] = [];
   let transitionOccurred = false;
   let replayControl: HistoricalReplayControl | null = null;
+  let livePlayerTeamIdentity: NhlPlayerTeamIdentitySnapshot | null = null;
   const allResults: CycleScoringResult[] = [];
   const canonicalParityObservations: CanonicalScoringParityObservation[] = [];
   const canonicalAuthorityDecisions: CanonicalScoringAuthorityDecision[] = [];
@@ -4831,6 +4838,12 @@ async function runLeagueAutomation(
       'historical-replay-data',
       () => getHistoricalReplayControl(leagueId),
     );
+    livePlayerTeamIdentity = replayControl
+      ? null
+      : await phaseTimer.measure(
+          'league-and-team-load',
+          () => loadCurrentNhlPlayerTeamIdentity(),
+        );
     const projectionRefreshPolicy = replayControl
       ? 'saved-only' as const
       : 'refresh-if-needed' as const;
@@ -4919,6 +4932,8 @@ async function runLeagueAutomation(
             previous.scoringRulesFingerprint === scoringRulesFingerprint
               ? previous.result
               : null,
+          currentTeamAbbreviationByPlayerId:
+            livePlayerTeamIdentity?.byPlayerId,
           replayGamesByAssetKey: replayContext?.gamesByAssetKey,
           replaySourceTeamAbbreviationByAssetGameId:
             replayContext?.sourceTeamAbbreviationByAssetGameId,
@@ -4950,6 +4965,32 @@ async function runLeagueAutomation(
               }
             : undefined,
         });
+        for (const summary of Object.values(result.windowScores)) {
+          if (!summary.teamIdentityChanged) {
+            continue;
+          }
+
+          const previousSummary = previous?.result.windowScores?.[summary.windowId];
+
+          if (
+            previousSummary?.scheduleTeamAbbreviation ===
+            summary.scheduleTeamAbbreviation
+          ) {
+            continue;
+          }
+
+          console.info('Updated live skater window after NHL team change.', {
+            leagueId,
+            cycleNumber: cycle.cycleNumber,
+            windowId: summary.windowId,
+            assetKey: summary.assetKey,
+            priorScheduleTeam:
+              previousSummary?.scheduleTeamAbbreviation ?? 'stored-asset-team',
+            currentScheduleTeam: summary.scheduleTeamAbbreviation ?? '',
+            preservedCompletedGameCount: summary.completedGameIds.length,
+            scheduledGameCount: summary.scheduledGameIds.length,
+          });
+        }
         const published = await phaseTimer.measure(
           'snapshot-publication',
           () => publishCycleSnapshot(
@@ -4985,6 +5026,7 @@ async function runLeagueAutomation(
             replayContext?.sourceTeamAbbreviationByAssetGameId,
             replayControl?.sourceSeason,
             projectionRefreshPolicy,
+            livePlayerTeamIdentity?.byPlayerId,
           ),
         );
 

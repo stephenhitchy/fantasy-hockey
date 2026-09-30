@@ -409,7 +409,7 @@ test('source-controlled scoring and private-season acceptance gates match the au
   assert.match(seasonAudit, /Audit only/);
 });
 
-test('the six-game window remains frozen and server scoring matches the D1L-B replay-input baseline', async () => {
+test('the six-game window remains frozen and server scoring matches the D1L-C live-team baseline', async () => {
   const [serverSelection, clientSelection, serverScoring] = await Promise.all([
     read('functions/src/shared/core/cycle/cycle-window-selection.util.ts'),
     read('src/app/core/cycle/cycle-window-selection.util.ts'),
@@ -418,7 +418,7 @@ test('the six-game window remains frozen and server scoring matches the D1L-B re
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), 'fbd0683f7dda81406248921545a3dfaa8e247818b06366e821763615e7eb063c');
-  assert.equal(sha256(serverScoring), '60512a443916e9551a31ced8505d63d2b5dc343af5df1617a7de023f17192316');
+  assert.equal(sha256(serverScoring), 'e0e359665563c94abde2bce0ce2eb8a93995e6f3d22006d5143e90a29b5d8f76');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

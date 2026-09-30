@@ -472,11 +472,23 @@ export class CycleAssetDetail implements OnDestroy {
   }
 
   getAssetTeamLabel(asset: DraftableAsset): string {
-    return asset.assetType === 'skater' ? asset.player.nhlTeamAbbreviation : asset.teamAbbreviation;
+    return asset.assetType === 'skater'
+      ? this.scoreSummary()?.scheduleTeamAbbreviation ??
+        asset.player.nhlTeamAbbreviation
+      : asset.teamAbbreviation;
   }
 
   getAssetLogoUrl(asset: DraftableAsset): string | undefined {
-    return asset.assetType === 'skater' ? asset.player.teamLogoUrl : asset.teamLogoUrl;
+    if (asset.assetType !== 'skater') {
+      return asset.teamLogoUrl;
+    }
+
+    const scheduleTeam = this.scoreSummary()?.scheduleTeamAbbreviation;
+
+    return scheduleTeam &&
+      scheduleTeam !== asset.player.nhlTeamAbbreviation
+      ? `https://assets.nhle.com/logos/nhl/svg/${scheduleTeam}_light.svg`
+      : asset.player.teamLogoUrl;
   }
 
   getDraftedByLabel(): string {

@@ -260,14 +260,18 @@ export function summarizeRosterNhlTeamCounts(
     }
 
     const assetKey = getRosterAssetIdentity(asset);
-    const teamAbbreviation = getRosterAssetTeamAbbreviation(asset);
+    const assetWindow = myWindows?.windows.find(
+      (window) => window.assetKey === assetKey,
+    ) ?? null;
+    const teamAbbreviation =
+      assetWindow?.scheduleTeamAbbreviation?.trim().toUpperCase() ||
+      getRosterAssetTeamAbbreviation(asset);
 
     if (!teamAbbreviation || seenAssetKeys.has(assetKey)) {
       continue;
     }
 
     seenAssetKeys.add(assetKey);
-    const assetWindow = myWindows?.windows.find((window) => window.assetKey === assetKey) ?? null;
     const assets = assetsByTeam.get(teamAbbreviation) ?? [];
     assets.push({
       assetKey,
