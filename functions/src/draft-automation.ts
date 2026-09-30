@@ -56,8 +56,11 @@ import {
 import {
   DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS,
   buildDraftFinalizationTaskId,
+  createDraftParticipantHash,
   draftFinalizationMatchesParticipants,
+  draftOrderContainsExactParticipants,
   finalizeDraftOrder,
+  isDraftMembershipFinalizedForSchedule,
   isDraftMembershipLocked,
 } from './draft-lifecycle.util';
 import {
@@ -1574,7 +1577,10 @@ export async function finalizeScheduledDraftMembership(
       return 'stale';
     }
 
-    if (isDraftMembershipLocked(rawDraft)) {
+    if (isDraftMembershipFinalizedForSchedule(
+      rawDraft,
+      expectedScheduleGeneration,
+    )) {
       return 'already-finalized';
     }
 
@@ -1617,12 +1623,27 @@ export async function finalizeScheduledDraftMembership(
       );
     }
 
+    const currentParticipantHash = createDraftParticipantHash(teamOwnerIds);
+    const existingOrderIsLocked = isDraftMembershipLocked(rawDraft);
+    const existingOrderMatchesParticipants = draftOrderContainsExactParticipants(
+      draft.roundOneOrder,
+      teamOwnerIds,
+    );
+
+    if (existingOrderIsLocked && !existingOrderMatchesParticipants) {
+      throw new Error(
+        'Draft membership could not be finalized because the locked Draft order does not match the current teams. Postpone or reopen the Draft before retrying.',
+      );
+    }
+
     const finalized = finalizeDraftOrder({
       orderMode: draft.orderMode ?? 'legacy-custom',
       currentOrder: draft.roundOneOrder,
       participantIds: teamOwnerIds,
       randomizationSeed,
-      preservedParticipantHash: draft.orderParticipantHash,
+      preservedParticipantHash: existingOrderIsLocked
+        ? currentParticipantHash
+        : draft.orderParticipantHash,
     });
     const orderEpoch = finalized.reusedPreservedOrder
       ? Math.max(1, draft.orderEpoch ?? 0)
@@ -1637,6 +1658,7 @@ export async function finalizeScheduledDraftMembership(
 
     transaction.set(draftRef, {
       roundOneOrder: finalized.order,
+      scheduleGeneration: expectedScheduleGeneration,
       membershipLockStatus: 'locked',
       membershipLockedAt: timestamp,
       orderFinalizedAt: timestamp,
@@ -1701,6 +1723,8 @@ export async function finalizeScheduledDraftMembership(
           participantCount: teamOwnerIds.length,
           participantHash: finalized.participantHash,
           reusedPreservedOrder: finalized.reusedPreservedOrder,
+          upgradedLegacySchedule:
+            rawDraft['membershipLockStatus'] === undefined,
           randomizationSeedHash: seedHash,
         },
         createdAt: timestamp,
@@ -1732,7 +1756,7 @@ async function scheduleDraftMembershipFinalizationTask(
   if (
     draft.status !== 'scheduled' ||
     scheduledStartMilliseconds === null ||
-    isDraftMembershipLocked(draft)
+    isDraftMembershipFinalizedForSchedule(draft, scheduleGeneration)
   ) {
     return 'not-due';
   }
@@ -3379,7 +3403,13 @@ async function processLeagueDraftAutomation(
     if (draft.status === 'scheduled') {
       const scheduledStartMilliseconds = getScheduledStartMilliseconds(draft);
 
-      if (!isDraftMembershipLocked(draft) && scheduledStartMilliseconds !== null) {
+      if (
+        !isDraftMembershipFinalizedForSchedule(
+          draft,
+          draft.scheduleGeneration ?? 0,
+        ) &&
+        scheduledStartMilliseconds !== null
+      ) {
         const cutoffMilliseconds =
           scheduledStartMilliseconds - DRAFT_MEMBERSHIP_LOCK_LEAD_MILLISECONDS;
 
@@ -3406,12 +3436,15 @@ async function processLeagueDraftAutomation(
         }
       }
 
-      if (!isDraftMembershipLocked(draft)) {
+      if (!isDraftMembershipFinalizedForSchedule(
+        draft,
+        draft.scheduleGeneration ?? 0,
+      )) {
         return {
           leagueId,
           status: 'waiting',
           picksMade: 0,
-          message: 'Draft membership remains open until the 40-minute cutoff.',
+          message: 'Draft membership finalization is waiting for the 40-minute cutoff.',
         };
       }
 

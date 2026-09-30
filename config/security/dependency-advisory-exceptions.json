@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "id": "angular-client-firestore-node-grpc-auth-context-2026-09-30",
+      "surface": {
+        "label": "Angular client",
+        "cwd": "."
+      },
+      "advisory": {
+        "ghsa": "GHSA-m9gg-hp2v-232j",
+        "source": 1240623,
+        "package": "@grpc/grpc-js",
+        "severity": "high"
+      },
+      "expectedAffectedPackages": [
+        "@firebase/firestore",
+        "@firebase/firestore-compat",
+        "@grpc/grpc-js",
+        "firebase"
+      ],
+      "lockPackages": [
+        {
+          "path": "node_modules/firebase",
+          "version": "12.16.0"
+        },
+        {
+          "path": "node_modules/@firebase/firestore",
+          "version": "4.16.0"
+        },
+        {
+          "path": "node_modules/@grpc/grpc-js",
+          "version": "1.9.16"
+        }
+      ],
+      "dependencyEdges": [
+        {
+          "from": "node_modules/firebase",
+          "dependency": "@firebase/firestore",
+          "declared": "4.16.0"
+        },
+        {
+          "from": "node_modules/@firebase/firestore",
+          "dependency": "@grpc/grpc-js",
+          "declared": "~1.9.0"
+        }
+      ],
+      "reachabilityProfile": "angular-browser-firestore-node-transport-not-bundled-v1",
+      "owner": "RinkRat platform administrator",
+      "approvedAt": "2026-09-30T00:00:00.000Z",
+      "expiresAt": "2026-10-14T23:59:59.000Z",
+      "upstream": "https://github.com/firebase/firebase-js-sdk/issues/10400",
+      "reason": "RinkRat is a browser-only Angular application. Firebase selects Firestore's browser export, which does not import the Node gRPC transport or call its server certificate authorization API."
+    }
+  ]
+}

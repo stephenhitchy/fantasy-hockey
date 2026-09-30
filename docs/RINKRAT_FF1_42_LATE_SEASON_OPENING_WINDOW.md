@@ -50,6 +50,12 @@ rows, or historical results in the new league.
 - Legacy leagues without the new anchor fields retain their historical mapping
   (`Fantasy Matchup N` uses NHL block `N`). No migration rewrites an existing
   started window.
+- A pre-FF1.40 Draft that is still scheduled with zero picks is upgraded only
+  at its existing T-40 cutoff. The server binds it to explicit generation `0`,
+  preserves an exact existing order without rerandomizing it, and then freezes
+  the opening source block. A stale task, canceled schedule, or locked order
+  that does not exactly match the current teams fails closed and requires the
+  commissioner to postpone and reopen; the server does not repair it silently.
 
 If the NHL schedule no longer contains a complete six-game block for every
 club, the server fails visibly. It never wraps to earlier games or silently

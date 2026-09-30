@@ -131,6 +131,40 @@ For a high or critical production advisory:
 
 When no upstream fix exists, document the compensating control, affected surface, owner, and deadline. Do not silently suppress the advisory.
 
+### Temporary browser-only Firestore transport exception
+
+On 2026-09-30, `npm audit` began reporting
+`GHSA-m9gg-hp2v-232j` through the browser application's
+`firebase > @firebase/firestore > @grpc/grpc-js` dependency path. The locked
+Firestore package requires `@grpc/grpc-js ~1.9.0`, while the advisory is fixed
+only in a newer range that Firestore does not yet declare compatible. Forcing
+that newer Node transport into Firestore is not an approved release shortcut.
+
+RinkRat's deployed Angular application is browser-only. Its Angular build has
+no server-side-rendering target, the Firestore browser export does not bundle
+the Node gRPC transport, and the application does not use `getAuthContext` or
+client-certificate authorization. The exact advisory is therefore covered by
+a temporary, source-controlled reachability exception through 2026-10-14.
+The exception is owned by the RinkRat platform owner and is recorded in:
+
+```text
+config/security/dependency-advisory-exceptions.json
+```
+
+The dependency-audit gate must continue to retain the raw finding and may
+apply the exception only when the surface, advisory, package, complete
+affected-package set, locked version, dependency path, browser-only Angular
+configuration, and source scan all match. Expiry, version drift, a new
+propagated package path, SSR/server introduction, a source reference to the
+affected APIs, or any different high/critical advisory fails closed. The
+upstream tracking issue is Firebase JS SDK issue 10400. Review for an upstream
+Firestore release at or before the expiry date; remove the exception as soon
+as Firestore declares a patched transport range.
+
+The same advisory in Cloud Functions is reachable as a Node dependency and is
+not excepted. Functions must remain on the supported patched
+`@grpc/grpc-js 1.14.5` or newer compatible version.
+
 ## CSP report-only rollout
 
 Firebase Hosting sends `Content-Security-Policy-Report-Only`; it does not block a manager in RC20. The policy:

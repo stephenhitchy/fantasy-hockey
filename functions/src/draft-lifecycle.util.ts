@@ -148,6 +148,34 @@ export function isDraftMembershipLocked(draftData: unknown): boolean {
 }
 
 /**
+ * Confirms that the explicit T-40 finalization belongs to the currently
+ * scheduled generation. Legacy scheduled Drafts can be treated as locked for
+ * membership compatibility while still requiring this one-time upgrade
+ * before anchor/readiness work may proceed.
+ */
+export function isDraftMembershipFinalizedForSchedule(
+  draftData: unknown,
+  expectedScheduleGeneration: number,
+): boolean {
+  if (!draftData || typeof draftData !== 'object' || Array.isArray(draftData)) {
+    return false;
+  }
+
+  const draft = draftData as Record<string, unknown>;
+  const scheduleGeneration = draft['scheduleGeneration'] === undefined
+    ? 0
+    : draft['scheduleGeneration'];
+
+  return draft['membershipLockStatus'] === 'locked' &&
+    Number.isSafeInteger(expectedScheduleGeneration) &&
+    expectedScheduleGeneration >= 0 &&
+    Number.isSafeInteger(scheduleGeneration) &&
+    scheduleGeneration === expectedScheduleGeneration &&
+    Number.isSafeInteger(draft['finalizedScheduleGeneration']) &&
+    draft['finalizedScheduleGeneration'] === expectedScheduleGeneration;
+}
+
+/**
  * Proves that the order finalized for the current schedule still represents
  * the exact server-owned team set. Legacy Drafts have no generation/hash
  * evidence, so they retain their historical exact-order compatibility path.

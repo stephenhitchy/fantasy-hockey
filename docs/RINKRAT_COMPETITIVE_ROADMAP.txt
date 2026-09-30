@@ -1197,6 +1197,10 @@ Future entries:
 
 # [x] LOG.141 2026-09-29 — Prepared D1A.2 after a Production league score refresh failed with `too many index entries for entity`: exempt the direct-document-read-only `liveScoring.result` map from unused automatic single-field indexing so the existing idempotent scorer can publish the valid NHL goal on retry. This changes one Firestore index policy but no snapshot body, scoring formula, Projection V11, six-game/Game 7 ownership, Rules, TTL, App Check, queue, worker, or competitive authority. The index deployment and affected-league retry remain manual; no Production write or deployment occurred here.
 
+# [x] LOG.142 2026-09-30 — Prepared FF1.42 late-season Draft opening windows: every new league still begins at Fantasy Matchup 1, while the server freezes the first not-fully-completed six-game NHL source block across all 32 clubs at T-40 and propagates its exact game IDs through Projection V11 snapshots, scoring, roster timing, and playoff capacity. A still-scheduled pre-FF1.40 Draft receives a generation-0 compatibility finalization at its existing cutoff without rerandomizing an exact locked order; stale, canceled, or mismatched records fail closed. Existing started leagues remain unchanged; Scoring V4, Projection V11 formulas, immutable started windows, Game 7 rollover, Rules, indexes, TTL, App Check, and queue limits remain unchanged. No Production deployment or league mutation occurred here.
+
+# [x] LOG.143 2026-09-30 — Responded to registry advisory drift before the FF1.42 release: advanced Angular 22 to its supported patched 22.2 line, advanced the Functions gRPC transport from 1.14.4 to 1.14.5 within its declared parent range, and added a visible, exact, expiring, fail-closed browser-only reachability exception for Firestore's still-pinned Node gRPC advisory. The raw advisory remains reported, any evidence drift blocks the gate, the exception expires 2026-10-14, and no competitive formula, authority, Firebase configuration, or Production data changed.
+
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 
 END OF ROADMAP
