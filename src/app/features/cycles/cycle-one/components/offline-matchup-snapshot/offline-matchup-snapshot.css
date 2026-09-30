@@ -256,12 +256,6 @@
   color: var(--rr-color-text) !important;
 }
 
-.offline-marker-finalizing {
-  border-color: color-mix(in srgb, #9c83f6 62%, var(--rr-color-border)) !important;
-  background: color-mix(in srgb, #9c83f6 18%, var(--rr-color-surface-raised)) !important;
-  color: var(--rr-color-text) !important;
-}
-
 .offline-marker-upcoming {
   color: var(--rr-color-text-secondary) !important;
 }

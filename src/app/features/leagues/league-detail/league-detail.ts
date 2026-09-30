@@ -67,6 +67,7 @@ import {
 } from '../../../core/user/user.service';
 import { PlatformAdminService } from '../../../core/admin/platform-admin.service';
 import { DialogFocusTrapDirective } from '../../../shared/accessibility/dialog-focus-trap.directive';
+import { PasswordVisibilityControl } from '../../../shared/password-visibility-control/password-visibility-control';
 import { ViewportOverlayPortalDirective } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import { LeagueWire } from '../league-wire/league-wire';
@@ -98,7 +99,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-league-detail',
-  imports: [FormsModule, RouterLink, ManagerAvatar, LeagueWire, DialogFocusTrapDirective, ViewportOverlayPortalDirective, LeagueQuickNavigation],
+  imports: [FormsModule, RouterLink, ManagerAvatar, LeagueWire, DialogFocusTrapDirective, ViewportOverlayPortalDirective, LeagueQuickNavigation, PasswordVisibilityControl],
   templateUrl: './league-detail.html',
   styleUrl: './league-detail.css',
 })

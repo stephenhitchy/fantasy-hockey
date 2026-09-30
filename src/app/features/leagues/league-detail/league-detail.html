@@ -520,16 +520,18 @@
               </select>
 
               <label for="league-capacity-password">Password</label>
-              <input
-                id="league-capacity-password"
-                class="rr-field"
-                aria-label="Current password for league size change"
-                type="password"
-                maxlength="128"
-                autocomplete="current-password"
-                [(ngModel)]="capacityPasswordDraft"
-                [disabled]="capacitySaving()"
-              />
+              <app-password-visibility-control passwordName="current password">
+                <input
+                  id="league-capacity-password"
+                  class="rr-field"
+                  aria-label="Current password for league size change"
+                  type="password"
+                  maxlength="128"
+                  autocomplete="current-password"
+                  [(ngModel)]="capacityPasswordDraft"
+                  [disabled]="capacitySaving()"
+                />
+              </app-password-visibility-control>
 
               @if (scheduledCapacityReopenAvailable()) {
                 <label class="capacity-reset-confirmation" for="league-capacity-reset-confirm">
@@ -668,15 +670,17 @@
             />
 
             <label for="member-removal-password">Confirm your current RinkRat password:</label>
-            <input
-              id="member-removal-password"
-              class="rr-field"
-              type="password"
-              maxlength="128"
-              autocomplete="current-password"
-              [(ngModel)]="memberRemovalPasswordDraft"
-              [disabled]="memberRemovalInProgress()"
-            />
+            <app-password-visibility-control passwordName="current password">
+              <input
+                id="member-removal-password"
+                class="rr-field"
+                type="password"
+                maxlength="128"
+                autocomplete="current-password"
+                [(ngModel)]="memberRemovalPasswordDraft"
+                [disabled]="memberRemovalInProgress()"
+              />
+            </app-password-visibility-control>
 
             <div class="delete-league-actions">
               <button
@@ -768,16 +772,18 @@
               Confirm your current RinkRat password:
             </label>
 
-            <input
-              id="delete-league-password-confirmation"
-              class="rr-field"
-              type="password"
-              maxlength="128"
-              autocomplete="current-password"
-              [(ngModel)]="deleteLeaguePasswordDraft"
-              [disabled]="deleteLeagueInProgress()"
-              placeholder="Current password"
-            />
+            <app-password-visibility-control passwordName="current password">
+              <input
+                id="delete-league-password-confirmation"
+                class="rr-field"
+                type="password"
+                maxlength="128"
+                autocomplete="current-password"
+                [(ngModel)]="deleteLeaguePasswordDraft"
+                [disabled]="deleteLeagueInProgress()"
+                placeholder="Current password"
+              />
+            </app-password-visibility-control>
 
             <div class="delete-league-actions">
               <button

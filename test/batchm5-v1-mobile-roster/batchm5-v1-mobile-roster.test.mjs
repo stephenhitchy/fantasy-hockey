@@ -412,7 +412,7 @@ test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules,
   assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(
     await sha256('firestore.indexes.json'),
-    '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',
+    '8e2798abd1f659d752e6fad8910ac249025e140c7ec6d03e3d336d2c814d096a',
   );
 });
 

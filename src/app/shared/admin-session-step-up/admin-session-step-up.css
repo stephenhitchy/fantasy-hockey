@@ -62,7 +62,7 @@
   font-weight: 800;
 }
 
-.admin-step-up__controls .rr-field {
+.admin-step-up__password-control {
   flex: 1 1 18rem;
   min-width: 0;
 }
@@ -124,5 +124,10 @@
 
   .admin-step-up__controls .rr-button {
     width: 100%;
+  }
+
+  .admin-step-up__password-control {
+    width: 100%;
+    flex: 0 0 auto;
   }
 }

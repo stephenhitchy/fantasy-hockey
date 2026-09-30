@@ -44,6 +44,7 @@ import {
   RINKRAT_NEUTRAL_THEME,
 } from '../../shared/pixel-theme/pixel-theme.data';
 import { Navbar } from '../../shared/navbar/navbar';
+import { PasswordVisibilityControl } from '../../shared/password-visibility-control/password-visibility-control';
 import {
   DEFAULT_HOCKEY_EXPERIENCE_LEVEL,
   HOCKEY_EXPERIENCE_OPTIONS,
@@ -53,7 +54,7 @@ import {
 @Component({
   selector: 'app-auth',
   standalone: true,
-  imports: [FormsModule, RouterLink, Navbar],
+  imports: [FormsModule, RouterLink, Navbar, PasswordVisibilityControl],
   templateUrl: './auth.html',
   styleUrl: './auth.css',
 })

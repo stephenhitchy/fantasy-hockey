@@ -17,11 +17,12 @@ import {
   RecentAuthService,
   getFriendlyReauthenticationError,
 } from '../../../core/auth/recent-auth.service';
+import { PasswordVisibilityControl } from '../../../shared/password-visibility-control/password-visibility-control';
 
 @Component({
   selector: 'app-privacy-center',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, PasswordVisibilityControl],
   templateUrl: './privacy-center.html',
   styleUrl: './privacy-center.css',
 })

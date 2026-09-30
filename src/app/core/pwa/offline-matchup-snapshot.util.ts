@@ -21,7 +21,6 @@ const ALLOWED_MARKER_STATUSES = new Set<OfflineMatchupMarkerStatus>([
   'played',
   'missed',
   'live',
-  'finalizing',
   'upcoming',
   'unavailable',
 ]);
@@ -75,17 +74,28 @@ function normalizeMarker(value: unknown): OfflineMatchupMarkerSnapshot | null {
   const index = finiteNumber(source['index'], 1, 6);
   const status = source['status'];
   const label = boundedString(source['label'], 220);
+  // Schema 1 snapshots may contain the retired purple presentation state.
+  // Keep those snapshots usable while ensuring they can only render green.
+  const normalizedStatus = status === 'finalizing' ? 'played' : status;
 
   if (
     index === null ||
     !Number.isInteger(index) ||
-    !ALLOWED_MARKER_STATUSES.has(status as OfflineMatchupMarkerStatus) ||
+    !ALLOWED_MARKER_STATUSES.has(normalizedStatus as OfflineMatchupMarkerStatus) ||
     !label
   ) {
     return null;
   }
 
-  return { index, status: status as OfflineMatchupMarkerStatus, label };
+  return {
+    index,
+    status: normalizedStatus as OfflineMatchupMarkerStatus,
+    label: status === 'finalizing'
+      ? label
+        .replace(/\bfinalizing\b/gi, 'final')
+        .replace(/\s*·\s*confirming appearance/gi, '')
+      : label,
+  };
 }
 
 function normalizePlayer(value: unknown): OfflineMatchupPlayerSnapshot | null {

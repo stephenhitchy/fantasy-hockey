@@ -34,16 +34,21 @@
       <form class="admin-step-up__form" (ngSubmit)="unlock()">
         <label for="admin-step-up-password">Current RinkRat password</label>
         <div class="admin-step-up__controls">
-          <input
-            id="admin-step-up-password"
-            class="rr-field"
-            type="password"
-            name="adminStepUpPassword"
-            autocomplete="current-password"
-            maxlength="128"
-            [(ngModel)]="password"
-            [disabled]="busy()"
-          />
+          <app-password-visibility-control
+            class="admin-step-up__password-control"
+            passwordName="current password"
+          >
+            <input
+              id="admin-step-up-password"
+              class="rr-field"
+              type="password"
+              name="adminStepUpPassword"
+              autocomplete="current-password"
+              maxlength="128"
+              [(ngModel)]="password"
+              [disabled]="busy()"
+            />
+          </app-password-visibility-control>
           <button
             type="submit"
             class="rr-button rr-button--primary"

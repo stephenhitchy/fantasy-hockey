@@ -41,16 +41,19 @@
 
       @if (!recentAuth.isRecent()) {
         <form class="secure-session-form" (ngSubmit)="verifyPassword()">
-          <label class="rr-field">
-            <span>Current password</span>
-            <input
-              type="password"
-              autocomplete="current-password"
-              [(ngModel)]="verificationPassword"
-              name="privacyPassword"
-              [disabled]="verifying()"
-            />
-          </label>
+          <div class="rr-field">
+            <label for="privacy-password">Current password</label>
+            <app-password-visibility-control passwordName="current password">
+              <input
+                id="privacy-password"
+                type="password"
+                autocomplete="current-password"
+                [(ngModel)]="verificationPassword"
+                name="privacyPassword"
+                [disabled]="verifying()"
+              />
+            </app-password-visibility-control>
+          </div>
           <button type="submit" class="rr-button rr-button--commit" [disabled]="verifying()">
             {{ verifying() ? 'Verifying…' : 'Unlock Protected Actions' }}
           </button>

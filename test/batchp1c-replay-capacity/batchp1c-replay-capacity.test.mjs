@@ -308,5 +308,5 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
   assert.equal(createHash('sha256').update(engine).digest('hex'), '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3');
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
-  assert.equal(createHash('sha256').update(indexes).digest('hex'), '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13');
+  assert.equal(createHash('sha256').update(indexes).digest('hex'), '8e2798abd1f659d752e6fad8910ac249025e140c7ec6d03e3d336d2c814d096a');
 });

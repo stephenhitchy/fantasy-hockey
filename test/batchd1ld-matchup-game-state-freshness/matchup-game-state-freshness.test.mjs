@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { normalizeOfflineMatchupSnapshot } from '../../src/app/core/pwa/offline-matchup-snapshot.util.ts';
+import { getMobileGameMarkerExplanation } from '../../src/app/features/cycles/cycle-one/cycle-mobile-matchup.util.ts';
 import { resolveCycleWindowGameMarkerState } from '../../src/app/features/cycles/cycle-one/cycle-window-game-marker.util.ts';
 import {
   getNhlGameRuntimeState,
@@ -36,11 +38,14 @@ function markerState(overrides = {}) {
   });
 }
 
-test('six-game markers distinguish scheduled live finalizing played and missed evidence', () => {
+test('six-game markers distinguish scheduled live final played and missed evidence', () => {
   assert.equal(markerState().status, 'upcoming');
   assert.equal(markerState({ gameStates: { 100: 'live' } }).status, 'live');
   assert.equal(markerState({ liveGameIds: [100] }).status, 'live');
-  assert.equal(markerState({ gameStates: { 100: 'final' } }).status, 'finalizing');
+  assert.deepEqual(markerState({ gameStates: { 100: 'final' } }), {
+    status: 'played',
+    statusLabel: 'Final',
+  });
   assert.equal(markerState({
     completedGameIds: [100],
     appearanceGameIds: [100],
@@ -54,14 +59,32 @@ test('six-game markers distinguish scheduled live finalizing played and missed e
   assert.equal(markerState({ gameId: null }).status, 'unavailable');
 });
 
-test('a final game never becomes missed before server-owned completion evidence exists', () => {
+test('a final game turns green without manufacturing server-owned completion evidence', () => {
+  const completedGameIds = [];
+  const appearanceGameIds = [];
   const state = markerState({
     gameStates: { 100: 'final' },
-    appearanceGameIds: [],
+    completedGameIds,
+    appearanceGameIds,
   });
 
-  assert.equal(state.status, 'finalizing');
-  assert.match(state.statusLabel, /confirming appearance/i);
+  assert.equal(state.status, 'played');
+  assert.equal(state.statusLabel, 'Final');
+  assert.deepEqual(completedGameIds, []);
+  assert.deepEqual(appearanceGameIds, []);
+
+  const explanation = getMobileGameMarkerExplanation({
+    index: 1,
+    gameId: 100,
+    gameDate: '2026-10-01',
+    gameLabel: 'SEA vs VAN',
+    status: state.status,
+    statusLabel: state.statusLabel,
+    title: 'Game 1: SEA vs VAN · Final',
+  }, 4.5, 'final');
+
+  assert.equal(explanation.heading, 'Game 1 is final');
+  assert.doesNotMatch(explanation.detail, /confirming|finalizing/i);
 });
 
 test('fresh game detail can promote only the one-way live-to-final transition', () => {
@@ -182,21 +205,100 @@ test('the scorer loads final player evidence after a fresher boxscore promotes s
   assert.match(scoring, /const state = getEffectiveGameRuntimeState\(game, gameData\)/);
 });
 
-test('desktop mobile and offline matchup markers all render live and finalizing states', async () => {
-  const [desktopTemplate, desktopStyles, mobileStyles, offlineTemplate] = await Promise.all([
+test('desktop mobile and offline matchup markers have no purple finalizing state', async () => {
+  const [
+    desktopTemplate,
+    desktopStyles,
+    mobileStyles,
+    offlineTemplate,
+    offlineStyles,
+    markerModels,
+    offlineModels,
+  ] = await Promise.all([
     read('src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html'),
     read('src/app/features/cycles/cycle-one/cycle-one.css'),
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.css'),
     read('src/app/features/cycles/cycle-one/components/offline-matchup-snapshot/offline-matchup-snapshot.html'),
+    read('src/app/features/cycles/cycle-one/components/offline-matchup-snapshot/offline-matchup-snapshot.css'),
+    read('src/app/features/cycles/cycle-one/cycle-one.models.ts'),
+    read('src/app/core/pwa/offline-matchup-snapshot.models.ts'),
   ]);
 
   assert.equal((desktopTemplate.match(/\[class\.marker-live\]/g) ?? []).length, 3);
-  assert.equal((desktopTemplate.match(/\[class\.marker-finalizing\]/g) ?? []).length, 3);
   assert.match(desktopStyles, /\.g \.marker-live[\s\S]*background: #79d9ff/);
-  assert.match(desktopStyles, /\.g \.marker-finalizing[\s\S]*background: #cbbaff/);
   assert.match(mobileStyles, /\.mobile-window-marker-live[\s\S]*background: var\(--rr-info\)/);
-  assert.match(mobileStyles, /\.mobile-window-marker-finalizing/);
-  assert.match(offlineTemplate, /offline-marker-finalizing/);
+
+  for (const source of [
+    desktopTemplate,
+    desktopStyles,
+    mobileStyles,
+    offlineTemplate,
+    offlineStyles,
+    markerModels,
+    offlineModels,
+  ]) {
+    assert.doesNotMatch(source, /finalizing|#cbbaff|#b9a7f7|#9c83f6/i);
+  }
+});
+
+test('legacy offline purple markers normalize to green final markers', () => {
+  const snapshot = normalizeOfflineMatchupSnapshot({
+    schemaVersion: 1,
+    accountId: 'account-1',
+    leagueId: 'league-1',
+    leagueName: 'Test League',
+    cycleNumber: 1,
+    cycleLabel: 'Matchup 1',
+    matchupId: 'matchup-1',
+    matchupLabel: 'Team A vs Team B',
+    matchupStatus: 'active',
+    readinessLabel: 'In progress',
+    finishLabel: 'Six-game windows',
+    savedAt: '2026-10-01T12:00:00.000Z',
+    sourceReleaseLabel: 'legacy-purple-release',
+    sourceScoringVersion: 4,
+    sourceProjectionVersion: 11,
+    teamA: {
+      teamName: 'Team A',
+      record: '0-0-0',
+      currentScore: 4.5,
+      projectedScore: 50,
+      gamesPlayed: 0,
+      gamesTotal: 6,
+      resultLabel: null,
+      viewerTeam: true,
+    },
+    teamB: null,
+    positionGroups: [{
+      position: 'C',
+      label: 'Centers',
+      rows: [{
+        slotLabel: 'C1',
+        teamAPlayer: {
+          playerName: 'Test Player',
+          teamLabel: 'SEA',
+          position: 'C',
+          currentPoints: 4.5,
+          projectedPoints: 8,
+          availabilityLabel: null,
+          markers: Array.from({ length: 6 }, (_, index) => ({
+            index: index + 1,
+            status: index === 0 ? 'finalizing' : 'upcoming',
+            label: index === 0
+              ? 'Game 1: SEA vs VAN · Final · confirming appearance · NHL game 100'
+              : `Game ${index + 1}: Upcoming`,
+          })),
+        },
+        teamBPlayer: null,
+      }],
+    }],
+  });
+
+  assert.ok(snapshot);
+  const marker = snapshot.positionGroups[0].rows[0].teamAPlayer.markers[0];
+  assert.equal(marker.status, 'played');
+  assert.equal(marker.label, 'Game 1: SEA vs VAN · Final · NHL game 100');
+  assert.doesNotMatch(marker.label, /confirming|finalizing/i);
 });
 
 test('injury status is not used as historical appearance evidence', async () => {

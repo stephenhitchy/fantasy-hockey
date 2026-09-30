@@ -81,7 +81,8 @@
   gap: var(--rr-space-1);
 }
 
-.rr-field > span {
+.rr-field > span,
+.rr-field > label {
   font-weight: 800;
 }
 

@@ -678,12 +678,6 @@
     animation: mobile-live-marker-pulse 1.6s ease-in-out infinite;
   }
 
-  .mobile-window-marker-finalizing {
-    border-color: color-mix(in srgb, #9c83f6 72%, var(--rr-ice-white));
-    color: var(--rr-scoreboard);
-    background: #b9a7f7;
-  }
-
   .mobile-live-player-statusline {
     display: block;
     overflow: hidden;

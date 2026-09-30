@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 import { ManagerAvatar } from '../../../shared/manager-avatar/manager-avatar';
+import { PasswordVisibilityControl } from '../../../shared/password-visibility-control/password-visibility-control';
 import {
   settleOperationWithin,
   waitForOperationDelay,
@@ -72,7 +73,7 @@ interface DraftRoundPreview {
 
 @Component({
   selector: 'app-draft-setup',
-  imports: [FormsModule, RouterLink, ManagerAvatar],
+  imports: [FormsModule, RouterLink, ManagerAvatar, PasswordVisibilityControl],
   templateUrl: './draft-setup.html',
   styleUrl: './draft-setup.css',
 })

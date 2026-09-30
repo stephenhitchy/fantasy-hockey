@@ -65,6 +65,8 @@ import {
   HockeyExperienceLevel,
   normalizeHockeyExperienceLevel,
 } from '../../../shared/hockey-terms/hockey-terms.data';
+import { PasswordVisibilityControl } from '../../../shared/password-visibility-control/password-visibility-control';
+
 interface AccountAchievement {
   icon: string;
   title: string;
@@ -86,7 +88,7 @@ const IDENTITY_UNLOCK_ORDER: Exclude<TeamIdentityUnlockRequirement, 'default'>[]
 @Component({
   selector: 'app-account-settings',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, PasswordVisibilityControl],
   templateUrl: './account-settings.html',
   styleUrl: './account-settings.css',
 })

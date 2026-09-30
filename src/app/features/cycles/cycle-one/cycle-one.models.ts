@@ -59,7 +59,7 @@ export interface CycleWindowGameMarker {
   gameId: number | null;
   gameDate: string | null;
   gameLabel: string;
-  status: 'played' | 'missed' | 'live' | 'finalizing' | 'upcoming' | 'unavailable';
+  status: 'played' | 'missed' | 'live' | 'upcoming' | 'unavailable';
   statusLabel: string;
   title: string;
 }

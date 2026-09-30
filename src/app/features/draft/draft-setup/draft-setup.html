@@ -168,18 +168,20 @@
       <section class="rr-card rr-card--padded" aria-labelledby="postpone-reopen-title">
         <h2 id="postpone-reopen-title">Reopen Draft</h2>
 
-        <label class="rr-field-group" for="draft-reopen-password">
-          <span>Password</span>
-          <input
-            id="draft-reopen-password"
-            class="rr-field"
-            type="password"
-            maxlength="128"
-            autocomplete="current-password"
-            [(ngModel)]="reopenPassword"
-            [disabled]="saving()"
-          />
-        </label>
+        <div class="rr-field-group">
+          <label for="draft-reopen-password">Password</label>
+          <app-password-visibility-control passwordName="current password">
+            <input
+              id="draft-reopen-password"
+              class="rr-field"
+              type="password"
+              maxlength="128"
+              autocomplete="current-password"
+              [(ngModel)]="reopenPassword"
+              [disabled]="saving()"
+            />
+          </app-password-visibility-control>
+        </div>
 
         <label class="capacity-reset-confirmation" for="draft-reopen-confirm">
           <input

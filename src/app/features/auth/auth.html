@@ -255,22 +255,24 @@
           @if (!isResettingPassword()) {
             <div class="form-field">
               <label for="auth-password">Password</label>
-              <input
-                #passwordInput
-                id="auth-password"
-                name="password"
-                [(ngModel)]="password"
-                (ngModelChange)="handlePasswordChange($event)"
-                placeholder="Enter your password"
-                type="password"
-                [attr.autocomplete]="passwordAutocomplete()"
-                required
-                [attr.minlength]="isRegistering() ? 12 : null"
-                [attr.maxlength]="isRegistering() ? 128 : null"
-                [attr.aria-invalid]="invalidField() === 'password' || (isRegistering() && password.length > 0 && !passwordRegistrationReady()) ? 'true' : null"
-                [attr.aria-describedby]="isRegistering() ? 'auth-password-policy' : (invalidField() === 'password' ? 'auth-error-message' : null)"
-                [disabled]="loading()"
-              />
+              <app-password-visibility-control passwordName="password">
+                <input
+                  #passwordInput
+                  id="auth-password"
+                  name="password"
+                  [(ngModel)]="password"
+                  (ngModelChange)="handlePasswordChange($event)"
+                  placeholder="Enter your password"
+                  type="password"
+                  [attr.autocomplete]="passwordAutocomplete()"
+                  required
+                  [attr.minlength]="isRegistering() ? 12 : null"
+                  [attr.maxlength]="isRegistering() ? 128 : null"
+                  [attr.aria-invalid]="invalidField() === 'password' || (isRegistering() && password.length > 0 && !passwordRegistrationReady()) ? 'true' : null"
+                  [attr.aria-describedby]="isRegistering() ? 'auth-password-policy' : (invalidField() === 'password' ? 'auth-error-message' : null)"
+                  [disabled]="loading()"
+                />
+              </app-password-visibility-control>
               @if (isRegistering()) {
                 <section
                   id="auth-password-policy"

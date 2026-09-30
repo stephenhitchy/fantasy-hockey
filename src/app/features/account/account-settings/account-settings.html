@@ -782,17 +782,20 @@
                   </small>
                 </label>
 
-                <label class="form-field deletion-confirmation-field rr-field-group">
-                  <span>Current password</span>
-                  <input
-                    type="password"
-                    class="rr-field"
-                    [(ngModel)]="deletePassword"
-                    autocomplete="current-password"
-                    placeholder="Enter your current password"
-                  />
+                <div class="form-field deletion-confirmation-field rr-field-group">
+                  <label for="delete-account-password">Current password</label>
+                  <app-password-visibility-control passwordName="current password">
+                    <input
+                      id="delete-account-password"
+                      type="password"
+                      class="rr-field"
+                      [(ngModel)]="deletePassword"
+                      autocomplete="current-password"
+                      placeholder="Enter your current password"
+                    />
+                  </app-password-visibility-control>
                   <small>Your password is used only to verify that this is really you.</small>
-                </label>
+                </div>
 
                 <label class="delete-account-acknowledgement">
                   <input type="checkbox" [(ngModel)]="deleteAcknowledged" />

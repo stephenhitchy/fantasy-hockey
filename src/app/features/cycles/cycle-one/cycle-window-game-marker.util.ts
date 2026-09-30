@@ -13,9 +13,11 @@ export interface CycleWindowGameMarkerStateInput {
 
 /**
  * Converts server-owned scoring evidence into the visual state of one game in
- * a roster slot's six-game window. A final NHL game remains "finalizing" until
- * the scorer has complete appearance evidence; it must not be shown as a
- * played or missed game prematurely.
+ * a roster slot's six-game window. NHL-final is presented with the same green
+ * marker as played while the scorer finishes in the background. Only the
+ * server-owned completion evidence below may later classify the game as
+ * played or missed; this presentation state never controls scoring or window
+ * ownership.
  */
 export function resolveCycleWindowGameMarkerState(
   input: CycleWindowGameMarkerStateInput,
@@ -57,8 +59,8 @@ export function resolveCycleWindowGameMarkerState(
 
   if (runtimeState === 'final') {
     return {
-      status: 'finalizing',
-      statusLabel: 'Final · confirming appearance',
+      status: 'played',
+      statusLabel: 'Final',
     };
   }
 

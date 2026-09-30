@@ -129,6 +129,14 @@ export function getMobileGameMarkerExplanation(
       })
     : 'date pending';
 
+  if (marker.status === 'played' && marker.statusLabel === 'Final') {
+    return {
+      heading: `Game ${marker.index} is final`,
+      detail: `${marker.gameLabel} on ${dateText}. The NHL game is final.`,
+      pointsLabel,
+    };
+  }
+
   if (marker.status === 'played') {
     return {
       heading: `Game ${marker.index} counted — player appeared`,
@@ -149,14 +157,6 @@ export function getMobileGameMarkerExplanation(
     return {
       heading: `Game ${marker.index} is live`,
       detail: `${marker.gameLabel} is in progress. Fantasy points may change until the NHL game becomes final.`,
-      pointsLabel,
-    };
-  }
-
-  if (marker.status === 'finalizing') {
-    return {
-      heading: `Game ${marker.index} is finalizing`,
-      detail: `${marker.gameLabel} is final. RinkRat is confirming the final player-appearance and scoring evidence before marking this game played or missed.`,
       pointsLabel,
     };
   }

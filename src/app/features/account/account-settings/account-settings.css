@@ -607,7 +607,8 @@
   display: grid;
   gap: 7px;
 }
-.form-field > span {
+.form-field > span,
+.form-field > label {
   color: #9bb1ca;
   font-size: 11px;
   font-weight: 900;
@@ -1188,6 +1189,7 @@
 .account-locker-page .eyebrow,
 .account-locker-page .panel-description,
 .account-locker-page .form-field span,
+.account-locker-page .form-field label,
 .account-locker-page .manager-rank,
 .account-locker-page .favorite-team-copy,
 .account-locker-page .background-option-copy small {

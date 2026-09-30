@@ -32,6 +32,11 @@
       ]
     },
     {
+      "collectionGroup": "liveScoring",
+      "fieldPath": "result",
+      "indexes": []
+    },
+    {
       "collectionGroup": "clientErrorReports",
       "fieldPath": "expiresAt",
       "ttl": true,

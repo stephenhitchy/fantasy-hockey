@@ -1195,6 +1195,8 @@ Future entries:
 
 # [x] LOG.140 2026-09-28 — Audited the recurring single Auto-Draft holdout and prepared FF1.41: proved snake position one reaches its second missed turn after every other position, found no retained Production Draft with a zero-manual absent manager stalled, kept the manager's explicit preference separate from the server-owned temporary missed-turn mode, corrected timeout-forced picks that were mislabeled as manager-enabled, showed the universal 0:00 server fallback in the Draft Room, carried exact session/pick/owner/start/deadline identity into the automatic-pick transaction, added privacy-safe reason diagnostics, and completed emulator Drafts of 68/102/136/170/204 picks with duplicate/stale/recovery coverage. The narrow Draft queue Rule accepts/preserves/clears the server marker while denying browser activation; indexes, TTLs, App Check, queue limits, Production Scoring V4, Projection V11, selection strategy, and all non-Draft competitive authority remain unchanged. No deployment or Production write occurred.
 
+# [x] LOG.141 2026-09-29 — Prepared D1A.2 after a Production league score refresh failed with `too many index entries for entity`: exempt the direct-document-read-only `liveScoring.result` map from unused automatic single-field indexing so the existing idempotent scorer can publish the valid NHL goal on retry. This changes one Firestore index policy but no snapshot body, scoring formula, Projection V11, six-game/Game 7 ownership, Rules, TTL, App Check, queue, worker, or competitive authority. The index deployment and affected-league retry remain manual; no Production write or deployment occurred here.
+
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 
 END OF ROADMAP

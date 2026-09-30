@@ -6,11 +6,12 @@ import {
   getFriendlyReauthenticationError,
   RecentAuthService,
 } from '../../core/auth/recent-auth.service';
+import { PasswordVisibilityControl } from '../password-visibility-control/password-visibility-control';
 
 @Component({
   selector: 'app-admin-session-step-up',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, PasswordVisibilityControl],
   templateUrl: './admin-session-step-up.html',
   styleUrl: './admin-session-step-up.css',
 })
