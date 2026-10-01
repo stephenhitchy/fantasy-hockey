@@ -92,6 +92,7 @@ import {
 } from '../../../shared/accessibility/viewport-overlay-portal.directive';
 import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
 import { AssetPortrait } from '../../../shared/asset-portrait/asset-portrait';
+import type { AssetPortraitSource } from '../../../shared/asset-portrait/asset-portrait.util';
 import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
 import {
   getRosterDisplayMetric,
@@ -2678,10 +2679,49 @@ export class TeamSettings implements OnDestroy {
     };
 
     if (rosterAsset.assetType === 'skater') {
-      return rosterAsset.player?.nhlTeamAbbreviation ?? rosterAsset.player?.teamAbbrev ?? '—';
+      const scheduleTeamAbbreviation = this.getRosterAssetScoreSummary(asset)
+        ?.scheduleTeamAbbreviation
+        ?.trim()
+        .toUpperCase();
+
+      return (
+        scheduleTeamAbbreviation && /^[A-Z0-9]{2,4}$/.test(scheduleTeamAbbreviation)
+          ? scheduleTeamAbbreviation
+          : rosterAsset.player?.nhlTeamAbbreviation ??
+            rosterAsset.player?.teamAbbrev ??
+            '—'
+      );
     }
 
     return rosterAsset.teamAbbreviation ?? '—';
+  }
+
+  getRosterAssetPortrait(asset: unknown): AssetPortraitSource {
+    const rosterAsset = asset as AssetPortraitSource;
+
+    if (rosterAsset.assetType !== 'skater') {
+      return rosterAsset;
+    }
+
+    const currentTeamAbbreviation = this.getRosterAssetTeamLabel(asset);
+
+    if (
+      currentTeamAbbreviation === '—' ||
+      !/^[A-Z0-9]{2,4}$/.test(currentTeamAbbreviation) ||
+      currentTeamAbbreviation === rosterAsset.player.nhlTeamAbbreviation
+    ) {
+      return rosterAsset;
+    }
+
+    return {
+      ...rosterAsset,
+      player: {
+        ...rosterAsset.player,
+        nhlTeamAbbreviation: currentTeamAbbreviation,
+        teamLogoUrl:
+          `https://assets.nhle.com/logos/nhl/svg/${currentTeamAbbreviation}_light.svg`,
+      },
+    };
   }
 
   getRosterAssetProjection(asset: unknown): DraftableAsset | null {

@@ -108,7 +108,7 @@ function boxscoreForCurrentTeam() {
   };
 }
 
-test('a stale zero-game window moves entirely to the current NHL club', () => {
+test('a former-club game already in progress stays owned while the unsettled remainder moves', () => {
   const tor = schedule('TOR', 1, ['LIVE', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
   const cbj = schedule('CBJ', 101, ['FINAL', 'LIVE', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
   const resolved = resolveLivePlayerTeamWindow({
@@ -126,10 +126,10 @@ test('a stale zero-game window moves entirely to the current NHL club', () => {
     currentTeamAbbreviation: 'CBJ',
   });
 
-  assert.deepEqual(resolved.games.map((entry) => entry.id), [102, 103, 104, 105, 106, 107]);
+  assert.deepEqual(resolved.games.map((entry) => entry.id), [1, 102, 103, 104, 105, 106]);
   assert.equal(resolved.scheduleTeamAbbreviation, 'CBJ');
   assert.equal(resolved.teamIdentityChanged, true);
-  assert.ok(resolved.games.every((entry) => entry.homeTeam.abbrev === 'CBJ'));
+  assert.equal(resolved.sourceTeamAbbreviationByGameId['1'], 'TOR');
   assert.equal(resolved.sourceTeamAbbreviationByGameId['102'], 'CBJ');
 });
 
@@ -260,6 +260,11 @@ test('live scoring uses the current-team game and stable player id, not the stal
     requiredGamesPerCycle: 6,
     scoringRules: scoringRules.defaultScoringRules,
     currentTeamAbbreviationByPlayerId: new Map([[PLAYER_ID, 'CBJ']]),
+    currentTeamConfirmedAtByPlayerId: new Map([
+      [PLAYER_ID, '2026-10-01T22:00:00Z'],
+    ]),
+    currentTeamIdentityHash: 'test-current-team-identity',
+    currentTeamIdentityGeneratedAt: '2026-10-01T23:01:00Z',
   });
   const summary = result.windowScores['owner-a__LW-1__cycle-1'];
 
@@ -283,6 +288,7 @@ test('server scoring loads one shared current-team catalog and historical replay
 
   assert.match(automation, /replayControl\s*\?\s*null\s*:\s*await phaseTimer\.measure\([\s\S]*?loadCurrentNhlPlayerTeamIdentity/);
   assert.match(automation, /currentTeamAbbreviationByPlayerId:\s*livePlayerTeamIdentity\?\.byPlayerId/);
+  assert.match(automation, /currentTeamConfirmedAtByPlayerId:\s*livePlayerTeamIdentity\?\.teamConfirmedAtByPlayerId/);
   assert.match(scorer, /sourceTeamAbbreviationByGameId/);
   assert.match(identityService, /Scoring was left unchanged and will retry/);
   assert.match(identityService, /getCurrentNhlDraftSkaters\(true\)/);

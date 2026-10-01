@@ -21,6 +21,8 @@ export interface FantasyPlayoffWindowBank {
   assignedMatchupId: string | null;
   assignedRoundNumber: number | null;
   expectedRosterSlotIds: string[];
+  /** Schema 1 requires every skater pick/window copy to carry one cursor. */
+  playerWindowContinuitySchemaVersion?: number;
   picks: DraftPick[];
   slotWindows: FantasyAssetCycleWindow[];
   teamScore: number;

@@ -135,7 +135,14 @@ test('a repaired slot never reuses finalized scores from the outgoing player', (
   );
 
   assert.match(previousSummary, /previousWindow\?\.assetKey === assetKey/);
-  assert.match(previousSummary, /return previousResult\?\.assetScores\?\.\[assetKey\]/);
+  assert.match(
+    previousSummary,
+    /const previousAsset = previousResult\?\.assetScores\?\.\[assetKey\]/,
+  );
+  assert.match(
+    previousSummary,
+    /return continuityMatches\(previousAsset\) \? previousAsset : undefined/,
+  );
 });
 
 test('historical replay retries the failed simulated date instead of skipping ahead', () => {

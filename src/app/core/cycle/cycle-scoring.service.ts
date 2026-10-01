@@ -1,4 +1,8 @@
-import { DraftableAsset, DraftPick } from '../draft/draft.models';
+import {
+  DraftableAsset,
+  DraftPick,
+  PlayerWindowContinuity,
+} from '../draft/draft.models';
 import {
   calculateGoalieGameBreakdown,
   calculateSkaterGameBreakdown,
@@ -53,6 +57,7 @@ export interface CycleAssetScoreSummary {
   scheduleTeamAbbreviation?: string;
   sourceTeamAbbreviationByGameId?: Record<string, string>;
   teamIdentityChanged?: boolean;
+  playerWindowContinuity?: PlayerWindowContinuity;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -93,6 +98,8 @@ export interface CycleScoringResult {
   nextScheduledGameStart: string | null;
   refreshedAt: string;
   dataFingerprint: string;
+  nhlPlayerTeamIdentityHash?: string;
+  nhlPlayerTeamIdentityGeneratedAt?: string;
 }
 
 export interface CalculateCycleScoringInput {

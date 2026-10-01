@@ -73,6 +73,17 @@ function teamSchedule(gameCount) {
   }));
 }
 
+function teamScheduleWithFinalCount(gameCount, finalCount) {
+  return teamSchedule(gameCount).map((game, index) =>
+    index < finalCount
+      ? game
+      : {
+          ...game,
+          gameState: 'FUT',
+        }
+  );
+}
+
 function validSkaterLine(playerId = 7, overrides = {}) {
   return {
     playerId,
@@ -452,7 +463,7 @@ test('a successful retry changes the same game from incomplete to reusable', () 
 });
 
 test('the real scorer retries Game 6 once and keeps Game 7 in the next window', async (t) => {
-  const schedule = teamSchedule(7);
+  const schedule = teamSchedule(12);
   const mocks = mockDirectNhlSources(t, {
     schedule,
     failedBoxscoreGameId: 6,
@@ -497,12 +508,12 @@ test('the real scorer retries Game 6 once and keeps Game 7 in the next window', 
 
   assert.deepEqual(
     cycleTwo.windowScores['owner-a__C-1__cycle-2'].scheduledGameIds,
-    [7],
+    [7, 8, 9, 10, 11, 12],
   );
 });
 
 test('the real scorer settles a proven nonappearance as a reusable zero', async (t) => {
-  const schedule = teamSchedule(1);
+  const schedule = teamScheduleWithFinalCount(6, 1);
   mockDirectNhlSources(t, {
     schedule,
     boxscoreByGameId: new Map([[1, validBoxscore({ appeared: false })]]),
@@ -624,7 +635,7 @@ test('historical replay preserves a proven source-team nonappearance as a reusab
 });
 
 test('the real scorer rejects a fulfilled malformed player log instead of storing zero', async (t) => {
-  const schedule = teamSchedule(1);
+  const schedule = teamScheduleWithFinalCount(6, 1);
   mockDirectNhlSources(t, {
     schedule,
     gameLog: [{ ...validPlayerLogEntry(1), powerPlayPoints: undefined }],
@@ -1191,6 +1202,9 @@ test('duplicate roster-move reconciliation activates once and writes one transac
   const pickRef = firestore.doc(
     `leagues/${leagueId}/cycles/cycle-2/rosterPicks/owner-a__C-1`,
   );
+  const teamWindowsRef = firestore.doc(
+    `leagues/${leagueId}/cycles/cycle-2/teamWindows/owner-a`,
+  );
   const rosterRef = firestore.doc(`leagues/${leagueId}/teams/owner-a/roster/current`);
   const cycle = {
     id: 'cycle-2',
@@ -1254,6 +1268,41 @@ test('duplicate roster-move reconciliation activates once and writes one transac
       }],
       benchSlots: [],
       irSlots: [],
+    }),
+    teamWindowsRef.set({
+      id: 'owner-a',
+      ownerId: 'owner-a',
+      cycleNumber: 2,
+      expectedRosterSlotIds: ['C-1'],
+      windows: [{
+        id: 'owner-a__C-1__cycle-2',
+        ownerId: 'owner-a',
+        rosterSlotId: 'C-1',
+        cycleNumber: 2,
+        position: 'C',
+        assetKey: 'skater-11',
+        asset: {
+          ...skaterAsset,
+          assetKey: 'skater-11',
+          player: outgoingAsset.player,
+        },
+        status: 'scheduled',
+        fantasyPoints: 0,
+        scheduledGameIds: [],
+        completedGameIds: [],
+        incompleteFinalGameIds: [],
+        liveGameIds: [],
+        appearanceGameIds: [],
+        gameScores: {},
+        gameStates: {},
+        scheduledGames: 0,
+        gamesPlayed: 0,
+        actualGamesPlayed: 0,
+        gamesLeft: 6,
+      }],
+      completedWindowCount: 0,
+      totalWindowCount: 1,
+      status: 'active',
     }),
   ]);
 

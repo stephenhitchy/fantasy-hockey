@@ -1,4 +1,8 @@
-import { DraftPosition, DraftableAsset } from '../draft/draft.models';
+import {
+  DraftPosition,
+  DraftableAsset,
+  PlayerWindowContinuity,
+} from '../draft/draft.models';
 
 export type FantasyCycleStatus = 'active' | 'complete';
 
@@ -35,6 +39,7 @@ export interface FantasyAssetCycleWindow {
   scheduleTeamAbbreviation?: string;
   sourceTeamAbbreviationByGameId?: Record<string, string>;
   teamIdentityChanged?: boolean;
+  playerWindowContinuity?: PlayerWindowContinuity;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -97,6 +102,7 @@ export interface FantasyCycle {
 
   /** Independent-window architecture metadata. */
   windowSchemaVersion?: number;
+  playerWindowContinuitySchemaVersion?: number;
   expectedRosterSlotIdsByOwner?: Record<string, string[]>;
   parentCycleNumber?: number | null;
   overlapsPreviousCycle?: boolean;

@@ -57,6 +57,7 @@ import {
 import {
   advanceCompletedRegularSeasonAssetWindows,
   completeCycle,
+  ensureCyclePlayerWindowContinuity,
   getActiveLeagueCycles,
   getCycleMatchupsOnce,
   getCycleRosterPicksOnce,
@@ -69,7 +70,9 @@ import {
 import {
   calculateCycleScoring,
   CycleScoringResult,
+  NhlPlayerTeamIdentityBoundaryRefreshRequiredError,
 } from './shared/core/cycle/cycle-scoring.service';
+import { resolveFrozenSeasonSourceGameIdsByTeam } from './shared/core/cycle/cycle-window-selection.util';
 import {
   normalizeFantasyTeamCycleWindows,
   syncCycleTeamWindows,
@@ -154,6 +157,7 @@ import {
 import { getFantasyPlayoffs } from './shared/core/playoffs/playoff.service';
 import {
   ensureNextPlayoffBankWindows,
+  getAllPlayoffWindowBanks,
   syncPlayoffWindowBankScores,
 } from './shared/core/playoffs/playoff-window-bank.service';
 import {
@@ -4450,6 +4454,9 @@ async function persistServerScoring(
   gameLogSeason?: string,
   projectionRefreshPolicy: 'refresh-if-needed' | 'saved-only' = 'refresh-if-needed',
   currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+  currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>,
+  currentTeamIdentityHash?: string,
+  currentTeamIdentityGeneratedAt?: string,
 ): Promise<boolean> {
   const matchups = await getCycleMatchupsOnce(
     leagueId,
@@ -4521,6 +4528,9 @@ async function persistServerScoring(
       replaySourceTeamAbbreviationByAssetGameId,
       gameLogSeason,
       currentTeamAbbreviationByPlayerId,
+      currentTeamConfirmedAtByPlayerId,
+      currentTeamIdentityHash,
+      currentTeamIdentityGeneratedAt,
     });
 
     await ensureNextPlayoffBankWindows({
@@ -4838,6 +4848,17 @@ async function runLeagueAutomation(
       'historical-replay-data',
       () => getHistoricalReplayControl(leagueId),
     );
+    const scoringDraftSnapshot = replayControl
+      ? null
+      : await phaseTimer.measure(
+          'league-and-team-load',
+          () => db.doc(`leagues/${leagueId}/draft/current`).get(),
+        );
+    const scoringDraft = scoringDraftSnapshot?.exists
+      ? scoringDraftSnapshot.data() as FantasyDraft
+      : null;
+    const draftSeasonSourceGameIdsByTeam =
+      resolveFrozenSeasonSourceGameIdsByTeam(scoringDraft);
     livePlayerTeamIdentity = replayControl
       ? null
       : await phaseTimer.measure(
@@ -4896,14 +4917,57 @@ async function runLeagueAutomation(
 
         const picks = await phaseTimer.measure(
           'roster-pick-load',
-          () => getCycleRosterPicksOnce(
-            leagueId,
-            cycle.cycleNumber,
-          ),
+          async () => {
+            const loadedPicks = await getCycleRosterPicksOnce(
+              leagueId,
+              cycle.cycleNumber,
+            );
+
+            return replayControl
+              ? loadedPicks
+              : ensureCyclePlayerWindowContinuity(
+                  leagueId,
+                  cycle,
+                  loadedPicks,
+                );
+          },
         );
 
         if (picks.length === 0) {
           continue;
+        }
+
+        const playoffIdentityPicks = cycle.phase === 'playoffs'
+          ? await (async () => {
+              const playoffs = await getFantasyPlayoffs(leagueId);
+
+              return playoffs
+                ? (await getAllPlayoffWindowBanks(leagueId, playoffs))
+                    .flatMap((bank) => bank.picks)
+                : [];
+            })()
+          : [];
+        const requiredRosteredPlayerIds = [
+          ...new Set(
+            [...picks, ...playoffIdentityPicks]
+              .filter((pick) => pick.asset.assetType === 'skater')
+              .map((pick) =>
+                pick.asset.assetType === 'skater'
+                  ? pick.asset.player.id
+                  : 0,
+              )
+              .filter((playerId) => playerId > 0),
+          ),
+        ];
+
+        if (!replayControl) {
+
+          livePlayerTeamIdentity = await phaseTimer.measure(
+            'league-and-team-load',
+            () => loadCurrentNhlPlayerTeamIdentity(
+              requiredRosteredPlayerIds,
+            ),
+          );
         }
 
         const previous = await phaseTimer.measure(
@@ -4919,7 +4983,7 @@ async function runLeagueAutomation(
               () => buildReplayRunContext(leagueId, picks, replayControl!),
             )
           : null;
-        const result = await calculateCycleScoring({
+        const calculateScoringPass = () => calculateCycleScoring({
           picks,
           cycleNumber: cycle.cycleNumber,
           season: dataSeason,
@@ -4934,8 +4998,16 @@ async function runLeagueAutomation(
               : null,
           currentTeamAbbreviationByPlayerId:
             livePlayerTeamIdentity?.byPlayerId,
+          currentTeamConfirmedAtByPlayerId:
+            livePlayerTeamIdentity?.teamConfirmedAtByPlayerId,
           sourceNhlTargetGameIdsByTeam:
             cycle.sourceNhlTargetGameIdsByTeam,
+          seasonSourceGameIdsByTeam:
+            draftSeasonSourceGameIdsByTeam,
+          currentTeamIdentityHash:
+            livePlayerTeamIdentity?.identityHash,
+          currentTeamIdentityGeneratedAt:
+            livePlayerTeamIdentity?.generatedAt,
           replayGamesByAssetKey: replayContext?.gamesByAssetKey,
           replaySourceTeamAbbreviationByAssetGameId:
             replayContext?.sourceTeamAbbreviationByAssetGameId,
@@ -4967,6 +5039,28 @@ async function runLeagueAutomation(
               }
             : undefined,
         });
+        let result: CycleScoringResult;
+
+        try {
+          result = await calculateScoringPass();
+        } catch (error: unknown) {
+          if (
+            replayControl ||
+            !(error instanceof NhlPlayerTeamIdentityBoundaryRefreshRequiredError)
+          ) {
+            throw error;
+          }
+
+          livePlayerTeamIdentity = await phaseTimer.measure(
+            'league-and-team-load',
+            () => loadCurrentNhlPlayerTeamIdentity({
+              requiredPlayerIds: requiredRosteredPlayerIds,
+              minimumGeneratedAtMilliseconds:
+                error.minimumGeneratedAtMilliseconds,
+            }),
+          );
+          result = await calculateScoringPass();
+        }
         for (const summary of Object.values(result.windowScores)) {
           if (!summary.teamIdentityChanged) {
             continue;
@@ -5029,6 +5123,9 @@ async function runLeagueAutomation(
             replayControl?.sourceSeason,
             projectionRefreshPolicy,
             livePlayerTeamIdentity?.byPlayerId,
+            livePlayerTeamIdentity?.teamConfirmedAtByPlayerId,
+            livePlayerTeamIdentity?.identityHash,
+            livePlayerTeamIdentity?.generatedAt,
           ),
         );
 

@@ -1,3 +1,4 @@
+import { isDraftNhlTeamRosterComplete } from '../player/draft-availability-source-completeness.util';
 import { queueNhlSharedCacheObservation } from './nhl-shared-cache.service';
 
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
@@ -667,7 +668,7 @@ export interface NhlDraftSkater {
   birthDate?: string;
 }
 
-interface NhlCurrentRosterPlayer {
+export interface NhlCurrentRosterPlayer {
   id?: number;
   playerId?: number;
   firstName?: {
@@ -685,9 +686,14 @@ interface NhlCurrentRosterPlayer {
   birthDate?: string;
 }
 
-interface NhlCurrentRosterResponse {
+export interface NhlCurrentRosterResponse {
   forwards?: NhlCurrentRosterPlayer[];
   defensemen?: NhlCurrentRosterPlayer[];
+}
+
+export interface NhlDraftClubRosterSnapshot {
+  club: NhlDraftClub;
+  roster: NhlCurrentRosterResponse;
 }
 
 const NHL_ROSTER_BATCH_SIZE = 1;
@@ -737,6 +743,10 @@ export const NHL_DRAFT_CLUBS: NhlDraftClub[] = [
   { abbreviation: 'WSH', name: 'Washington Capitals' },
   { abbreviation: 'WPG', name: 'Winnipeg Jets' }
 ];
+
+const supportedDraftClubAbbreviations = new Set(
+  NHL_DRAFT_CLUBS.map((club) => club.abbreviation)
+);
 
 function getDraftPosition(
   positionCode?: string
@@ -792,11 +802,9 @@ function getCurrentDraftRosterSeason(): string {
 }
 
 async function getDraftClubRoster(
-  club: NhlDraftClub
-): Promise<{
-  club: NhlDraftClub;
-  roster: NhlCurrentRosterResponse;
-}> {
+  club: NhlDraftClub,
+  forceRefresh: boolean = false
+): Promise<NhlDraftClubRosterSnapshot> {
   const season = getCurrentDraftRosterSeason();
 
   const url =
@@ -804,8 +812,14 @@ async function getDraftClubRoster(
   const roster = await getCachedApiJson<NhlCurrentRosterResponse>(
     url,
     NHL_ROSTER_CACHE_MILLISECONDS,
-    `${club.abbreviation} roster request failed`
+    `${club.abbreviation} roster request failed`,
+    forceRefresh
   );
+
+  // A successful HTTP response is not enough evidence for scoring identity.
+  // Validate each club independently before a large aggregate player count can
+  // conceal an empty or structurally incomplete response.
+  buildDraftClubSkaters({ club, roster });
 
   return {
     club,
@@ -813,51 +827,236 @@ async function getDraftClubRoster(
   };
 }
 
-function addRosterSkaters(
-  skaters: Map<number, NhlDraftSkater>,
-  club: NhlDraftClub,
-  roster: NhlCurrentRosterResponse
-): void {
-  const rosterPlayers = [
-    ...(roster.forwards ?? []),
-    ...(roster.defensemen ?? [])
-  ];
+interface DraftClubSkater extends NhlDraftSkater {
+  sourceClubAbbreviation: string;
+}
 
-  for (const player of rosterPlayers) {
-    const playerId = player.id ?? player.playerId;
-    const position = getDraftPosition(player.positionCode);
+function normalizeRosterTeamAbbreviation(
+  value: string | undefined,
+  sourceClubAbbreviation: string
+): string {
+  const normalized = value?.trim().toUpperCase() || sourceClubAbbreviation;
 
-    if (!playerId || !position) {
-      continue;
+  if (!supportedDraftClubAbbreviations.has(normalized)) {
+    throw new Error(
+      `The NHL roster response for ${sourceClubAbbreviation} assigned a ` +
+      `skater to unsupported club ${normalized || '(missing)'}.`
+    );
+  }
+
+  return normalized;
+}
+
+function buildDraftClubSkaters(
+  snapshot: NhlDraftClubRosterSnapshot
+): DraftClubSkater[] {
+  const sourceClubAbbreviation = snapshot.club.abbreviation
+    .trim()
+    .toUpperCase();
+
+  if (!supportedDraftClubAbbreviations.has(sourceClubAbbreviation)) {
+    throw new Error(
+      `The NHL roster catalog received unsupported club ${sourceClubAbbreviation || '(missing)'}.`
+    );
+  }
+
+  const roster = snapshot.roster;
+  const forwardsArrayPresent = Array.isArray(roster?.forwards);
+  const defensemenArrayPresent = Array.isArray(roster?.defensemen);
+  const groups = [
+    {
+      players: forwardsArrayPresent ? roster.forwards ?? [] : [],
+      kind: 'forward',
+    },
+    {
+      players: defensemenArrayPresent ? roster.defensemen ?? [] : [],
+      kind: 'defenseman',
+    },
+  ] as const;
+  const validForwardIds = new Set<number>();
+  const validDefensemanIds = new Set<number>();
+  const byPlayerId = new Map<number, DraftClubSkater>();
+
+  for (const group of groups) {
+    for (const player of group.players) {
+      const playerId = player.id ?? player.playerId;
+      const position = getDraftPosition(player.positionCode);
+
+      if (
+        !Number.isSafeInteger(playerId) ||
+        (playerId as number) <= 0 ||
+        !position ||
+        (group.kind === 'forward' && position === 'D') ||
+        (group.kind === 'defenseman' && position !== 'D')
+      ) {
+        continue;
+      }
+
+      const stablePlayerId = playerId as number;
+      const teamAbbreviation = normalizeRosterTeamAbbreviation(
+        player.currentTeamAbbrev,
+        sourceClubAbbreviation
+      );
+      const existing = byPlayerId.get(stablePlayerId);
+
+      if (
+        existing &&
+        (
+          existing.nhlTeamAbbreviation !== teamAbbreviation ||
+          existing.position !== position
+        )
+      ) {
+        throw new Error(
+          `The NHL roster response for ${sourceClubAbbreviation} contained ` +
+          `conflicting rows for player ${stablePlayerId}.`
+        );
+      }
+
+      if (group.kind === 'forward') {
+        validForwardIds.add(stablePlayerId);
+      } else {
+        validDefensemanIds.add(stablePlayerId);
+      }
+
+      if (existing) {
+        continue;
+      }
+
+      const fullName =
+        [
+          player.firstName?.default,
+          player.lastName?.default
+        ]
+          .filter(Boolean)
+          .join(' ') ||
+        player.fullName?.default ||
+        'Unknown Player';
+
+      byPlayerId.set(stablePlayerId, {
+        id: stablePlayerId,
+        fullName,
+        position,
+        nhlTeamAbbreviation: teamAbbreviation,
+        teamLogoUrl: getDraftTeamLogo(teamAbbreviation),
+        headshotUrl: player.headshot,
+        birthDate: player.birthDate,
+        sourceClubAbbreviation
+      });
+    }
+  }
+
+  const completeness = {
+    forwardsArrayPresent,
+    defensemenArrayPresent,
+    validForwardCount: validForwardIds.size,
+    validDefensemanCount: validDefensemanIds.size,
+    uniqueSkaterCount: byPlayerId.size,
+  };
+
+  if (!isDraftNhlTeamRosterComplete(completeness)) {
+    throw new Error(
+      `The NHL roster response for ${sourceClubAbbreviation} was incomplete ` +
+      `(${completeness.validForwardCount} forwards, ` +
+      `${completeness.validDefensemanCount} defensemen, ` +
+      `${completeness.uniqueSkaterCount} unique skaters).`
+    );
+  }
+
+  return [...byPlayerId.values()];
+}
+
+/**
+ * Builds the current skater catalog only after every supplied club response
+ * passes its own completeness checks. Conflicting stable-id assignments fail
+ * before request order can silently decide which NHL team wins.
+ */
+export function buildCurrentNhlDraftSkaterCatalog(
+  snapshots: readonly NhlDraftClubRosterSnapshot[]
+): NhlDraftSkater[] {
+  const byPlayerId = new Map<number, DraftClubSkater>();
+  const seenClubs = new Set<string>();
+
+  for (const snapshot of [...snapshots].sort((first, second) =>
+    first.club.abbreviation.localeCompare(second.club.abbreviation)
+  )) {
+    const sourceClubAbbreviation = snapshot.club.abbreviation
+      .trim()
+      .toUpperCase();
+
+    if (seenClubs.has(sourceClubAbbreviation)) {
+      throw new Error(
+        `The NHL roster catalog received duplicate ${sourceClubAbbreviation} club responses.`
+      );
     }
 
-    const fullName =
-      [
-        player.firstName?.default,
-        player.lastName?.default
-      ]
-        .filter(Boolean)
-        .join(' ') ||
-      player.fullName?.default ||
-      'Unknown Player';
+    seenClubs.add(sourceClubAbbreviation);
 
-    const teamAbbreviation =
-      player.currentTeamAbbrev ?? club.abbreviation;
+    for (const skater of buildDraftClubSkaters(snapshot)) {
+      const existing = byPlayerId.get(skater.id);
 
-    skaters.set(playerId, {
-      id: playerId,
-      fullName,
-      position,
-      nhlTeamAbbreviation: teamAbbreviation,
-      teamLogoUrl: getDraftTeamLogo(teamAbbreviation),
-      headshotUrl: player.headshot,
-      birthDate: player.birthDate
-    });
+      if (
+        existing &&
+        existing.nhlTeamAbbreviation !== skater.nhlTeamAbbreviation
+      ) {
+        const assignedTeams = [
+          existing.nhlTeamAbbreviation,
+          skater.nhlTeamAbbreviation,
+        ].sort();
+
+        throw new Error(
+          `NHL current rosters assigned player ${skater.id} to both ` +
+          `${assignedTeams[0]} and ${assignedTeams[1]}.`
+        );
+      }
+
+      if (!existing) {
+        byPlayerId.set(skater.id, skater);
+        continue;
+      }
+
+      const existingIsCurrentClub =
+        existing.sourceClubAbbreviation === existing.nhlTeamAbbreviation;
+      const candidateIsCurrentClub =
+        skater.sourceClubAbbreviation === skater.nhlTeamAbbreviation;
+
+      if (candidateIsCurrentClub && !existingIsCurrentClub) {
+        byPlayerId.set(skater.id, skater);
+      }
+    }
   }
+
+  const missingClubAbbreviations = NHL_DRAFT_CLUBS
+    .map((club) => club.abbreviation)
+    .filter((clubAbbreviation) => !seenClubs.has(clubAbbreviation));
+
+  if (missingClubAbbreviations.length > 0) {
+    throw new Error(
+      `The NHL roster catalog was missing ${missingClubAbbreviations.length} ` +
+      `club response${missingClubAbbreviations.length === 1 ? '' : 's'}: ` +
+      `${missingClubAbbreviations.slice(0, 8).join(', ')}.`
+    );
+  }
+
+  if (byPlayerId.size === 0) {
+    throw new Error(
+      'The NHL roster service responded, but no draftable skaters were found.'
+    );
+  }
+
+  return [...byPlayerId.values()]
+    .map(({ sourceClubAbbreviation: _sourceClubAbbreviation, ...skater }) =>
+      skater
+    )
+    .sort((first, second) =>
+      first.fullName.localeCompare(second.fullName) || first.id - second.id
+    );
 }
 
 async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
-  const skaters = new Map<number, NhlDraftSkater>();
+  const rosterSnapshotsByClub = new Map<
+    string,
+    NhlDraftClubRosterSnapshot
+  >();
   const retryClubs: NhlDraftClub[] = [];
   const failedClubs = new Map<string, string>();
 
@@ -879,10 +1078,9 @@ async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
       const club = batch[resultIndex];
 
       if (result.status === 'fulfilled') {
-        addRosterSkaters(
-          skaters,
-          result.value.club,
-          result.value.roster
+        rosterSnapshotsByClub.set(
+          result.value.club.abbreviation,
+          result.value
         );
         return;
       }
@@ -906,12 +1104,11 @@ async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
     await wait(NHL_ROSTER_DELAY_MS);
 
     try {
-      const result = await getDraftClubRoster(club);
+      const result = await getDraftClubRoster(club, true);
 
-      addRosterSkaters(
-        skaters,
-        result.club,
-        result.roster
+      rosterSnapshotsByClub.set(
+        result.club.abbreviation,
+        result
       );
 
       failedClubs.delete(club.abbreviation);
@@ -937,15 +1134,19 @@ async function loadCurrentNhlDraftSkatersFromApi(): Promise<NhlDraftSkater[]> {
     );
   }
 
-  if (skaters.size === 0) {
-    throw new Error(
-      'The NHL roster service responded, but no draftable skaters were found.'
-    );
-  }
+  const snapshots = NHL_DRAFT_CLUBS.map((club) => {
+    const snapshot = rosterSnapshotsByClub.get(club.abbreviation);
 
-  return [...skaters.values()].sort((first, second) =>
-    first.fullName.localeCompare(second.fullName)
-  );
+    if (!snapshot) {
+      throw new Error(
+        `The NHL roster response for ${club.abbreviation} is unavailable.`
+      );
+    }
+
+    return snapshot;
+  });
+
+  return buildCurrentNhlDraftSkaterCatalog(snapshots);
 }
 
 function isValidCachedDraftSkaters(value: unknown): value is {
@@ -1033,6 +1234,14 @@ export async function getCurrentNhlDraftSkaters(
 ): Promise<NhlDraftSkater[]> {
   if (forceRefresh) {
     clearCurrentNhlDraftSkaterCache();
+
+    if (draftSkaterRequestInFlight) {
+      // A scoring coverage miss needs one provider-backed refresh, not the
+      // result of an older request that happened to be in flight. Let that
+      // request settle, clear what it cached, and then start the fresh load.
+      await draftSkaterRequestInFlight.catch(() => undefined);
+      clearCurrentNhlDraftSkaterCache();
+    }
   }
 
   const season = getCurrentDraftRosterSeason();

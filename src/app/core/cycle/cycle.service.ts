@@ -377,6 +377,10 @@ function normalizeCycle(
     matchupIds: Array.isArray(data.matchupIds) ? data.matchupIds : [],
     windowSchemaVersion:
       typeof data.windowSchemaVersion === 'number' ? data.windowSchemaVersion : 0,
+    playerWindowContinuitySchemaVersion:
+      typeof data.playerWindowContinuitySchemaVersion === 'number'
+        ? data.playerWindowContinuitySchemaVersion
+        : 0,
     expectedRosterSlotIdsByOwner:
       data.expectedRosterSlotIdsByOwner && typeof data.expectedRosterSlotIdsByOwner === 'object'
         ? data.expectedRosterSlotIdsByOwner

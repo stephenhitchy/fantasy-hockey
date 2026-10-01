@@ -3,8 +3,8 @@ import {
   doc,
   getDocs,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
-  writeBatch,
 } from '../firebase-admin-compat';
 
 import { db } from '../firebase';
@@ -19,6 +19,11 @@ import {
 } from './cycle.models';
 import { CycleAssetScoreSummary, CycleScoringResult } from './cycle-scoring.service';
 import { resolveSourceNhlBlockNumber } from './cycle-window-selection.util';
+import {
+  normalizePlayerWindowContinuity,
+  resolveConsistentPlayerWindowContinuity,
+  resolvePlayerWindowContinuity,
+} from './player-window-continuity.util';
 
 function getCycleDocumentId(cycleNumber: number): string {
   return `cycle-${cycleNumber}`;
@@ -37,6 +42,28 @@ function getTeamWindowsCollectionRef(leagueId: string, cycleNumber: number) {
 
 export function getCycleTeamWindowsRef(leagueId: string, cycleNumber: number, ownerId: string) {
   return doc(getTeamWindowsCollectionRef(leagueId, cycleNumber), ownerId);
+}
+
+function getCycleRosterSlotPickRef(
+  leagueId: string,
+  cycleNumber: number,
+  ownerId: string,
+  rosterSlotId: string,
+) {
+  const documentId = `${ownerId}__${rosterSlotId}`.replace(
+    /[^a-zA-Z0-9_-]/g,
+    '-',
+  );
+
+  return doc(
+    db,
+    'leagues',
+    leagueId,
+    'cycles',
+    getCycleDocumentId(cycleNumber),
+    'rosterPicks',
+    documentId,
+  );
 }
 
 function getRosterSlotId(pick: DraftPick): string {
@@ -113,10 +140,21 @@ function normalizeAssetCycleWindow(
   ownerId: string,
   cycleNumber: number,
 ): FantasyAssetCycleWindow {
+  const rosterSlotId = value.rosterSlotId ?? '';
+  const asset = value.asset as FantasyAssetCycleWindow['asset'];
+  const playerWindowContinuity = asset
+    ? resolvePlayerWindowContinuity({
+        value: value.playerWindowContinuity,
+        ownerId: value.ownerId ?? ownerId,
+        rosterSlotId,
+        asset,
+      })
+    : normalizePlayerWindowContinuity(value.playerWindowContinuity);
+
   return {
     id: value.id ?? '',
     ownerId: value.ownerId ?? ownerId,
-    rosterSlotId: value.rosterSlotId ?? '',
+    rosterSlotId,
     cycleNumber: value.cycleNumber ?? cycleNumber,
     sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
       value.sourceNhlBlockNumber,
@@ -124,7 +162,7 @@ function normalizeAssetCycleWindow(
     ),
     position: value.position ?? 'C',
     assetKey: value.assetKey ?? value.asset?.assetKey ?? '',
-    asset: value.asset as FantasyAssetCycleWindow['asset'],
+    asset,
     status:
       value.status === 'complete' ? 'complete' : value.status === 'active' ? 'active' : 'scheduled',
     scheduledGameIds: normalizeNumberArray(value.scheduledGameIds),
@@ -138,6 +176,7 @@ function normalizeAssetCycleWindow(
       value.sourceTeamAbbreviationByGameId,
     ),
     teamIdentityChanged: value.teamIdentityChanged === true,
+    ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -247,6 +286,16 @@ function buildWindow(
   const startedAt =
     status === 'scheduled' ? (previous?.startedAt ?? null) : (previous?.startedAt ?? nowIso);
   const completedAt = status === 'complete' ? (previous?.completedAt ?? nowIso) : null;
+  const playerWindowContinuity = resolveConsistentPlayerWindowContinuity({
+    values: [
+      summary?.playerWindowContinuity,
+      previous?.playerWindowContinuity,
+      pick.playerWindowContinuity,
+    ],
+    ownerId: pick.ownerId,
+    rosterSlotId,
+    asset: pick.asset,
+  });
 
   return {
     id: windowId,
@@ -273,6 +322,7 @@ function buildWindow(
       normalizeStringRecord(previous?.sourceTeamAbbreviationByGameId),
     teamIdentityChanged:
       summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
+    ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     completedGameIds: summary?.completedGameIds ?? normalizeNumberArray(previous?.completedGameIds),
     liveGameIds: summary?.liveGameIds ?? normalizeNumberArray(previous?.liveGameIds),
     appearanceGameIds:
@@ -335,6 +385,7 @@ function stableWindowFingerprint(teamWindows: FantasyTeamCycleWindows): string {
       sourceTeamAbbreviationByGameId:
         window.sourceTeamAbbreviationByGameId ?? {},
       teamIdentityChanged: window.teamIdentityChanged === true,
+      playerWindowContinuity: window.playerWindowContinuity ?? null,
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,
@@ -474,8 +525,13 @@ export async function syncCycleTeamWindows(
     ...Object.keys(cycle.expectedRosterSlotIdsByOwner ?? {}),
     ...picks.map((pick) => pick.ownerId),
   ]);
-  const batch = writeBatch(db);
   let writeCount = 0;
+  const pendingWrites: Array<{
+    ownerId: string;
+    ownerPicks: DraftPick[];
+    expectedExistingFingerprint: string | null;
+    next: FantasyTeamCycleWindows;
+  }> = [];
   const teamStatusByOwnerId: Record<string, AssetCycleWindowStatus> = {};
   const completedOwnerIds: string[] = [];
   const newlyCompletedOwnerIds: string[] = [];
@@ -536,12 +592,91 @@ export async function syncCycleTeamWindows(
     }
 
     writeCount += 1;
-    batch.set(getCycleTeamWindowsRef(leagueId, cycle.cycleNumber, ownerId), next, { merge: true });
+    pendingWrites.push({
+      ownerId,
+      ownerPicks,
+      expectedExistingFingerprint: existing
+        ? stableWindowFingerprint(existing)
+        : null,
+      next,
+    });
   }
 
-  if (writeCount > 0) {
-    await batch.commit();
-  }
+  await Promise.all(pendingWrites.map((pending) =>
+    runTransaction(db, async (transaction) => {
+      const teamWindowsRef = getCycleTeamWindowsRef(
+        leagueId,
+        cycle.cycleNumber,
+        pending.ownerId,
+      );
+      const pickRefs = pending.ownerPicks.map((pick) =>
+        getCycleRosterSlotPickRef(
+          leagueId,
+          cycle.cycleNumber,
+          pick.ownerId,
+          getRosterSlotId(pick),
+        ),
+      );
+      const [teamWindowsSnapshot, ...pickSnapshots] = await Promise.all([
+        transaction.get(teamWindowsRef),
+        ...pickRefs.map((reference) => transaction.get(reference)),
+      ]);
+      const currentTeamWindows = teamWindowsSnapshot.exists()
+        ? normalizeFantasyTeamCycleWindows(
+            pending.ownerId,
+            cycle.cycleNumber,
+            teamWindowsSnapshot.data()!,
+          )
+        : null;
+      const currentFingerprint = currentTeamWindows
+        ? stableWindowFingerprint(currentTeamWindows)
+        : null;
+
+      if (currentFingerprint !== pending.expectedExistingFingerprint) {
+        throw new Error(
+          `Cycle ${cycle.cycleNumber} team windows changed while scoring ` +
+          `${pending.ownerId}. The stale scoring pass was not persisted.`,
+        );
+      }
+
+      pending.ownerPicks.forEach((pick, index) => {
+        const savedSnapshot = pickSnapshots[index];
+
+        if (!savedSnapshot?.exists()) {
+          throw new Error(
+            `Cycle ${cycle.cycleNumber} roster pick disappeared while scoring ` +
+            `${pick.ownerId}/${getRosterSlotId(pick)}.`,
+          );
+        }
+
+        const savedPick = savedSnapshot.data() as DraftPick;
+        const expectedContinuityId = resolvePlayerWindowContinuity({
+          value: pick.playerWindowContinuity,
+          ownerId: pick.ownerId,
+          rosterSlotId: getRosterSlotId(pick),
+          asset: pick.asset,
+        })?.continuityId;
+        const savedContinuityId = resolvePlayerWindowContinuity({
+          value: savedPick.playerWindowContinuity,
+          ownerId: pick.ownerId,
+          rosterSlotId: getRosterSlotId(pick),
+          asset: savedPick.asset,
+        })?.continuityId;
+
+        if (
+          savedPick.asset.assetKey !== pick.asset.assetKey ||
+          savedContinuityId !== expectedContinuityId
+        ) {
+          throw new Error(
+            `Cycle ${cycle.cycleNumber} roster assignment changed while scoring ` +
+            `${pick.ownerId}/${getRosterSlotId(pick)}. The stale scoring pass was not persisted.`,
+          );
+        }
+      });
+
+      transaction.set(teamWindowsRef, pending.next, { merge: true });
+    })
+  ));
 
   const completionFingerprint = Object.entries(teamStatusByOwnerId)
     .sort(([firstOwnerId], [secondOwnerId]) => firstOwnerId.localeCompare(secondOwnerId))

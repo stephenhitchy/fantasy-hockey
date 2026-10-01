@@ -21,6 +21,7 @@ export interface FantasyPlayoffWindowBank {
   assignedMatchupId: string | null;
   assignedRoundNumber: number | null;
   expectedRosterSlotIds: string[];
+  playerWindowContinuitySchemaVersion?: number;
   picks: DraftPick[];
   slotWindows: FantasyAssetCycleWindow[];
   teamScore: number;

@@ -5,7 +5,6 @@ import {
   getDocs,
   runTransaction,
   serverTimestamp,
-  writeBatch,
 } from '../firebase-admin-compat';
 
 import { db } from '../firebase';
@@ -23,17 +22,31 @@ import {
 } from '../projection/window-projection.service';
 import { FantasyRoster, PendingRosterSlotMove, RosterAsset } from '../team/roster.models';
 import { normalizeFantasyRoster } from '../team/roster.service';
-import { calculateCycleScoring, CycleScoringResult } from '../cycle/cycle-scoring.service';
+import {
+  calculateCycleScoring,
+  CycleScoringResult,
+  NhlPlayerTeamIdentityBoundaryRefreshRequiredError,
+} from '../cycle/cycle-scoring.service';
 import { defaultScoringRules, ScoringRules } from '../scoring/scoring-rules';
 import { FantasyAssetCycleWindow } from '../cycle/cycle.models';
 import {
   buildSourceNhlTargetGameIdsByTeam,
+  resolveFrozenSeasonSourceGameIdsByTeam,
   resolveSourceNhlBlockNumber,
 } from '../cycle/cycle-window-selection.util';
 import { NhlTeamSeasonGame } from '../nhl/nhl-api.service';
+import { loadCurrentNhlPlayerTeamIdentity } from '../nhl/nhl-player-team-identity.service';
 import { normalizeNhlFinalInputCompletenessRecord } from '../nhl/nhl-final-input-completeness.util';
 import { FantasyPlayoffWindowBank } from './playoff-window-bank.models';
 import { FantasyPlayoffs } from './playoff.models';
+import {
+  advancePlayerWindowContinuity,
+  createPlayerWindowContinuity,
+  normalizePlayerWindowContinuity,
+  PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION,
+  resolveConsistentPlayerWindowContinuity,
+  resolvePlayerWindowContinuity,
+} from '../cycle/player-window-continuity.util';
 
 function getOwnerBankRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'playoffWindowBanks', ownerId);
@@ -92,6 +105,19 @@ function normalizeNumberRecord(value: unknown): Record<string, number> {
   );
 }
 
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' && entry[1].trim().length > 0,
+    ),
+  );
+}
+
 function normalizeSourceNhlTargetGameIdsByTeam(
   value: unknown,
 ): Record<string, number[]> {
@@ -130,11 +156,22 @@ function normalizeGameStateRecord(value: unknown): Record<string, 'scheduled' | 
 
 function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAssetCycleWindow {
   const cycleNumber = typeof value.cycleNumber === 'number' ? value.cycleNumber : 0;
+  const ownerId = value.ownerId ?? '';
+  const rosterSlotId = value.rosterSlotId ?? '';
+  const asset = value.asset as FantasyAssetCycleWindow['asset'];
+  const playerWindowContinuity = asset
+    ? resolvePlayerWindowContinuity({
+        value: value.playerWindowContinuity,
+        ownerId,
+        rosterSlotId,
+        asset,
+      })
+    : normalizePlayerWindowContinuity(value.playerWindowContinuity);
 
   return {
     id: value.id ?? '',
-    ownerId: value.ownerId ?? '',
-    rosterSlotId: value.rosterSlotId ?? '',
+    ownerId,
+    rosterSlotId,
     cycleNumber,
     sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
       value.sourceNhlBlockNumber,
@@ -142,12 +179,21 @@ function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAs
     ),
     position: value.position ?? 'C',
     assetKey: value.assetKey ?? value.asset?.assetKey ?? '',
-    asset: value.asset as FantasyAssetCycleWindow['asset'],
+    asset,
     status:
       value.status === 'complete' ? 'complete' : value.status === 'active' ? 'active' : 'scheduled',
     scheduledGameIds: normalizeNumberArray(value.scheduledGameIds),
     scheduledGameDates: normalizeStringArray(value.scheduledGameDates),
     scheduledGameLabels: normalizeStringArray(value.scheduledGameLabels),
+    scheduleTeamAbbreviation:
+      typeof value.scheduleTeamAbbreviation === 'string'
+        ? value.scheduleTeamAbbreviation
+        : undefined,
+    sourceTeamAbbreviationByGameId: normalizeStringRecord(
+      value.sourceTeamAbbreviationByGameId,
+    ),
+    teamIdentityChanged: value.teamIdentityChanged === true,
+    ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -240,6 +286,10 @@ export function normalizePlayoffWindowBank(
     assignedRoundNumber:
       typeof value.assignedRoundNumber === 'number' ? value.assignedRoundNumber : null,
     expectedRosterSlotIds: normalizeStringArray(value.expectedRosterSlotIds),
+    playerWindowContinuitySchemaVersion:
+      typeof value.playerWindowContinuitySchemaVersion === 'number'
+        ? value.playerWindowContinuitySchemaVersion
+        : 0,
     picks: Array.isArray(value.picks) ? (value.picks as DraftPick[]) : [],
     slotWindows: normalizeSlotWindows(value.slotWindows),
     teamScore: typeof value.teamScore === 'number' ? value.teamScore : 0,
@@ -553,6 +603,16 @@ function buildSlotWindows(
   bank: FantasyPlayoffWindowBank,
   scoring: CycleScoringResult,
 ): FantasyAssetCycleWindow[] {
+  if (
+    (bank.playerWindowContinuitySchemaVersion ?? 0) >
+    PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION
+  ) {
+    throw new Error(
+      `Playoff Window ${bank.windowNumber} uses an unsupported player-window ` +
+      `continuity schema.`,
+    );
+  }
+
   const previousById = new Map(bank.slotWindows.map((window) => [window.id, window] as const));
 
   return bank.picks.map((pick) => {
@@ -562,6 +622,28 @@ function buildSlotWindows(
     const summary = scoring.windowScores[windowId] ?? scoring.assetScores[pick.asset.assetKey];
     const previous = previousById.get(windowId);
     const nowIso = new Date().toISOString();
+    const playerWindowContinuity = resolveConsistentPlayerWindowContinuity({
+      values: [
+        summary?.playerWindowContinuity,
+        previous?.playerWindowContinuity,
+        pick.playerWindowContinuity,
+      ],
+      ownerId: pick.ownerId,
+      rosterSlotId,
+      asset: pick.asset,
+    });
+
+    if (
+      bank.playerWindowContinuitySchemaVersion ===
+        PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION &&
+      pick.asset.assetType === 'skater' &&
+      !playerWindowContinuity
+    ) {
+      throw new Error(
+        `Playoff Window ${bank.windowNumber} requires player-window continuity ` +
+        `for ${pick.ownerId}/${rosterSlotId}/${pick.asset.assetKey}.`,
+      );
+    }
 
     return {
       id: windowId,
@@ -587,6 +669,7 @@ function buildSlotWindows(
         {},
       teamIdentityChanged:
         summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
+      ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
       completedGameIds: summary?.completedGameIds ?? previous?.completedGameIds ?? [],
       liveGameIds: summary?.liveGameIds ?? previous?.liveGameIds ?? [],
       appearanceGameIds: summary?.appearanceGameIds ?? previous?.appearanceGameIds ?? [],
@@ -654,6 +737,7 @@ function bankFingerprint(bank: FantasyPlayoffWindowBank): string {
       sourceTeamAbbreviationByGameId:
         window.sourceTeamAbbreviationByGameId ?? {},
       teamIdentityChanged: window.teamIdentityChanged === true,
+      playerWindowContinuity: window.playerWindowContinuity ?? null,
       gameInputCompleteness: window.gameInputCompleteness ?? {},
       incompleteFinalGameIds: window.incompleteFinalGameIds ?? [],
       fantasyPoints: window.fantasyPoints,
@@ -663,6 +747,55 @@ function bankFingerprint(bank: FantasyPlayoffWindowBank): string {
       frozenProjectionFrozenAt: window.frozenProjectionFrozenAt,
       frozenProjectionTargetGameIds: window.frozenProjectionTargetGameIds,
     })),
+  });
+}
+
+function bankPickAuthorityFingerprint(picks: readonly DraftPick[]): string {
+  return JSON.stringify(
+    [...picks]
+      .map((pick) => {
+        const rosterSlotId = pick.rosterSlotId ??
+          `legacy-pick-${pick.overallPick}`;
+        const continuity = resolvePlayerWindowContinuity({
+          value: pick.playerWindowContinuity,
+          ownerId: pick.ownerId,
+          rosterSlotId,
+          asset: pick.asset,
+        });
+
+        return {
+          ownerId: pick.ownerId,
+          rosterSlotId,
+          assetKey: pick.asset.assetKey,
+          currentTeamAbbreviation: getAssetTeamAbbreviation(pick.asset),
+          cycleWindowId: pick.cycleWindowId ?? '',
+          snapshotCycleNumber: pick.snapshotCycleNumber ?? null,
+          playoffWindowNumber: pick.playoffWindowNumber ?? null,
+          continuityId: continuity?.continuityId ?? '',
+          sourceNhlTargetGameIds: pick.sourceNhlTargetGameIds ?? [],
+        };
+      })
+      .sort((first, second) =>
+        `${first.ownerId}::${first.rosterSlotId}`.localeCompare(
+          `${second.ownerId}::${second.rosterSlotId}`,
+        ),
+      ),
+  );
+}
+
+function bankAuthorityFingerprint(bank: FantasyPlayoffWindowBank): string {
+  return JSON.stringify({
+    ownerId: bank.ownerId,
+    windowNumber: bank.windowNumber,
+    sourceCycleNumber: bank.sourceCycleNumber,
+    sourceNhlBlockNumber: bank.sourceNhlBlockNumber ?? null,
+    assignmentStatus: bank.assignmentStatus,
+    assignedMatchupId: bank.assignedMatchupId,
+    assignedRoundNumber: bank.assignedRoundNumber,
+    expectedRosterSlotIds: [...bank.expectedRosterSlotIds].sort(),
+    playerWindowContinuitySchemaVersion:
+      bank.playerWindowContinuitySchemaVersion ?? 0,
+    pickAuthority: bankPickAuthorityFingerprint(bank.picks),
   });
 }
 
@@ -704,6 +837,12 @@ function buildPreviousScoringResultFromBanks(
       sourceTeamAbbreviationByGameId:
         window.sourceTeamAbbreviationByGameId ?? {},
       teamIdentityChanged: window.teamIdentityChanged === true,
+      ...(window.playerWindowContinuity
+        ? {
+            playerWindowContinuityId:
+              window.playerWindowContinuity.continuityId,
+          }
+        : {}),
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,
@@ -761,6 +900,9 @@ export async function syncPlayoffWindowBankScores(input: {
   replaySourceTeamAbbreviationByAssetGameId?: Record<string, Record<string, string>>;
   gameLogSeason?: string;
   currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>;
+  currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>;
+  currentTeamIdentityHash?: string;
+  currentTeamIdentityGeneratedAt?: string;
 }): Promise<FantasyPlayoffWindowBank[]> {
   const [banks, draftAuthoritySnapshot] = await Promise.all([
     getAllPlayoffWindowBanks(input.leagueId, input.playoffs),
@@ -770,6 +912,13 @@ export async function syncPlayoffWindowBankScores(input: {
     ? (draftAuthoritySnapshot.data() as FantasyDraft)
     : null;
   const scoringByOwnerWindow = new Map<string, CycleScoringResult>();
+  let currentTeamAbbreviationByPlayerId =
+    input.currentTeamAbbreviationByPlayerId;
+  let currentTeamConfirmedAtByPlayerId =
+    input.currentTeamConfirmedAtByPlayerId;
+  let currentTeamIdentityHash = input.currentTeamIdentityHash;
+  let currentTeamIdentityGeneratedAt =
+    input.currentTeamIdentityGeneratedAt;
 
   if (input.assignedPicks?.length && input.assignedScoring) {
     const ownerWindowPairs = new Set(
@@ -825,22 +974,62 @@ export async function syncPlayoffWindowBankScores(input: {
         groupedBanks.map((bank) => [bank.ownerId, bank.expectedRosterSlotIds]),
       );
       const previousResult = buildPreviousScoringResultFromBanks(groupedBanks);
-      const scoring = await calculateCycleScoring({
-        picks: unassignedPicks,
-        cycleNumber: input.playoffs.regularSeasonCycleCount + 1,
-        season: input.season,
-        requiredGamesPerCycle: input.requiredGamesPerCycle,
-        scoringRules: input.scoringRules,
-        expectedRosterSlotIdsByOwner,
-        previousResult,
-        sourceNhlTargetGameIdsByTeam,
-        replayGamesByAssetKey: input.replayGamesByAssetKey,
-        replaySourceTeamAbbreviationByAssetGameId:
-          input.replaySourceTeamAbbreviationByAssetGameId,
-        gameLogSeason: input.gameLogSeason,
-        currentTeamAbbreviationByPlayerId:
-          input.currentTeamAbbreviationByPlayerId,
-      });
+      const calculateScoringPass = () => calculateCycleScoring({
+          picks: unassignedPicks,
+          cycleNumber: input.playoffs.regularSeasonCycleCount + 1,
+          season: input.season,
+          requiredGamesPerCycle: input.requiredGamesPerCycle,
+          scoringRules: input.scoringRules,
+          expectedRosterSlotIdsByOwner,
+          previousResult,
+          sourceNhlTargetGameIdsByTeam,
+          seasonSourceGameIdsByTeam:
+            resolveFrozenSeasonSourceGameIdsByTeam(draftAuthority),
+          currentTeamIdentityHash,
+          currentTeamIdentityGeneratedAt,
+          currentTeamConfirmedAtByPlayerId,
+          replayGamesByAssetKey: input.replayGamesByAssetKey,
+          replaySourceTeamAbbreviationByAssetGameId:
+            input.replaySourceTeamAbbreviationByAssetGameId,
+          gameLogSeason: input.gameLogSeason,
+          currentTeamAbbreviationByPlayerId,
+        });
+      let scoring: CycleScoringResult;
+
+      try {
+        scoring = await calculateScoringPass();
+      } catch (error: unknown) {
+        if (
+          input.replayGamesByAssetKey ||
+          !(error instanceof NhlPlayerTeamIdentityBoundaryRefreshRequiredError)
+        ) {
+          throw error;
+        }
+
+        const requiredPlayerIds = [
+          ...new Set(
+            unassignedPicks
+              .filter((pick) => pick.asset.assetType === 'skater')
+              .map((pick) =>
+                pick.asset.assetType === 'skater'
+                  ? pick.asset.player.id
+                  : 0,
+              )
+              .filter((playerId) => playerId > 0),
+          ),
+        ];
+        const identity = await loadCurrentNhlPlayerTeamIdentity({
+          requiredPlayerIds,
+          minimumGeneratedAtMilliseconds:
+            error.minimumGeneratedAtMilliseconds,
+        });
+        currentTeamAbbreviationByPlayerId = identity.byPlayerId;
+        currentTeamConfirmedAtByPlayerId =
+          identity.teamConfirmedAtByPlayerId;
+        currentTeamIdentityHash = identity.identityHash;
+        currentTeamIdentityGeneratedAt = identity.generatedAt;
+        scoring = await calculateScoringPass();
+      }
 
       for (const bank of groupedBanks) {
         scoringByOwnerWindow.set(`${bank.ownerId}::${bank.windowNumber}`, scoring);
@@ -848,9 +1037,7 @@ export async function syncPlayoffWindowBankScores(input: {
     }
   }
 
-  const batch = writeBatch(db);
   const updatedBanks: FantasyPlayoffWindowBank[] = [];
-  let writeCount = 0;
 
   for (const bank of banks) {
     const scoring = scoringByOwnerWindow.get(`${bank.ownerId}::${bank.windowNumber}`);
@@ -860,40 +1047,112 @@ export async function syncPlayoffWindowBankScores(input: {
       continue;
     }
 
-    const slotWindows = buildSlotWindows(bank, scoring);
-    const completedWindowCount = slotWindows.filter(
-      (window) => window.status === 'complete',
-    ).length;
-    const totalWindowCount = bank.expectedRosterSlotIds.length;
-    const complete = totalWindowCount > 0 && completedWindowCount >= totalWindowCount;
-    const active = slotWindows.some((window) => window.status !== 'scheduled');
-    const next: FantasyPlayoffWindowBank = {
-      ...bank,
-      slotWindows,
-      teamScore: Number(
-        slotWindows.reduce((total, window) => total + window.fantasyPoints, 0).toFixed(1),
-      ),
-      completedWindowCount,
-      totalWindowCount,
-      status: complete ? 'complete' : active ? 'active' : 'scheduled',
-      updatedAt: serverTimestamp(),
-      completedAt: complete ? (bank.completedAt ?? serverTimestamp()) : null,
-    };
+    const expectedAuthorityFingerprint = bankAuthorityFingerprint(bank);
+    const expectedScoringFingerprint = bankFingerprint(bank);
+    const next = await runTransaction(db, async (transaction) => {
+      const reference = getPlayoffWindowBankRef(
+        input.leagueId,
+        bank.ownerId,
+        bank.windowNumber,
+      );
+      const snapshot = await transaction.get(reference);
+
+      if (!snapshot.exists()) {
+        throw new Error(
+          `Playoff Window ${bank.windowNumber} for ${bank.ownerId} disappeared during scoring.`,
+        );
+      }
+
+      const current = normalizePlayoffWindowBank(
+        snapshot.data() as Partial<FantasyPlayoffWindowBank>,
+        bank.ownerId,
+        bank.windowNumber,
+        input.playoffs.regularSeasonCycleCount,
+      );
+
+      if (
+        bankAuthorityFingerprint(current) !== expectedAuthorityFingerprint ||
+        bankFingerprint(current) !== expectedScoringFingerprint
+      ) {
+        throw new Error(
+          `Playoff Window ${bank.windowNumber} for ${bank.ownerId} changed during scoring. ` +
+          'The stale scoring pass was discarded and will retry.',
+        );
+      }
+
+      if (current.assignmentStatus === 'assigned') {
+        const assignedPicks = (input.assignedPicks ?? []).filter(
+          (pick) =>
+            pick.ownerId === current.ownerId &&
+            (pick.playoffWindowNumber ?? 1) === current.windowNumber,
+        );
+
+        if (
+          assignedPicks.length === 0 ||
+          bankPickAuthorityFingerprint(assignedPicks) !==
+            bankPickAuthorityFingerprint(current.picks)
+        ) {
+          throw new Error(
+            `Assigned Playoff Window ${current.windowNumber} for ${current.ownerId} ` +
+            'does not match the active cycle picks. Scoring was left unchanged.',
+          );
+        }
+      }
+
+      const slotWindows = buildSlotWindows(current, scoring);
+      const completedWindowCount = slotWindows.filter(
+        (window) => window.status === 'complete',
+      ).length;
+      const totalWindowCount = current.expectedRosterSlotIds.length;
+      const complete = totalWindowCount > 0 &&
+        completedWindowCount >= totalWindowCount;
+      const active = slotWindows.some(
+        (window) => window.status !== 'scheduled',
+      );
+      const status = complete
+        ? 'complete' as const
+        : active
+          ? 'active' as const
+          : 'scheduled' as const;
+      const teamScore = Number(
+        slotWindows
+          .reduce((total, window) => total + window.fantasyPoints, 0)
+          .toFixed(1),
+      );
+      const completedAt = complete
+        ? current.completedAt ?? serverTimestamp()
+        : null;
+      const nextBank: FantasyPlayoffWindowBank = {
+        ...current,
+        slotWindows,
+        teamScore,
+        completedWindowCount,
+        totalWindowCount,
+        status,
+        updatedAt: serverTimestamp(),
+        completedAt,
+      };
+
+      if (bankFingerprint(current) !== bankFingerprint(nextBank)) {
+        transaction.set(
+          reference,
+          {
+            slotWindows,
+            teamScore,
+            completedWindowCount,
+            totalWindowCount,
+            status,
+            completedAt,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      return nextBank;
+    });
 
     updatedBanks.push(next);
-
-    if (bankFingerprint(bank) === bankFingerprint(next)) {
-      continue;
-    }
-
-    writeCount += 1;
-    batch.set(getPlayoffWindowBankRef(input.leagueId, bank.ownerId, bank.windowNumber), next, {
-      merge: true,
-    });
-  }
-
-  if (writeCount > 0) {
-    await batch.commit();
   }
 
   return updatedBanks;
@@ -939,6 +1198,26 @@ export function createInitialPlayoffBankPayloads(
       (pick) => pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`,
     );
 
+    for (const pick of ownerPicks) {
+      if (pick.asset.assetType !== 'skater') {
+        continue;
+      }
+
+      const rosterSlotId = pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
+
+      if (!resolvePlayerWindowContinuity({
+        value: pick.playerWindowContinuity,
+        ownerId: pick.ownerId,
+        rosterSlotId,
+        asset: pick.asset,
+      })) {
+        throw new Error(
+          `Playoff Window 1 cannot open without player-window continuity for ` +
+          `${pick.ownerId}/${rosterSlotId}/${pick.asset.assetKey}.`,
+        );
+      }
+    }
+
     return {
       id: 'window-1',
       ownerId: seed.ownerId,
@@ -951,6 +1230,8 @@ export function createInitialPlayoffBankPayloads(
       assignedMatchupId: null,
       assignedRoundNumber: null,
       expectedRosterSlotIds,
+      playerWindowContinuitySchemaVersion:
+        PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION,
       picks: ownerPicks,
       slotWindows: [],
       teamScore: 0,
@@ -1080,12 +1361,21 @@ async function createNextPlayoffBankWindow(
   );
   const rosterRef = getTeamRosterRef(leagueId, ownerId);
   const bankRef = getPlayoffWindowBankRef(leagueId, ownerId, windowNumber);
+  const previousBankRef = windowNumber > 1
+    ? getPlayoffWindowBankRef(leagueId, ownerId, windowNumber - 1)
+    : null;
 
   await runTransaction(db, async (transaction) => {
-    const [rosterSnapshot, bankSnapshot, savedDraftSnapshot] = await Promise.all([
+    const [
+      rosterSnapshot,
+      bankSnapshot,
+      savedDraftSnapshot,
+      previousBankSnapshot,
+    ] = await Promise.all([
       transaction.get(rosterRef),
       transaction.get(bankRef),
       transaction.get(getDraftRef(leagueId)),
+      previousBankRef ? transaction.get(previousBankRef) : Promise.resolve(null),
     ]);
 
     if (bankSnapshot.exists()) {
@@ -1113,6 +1403,88 @@ async function createNextPlayoffBankWindow(
       throw new Error(`Roster ${ownerId} is missing while opening playoff window ${windowNumber}.`);
     }
 
+    const previousBank = previousBankSnapshot?.exists
+      ? normalizePlayoffWindowBank(
+          previousBankSnapshot.data() as Partial<FantasyPlayoffWindowBank>,
+          ownerId,
+          windowNumber - 1,
+          playoffs.regularSeasonCycleCount,
+        )
+      : null;
+
+    if (windowNumber > 1 && (!previousBank || previousBank.status !== 'complete')) {
+      throw new Error(
+        `Playoff Window ${windowNumber - 1} must be complete before Window ${windowNumber} opens.`,
+      );
+    }
+
+    if (
+      windowNumber > 1 &&
+      previousBank?.playerWindowContinuitySchemaVersion !==
+        PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION
+    ) {
+      throw new Error(
+        `Playoff Window ${windowNumber - 1} predates required player-window ` +
+        `continuity. The next bank was not opened from incomplete legacy evidence.`,
+      );
+    }
+
+    const previousPickBySlotId = new Map(
+      (previousBank?.picks ?? []).map((pick) => [
+        pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`,
+        pick,
+      ] as const),
+    );
+    const previousWindowBySlotId = new Map(
+      (previousBank?.slotWindows ?? []).map((window) => [
+        window.rosterSlotId,
+        window,
+      ] as const),
+    );
+    const previousContinuityBySlotId = new Map<string, ReturnType<
+      typeof resolveConsistentPlayerWindowContinuity
+    >>();
+
+    for (const previousPick of previousBank?.picks ?? []) {
+      if (previousPick.asset.assetType !== 'skater') {
+        continue;
+      }
+
+      const rosterSlotId = previousPick.rosterSlotId ??
+        `legacy-pick-${previousPick.overallPick}`;
+      const previousWindow = previousWindowBySlotId.get(rosterSlotId);
+
+      if (
+        !previousWindow ||
+        previousWindow.status !== 'complete' ||
+        previousWindow.assetKey !== previousPick.asset.assetKey
+      ) {
+        throw new Error(
+          `Playoff Window ${windowNumber - 1} is missing the completed window ` +
+          `for ${ownerId}/${rosterSlotId}/${previousPick.asset.assetKey}.`,
+        );
+      }
+
+      const continuity = resolveConsistentPlayerWindowContinuity({
+        values: [
+          previousPick.playerWindowContinuity,
+          previousWindow.playerWindowContinuity,
+        ],
+        ownerId,
+        rosterSlotId,
+        asset: previousPick.asset,
+      });
+
+      if (!continuity) {
+        throw new Error(
+          `Playoff Window ${windowNumber - 1} is missing required player-window ` +
+          `continuity for ${ownerId}/${rosterSlotId}/${previousPick.asset.assetKey}.`,
+        );
+      }
+
+      previousContinuityBySlotId.set(rosterSlotId, continuity);
+    }
+
     const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
     const picks: DraftPick[] = [];
 
@@ -1129,6 +1501,40 @@ async function createNextPlayoffBankWindow(
 
       const incomingAssetKey = getRosterAssetKey(incomingAsset);
       const draftFallback = draftByAssetKey.get(incomingAssetKey)?.asset ?? null;
+      const nextDraftableAsset = rosterAssetToDraftableAsset(
+        incomingAsset,
+        sourceCycleNumber,
+        projectionAssetsByKey.get(incomingAssetKey) ?? null,
+        draftFallback,
+      );
+      const previousPick = previousPickBySlotId.get(slot.slotId);
+      const previousWindow = previousWindowBySlotId.get(slot.slotId);
+      const previousContinuity = previousContinuityBySlotId.get(slot.slotId);
+      const playerWindowContinuity = pendingMoveReady && slot.pendingMove
+        ? createPlayerWindowContinuity({
+            ownerId,
+            rosterSlotId: slot.slotId,
+            asset: nextDraftableAsset,
+            activationKey: `move-${slot.pendingMove.id}`,
+          })
+        : previousPick && previousWindow
+          ? advancePlayerWindowContinuity({
+              previousAsset: previousPick.asset,
+              nextAsset: nextDraftableAsset,
+              previousContinuity,
+              completedScheduledGameIds: previousWindow.scheduledGameIds,
+              completedScheduleTeamAbbreviation:
+                previousWindow.scheduleTeamAbbreviation,
+              ownerId,
+              rosterSlotId: slot.slotId,
+              activationKey: `playoff-window-${windowNumber}`,
+            })
+          : createPlayerWindowContinuity({
+              ownerId,
+              rosterSlotId: slot.slotId,
+              asset: nextDraftableAsset,
+              activationKey: `playoff-window-${windowNumber}`,
+            });
       const pick: DraftPick = {
         overallPick: draftByAssetKey.get(incomingAssetKey)?.overallPick ?? 100000 + slotIndex + 1,
         round: draftByAssetKey.get(incomingAssetKey)?.round ?? 0,
@@ -1145,14 +1551,14 @@ async function createNextPlayoffBankWindow(
             }
           : {}),
         sourceNhlTargetGameIdsByTeam: { ...sourceNhlTargetGameIdsByTeam },
+        ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+        snapshotSource: pendingMoveReady && slot.pendingMove
+          ? 'queued-playoff-slot-move'
+          : 'playoff-window-open',
+        snapshottedAt: new Date().toISOString(),
         playoffWindowNumber: windowNumber,
         snapshotOrder: draftByAssetKey.get(incomingAssetKey)?.overallPick ?? 100000 + slotIndex + 1,
-        asset: rosterAssetToDraftableAsset(
-          incomingAsset,
-          sourceCycleNumber,
-          projectionAssetsByKey.get(incomingAssetKey) ?? null,
-          draftFallback,
-        ),
+        asset: nextDraftableAsset,
       };
 
       picks.push(pick);
@@ -1250,6 +1656,8 @@ async function createNextPlayoffBankWindow(
       assignedMatchupId: null,
       assignedRoundNumber: null,
       expectedRosterSlotIds,
+      playerWindowContinuitySchemaVersion:
+        PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION,
       picks,
       slotWindows: [],
       teamScore: 0,

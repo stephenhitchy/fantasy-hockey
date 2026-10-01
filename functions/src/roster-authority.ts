@@ -20,9 +20,10 @@ import {
   normalizeFantasyRoster,
 } from './shared/core/team/roster.service';
 import {
+  applyCurrentNhlTeamIdentity,
   getAuthoritativeAvailabilityStatus,
-  getEarliestEligibleCycleNumber,
   loadCanonicalDraftableAsset,
+  resolveRosterMoveAssetCycleEligibility,
 } from './roster-moves';
 
 const FUNCTION_REGION = 'us-central1';
@@ -342,17 +343,44 @@ async function getAllRosterRefs(leagueId: string): Promise<Array<ReturnType<type
   );
 }
 
-async function getFairEffectiveCycleNumber(
+interface FairEffectiveCycleResolution<
+  TAsset extends DraftableAsset | RosterAsset,
+> {
+  asset: TAsset;
+  effectiveCycleNumber: number;
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>;
+}
+
+async function getFairEffectiveCycleNumber<
+  TAsset extends DraftableAsset | RosterAsset,
+>(
   leagueId: string,
-  asset: DraftableAsset | RosterAsset,
+  asset: TAsset,
   gamesPerCycle: number,
   requestedCycle: number | null,
-): Promise<number> {
-  const earliest = Math.max(
-    asset.eligibleFromCycleNumber ?? 1,
-    await getEarliestEligibleCycleNumber(asset, gamesPerCycle, leagueId),
+  actionBoundaryMilliseconds: number,
+): Promise<FairEffectiveCycleResolution<TAsset>> {
+  const eligibility = await resolveRosterMoveAssetCycleEligibility(
+    asset,
+    gamesPerCycle,
+    leagueId,
+    undefined,
+    actionBoundaryMilliseconds,
   );
-  return Math.max(requestedCycle ?? earliest, earliest);
+  const earliest = Math.max(
+    eligibility.asset.eligibleFromCycleNumber ?? 1,
+    eligibility.earliestEligibleCycleNumber,
+  );
+  return {
+    asset: eligibility.asset,
+    effectiveCycleNumber: Math.max(requestedCycle ?? earliest, earliest),
+    ...(eligibility.currentTeamAbbreviationByPlayerId
+      ? {
+          currentTeamAbbreviationByPlayerId:
+            eligibility.currentTeamAbbreviationByPlayerId,
+        }
+      : {}),
+  };
 }
 
 async function assertAssetIsFreeAgent(
@@ -377,6 +405,7 @@ async function executeAddAction(options: {
   requestedCycle: number | null;
   requestedLabel: string | null;
   gamesPerCycle: number;
+  actionBoundaryMilliseconds: number;
 }): Promise<SecureRosterActionResult> {
   const {
     leagueId,
@@ -387,15 +416,19 @@ async function executeAddAction(options: {
     requestedCycle,
     requestedLabel,
     gamesPerCycle,
+    actionBoundaryMilliseconds,
   } = options;
-  const asset = await loadCanonicalDraftableAsset(leagueId, assetKey);
+  const canonicalAsset = await loadCanonicalDraftableAsset(leagueId, assetKey);
   await assertAssetIsFreeAgent(leagueId, assetKey);
-  const effectiveCycleNumber = await getFairEffectiveCycleNumber(
+  const fairEffectiveCycle = await getFairEffectiveCycleNumber(
     leagueId,
-    asset,
+    canonicalAsset,
     gamesPerCycle,
     requestedCycle,
+    actionBoundaryMilliseconds,
   );
+  const asset = fairEffectiveCycle.asset;
+  const effectiveCycleNumber = fairEffectiveCycle.effectiveCycleNumber;
   const effectiveLabel = requestedLabel || `Cycle ${effectiveCycleNumber}`;
   const queueAtSlotBoundary = await hasStartedFantasyCycle(leagueId);
   const rosterRefs = await getAllRosterRefs(leagueId);
@@ -571,8 +604,16 @@ async function executeSimpleOwnerAction(options: {
   action: Exclude<SecureRosterAction, 'add-drop' | 'add-open-slot' | 'place-waiver-claim' | 'process-waiver'>;
   input: SecureRosterActionRequest;
   gamesPerCycle: number;
+  actionBoundaryMilliseconds: number;
 }): Promise<SecureRosterActionResult> {
-  const { leagueId, ownerId, action, input, gamesPerCycle } = options;
+  const {
+    leagueId,
+    ownerId,
+    action,
+    input,
+    gamesPerCycle,
+    actionBoundaryMilliseconds,
+  } = options;
   const requestedCycle = asPositiveIntegerOrNull(input.effectiveCycleNumber);
   const requestedLabel = asString(input.effectiveLabel) || null;
   const rosterRef = db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`);
@@ -583,6 +624,9 @@ async function executeSimpleOwnerAction(options: {
   let preflightIrActiveAssetKey = '';
   let preflightIrBenchSlotId = '';
   let preflightIrBenchAssetKey = '';
+  let preflightCurrentTeamAbbreviationByPlayerId:
+    | ReadonlyMap<number, string>
+    | undefined;
   const requiresRosterPreflight = [
     'queue-active-bench-swap',
     'activate-ir-active',
@@ -603,12 +647,16 @@ async function executeSimpleOwnerAction(options: {
       throw new HttpsError('failed-precondition', 'The selected bench player was not found.');
     }
     preflightAssetKey = getAssetKey(benchAsset);
-    preflightFairCycle = await getFairEffectiveCycleNumber(
+    const fairEffectiveCycle = await getFairEffectiveCycleNumber(
       leagueId,
       benchAsset,
       gamesPerCycle,
       requestedCycle,
+      actionBoundaryMilliseconds,
     );
+    preflightFairCycle = fairEffectiveCycle.effectiveCycleNumber;
+    preflightCurrentTeamAbbreviationByPlayerId =
+      fairEffectiveCycle.currentTeamAbbreviationByPlayerId;
   }
   if (action === 'activate-ir-active') {
     const irAsset = preflightRoster?.irSlots.find(
@@ -618,12 +666,16 @@ async function executeSimpleOwnerAction(options: {
       throw new HttpsError('failed-precondition', 'The selected IR player was not found.');
     }
     preflightAssetKey = getAssetKey(irAsset);
-    preflightFairCycle = await getFairEffectiveCycleNumber(
+    const fairEffectiveCycle = await getFairEffectiveCycleNumber(
       leagueId,
       irAsset,
       gamesPerCycle,
       requestedCycle,
+      actionBoundaryMilliseconds,
     );
+    preflightFairCycle = fairEffectiveCycle.effectiveCycleNumber;
+    preflightCurrentTeamAbbreviationByPlayerId =
+      fairEffectiveCycle.currentTeamAbbreviationByPlayerId;
 
     const requestedActiveSlotId = asString(input.activeSlotId);
     const activeSlot = preflightRoster?.activeSlots.find((slot) =>
@@ -782,17 +834,27 @@ async function executeSimpleOwnerAction(options: {
           'The selected IR player changed. Refresh and try again.',
         );
       }
+      const authoritativeIrAsset = applyCurrentNhlTeamIdentity(
+        irAsset,
+        preflightCurrentTeamAbbreviationByPlayerId,
+      );
       const requestedActiveSlotId = asString(input.activeSlotId);
       const activeIndex = roster.activeSlots.findIndex((slot) =>
         requestedActiveSlotId
           ? slot.slotId === requestedActiveSlotId
-          : slot.position === irAsset.position && slot.asset === null,
+          : slot.position === authoritativeIrAsset.position && slot.asset === null,
       );
       if (activeIndex < 0) {
-        throw new HttpsError('failed-precondition', `Choose a ${irAsset.position} active slot.`);
+        throw new HttpsError(
+          'failed-precondition',
+          `Choose a ${authoritativeIrAsset.position} active slot.`,
+        );
       }
       const activeSlot = roster.activeSlots[activeIndex];
-      if (activeSlot.pendingMove || activeSlot.position !== irAsset.position) {
+      if (
+        activeSlot.pendingMove ||
+        activeSlot.position !== authoritativeIrAsset.position
+      ) {
         throw new HttpsError('failed-precondition', 'The selected active slot is unavailable.');
       }
       if (getAssetKey(activeSlot.asset) !== preflightIrActiveAssetKey) {
@@ -848,7 +910,11 @@ async function executeSimpleOwnerAction(options: {
       const label = requestedLabel || `Cycle ${fairCycle}`;
       roster.activeSlots[activeIndex] = {
         ...activeSlot,
-        asset: { ...irAsset, rosterStatus: 'moved', eligibleFromCycleNumber: fairCycle },
+        asset: {
+          ...authoritativeIrAsset,
+          rosterStatus: 'moved',
+          eligibleFromCycleNumber: fairCycle,
+        },
         openFromCycleNumber: null,
       };
       roster.irSlots[irIndex] = { ...roster.irSlots[irIndex], asset: null };
@@ -860,7 +926,7 @@ async function executeSimpleOwnerAction(options: {
         );
       }
       transaction.set(transactionRef, {
-        type: 'activate-from-ir', ownerId, activatedAsset: irAsset,
+        type: 'activate-from-ir', ownerId, activatedAsset: authoritativeIrAsset,
         movedAsset: displacedActiveAsset ?? null,
         droppedAsset: droppedAsset ?? null,
         waiverId: droppedAsset ? getAssetKey(droppedAsset) : null,
@@ -950,21 +1016,32 @@ async function executeSimpleOwnerAction(options: {
           'The active or bench slot changed. Refresh and try again.',
         );
       }
-      if (activeSlot.position !== benchAsset.position) {
-        throw new HttpsError('failed-precondition', `That bench asset requires a ${benchAsset.position} slot.`);
+      const authoritativeBenchAsset = applyCurrentNhlTeamIdentity(
+        benchAsset,
+        preflightCurrentTeamAbbreviationByPlayerId,
+      );
+      if (activeSlot.position !== authoritativeBenchAsset.position) {
+        throw new HttpsError(
+          'failed-precondition',
+          `That bench asset requires a ${authoritativeBenchAsset.position} slot.`,
+        );
       }
       const fairCycle = preflightFairCycle ?? 1;
       const label = requestedLabel || `Cycle ${fairCycle}`;
       const pendingMove = createPendingRosterMove(
         'add-drop', ownerId, activeSlot.slotId, activeSlot.asset,
-        rosterAssetToDraftableAsset(benchAsset), null, fairCycle, label,
+        rosterAssetToDraftableAsset(authoritativeBenchAsset), null, fairCycle, label,
         benchSlotId, 'bench',
       );
+      roster.benchSlots[benchIndex] = {
+        ...roster.benchSlots[benchIndex],
+        asset: authoritativeBenchAsset,
+      };
       roster.activeSlots[activeIndex] = { ...activeSlot, pendingMove };
       transaction.set(rosterRef, rosterWrite(roster), { merge: true });
       transaction.set(transactionRef, {
         type: 'queue-active-bench-swap', ownerId,
-        movedAsset: benchAsset, droppedAsset: activeSlot.asset,
+        movedAsset: authoritativeBenchAsset, droppedAsset: activeSlot.asset,
         activeSlotId, benchSlotId, rosterSlotId: activeSlotId,
         queuedMoveId: pendingMove.id, effectiveCycleNumber: fairCycle,
         effectiveLabel: label, authority: 'cloud-function',
@@ -1498,6 +1575,7 @@ export const executeSecureRosterAction = onCall(
     }
 
     const { gamesPerCycle } = await requireOwnerContext(leagueId, ownerId);
+    const actionBoundaryMilliseconds = Date.now();
 
     if (action === 'add-drop' || action === 'add-open-slot') {
       const assetKey = requireRosterAssetKey(input.assetKey);
@@ -1512,6 +1590,7 @@ export const executeSecureRosterAction = onCall(
         requestedCycle: asPositiveIntegerOrNull(input.effectiveCycleNumber),
         requestedLabel: asString(input.effectiveLabel) || null,
         gamesPerCycle,
+        actionBoundaryMilliseconds,
       });
     }
 
@@ -1522,6 +1601,13 @@ export const executeSecureRosterAction = onCall(
       return processWaiver({ leagueId, commissionerId: ownerId, input });
     }
 
-    return executeSimpleOwnerAction({ leagueId, ownerId, action, input, gamesPerCycle });
+    return executeSimpleOwnerAction({
+      leagueId,
+      ownerId,
+      action,
+      input,
+      gamesPerCycle,
+      actionBoundaryMilliseconds,
+    });
   },
 );

@@ -1,4 +1,8 @@
-import { DraftPosition, DraftableAsset } from '../draft/draft.models';
+import {
+  DraftPosition,
+  DraftableAsset,
+  PlayerWindowContinuity,
+} from '../draft/draft.models';
 import type { NhlFinalInputCompleteness } from '../nhl/nhl-final-input-completeness.util';
 
 export type FantasyCycleStatus = 'active' | 'complete';
@@ -36,6 +40,8 @@ export interface FantasyAssetCycleWindow {
   scheduleTeamAbbreviation?: string;
   sourceTeamAbbreviationByGameId?: Record<string, string>;
   teamIdentityChanged?: boolean;
+  /** Player schedule lineage used to prevent cross-window game reuse. */
+  playerWindowContinuity?: PlayerWindowContinuity;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -100,6 +106,12 @@ export interface FantasyCycle {
 
   /** Independent-window architecture metadata. */
   windowSchemaVersion?: number;
+  /**
+   * When set to 1, every skater snapshot in this cycle must carry a validated
+   * per-slot game-ownership cursor. Absence means the legacy bootstrap has not
+   * completed and must not be treated as an empty cursor.
+   */
+  playerWindowContinuitySchemaVersion?: number;
   expectedRosterSlotIdsByOwner?: Record<string, string[]>;
   parentCycleNumber?: number | null;
   overlapsPreviousCycle?: boolean;

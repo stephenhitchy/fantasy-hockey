@@ -1,5 +1,6 @@
 import type { DraftableAsset } from '../draft/draft.models';
 import type { NhlTeamSeasonGame } from '../nhl/nhl-api.service';
+import { getNhlGameRuntimeState } from '../nhl/nhl-game-runtime-state.util';
 import {
   selectCycleWindowGames,
   selectGamesByStableIds,
@@ -9,7 +10,10 @@ export interface PreviousLivePlayerWindowSummary {
   status?: 'scheduled' | 'active' | 'complete';
   scheduledGameIds?: number[];
   completedGameIds?: number[];
+  liveGameIds?: number[];
   appearanceGameIds?: number[];
+  incompleteFinalGameIds?: number[];
+  gameStates?: Record<string, 'scheduled' | 'live' | 'final'>;
   scheduleTeamAbbreviation?: string;
   sourceTeamAbbreviationByGameId?: Record<string, string>;
 }
@@ -52,18 +56,23 @@ function gameIsFinal(game: NhlTeamSeasonGame): boolean {
   );
 }
 
+function gameStartMilliseconds(game: NhlTeamSeasonGame): number | null {
+  if (typeof game.startTimeUTC !== 'string' || !game.startTimeUTC.trim()) {
+    return null;
+  }
+
+  const parsed = Date.parse(game.startTimeUTC);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function gameOrder(
   first: NhlTeamSeasonGame,
   second: NhlTeamSeasonGame,
 ): number {
-  const firstStart = Date.parse(
-    first.startTimeUTC ?? `${first.gameDate}T12:00:00Z`,
-  );
-  const secondStart = Date.parse(
-    second.startTimeUTC ?? `${second.gameDate}T12:00:00Z`,
-  );
+  const firstStart = gameStartMilliseconds(first);
+  const secondStart = gameStartMilliseconds(second);
 
-  if (Number.isFinite(firstStart) && Number.isFinite(secondStart)) {
+  if (firstStart !== null && secondStart !== null) {
     return firstStart - secondStart || first.id - second.id;
   }
 
@@ -139,11 +148,156 @@ function buildSourceTeamMap(
   );
 }
 
+function requireExactUniqueWindow(input: {
+  assetKey: string;
+  currentTeamAbbreviation: string;
+  cycleNumber: number;
+  requiredGamesPerCycle: number;
+  games: NhlTeamSeasonGame[];
+}): NhlTeamSeasonGame[] {
+  const uniqueGameIds = new Set(input.games.map((game) => game.id));
+
+  if (
+    input.games.length !== input.requiredGamesPerCycle ||
+    uniqueGameIds.size !== input.requiredGamesPerCycle
+  ) {
+    throw new Error(
+      `Unable to assign exactly ${input.requiredGamesPerCycle} unique NHL games ` +
+        `for ${input.assetKey} on ${input.currentTeamAbbreviation} in source ` +
+        `block ${input.cycleNumber}; resolved ${uniqueGameIds.size}.`,
+    );
+  }
+
+  return input.games;
+}
+
+function resolveSeasonPlanGames(input: {
+  schedule: NhlTeamSeasonGame[];
+  seasonSourceGameIds?: readonly number[];
+}): NhlTeamSeasonGame[] {
+  if (input.seasonSourceGameIds !== undefined) {
+    return selectGamesByStableIds(
+      input.schedule,
+      input.seasonSourceGameIds,
+    );
+  }
+
+  // Legacy leagues predate the frozen full-season plan. Their provider
+  // schedule remains the compatibility source, but sorting it here gives the
+  // same deterministic cursor semantics as a frozen plan.
+  return [...input.schedule].sort(gameOrder);
+}
+
+function selectPlanSuffixGames(input: {
+  planGames: NhlTeamSeasonGame[];
+  startIndex: number;
+  count: number;
+  excludedGameIds: ReadonlySet<number>;
+  confirmedAppearanceGameIds: ReadonlySet<number>;
+  requireFinalAppearanceEvidence: boolean;
+  hardNotBeforeMilliseconds?: number;
+  teamIdentityNotBeforeMilliseconds?: number;
+}): NhlTeamSeasonGame[] {
+  const selected: NhlTeamSeasonGame[] = [];
+  const selectedGameIds = new Set<number>();
+
+  for (const game of input.planGames.slice(input.startIndex)) {
+    if (
+      input.excludedGameIds.has(game.id) ||
+      selectedGameIds.has(game.id)
+    ) {
+      continue;
+    }
+
+    const startMilliseconds = gameStartMilliseconds(game);
+    const runtimeState = getNhlGameRuntimeState(game);
+    const requiresIdentityCutoverEvidence =
+      input.requireFinalAppearanceEvidence ||
+      input.hardNotBeforeMilliseconds !== undefined ||
+      input.teamIdentityNotBeforeMilliseconds !== undefined;
+
+    if (
+      requiresIdentityCutoverEvidence &&
+      (runtimeState === 'live' || runtimeState === 'final') &&
+      startMilliseconds === null
+    ) {
+      throw new Error(
+        `NHL game ${game.id} is ${runtimeState}, but its exact startTimeUTC ` +
+        'is unavailable. Window publication cannot prove the player-team ' +
+        'identity cutover and will retry.',
+      );
+    }
+
+    const beforeHardBoundary =
+      input.hardNotBeforeMilliseconds !== undefined &&
+      (
+        startMilliseconds === null ||
+        startMilliseconds < input.hardNotBeforeMilliseconds
+      );
+    const beforeTeamIdentityBoundary =
+      input.teamIdentityNotBeforeMilliseconds !== undefined &&
+      (
+        startMilliseconds === null ||
+        startMilliseconds < input.teamIdentityNotBeforeMilliseconds
+      );
+    const provenByBoundary = startMilliseconds !== null && (
+      (
+        input.hardNotBeforeMilliseconds !== undefined &&
+        startMilliseconds >= input.hardNotBeforeMilliseconds
+      ) ||
+      (
+        input.teamIdentityNotBeforeMilliseconds !== undefined &&
+        startMilliseconds >= input.teamIdentityNotBeforeMilliseconds
+      )
+    );
+
+    if (
+      beforeTeamIdentityBoundary &&
+      runtimeState === 'live'
+    ) {
+      throw new Error(
+        `NHL game ${game.id} started before the player's current-team ` +
+        'identity was confirmed. Window publication will retry after final appearance evidence is available.',
+      );
+    }
+
+    if (
+      beforeHardBoundary ||
+      (
+        beforeTeamIdentityBoundary &&
+        !(
+          gameIsFinal(game) &&
+          input.confirmedAppearanceGameIds.has(game.id)
+        )
+      ) ||
+      (
+        input.requireFinalAppearanceEvidence &&
+        gameIsFinal(game) &&
+        !provenByBoundary &&
+        !input.confirmedAppearanceGameIds.has(game.id)
+      )
+    ) {
+      continue;
+    }
+
+    selected.push(game);
+    selectedGameIds.add(game.id);
+
+    if (selected.length === input.count) {
+      break;
+    }
+  }
+
+  return selected;
+}
+
 /**
  * Keeps a live skater's six-game ownership attached to stable player identity.
- * Finalized games and games where the skater already appeared never move.
- * When the official NHL roster changes, only the unsettled remainder is filled
- * from live/upcoming games for the new club and then remains fixed on retries.
+ * Started/finalized games and games where the skater already appeared never
+ * move. When the official NHL roster changes, only the unsettled remainder is
+ * filled from the new club's frozen season plan and then remains fixed on
+ * retries. Prior assignment evidence carries any spillover into the next
+ * window without repeating or skipping an eligible game.
  */
 export function resolveLivePlayerTeamWindow(input: {
   asset: DraftableAsset;
@@ -154,6 +308,20 @@ export function resolveLivePlayerTeamWindow(input: {
   currentTeamAbbreviation?: string;
   /** Exact game ids frozen for the currently resolved NHL club. */
   sourceNhlTargetGameIds?: number[];
+  /** Full-season frozen game-id plan for the currently resolved NHL club. */
+  seasonSourceGameIds?: readonly number[];
+  /** Games already assigned earlier in this continuous skater/slot stint. */
+  priorAssignedGameIds?: readonly number[] | ReadonlySet<number>;
+  /** NHL club that owned the immediately preceding continuity assignment. */
+  continuityScheduleTeamAbbreviation?: string;
+  /** Final current-club games with stable-player-id appearance evidence. */
+  confirmedCurrentTeamAppearanceGameIds?:
+    | readonly number[]
+    | ReadonlySet<number>;
+  /** Fresh fantasy activations cannot own a game that already started. */
+  assignmentNotBeforeMilliseconds?: number;
+  /** Current-team confirmation is soft: prior finals need appearance proof. */
+  teamIdentityNotBeforeMilliseconds?: number;
 }): ResolvedLivePlayerWindow {
   const storedTeamAbbreviation = getAssetTeamAbbreviation(input.asset);
   const currentTeamAbbreviation = input.asset.assetType === 'skater'
@@ -163,16 +331,19 @@ export function resolveLivePlayerTeamWindow(input: {
   const previousScheduleTeamAbbreviation = normalizeTeamAbbreviation(
     input.previous?.scheduleTeamAbbreviation,
   ) || storedTeamAbbreviation;
+  const previousPublishedWindow = input.previous?.scheduledGameIds?.length
+    ? input.previous
+    : undefined;
 
   if (
-    input.previous?.scheduledGameIds?.length &&
+    previousPublishedWindow &&
     (
-      input.previous.status === 'complete' ||
+      previousPublishedWindow.status === 'complete' ||
       previousScheduleTeamAbbreviation === currentTeamAbbreviation
     )
   ) {
     const previousWindow = resolvePreviousGames({
-      previous: input.previous,
+      previous: previousPublishedWindow,
       schedulesByTeam: input.schedulesByTeam,
       fallbackTeamAbbreviation: previousScheduleTeamAbbreviation,
     });
@@ -185,23 +356,168 @@ export function resolveLivePlayerTeamWindow(input: {
     };
   }
 
-  if (currentTeamAbbreviation === previousScheduleTeamAbbreviation) {
-    if (!schedulesHaveTeam(input.schedulesByTeam, currentTeamAbbreviation)) {
-      throw new Error(
-        `The NHL schedule for ${currentTeamAbbreviation} is unavailable.`,
+  if (!schedulesHaveTeam(input.schedulesByTeam, currentTeamAbbreviation)) {
+    throw new Error(
+      previousPublishedWindow
+        ? `The NHL schedule for traded skater ${input.asset.assetKey} on ${currentTeamAbbreviation} is unavailable.`
+        : `The NHL schedule for ${currentTeamAbbreviation} is unavailable.`,
+    );
+  }
+
+  const currentTeamSchedule = input.schedulesByTeam[currentTeamAbbreviation];
+  const priorAssignedGameIds = new Set(input.priorAssignedGameIds ?? []);
+  const confirmedAppearanceGameIds = new Set(
+    input.confirmedCurrentTeamAppearanceGameIds ?? [],
+  );
+  if (!previousPublishedWindow) {
+    if (priorAssignedGameIds.size > 0) {
+      const planGames = resolveSeasonPlanGames({
+        schedule: currentTeamSchedule,
+        seasonSourceGameIds: input.seasonSourceGameIds,
+      });
+      const continuityTeamAbbreviation = normalizeTeamAbbreviation(
+        input.continuityScheduleTeamAbbreviation,
       );
+      const latestPriorPlanIndex = planGames.reduce(
+        (latestIndex, game, index) =>
+          priorAssignedGameIds.has(game.id)
+            ? Math.max(latestIndex, index)
+            : latestIndex,
+        -1,
+      );
+      const continuesSameTeam =
+        continuityTeamAbbreviation === currentTeamAbbreviation &&
+        latestPriorPlanIndex >= 0;
+      // A club switch is a schedule cutover, not an ordinal-block swap. The
+      // destination club can be ahead of or behind the former club, so begin
+      // at its first eligible game: finalized games require stable-player-id
+      // appearance evidence, while live/upcoming games are eligible from the
+      // current official roster assignment. Same-club rollover still follows
+      // the persisted cursor so spillover games are neither skipped nor reused.
+      const startIndex = continuesSameTeam
+        ? latestPriorPlanIndex + 1
+        : 0;
+      const games = requireExactUniqueWindow({
+        assetKey: input.asset.assetKey,
+        currentTeamAbbreviation,
+        cycleNumber: input.cycleNumber,
+        requiredGamesPerCycle: input.requiredGamesPerCycle,
+        games: selectPlanSuffixGames({
+          planGames,
+          startIndex,
+          count: input.requiredGamesPerCycle,
+          excludedGameIds: priorAssignedGameIds,
+          confirmedAppearanceGameIds,
+          requireFinalAppearanceEvidence: !continuesSameTeam,
+          hardNotBeforeMilliseconds:
+            input.assignmentNotBeforeMilliseconds,
+          teamIdentityNotBeforeMilliseconds:
+            input.teamIdentityNotBeforeMilliseconds,
+        }),
+      });
+
+      return {
+        games,
+        scheduleTeamAbbreviation: currentTeamAbbreviation,
+        sourceTeamAbbreviationByGameId: buildSourceTeamMap(
+          games,
+          currentTeamAbbreviation,
+        ),
+        teamIdentityChanged:
+          currentTeamAbbreviation !== storedTeamAbbreviation,
+      };
     }
 
-    const games = input.sourceNhlTargetGameIds?.length
-      ? selectGamesByStableIds(
-          input.schedulesByTeam[currentTeamAbbreviation],
-          input.sourceNhlTargetGameIds,
-        )
-      : selectCycleWindowGames(
-          input.schedulesByTeam[currentTeamAbbreviation],
-          input.cycleNumber,
-          input.requiredGamesPerCycle,
-        );
+    if (input.assignmentNotBeforeMilliseconds !== undefined) {
+      const planGames = resolveSeasonPlanGames({
+        schedule: currentTeamSchedule,
+        seasonSourceGameIds: input.seasonSourceGameIds,
+      });
+      const games = requireExactUniqueWindow({
+        assetKey: input.asset.assetKey,
+        currentTeamAbbreviation,
+        cycleNumber: input.cycleNumber,
+        requiredGamesPerCycle: input.requiredGamesPerCycle,
+        games: selectPlanSuffixGames({
+          planGames,
+          startIndex: 0,
+          count: input.requiredGamesPerCycle,
+          excludedGameIds: priorAssignedGameIds,
+          confirmedAppearanceGameIds,
+          requireFinalAppearanceEvidence: true,
+          hardNotBeforeMilliseconds:
+            input.assignmentNotBeforeMilliseconds,
+          teamIdentityNotBeforeMilliseconds:
+            input.teamIdentityNotBeforeMilliseconds,
+        }),
+      });
+
+      return {
+        games,
+        scheduleTeamAbbreviation: currentTeamAbbreviation,
+        sourceTeamAbbreviationByGameId: buildSourceTeamMap(
+          games,
+          currentTeamAbbreviation,
+        ),
+        teamIdentityChanged:
+          currentTeamAbbreviation !== storedTeamAbbreviation,
+      };
+    }
+
+    if (
+      input.asset.assetType === 'skater' &&
+      currentTeamAbbreviation !== storedTeamAbbreviation
+    ) {
+      const planGames = resolveSeasonPlanGames({
+        schedule: currentTeamSchedule,
+        seasonSourceGameIds: input.seasonSourceGameIds,
+      });
+      const games = requireExactUniqueWindow({
+        assetKey: input.asset.assetKey,
+        currentTeamAbbreviation,
+        cycleNumber: input.cycleNumber,
+        requiredGamesPerCycle: input.requiredGamesPerCycle,
+        games: selectPlanSuffixGames({
+          planGames,
+          startIndex: 0,
+          count: input.requiredGamesPerCycle,
+          excludedGameIds: priorAssignedGameIds,
+          confirmedAppearanceGameIds,
+          requireFinalAppearanceEvidence: true,
+          hardNotBeforeMilliseconds:
+            input.assignmentNotBeforeMilliseconds,
+          teamIdentityNotBeforeMilliseconds:
+            input.teamIdentityNotBeforeMilliseconds,
+        }),
+      });
+
+      return {
+        games,
+        scheduleTeamAbbreviation: currentTeamAbbreviation,
+        sourceTeamAbbreviationByGameId: buildSourceTeamMap(
+          games,
+          currentTeamAbbreviation,
+        ),
+        teamIdentityChanged: true,
+      };
+    }
+
+    const games = requireExactUniqueWindow({
+      assetKey: input.asset.assetKey,
+      currentTeamAbbreviation,
+      cycleNumber: input.cycleNumber,
+      requiredGamesPerCycle: input.requiredGamesPerCycle,
+      games: input.sourceNhlTargetGameIds?.length
+        ? selectGamesByStableIds(
+            currentTeamSchedule,
+            input.sourceNhlTargetGameIds,
+          )
+        : selectCycleWindowGames(
+            currentTeamSchedule,
+            input.cycleNumber,
+            input.requiredGamesPerCycle,
+          ),
+    });
 
     return {
       games,
@@ -215,29 +531,35 @@ export function resolveLivePlayerTeamWindow(input: {
     };
   }
 
-  if (!schedulesHaveTeam(input.schedulesByTeam, currentTeamAbbreviation)) {
-    throw new Error(
-      `The NHL schedule for traded skater ${input.asset.assetKey} on ${currentTeamAbbreviation} is unavailable.`,
-    );
-  }
-
-  const previousWindow = input.previous?.scheduledGameIds?.length
-    ? resolvePreviousGames({
-        previous: input.previous,
-        schedulesByTeam: input.schedulesByTeam,
-        fallbackTeamAbbreviation: previousScheduleTeamAbbreviation,
-      })
-    : {
-        games: [] as NhlTeamSeasonGame[],
-        sourceTeamAbbreviationByGameId: {} as Record<string, string>,
-      };
-  const protectedGameIds = new Set([
+  const previousWindow = resolvePreviousGames({
+    previous: previousPublishedWindow,
+    schedulesByTeam: input.schedulesByTeam,
+    fallbackTeamAbbreviation: previousScheduleTeamAbbreviation,
+  });
+  const explicitlyProtectedGameIds = new Set([
     ...(input.previous?.completedGameIds ?? []),
+    ...(input.previous?.liveGameIds ?? []),
     ...(input.previous?.appearanceGameIds ?? []),
+    ...(input.previous?.incompleteFinalGameIds ?? []),
   ]);
-  const protectedGames = previousWindow.games.filter((game) =>
-    protectedGameIds.has(game.id)
-  );
+  const protectedGames: NhlTeamSeasonGame[] = [];
+  const protectedGameIds = new Set<number>();
+
+  for (const game of previousWindow.games) {
+    const savedState = input.previous?.gameStates?.[String(game.id)];
+    const currentState = getNhlGameRuntimeState(game);
+    const isProtected =
+      explicitlyProtectedGameIds.has(game.id) ||
+      savedState === 'live' ||
+      savedState === 'final' ||
+      currentState === 'live' ||
+      currentState === 'final';
+
+    if (isProtected && !protectedGameIds.has(game.id)) {
+      protectedGames.push(game);
+      protectedGameIds.add(game.id);
+    }
+  }
   const protectedSourceTeams = Object.fromEntries(
     protectedGames.map((game) => [
       String(game.id),
@@ -249,19 +571,37 @@ export function resolveLivePlayerTeamWindow(input: {
     0,
     input.requiredGamesPerCycle - protectedGames.length,
   );
-  const replacementGames = (
-    previousWindow.games.length === 0 && input.sourceNhlTargetGameIds?.length
-      ? selectGamesByStableIds(
-          input.schedulesByTeam[currentTeamAbbreviation],
-          input.sourceNhlTargetGameIds,
-        )
-      : [...input.schedulesByTeam[currentTeamAbbreviation]]
-          .filter((game) => !protectedGameIds.has(game.id) && !gameIsFinal(game))
-          .sort(gameOrder)
-  )
-    .filter((game) => !protectedGameIds.has(game.id))
-    .slice(0, remainingGameCount);
-  const games = [...protectedGames, ...replacementGames];
+  const planGames = resolveSeasonPlanGames({
+    schedule: currentTeamSchedule,
+    seasonSourceGameIds: input.seasonSourceGameIds,
+  });
+  const excludedGameIds = new Set([
+    ...priorAssignedGameIds,
+    ...protectedGameIds,
+  ]);
+  const replacementGames = selectPlanSuffixGames({
+    planGames,
+    // On a team change, schedule ordinals are not comparable. Starting from
+    // the destination plan's beginning lets confirmed post-trade appearances
+    // before the nominal block count, skips unproven finals, and naturally
+    // lands on the first live/upcoming game when no finalized appearance is
+    // available.
+    startIndex: 0,
+    count: remainingGameCount,
+    excludedGameIds,
+    confirmedAppearanceGameIds,
+    requireFinalAppearanceEvidence: true,
+    hardNotBeforeMilliseconds: input.assignmentNotBeforeMilliseconds,
+    teamIdentityNotBeforeMilliseconds:
+      input.teamIdentityNotBeforeMilliseconds,
+  });
+  const games = requireExactUniqueWindow({
+    assetKey: input.asset.assetKey,
+    currentTeamAbbreviation,
+    cycleNumber: input.cycleNumber,
+    requiredGamesPerCycle: input.requiredGamesPerCycle,
+    games: [...protectedGames, ...replacementGames],
+  });
 
   return {
     games,

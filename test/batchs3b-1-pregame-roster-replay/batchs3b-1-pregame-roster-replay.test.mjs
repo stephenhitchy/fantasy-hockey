@@ -151,11 +151,11 @@ test('server roster actions evaluate the NHL schedule through the authoritative 
   assert.match(moves, /completedThroughDate,\s*\}\);/);
   assert.match(
     moves,
-    /getEarliestEligibleCycleNumber\(addAsset, gamesPerCycle, leagueId\)/,
+    /getEarliestEligibleCycleNumber\(\s*authoritativeAddAsset,\s*gamesPerCycle,\s*leagueId,\s*currentTeamAbbreviationByPlayerId,\s*\)/,
   );
   assert.match(
     authority,
-    /getEarliestEligibleCycleNumber\(asset, gamesPerCycle, leagueId\)/,
+    /resolveRosterMoveAssetCycleEligibility\(\s*asset,\s*gamesPerCycle,\s*leagueId,\s*undefined,\s*actionBoundaryMilliseconds,\s*\)/,
   );
 });
 

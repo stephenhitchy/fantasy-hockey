@@ -352,7 +352,7 @@
                           </div>
                         }
 
-                        <app-asset-portrait class="fantasy-player-logo" [asset]="asset" />
+                        <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
 
                         <div
                           class="fantasy-player-main roster-player-detail-link"
@@ -480,7 +480,7 @@
                         </div>
                       }
 
-                      <app-asset-portrait class="fantasy-player-logo" [asset]="asset" />
+                      <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
 
                       <div
                         class="fantasy-player-main roster-player-detail-link"
@@ -604,7 +604,7 @@
                         </div>
                       }
 
-                      <app-asset-portrait class="fantasy-player-logo" [asset]="asset" />
+                      <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
 
                       <div
                         class="fantasy-player-main roster-player-detail-link"
@@ -750,7 +750,7 @@
                 </div>
               }
 
-              <app-asset-portrait class="fantasy-player-logo" [asset]="asset" />
+              <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
 
               <div
                 class="fantasy-player-main roster-player-detail-link"
@@ -847,7 +847,7 @@
               (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset)"
             >
               @if (slot.asset; as asset) {
-                <app-asset-portrait class="fantasy-player-logo" [asset]="asset" />
+                <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
 
                 <div
                   class="ir-player-main roster-player-detail-link"
@@ -931,7 +931,7 @@
       <section class="roster-manager-summary">
         @if (rosterManagerAsset(); as managerAsset) {
           <div class="roster-manager-identity">
-            <app-asset-portrait class="roster-manager-portrait" [asset]="managerAsset" />
+            <app-asset-portrait class="roster-manager-portrait" [asset]="getRosterAssetPortrait(managerAsset)" />
 
             <div>
               <strong>{{ getRosterAssetName(managerAsset) }}</strong>
@@ -1008,7 +1008,7 @@
       @if (getPendingActiveBenchSwapSlot(); as activeSwapSlot) {
         @if (activeSwapSlot.asset; as activeSwapAsset) {
           <section class="active-bench-picker-summary">
-            <app-asset-portrait [asset]="activeSwapAsset" />
+            <app-asset-portrait [asset]="getRosterAssetPortrait(activeSwapAsset)" />
             <div>
               <span>Currently starting</span>
               <strong>{{ getRosterAssetName(activeSwapAsset) }}</strong>
@@ -1029,7 +1029,7 @@
                     (click)="chooseActiveBenchSwapCandidate(benchSlot.slotId)"
                     [disabled]="isRosterOperationPending()"
                   >
-                    <app-asset-portrait [asset]="benchAsset" />
+                    <app-asset-portrait [asset]="getRosterAssetPortrait(benchAsset)" />
                     <span>
                       <strong>{{ getRosterAssetName(benchAsset) }}</strong>
                       <small>
@@ -1100,7 +1100,7 @@
             </header>
 
             <div class="ir-activation-player-summary">
-              <app-asset-portrait class="ir-activation-player-logo" [asset]="activationAsset" />
+              <app-asset-portrait class="ir-activation-player-logo" [asset]="getRosterAssetPortrait(activationAsset)" />
 
               <div>
                 <strong>{{ getRosterAssetName(activationAsset) }}</strong>
@@ -1138,7 +1138,7 @@
                     <span class="ir-activation-radio-mark"></span>
 
                     @if (targetSlot.asset; as targetAsset) {
-                      <app-asset-portrait class="ir-activation-target-logo" [asset]="targetAsset" />
+                      <app-asset-portrait class="ir-activation-target-logo" [asset]="getRosterAssetPortrait(targetAsset)" />
                     } @else {
                       <span class="ir-activation-open-slot-icon">+</span>
                     }
@@ -1198,7 +1198,7 @@
                           @if (benchSlot.asset; as benchAsset) {
                             <app-asset-portrait
                               class="ir-activation-target-logo"
-                              [asset]="benchAsset"
+                              [asset]="getRosterAssetPortrait(benchAsset)"
                             />
                           } @else {
                             <span class="ir-activation-open-slot-icon">+</span>
@@ -1429,7 +1429,7 @@
             </header>
 
             <div class="lineup-change-player-summary ir-activation-player-summary">
-              <app-asset-portrait class="ir-activation-player-logo" [asset]="benchSwapAsset" />
+              <app-asset-portrait class="ir-activation-player-logo" [asset]="getRosterAssetPortrait(benchSwapAsset)" />
               <div>
                 <strong>{{ getRosterAssetName(benchSwapAsset) }}</strong>
                 <span
@@ -1473,7 +1473,7 @@
                       @if (targetSlot.asset; as targetAsset) {
                         <app-asset-portrait
                           class="ir-activation-target-logo"
-                          [asset]="targetAsset"
+                          [asset]="getRosterAssetPortrait(targetAsset)"
                         />
                       } @else {
                         <span class="ir-activation-open-slot-icon">+</span>
@@ -1623,7 +1623,7 @@
           </header>
 
           <div class="ir-activation-player-summary roster-drop-player-summary">
-            <app-asset-portrait class="ir-activation-player-logo" [asset]="pendingDrop.asset" />
+            <app-asset-portrait class="ir-activation-player-logo" [asset]="getRosterAssetPortrait(pendingDrop.asset)" />
 
             <div>
               <strong>{{ getRosterAssetName(pendingDrop.asset) }}</strong>

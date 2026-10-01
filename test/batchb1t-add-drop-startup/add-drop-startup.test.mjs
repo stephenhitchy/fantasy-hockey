@@ -104,7 +104,7 @@ test('competitive formulas, roster authority, Rules, and indexes remain unchange
   );
   assert.equal(
     await sha256('functions/src/roster-authority.ts'),
-    '5a78fd3a5bcd43e23471b15d4366a0c67211977551363747b994abd6a183839b',
+    'a3df8b53f02aca18aa5cde91c597d77cad1e89cb26d987b8025df6f65178db76',
   );
   assert.equal(
     await sha256('firestore.rules'),

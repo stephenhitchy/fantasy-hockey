@@ -1,4 +1,9 @@
-import { DraftableAsset, DraftPick } from '../draft/draft.models';
+import { createHash } from 'node:crypto';
+import {
+  DraftableAsset,
+  DraftPick,
+  PlayerWindowContinuity,
+} from '../draft/draft.models';
 import {
   calculateGoalieGameBreakdown,
   calculateSkaterGameBreakdown,
@@ -56,6 +61,7 @@ import {
   resolveLivePlayerTeamWindow,
   type ResolvedLivePlayerWindow,
 } from './live-player-team-window.util';
+import { resolvePlayerWindowContinuity } from './player-window-continuity.util';
 
 export type CycleGameRuntimeState =
   | 'scheduled'
@@ -94,6 +100,10 @@ export interface CycleAssetScoreSummary {
   sourceTeamAbbreviationByGameId?: Record<string, string>;
   /** True when stable NHL player identity overrode stale roster metadata. */
   teamIdentityChanged?: boolean;
+  /** Server-owned active-slot lineage used to prevent game reuse after trades. */
+  playerWindowContinuity?: PlayerWindowContinuity;
+  /** Compact stint identity; cumulative game history stays out of aggregates. */
+  playerWindowContinuityId?: string;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -137,6 +147,9 @@ export interface CycleScoringResult {
   nextScheduledGameStart: string | null;
   refreshedAt: string;
   dataFingerprint: string;
+  /** Exact shared NHL roster identity evidence used for this calculation. */
+  nhlPlayerTeamIdentityHash?: string;
+  nhlPlayerTeamIdentityGeneratedAt?: string;
 }
 
 export interface CalculateCycleScoringInput {
@@ -168,6 +181,14 @@ export interface CalculateCycleScoringInput {
    * pre-bootstrap trade choose the new club's already-frozen schedule.
    */
   sourceNhlTargetGameIdsByTeam?: Readonly<Record<string, number[]>>;
+
+  /** Complete draft-frozen NHL schedule plan used for trade continuations. */
+  seasonSourceGameIdsByTeam?: Readonly<Record<string, number[]>>;
+
+  /** Provenance for the stable player-to-current-club catalog. */
+  currentTeamIdentityHash?: string;
+  currentTeamIdentityGeneratedAt?: string;
+  currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>;
 
   /**
    * Optional commissioner historical-replay schedules. Each asset receives a
@@ -230,6 +251,18 @@ export interface CalculateCycleScoringInput {
   /** Kept optional for older callers. Scoring is based on NHL game numbers. */
   startDate?: Date;
   endDate?: Date;
+}
+
+export class NhlPlayerTeamIdentityBoundaryRefreshRequiredError extends Error {
+  readonly code = 'nhl-player-team-identity-boundary-refresh-required';
+
+  constructor(readonly minimumGeneratedAtMilliseconds: number) {
+    super(
+      'NHL player-team identity predates a game that has now started. ' +
+      'Scoring requires a post-puck-drop roster refresh before ownership can be frozen.',
+    );
+    this.name = 'NhlPlayerTeamIdentityBoundaryRefreshRequiredError';
+  }
 }
 
 interface ScoringGameData {
@@ -300,6 +333,77 @@ function getEffectiveGameRuntimeState(
     schedule: game,
     boxscore: gameData?.boxscore,
   });
+}
+
+function timestampMilliseconds(value: unknown): number | null {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const toMillis = candidate['toMillis'];
+
+  if (typeof toMillis === 'function') {
+    const milliseconds = toMillis.call(value);
+    return typeof milliseconds === 'number' && Number.isFinite(milliseconds)
+      ? milliseconds
+      : null;
+  }
+
+  const seconds = candidate['seconds'] ?? candidate['_seconds'];
+  const nanoseconds = candidate['nanoseconds'] ?? candidate['_nanoseconds'];
+
+  return typeof seconds === 'number' && Number.isFinite(seconds)
+    ? seconds * 1000 + (
+        typeof nanoseconds === 'number' && Number.isFinite(nanoseconds)
+          ? nanoseconds / 1_000_000
+          : 0
+      )
+    : null;
+}
+
+function gameStartMilliseconds(game: NhlTeamSeasonGame): number | null {
+  if (typeof game.startTimeUTC !== 'string' || !game.startTimeUTC.trim()) {
+    return null;
+  }
+
+  const parsed = Date.parse(game.startTimeUTC);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Limits finalized appearance proof to the player's latest uninterrupted NHL
+ * affiliation. This prevents A -> B -> A from reusing an appearance from the
+ * earlier A stint merely because the stable player id is the same.
+ */
+export function getCurrentAffiliationAppearanceGameIds(
+  gameLog: readonly NhlPlayerGameLogEntry[],
+  currentTeamAbbreviation: string,
+): number[] {
+  const currentTeam = currentTeamAbbreviation.trim().toUpperCase();
+  const ordered = [...gameLog]
+    .filter((entry) => Number.isSafeInteger(entry.gameId) && entry.gameId > 0)
+    .sort((first, second) =>
+      first.gameDate.localeCompare(second.gameDate) ||
+      first.gameId - second.gameId
+    );
+  let latestDifferentTeamIndex = -1;
+
+  ordered.forEach((entry, index) => {
+    if (entry.teamAbbrev?.trim().toUpperCase() !== currentTeam) {
+      latestDifferentTeamIndex = index;
+    }
+  });
+
+  return ordered
+    .slice(latestDifferentTeamIndex + 1)
+    .filter((entry) => entry.teamAbbrev?.trim().toUpperCase() === currentTeam)
+    .map((entry) => entry.gameId);
 }
 
 function getAssetTeamAbbreviation(asset: DraftableAsset): string {
@@ -802,7 +906,13 @@ function getRelevantAssetGames(
   previous: CycleAssetScoreSummary | undefined,
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>,
   currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+  currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>,
   sourceNhlTargetGameIdsByTeam?: Readonly<Record<string, number[]>>,
+  seasonSourceGameIdsByTeam?: Readonly<Record<string, number[]>>,
+  confirmedCurrentTeamAppearanceGameIdsByPlayerId?: ReadonlyMap<
+    number,
+    ReadonlySet<number>
+  >,
 ): ResolvedLivePlayerWindow {
   const replaySchedule = replayGamesByAssetKey?.[pick.asset.assetKey];
 
@@ -829,10 +939,28 @@ function getRelevantAssetGames(
   }
 
   const storedTeamAbbreviation = getAssetTeamAbbreviation(pick.asset).trim().toUpperCase();
-  const currentTeamAbbreviation = pick.asset.assetType === 'skater'
-    ? currentTeamAbbreviationByPlayerId?.get(pick.asset.player.id)?.trim().toUpperCase() ||
-      storedTeamAbbreviation
-    : storedTeamAbbreviation;
+  const currentTeamFromIdentity = pick.asset.assetType === 'skater'
+    ? currentTeamAbbreviationByPlayerId?.get(pick.asset.player.id)?.trim().toUpperCase()
+    : undefined;
+
+  if (
+    pick.asset.assetType === 'skater' &&
+    currentTeamAbbreviationByPlayerId &&
+    !currentTeamFromIdentity
+  ) {
+    throw new Error(
+      `Current NHL team identity is unavailable for rostered player ${pick.asset.player.id}. Scoring was left unchanged and will retry.`,
+    );
+  }
+
+  const currentTeamAbbreviation = currentTeamFromIdentity || storedTeamAbbreviation;
+  const rosterSlotId = getRosterSlotId(pick);
+  const playerWindowContinuity = resolvePlayerWindowContinuity({
+    value: pick.playerWindowContinuity,
+    ownerId: pick.ownerId,
+    rosterSlotId,
+    asset: pick.asset,
+  });
   const frozenTargetGameIds = replayGamesByAssetKey
     ? undefined
     : resolveFrozenTargetGameIdsForPick(
@@ -840,6 +968,84 @@ function getRelevantAssetGames(
         currentTeamAbbreviation,
         sourceNhlTargetGameIdsByTeam,
       );
+  const currentTeamSeasonSourceGameIds = seasonSourceGameIdsByTeam
+    ? seasonSourceGameIdsByTeam[currentTeamAbbreviation]
+    : undefined;
+
+  if (
+    seasonSourceGameIdsByTeam &&
+    !Object.prototype.hasOwnProperty.call(
+      seasonSourceGameIdsByTeam,
+      currentTeamAbbreviation,
+    )
+  ) {
+    throw new Error(
+      `The frozen NHL season plan is missing ${currentTeamAbbreviation}. Scoring was left unchanged and will retry.`,
+    );
+  }
+
+  const rawConfirmedAppearanceGameIds = pick.asset.assetType === 'skater'
+    ? confirmedCurrentTeamAppearanceGameIdsByPlayerId?.get(
+        pick.asset.player.id,
+      )
+    : undefined;
+  const activationMilliseconds = timestampMilliseconds(pick.snapshottedAt);
+  const teamConfirmedAtMilliseconds = timestampMilliseconds(
+    pick.asset.assetType === 'skater'
+      ? currentTeamConfirmedAtByPlayerId?.get(pick.asset.player.id)
+      : undefined,
+  );
+  const priorScheduleTeamAbbreviation = (
+    previous?.scheduleTeamAbbreviation ??
+    playerWindowContinuity?.lastScheduleTeamAbbreviation ??
+    storedTeamAbbreviation
+  ).trim().toUpperCase();
+  const teamCutoverDetected =
+    pick.asset.assetType === 'skater' &&
+    priorScheduleTeamAbbreviation !== currentTeamAbbreviation;
+  const frozenTargetGameIdSet = new Set(frozenTargetGameIds ?? []);
+  const continuityCameFromRosterMove = Boolean(
+    playerWindowContinuity?.continuityId.includes('::move-') ||
+    pick.snapshotSource?.includes('move'),
+  );
+  const assignmentNotBeforeMilliseconds = continuityCameFromRosterMove
+    ? activationMilliseconds ?? undefined
+    : undefined;
+  const teamIdentityNotBeforeMilliseconds = teamCutoverDetected
+    ? teamConfirmedAtMilliseconds ?? undefined
+    : undefined;
+
+  if (teamCutoverDetected && teamConfirmedAtMilliseconds === null) {
+    throw new Error(
+      `Current NHL team-change timestamp is unavailable for ${pick.asset.assetKey}. ` +
+      'Scoring was left unchanged and will retry.',
+    );
+  }
+
+  if (continuityCameFromRosterMove && activationMilliseconds === null) {
+    throw new Error(
+      `Roster-move activation time is unavailable for ${pick.asset.assetKey}. Scoring was left unchanged and will retry.`,
+    );
+  }
+  const currentScheduleByGameId = new Map(
+    (schedulesByTeam[currentTeamAbbreviation] ?? []).map((game) => [game.id, game] as const),
+  );
+  const confirmedCurrentTeamAppearanceGameIds = new Set(
+    [...(rawConfirmedAppearanceGameIds ?? [])].filter((gameId) => {
+      const game = currentScheduleByGameId.get(gameId);
+      const startMilliseconds = game ? gameStartMilliseconds(game) : null;
+
+      if (
+        activationMilliseconds !== null &&
+        startMilliseconds !== null &&
+        startMilliseconds >= activationMilliseconds
+      ) {
+        return true;
+      }
+
+      return !continuityCameFromRosterMove && frozenTargetGameIdSet.has(gameId);
+    }),
+  );
 
   return resolveLivePlayerTeamWindow({
     asset: pick.asset,
@@ -849,6 +1055,16 @@ function getRelevantAssetGames(
     previous,
     currentTeamAbbreviation,
     sourceNhlTargetGameIds: frozenTargetGameIds,
+    priorAssignedGameIds:
+      playerWindowContinuity?.priorAssignedGameIds,
+    continuityScheduleTeamAbbreviation:
+      playerWindowContinuity?.lastScheduleTeamAbbreviation,
+    seasonSourceGameIds:
+      currentTeamSeasonSourceGameIds,
+    confirmedCurrentTeamAppearanceGameIds:
+      confirmedCurrentTeamAppearanceGameIds,
+    assignmentNotBeforeMilliseconds,
+    teamIdentityNotBeforeMilliseconds,
   });
 }
 
@@ -983,18 +1199,30 @@ function canReuseFinalGame(
 function getPreviousWindowSummary(
   previousResult: CycleScoringResult | null | undefined,
   windowId: string,
-  assetKey: string
+  assetKey: string,
+  expectedContinuityId?: string,
 ): CycleAssetScoreSummary | undefined {
   const previousWindow = previousResult?.windowScores?.[windowId];
+  const continuityMatches = (summary: CycleAssetScoreSummary | undefined) =>
+    !expectedContinuityId ||
+    summary?.playerWindowContinuityId === expectedContinuityId ||
+    (
+      !summary?.playerWindowContinuityId &&
+      !expectedContinuityId.includes('::move-')
+    );
 
   // A recovery pass may replace an incorrectly snapshotted outgoing player
   // with the queued incoming player while retaining the same roster-slot
   // window id. Never reuse finalized game scores from a different asset.
-  if (previousWindow?.assetKey === assetKey) {
+  if (
+    previousWindow?.assetKey === assetKey &&
+    continuityMatches(previousWindow)
+  ) {
     return previousWindow;
   }
 
-  return previousResult?.assetScores?.[assetKey];
+  const previousAsset = previousResult?.assetScores?.[assetKey];
+  return continuityMatches(previousAsset) ? previousAsset : undefined;
 }
 
 function getNextScheduledStart(
@@ -1011,10 +1239,12 @@ function getNextScheduledStart(
 
 function buildResultFingerprint(
   cycleNumber: number,
-  windowScores: Record<string, CycleAssetScoreSummary>
+  windowScores: Record<string, CycleAssetScoreSummary>,
+  currentPickIdentityDigest?: string,
 ): string {
   return [
     `cycle:${cycleNumber}`,
+    `nhl-player-team-identity-subset-v1:${currentPickIdentityDigest ?? 'not-supplied'}`,
     ...Object.values(windowScores)
       .sort((first, second) => first.windowId.localeCompare(second.windowId))
       .map((summary) => [
@@ -1029,6 +1259,7 @@ function buildResultFingerprint(
         summary.liveGameIds.join(','),
         summary.scheduleTeamAbbreviation ?? '',
         summary.teamIdentityChanged ? 'team-updated' : 'team-stored',
+        summary.playerWindowContinuityId ?? 'legacy-continuity',
         Object.entries(summary.sourceTeamAbbreviationByGameId ?? {})
           .sort(([first], [second]) => first.localeCompare(second))
           .map(([gameId, team]) => `${gameId}:${team}`)
@@ -1049,6 +1280,40 @@ function buildResultFingerprint(
           .join(','),
       ].join(':'))
   ].join('|');
+}
+
+function buildCurrentPickIdentityDigest(
+  picks: DraftPick[],
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+  currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>,
+): string | undefined {
+  if (!currentTeamAbbreviationByPlayerId) {
+    return undefined;
+  }
+
+  const playerIds = new Set<number>();
+
+  for (const pick of picks) {
+    if (pick.asset.assetType === 'skater') {
+      playerIds.add(pick.asset.player.id);
+    }
+  }
+
+  const evidence = [...playerIds]
+    .sort((first, second) => first - second)
+    .map((playerId) => ({
+      playerId,
+      teamAbbreviation:
+        currentTeamAbbreviationByPlayerId.get(playerId)?.trim().toUpperCase() ??
+        null,
+      teamConfirmedAt: (
+        currentTeamConfirmedAtByPlayerId?.get(playerId)?.trim() || null
+      ),
+    }));
+
+  return createHash('sha256')
+    .update(JSON.stringify(evidence))
+    .digest('hex');
 }
 
 export async function calculateCycleScoring(
@@ -1073,6 +1338,164 @@ export async function calculateCycleScoring(
         Date.now() - scheduleStartedAt,
       );
     }
+  }
+  if (
+    !input.replayGamesByAssetKey &&
+    input.currentTeamIdentityHash &&
+    input.currentTeamAbbreviationByPlayerId
+  ) {
+    const identityGeneratedAtMilliseconds = Date.parse(
+      input.currentTeamIdentityGeneratedAt ?? '',
+    );
+    const startedGames = Object.values(schedulesByTeam)
+      .flat()
+      .filter((game) => getGameRuntimeState(game) !== 'scheduled');
+    const startedGameWithoutExactStart = startedGames.find(
+      (game) => gameStartMilliseconds(game) === null,
+    );
+
+    if (startedGameWithoutExactStart) {
+      throw new Error(
+        `NHL game ${startedGameWithoutExactStart.id} is live or final, but ` +
+        'its exact startTimeUTC is unavailable. Scoring cannot prove the ' +
+        'player-team identity boundary and was left unchanged.',
+      );
+    }
+
+    const latestStartedGameBoundary = startedGames
+      .map(gameStartMilliseconds)
+      .filter((value): value is number => value !== null)
+      .reduce(
+        (latest, value) => Math.max(latest, value),
+        Number.NEGATIVE_INFINITY,
+      );
+
+    if (
+      Number.isFinite(latestStartedGameBoundary) &&
+      (
+        !Number.isFinite(identityGeneratedAtMilliseconds) ||
+        identityGeneratedAtMilliseconds < latestStartedGameBoundary
+      )
+    ) {
+      throw new NhlPlayerTeamIdentityBoundaryRefreshRequiredError(
+        latestStartedGameBoundary,
+      );
+    }
+  }
+  const tradedSkatersNeedingAppearanceEvidence = input.replayGamesByAssetKey
+    ? []
+    : getUniqueSkaterAssets(input.picks).filter((asset) => {
+        if (asset.assetType !== 'skater') {
+          return false;
+        }
+
+        const currentTeam = input.currentTeamAbbreviationByPlayerId
+          ?.get(asset.player.id)
+          ?.trim()
+          .toUpperCase();
+
+        if (!currentTeam) {
+          return false;
+        }
+
+        return input.picks
+          .filter((pick) => pick.asset.assetKey === asset.assetKey)
+          .some((pick) => {
+            const pickWindowCycleNumber = getPickWindowCycleNumber(
+              pick,
+              input.cycleNumber,
+            );
+            const previous = getPreviousWindowSummary(
+              input.previousResult,
+              getWindowId(pick, pickWindowCycleNumber),
+              pick.asset.assetKey,
+              resolvePlayerWindowContinuity({
+                value: pick.playerWindowContinuity,
+                ownerId: pick.ownerId,
+                rosterSlotId: getRosterSlotId(pick),
+                asset: pick.asset,
+              })?.continuityId,
+            );
+            const rosterSlotId = getRosterSlotId(pick);
+            const playerWindowContinuity = resolvePlayerWindowContinuity({
+              value: pick.playerWindowContinuity,
+              ownerId: pick.ownerId,
+              rosterSlotId,
+              asset: pick.asset,
+            });
+            const previousTeam = (
+              previous?.scheduleTeamAbbreviation ??
+              playerWindowContinuity?.lastScheduleTeamAbbreviation ??
+              getAssetTeamAbbreviation(pick.asset)
+            ).trim().toUpperCase();
+
+            return previousTeam !== currentTeam;
+          });
+      });
+  let tradeAppearanceGameLogsByPlayerId = new Map<number, SkaterGameLogLoad>();
+
+  if (tradedSkatersNeedingAppearanceEvidence.length > 0) {
+    const phaseStartedAt = Date.now();
+
+    try {
+      tradeAppearanceGameLogsByPlayerId = await loadSkaterGameLogs(
+        tradedSkatersNeedingAppearanceEvidence,
+        input.gameLogSeason ?? input.season,
+      );
+    } finally {
+      input.onPhaseDuration?.(
+        'nhl-player-log-load',
+        Date.now() - phaseStartedAt,
+      );
+    }
+  }
+  const confirmedCurrentTeamAppearanceGameIdsByPlayerId = new Map<
+    number,
+    ReadonlySet<number>
+  >();
+
+  for (const asset of tradedSkatersNeedingAppearanceEvidence) {
+    if (asset.assetType !== 'skater') {
+      continue;
+    }
+
+    const currentTeam = input.currentTeamAbbreviationByPlayerId
+      ?.get(asset.player.id)
+      ?.trim()
+      .toUpperCase();
+    const load = tradeAppearanceGameLogsByPlayerId.get(asset.player.id);
+
+    if (!currentTeam) {
+      continue;
+    }
+
+    const hasFinalDestinationGame = (
+      schedulesByTeam[currentTeam] ?? []
+    ).some((game) => getGameRuntimeState(game) === 'final');
+
+    if (
+      hasFinalDestinationGame &&
+      load?.sourceState.availability !== 'available'
+    ) {
+      throw new Error(
+        `Final appearance evidence is unavailable for traded skater ` +
+        `${asset.player.id} on ${currentTeam}. Scoring was left unchanged and will retry.`,
+      );
+    }
+
+    if (load?.sourceState.availability !== 'available') {
+      continue;
+    }
+
+    confirmedCurrentTeamAppearanceGameIdsByPlayerId.set(
+      asset.player.id,
+      new Set(
+        getCurrentAffiliationAppearanceGameIds(
+          load.gameLog,
+          currentTeam,
+        ),
+      ),
+    );
   }
   const gamesByWindowId = new Map<string, NhlTeamSeasonGame[]>();
   const scheduleTeamByWindowId = new Map<string, string>();
@@ -1135,10 +1558,17 @@ export async function calculateCycleScoring(
       input.cycleNumber,
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
+    const pickContinuity = resolvePlayerWindowContinuity({
+      value: pick.playerWindowContinuity,
+      ownerId: pick.ownerId,
+      rosterSlotId: getRosterSlotId(pick),
+      asset: pick.asset,
+    });
     const previous = getPreviousWindowSummary(
       input.previousResult,
       windowId,
-      pick.asset.assetKey
+      pick.asset.assetKey,
+      pickContinuity?.continuityId,
     );
     const resolvedWindow = getRelevantAssetGames(
       pick,
@@ -1148,7 +1578,10 @@ export async function calculateCycleScoring(
       previous,
       input.replayGamesByAssetKey,
       input.currentTeamAbbreviationByPlayerId,
+      input.currentTeamConfirmedAtByPlayerId,
       input.sourceNhlTargetGameIdsByTeam,
+      input.seasonSourceGameIdsByTeam,
+      confirmedCurrentTeamAppearanceGameIdsByPlayerId,
     );
     const games = resolvedWindow.games;
 
@@ -1189,7 +1622,12 @@ export async function calculateCycleScoring(
   }
 
   const skatersNeedingLogs = getUniqueSkaterAssets(input.picks).filter(
-    (asset) => skaterAssetKeysNeedingFinalLogs.has(asset.assetKey)
+    (asset) =>
+      skaterAssetKeysNeedingFinalLogs.has(asset.assetKey) &&
+      (
+        asset.assetType !== 'skater' ||
+        !tradeAppearanceGameLogsByPlayerId.has(asset.player.id)
+      )
   );
 
   const gameDataPromise = (async () => {
@@ -1222,9 +1660,13 @@ export async function calculateCycleScoring(
       );
     }
   })();
-  const [gameDataById, gameLogsByPlayerId] = await Promise.all([
+  const [gameDataById, newlyLoadedGameLogsByPlayerId] = await Promise.all([
     gameDataPromise,
     gameLogPromise,
+  ]);
+  const gameLogsByPlayerId = new Map<number, SkaterGameLogLoad>([
+    ...tradeAppearanceGameLogsByPlayerId,
+    ...newlyLoadedGameLogsByPlayerId,
   ]);
 
   const skatersNeedingPromotedFinalLogs = getUniqueSkaterAssets(input.picks).filter(
@@ -1520,7 +1962,12 @@ export async function calculateCycleScoring(
       : gamesPlayed > 0 || liveGameIds.length > 0 || incompleteFinalGameIds.length > 0
         ? 'active'
         : 'scheduled';
-
+    const summaryContinuity = resolvePlayerWindowContinuity({
+      value: pick.playerWindowContinuity,
+      ownerId: pick.ownerId,
+      rosterSlotId,
+      asset: pick.asset,
+    });
     const summary: CycleAssetScoreSummary = {
       assetKey: pick.asset.assetKey,
       ownerId: pick.ownerId,
@@ -1546,6 +1993,9 @@ export async function calculateCycleScoring(
       sourceTeamAbbreviationByGameId,
       teamIdentityChanged:
         teamIdentityChangedByWindowId.get(windowId) === true,
+      ...(summaryContinuity
+        ? { playerWindowContinuityId: summaryContinuity.continuityId }
+        : {}),
       completedGameIds,
       incompleteFinalGameIds,
       liveGameIds,
@@ -1608,9 +2058,17 @@ export async function calculateCycleScoring(
   const cycleHasScheduledGames = Object.values(assetScores).some(
     (summary) => summary.scheduledGames > 0
   );
+  const currentPickIdentityDigest = input.replayGamesByAssetKey
+    ? undefined
+    : buildCurrentPickIdentityDigest(
+        input.picks,
+        input.currentTeamAbbreviationByPlayerId,
+        input.currentTeamConfirmedAtByPlayerId,
+      );
   const dataFingerprint = buildResultFingerprint(
     input.cycleNumber,
-    windowScores
+    windowScores,
+    currentPickIdentityDigest,
   );
 
     return {
@@ -1625,7 +2083,16 @@ export async function calculateCycleScoring(
       hasIncompleteFinalGames,
       nextScheduledGameStart: getNextScheduledStart(allRelevantGames),
       refreshedAt: new Date().toISOString(),
-      dataFingerprint
+      dataFingerprint,
+      ...(input.currentTeamIdentityHash
+        ? { nhlPlayerTeamIdentityHash: input.currentTeamIdentityHash }
+        : {}),
+      ...(input.currentTeamIdentityGeneratedAt
+        ? {
+            nhlPlayerTeamIdentityGeneratedAt:
+              input.currentTeamIdentityGeneratedAt,
+          }
+        : {}),
     };
   } finally {
     input.onPhaseDuration?.(

@@ -1,0 +1,529 @@
+import type {
+  DraftableAsset,
+  PlayerWindowContinuity,
+} from '../draft/draft.models';
+
+export const PLAYER_WINDOW_CONTINUITY_SCHEMA_VERSION = 1;
+
+export interface LegacyPlayerWindowAssignment {
+  cycleNumber: number;
+  asset: DraftableAsset;
+  scheduledGameIds: readonly number[];
+  scheduleTeamAbbreviation?: string;
+  ownershipStarted: boolean;
+  playerWindowContinuity?: unknown;
+  snapshotSource?: string;
+}
+
+function normalizeTeamAbbreviation(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  return /^[A-Z0-9]{2,4}$/.test(normalized) ? normalized : undefined;
+}
+
+function normalizeGameIds(value: unknown): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (gameId) =>
+        typeof gameId !== 'number' ||
+        !Number.isSafeInteger(gameId) ||
+        gameId <= 0,
+    )
+  ) {
+    throw new Error('Player-window continuity game history is malformed.');
+  }
+
+  const gameIds = value as number[];
+
+  if (new Set(gameIds).size !== gameIds.length) {
+    throw new Error('Player-window continuity game history contains duplicates.');
+  }
+
+  return [...gameIds];
+}
+
+export function normalizePlayerWindowContinuity(
+  value: unknown,
+): PlayerWindowContinuity | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Player-window continuity evidence is malformed.');
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const continuityId = typeof candidate['continuityId'] === 'string'
+    ? candidate['continuityId'].trim()
+    : '';
+
+  const ownerId = typeof candidate['ownerId'] === 'string'
+    ? candidate['ownerId'].trim()
+    : '';
+  const rosterSlotId = typeof candidate['rosterSlotId'] === 'string'
+    ? candidate['rosterSlotId'].trim()
+    : '';
+  const assetKey = typeof candidate['assetKey'] === 'string'
+    ? candidate['assetKey'].trim()
+    : '';
+
+  if (
+    candidate['schemaVersion'] !== 1 ||
+    !continuityId ||
+    !ownerId ||
+    !rosterSlotId ||
+    !assetKey ||
+    !continuityId.startsWith(
+      `${ownerId}::${rosterSlotId}::${assetKey}::`,
+    )
+  ) {
+    throw new Error(
+      'Player-window continuity evidence is malformed or uses an unsupported schema.',
+    );
+  }
+
+  const lastScheduleTeamAbbreviation = normalizeTeamAbbreviation(
+    candidate['lastScheduleTeamAbbreviation'],
+  );
+  const priorAssignedGameIds = normalizeGameIds(
+    candidate['priorAssignedGameIds'],
+  );
+
+  if (priorAssignedGameIds.length > 0 && !lastScheduleTeamAbbreviation) {
+    throw new Error(
+      'Player-window continuity history is missing its last NHL schedule team.',
+    );
+  }
+
+  return {
+    schemaVersion: 1,
+    continuityId,
+    ownerId,
+    rosterSlotId,
+    assetKey,
+    priorAssignedGameIds,
+    ...(lastScheduleTeamAbbreviation
+      ? { lastScheduleTeamAbbreviation }
+      : {}),
+  };
+}
+
+export function createPlayerWindowContinuity(input: {
+  ownerId: string;
+  rosterSlotId: string;
+  asset: DraftableAsset;
+  activationKey: string;
+}): PlayerWindowContinuity | undefined {
+  if (input.asset.assetType !== 'skater') {
+    return undefined;
+  }
+
+  return {
+    schemaVersion: 1,
+    continuityId: [
+      input.ownerId,
+      input.rosterSlotId,
+      input.asset.assetKey,
+      input.activationKey,
+    ].join('::'),
+    ownerId: input.ownerId,
+    rosterSlotId: input.rosterSlotId,
+    assetKey: input.asset.assetKey,
+    priorAssignedGameIds: [],
+    lastScheduleTeamAbbreviation:
+      normalizeTeamAbbreviation(input.asset.player.nhlTeamAbbreviation),
+  };
+}
+
+/**
+ * Validates lineage ownership. A different asset proves an old writer carried
+ * the outgoing player's cursor across a roster replacement, so the incoming
+ * asset safely starts a fresh stint. Owner/slot mismatches are corruption and
+ * fail visibly rather than borrowing another competitive history.
+ */
+export function resolvePlayerWindowContinuity(input: {
+  value: unknown;
+  ownerId: string;
+  rosterSlotId: string;
+  asset: DraftableAsset;
+}): PlayerWindowContinuity | undefined {
+  const continuity = normalizePlayerWindowContinuity(input.value);
+
+  if (!continuity || input.asset.assetType !== 'skater') {
+    return undefined;
+  }
+
+  if (continuity.assetKey !== input.asset.assetKey) {
+    return undefined;
+  }
+
+  if (
+    continuity.ownerId !== input.ownerId ||
+    continuity.rosterSlotId !== input.rosterSlotId
+  ) {
+    throw new Error(
+      `Player-window continuity ${continuity.continuityId} does not belong to ` +
+      `${input.ownerId}/${input.rosterSlotId}.`,
+    );
+  }
+
+  return continuity;
+}
+
+/**
+ * Resolves redundant persisted copies without letting an outgoing asset's
+ * cursor mask a later, valid copy. Copies for the active asset are competitive
+ * evidence: if they disagree, scoring stops instead of guessing which game
+ * reservation history is authoritative.
+ */
+export function resolveConsistentPlayerWindowContinuity(input: {
+  values: readonly unknown[];
+  ownerId: string;
+  rosterSlotId: string;
+  asset: DraftableAsset;
+}): PlayerWindowContinuity | undefined {
+  const candidates = input.values
+    .map((value) => resolvePlayerWindowContinuity({
+      value,
+      ownerId: input.ownerId,
+      rosterSlotId: input.rosterSlotId,
+      asset: input.asset,
+    }))
+    .filter((value): value is PlayerWindowContinuity => Boolean(value));
+
+  const authoritative = candidates[0];
+
+  if (!authoritative) {
+    return undefined;
+  }
+
+  const authoritativeGameIds = [...authoritative.priorAssignedGameIds].sort(
+    (first, second) => first - second,
+  );
+
+  for (const candidate of candidates.slice(1)) {
+    const candidateGameIds = [...candidate.priorAssignedGameIds].sort(
+      (first, second) => first - second,
+    );
+    const agrees =
+      candidate.continuityId === authoritative.continuityId &&
+      candidate.lastScheduleTeamAbbreviation ===
+        authoritative.lastScheduleTeamAbbreviation &&
+      candidateGameIds.length === authoritativeGameIds.length &&
+      candidateGameIds.every(
+        (gameId, index) => gameId === authoritativeGameIds[index],
+      );
+
+    if (!agrees) {
+      throw new Error(
+        `Player-window continuity copies disagree for ` +
+        `${input.ownerId}/${input.rosterSlotId}/${input.asset.assetKey}.`,
+      );
+    }
+  }
+
+  return authoritative;
+}
+
+/**
+ * Legacy mixed-version writers could save the same continuity id with an
+ * older game-id prefix in one redundant copy. The one-time migration may
+ * keep the longer true prefix history, but it still rejects divergent
+ * histories, different ids, or conflicting last-club evidence because those
+ * indicate different fantasy stints.
+ */
+export function mergeLegacyPlayerWindowContinuityCopies(input: {
+  values: readonly unknown[];
+  ownerId: string;
+  rosterSlotId: string;
+  asset: DraftableAsset;
+}): PlayerWindowContinuity | undefined {
+  const candidates = input.values
+    .map((value) => resolvePlayerWindowContinuity({
+      value,
+      ownerId: input.ownerId,
+      rosterSlotId: input.rosterSlotId,
+      asset: input.asset,
+    }))
+    .filter((value): value is PlayerWindowContinuity => Boolean(value));
+  const authoritative = candidates[0];
+
+  if (!authoritative) {
+    return undefined;
+  }
+
+  let longestHistory = authoritative;
+
+  for (const candidate of candidates.slice(1)) {
+    const shorter = candidate.priorAssignedGameIds.length <
+      longestHistory.priorAssignedGameIds.length
+      ? candidate.priorAssignedGameIds
+      : longestHistory.priorAssignedGameIds;
+    const longer = candidate.priorAssignedGameIds.length <
+      longestHistory.priorAssignedGameIds.length
+      ? longestHistory.priorAssignedGameIds
+      : candidate.priorAssignedGameIds;
+    const historyIsOrderedPrefix = shorter.every(
+      (gameId, index) => gameId === longer[index],
+    );
+
+    if (
+      candidate.continuityId !== authoritative.continuityId ||
+      !historyIsOrderedPrefix ||
+      (
+        candidate.lastScheduleTeamAbbreviation &&
+        authoritative.lastScheduleTeamAbbreviation &&
+        candidate.lastScheduleTeamAbbreviation !==
+          authoritative.lastScheduleTeamAbbreviation
+      )
+    ) {
+      throw new Error(
+        `Legacy player-window continuity copies disagree for ` +
+        `${input.ownerId}/${input.rosterSlotId}/${input.asset.assetKey}.`,
+      );
+    }
+
+    if (
+      candidate.priorAssignedGameIds.length >
+      longestHistory.priorAssignedGameIds.length
+    ) {
+      longestHistory = candidate;
+    }
+  }
+
+  return {
+    ...longestHistory,
+    priorAssignedGameIds: [...longestHistory.priorAssignedGameIds],
+    ...(
+      longestHistory.lastScheduleTeamAbbreviation ||
+      candidates.find((candidate) => candidate.lastScheduleTeamAbbreviation)
+        ?.lastScheduleTeamAbbreviation
+        ? {
+            lastScheduleTeamAbbreviation:
+              longestHistory.lastScheduleTeamAbbreviation ??
+              candidates.find((candidate) => candidate.lastScheduleTeamAbbreviation)!
+                .lastScheduleTeamAbbreviation,
+          }
+        : {}
+    ),
+  };
+}
+
+/**
+ * Rolls a completed skater window into the same active-slot stint. A different
+ * asset always receives a fresh lineage so fantasy drops, swaps, and later
+ * reacquisitions cannot inherit another stint's NHL game reservations.
+ */
+export function advancePlayerWindowContinuity(input: {
+  previousAsset: DraftableAsset;
+  nextAsset: DraftableAsset;
+  previousContinuity?: unknown;
+  completedScheduledGameIds: readonly number[];
+  completedScheduleTeamAbbreviation?: string;
+  ownerId: string;
+  rosterSlotId: string;
+  activationKey: string;
+}): PlayerWindowContinuity | undefined {
+  if (input.nextAsset.assetType !== 'skater') {
+    return undefined;
+  }
+
+  if (
+    input.previousAsset.assetType !== 'skater' ||
+    input.previousAsset.assetKey !== input.nextAsset.assetKey
+  ) {
+    return createPlayerWindowContinuity({
+      ownerId: input.ownerId,
+      rosterSlotId: input.rosterSlotId,
+      asset: input.nextAsset,
+      activationKey: input.activationKey,
+    });
+  }
+
+  const previous = resolvePlayerWindowContinuity({
+    value: input.previousContinuity,
+    ownerId: input.ownerId,
+    rosterSlotId: input.rosterSlotId,
+    asset: input.previousAsset,
+  }) ?? createPlayerWindowContinuity({
+    ownerId: input.ownerId,
+    rosterSlotId: input.rosterSlotId,
+    asset: input.previousAsset,
+    activationKey: `legacy-${input.activationKey}`,
+  });
+
+  if (!previous) {
+    return undefined;
+  }
+
+  const lastScheduleTeamAbbreviation = normalizeTeamAbbreviation(
+    input.completedScheduleTeamAbbreviation,
+  ) ?? previous.lastScheduleTeamAbbreviation;
+
+  return {
+    schemaVersion: 1,
+    continuityId: previous.continuityId,
+    ownerId: previous.ownerId,
+    rosterSlotId: previous.rosterSlotId,
+    assetKey: previous.assetKey,
+    priorAssignedGameIds: [
+      ...new Set([
+        ...previous.priorAssignedGameIds,
+        ...normalizeGameIds(input.completedScheduledGameIds),
+      ]),
+    ],
+    ...(lastScheduleTeamAbbreviation
+      ? { lastScheduleTeamAbbreviation }
+      : {}),
+  };
+}
+
+function snapshotStartsNewFantasyStint(snapshotSource: unknown): boolean {
+  return (
+    typeof snapshotSource === 'string' &&
+    snapshotSource.toLowerCase().includes('move')
+  );
+}
+
+/**
+ * Rebuilds the cursor for a cycle created before continuity schema 1 existed.
+ * History is supplied newest-first and is consumed only while the same asset
+ * occupies the same owner/slot without a gap. Every started historical window
+ * contributes its entire immutable assignment, including games where the
+ * skater did not appear. A move snapshot is a hard fantasy-stint boundary even
+ * when a manager later reacquired the same NHL player in the same slot.
+ */
+export function reconstructLegacyPlayerWindowContinuity(input: {
+  ownerId: string;
+  rosterSlotId: string;
+  currentCycleNumber: number;
+  currentAsset: DraftableAsset;
+  currentContinuity?: unknown;
+  currentSnapshotSource?: string;
+  assignmentsNewestFirst: readonly (LegacyPlayerWindowAssignment | null)[];
+}): PlayerWindowContinuity | undefined {
+  if (input.currentAsset.assetType !== 'skater') {
+    return undefined;
+  }
+
+  const savedCurrent = resolvePlayerWindowContinuity({
+    value: input.currentContinuity,
+    ownerId: input.ownerId,
+    rosterSlotId: input.rosterSlotId,
+    asset: input.currentAsset,
+  });
+
+  if (snapshotStartsNewFantasyStint(input.currentSnapshotSource)) {
+    return savedCurrent?.continuityId.includes('::move-')
+      ? savedCurrent
+      : createPlayerWindowContinuity({
+      ownerId: input.ownerId,
+      rosterSlotId: input.rosterSlotId,
+      asset: input.currentAsset,
+      activationKey: `legacy-cycle-${input.currentCycleNumber}`,
+    });
+  }
+
+  const contiguousAssignments: LegacyPlayerWindowAssignment[] = [];
+
+  for (const assignment of input.assignmentsNewestFirst) {
+    if (!assignment || assignment.asset.assetKey !== input.currentAsset.assetKey) {
+      break;
+    }
+
+    if (!assignment.ownershipStarted) {
+      throw new Error(
+        `Legacy player-window history for ${input.ownerId}/${input.rosterSlotId} ` +
+        `contains an unstarted Cycle ${assignment.cycleNumber} assignment before the ` +
+        `current cycle. Continuity was not guessed.`,
+      );
+    }
+
+    const scheduledGameIds = normalizeGameIds(assignment.scheduledGameIds);
+
+    if (scheduledGameIds.length === 0) {
+      throw new Error(
+        `Legacy player-window history for ${input.ownerId}/${input.rosterSlotId} ` +
+        `is missing Cycle ${assignment.cycleNumber} game ownership.`,
+      );
+    }
+
+    contiguousAssignments.push({
+      ...assignment,
+      scheduledGameIds,
+    });
+
+    if (snapshotStartsNewFantasyStint(assignment.snapshotSource)) {
+      break;
+    }
+  }
+
+  const savedHistorical = contiguousAssignments
+    .map((assignment) => resolvePlayerWindowContinuity({
+      value: assignment.playerWindowContinuity,
+      ownerId: input.ownerId,
+      rosterSlotId: input.rosterSlotId,
+      asset: input.currentAsset,
+    }))
+    .find((continuity): continuity is PlayerWindowContinuity => Boolean(continuity));
+  const base = savedCurrent ?? savedHistorical ?? createPlayerWindowContinuity({
+    ownerId: input.ownerId,
+    rosterSlotId: input.rosterSlotId,
+    asset: input.currentAsset,
+    activationKey: `legacy-cycle-${input.currentCycleNumber}`,
+  });
+
+  if (!base) {
+    return undefined;
+  }
+
+  const distinctContinuityIds = new Set(
+    [savedCurrent, ...contiguousAssignments.map((assignment) =>
+      resolvePlayerWindowContinuity({
+        value: assignment.playerWindowContinuity,
+        ownerId: input.ownerId,
+        rosterSlotId: input.rosterSlotId,
+        asset: input.currentAsset,
+      }),
+    )]
+      .filter((continuity): continuity is PlayerWindowContinuity => Boolean(continuity))
+      .map((continuity) => continuity.continuityId),
+  );
+
+  if (distinctContinuityIds.size > 1) {
+    throw new Error(
+      `Legacy player-window continuity identifiers disagree for ` +
+      `${input.ownerId}/${input.rosterSlotId}/${input.currentAsset.assetKey}.`,
+    );
+  }
+
+  const chronologicalAssignments = [...contiguousAssignments].reverse();
+  const priorAssignedGameIds = normalizeGameIds([
+    ...new Set([
+      ...base.priorAssignedGameIds,
+      ...chronologicalAssignments.flatMap((assignment) => [
+        ...assignment.scheduledGameIds,
+      ]),
+    ]),
+  ]);
+  const lastScheduleTeamAbbreviation = normalizeTeamAbbreviation(
+    contiguousAssignments[0]?.scheduleTeamAbbreviation,
+  ) ?? base.lastScheduleTeamAbbreviation;
+
+  return {
+    schemaVersion: 1,
+    continuityId: base.continuityId,
+    ownerId: base.ownerId,
+    rosterSlotId: base.rosterSlotId,
+    assetKey: base.assetKey,
+    priorAssignedGameIds,
+    ...(lastScheduleTeamAbbreviation
+      ? { lastScheduleTeamAbbreviation }
+      : {}),
+  };
+}

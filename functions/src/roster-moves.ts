@@ -4,6 +4,10 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
 import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
+import {
+  loadCurrentNhlPlayerTeamIdentity,
+  type NhlPlayerTeamIdentitySnapshot,
+} from './shared/core/nhl/nhl-player-team-identity.service';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import {
   optionalFirestoreDocumentId,
@@ -28,6 +32,7 @@ import {
 import {
   buildSourceNhlTargetGameIdsByTeam,
 } from './shared/core/cycle/cycle-window-selection.util';
+import { createPlayerWindowContinuity } from './shared/core/cycle/player-window-continuity.util';
 
 const FUNCTION_REGION = 'us-central1';
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
@@ -56,6 +61,7 @@ interface SlotWindowContext {
   cycleRefPath: string;
   teamWindowsRefPath: string;
   rosterPickRefPath: string;
+  playoffBankRefPath: string | null;
 }
 
 interface NhlScheduleGame {
@@ -143,6 +149,62 @@ function getAssetTeamAbbreviation(asset: DraftableAsset | RosterAsset): string {
   return asset.assetType === 'skater'
     ? asset.player.nhlTeamAbbreviation
     : asset.teamAbbreviation;
+}
+
+export function applyCurrentNhlTeamIdentity<
+  T extends DraftableAsset | RosterAsset,
+>(
+  asset: T,
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+): T {
+  if (asset.assetType !== 'skater' || !currentTeamAbbreviationByPlayerId) {
+    return asset;
+  }
+
+  const currentTeamAbbreviation = currentTeamAbbreviationByPlayerId
+    .get(asset.player.id)
+    ?.trim()
+    .toUpperCase();
+
+  if (!currentTeamAbbreviation) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Current NHL team identity is unavailable for player ${asset.player.id}. Try again shortly.`,
+    );
+  }
+
+  return {
+    ...asset,
+    player: {
+      ...asset.player,
+      nhlTeamAbbreviation: currentTeamAbbreviation,
+      teamLogoUrl:
+        `https://assets.nhle.com/logos/nhl/svg/${currentTeamAbbreviation}_light.svg`,
+    },
+  } as T;
+}
+
+function getSkaterPlayerIds(
+  assets: readonly (
+    | DraftableAsset
+    | RosterAsset
+    | null
+    | undefined
+  )[],
+): number[] {
+  return [
+    ...new Set(
+      assets
+        .filter(
+          (asset): asset is RosterAsset | DraftableAsset =>
+            Boolean(asset) && asset!.assetType === 'skater',
+        )
+        .map((asset) =>
+          asset.assetType === 'skater' ? asset.player.id : 0,
+        )
+        .filter((playerId) => playerId > 0),
+    ),
+  ];
 }
 
 function getRosterPickDocumentId(ownerId: string, rosterSlotId: string): string {
@@ -499,11 +561,23 @@ export function determineEarliestEligibleSourceBlock(input: {
   return totalBlockCount + 1;
 }
 
-export async function getEarliestEligibleCycleNumber(
-  asset: DraftableAsset | RosterAsset,
+export interface RosterMoveAssetCycleEligibility<
+  TAsset extends DraftableAsset | RosterAsset,
+> {
+  asset: TAsset;
+  earliestEligibleCycleNumber: number;
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>;
+}
+
+export async function resolveRosterMoveAssetCycleEligibility<
+  TAsset extends DraftableAsset | RosterAsset,
+>(
+  asset: TAsset,
   gamesPerCycle: number,
   leagueId: string | null = null,
-): Promise<number> {
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+  minimumIdentityGeneratedAtMilliseconds?: number,
+): Promise<RosterMoveAssetCycleEligibility<TAsset>> {
   const [replayContext, seasonWindowAnchor] = await Promise.all([
     loadRosterMoveReplayContext(leagueId),
     loadRosterMoveSeasonWindowAnchor(leagueId),
@@ -513,7 +587,34 @@ export async function getEarliestEligibleCycleNumber(
     throw new HttpsError('failed-precondition', replayContext.message);
   }
 
-  const teamAbbreviation = getAssetTeamAbbreviation(asset).trim().toUpperCase();
+  let resolvedCurrentTeamAbbreviationByPlayerId =
+    replayContext.mode === 'historical-replay'
+      ? undefined
+      : currentTeamAbbreviationByPlayerId;
+
+  if (
+    replayContext.mode !== 'historical-replay' &&
+    asset.assetType === 'skater' &&
+    !resolvedCurrentTeamAbbreviationByPlayerId
+  ) {
+    resolvedCurrentTeamAbbreviationByPlayerId = (
+      await loadCurrentNhlPlayerTeamIdentity({
+        requiredPlayerIds: [asset.player.id],
+        minimumGeneratedAtMilliseconds:
+          minimumIdentityGeneratedAtMilliseconds,
+      })
+    ).byPlayerId;
+  }
+
+  const authoritativeAsset = replayContext.mode === 'historical-replay'
+    ? asset
+    : applyCurrentNhlTeamIdentity(
+        asset,
+        resolvedCurrentTeamAbbreviationByPlayerId,
+      );
+  const teamAbbreviation = getAssetTeamAbbreviation(authoritativeAsset)
+    .trim()
+    .toUpperCase();
   const team = teamAbbreviation.toLowerCase();
   const season = replayContext.mode === 'historical-replay'
     ? replayContext.seasonOverride
@@ -578,12 +679,41 @@ export async function getEarliestEligibleCycleNumber(
     completedThroughDate,
   });
 
-  return replayContext.mode === 'historical-replay'
+  const earliestEligibleCycleNumber = replayContext.mode === 'historical-replay'
     ? sourceNhlBlockNumber
     : toLeagueRelativeCycleNumber(
         sourceNhlBlockNumber,
         seasonWindowAnchor.initialNhlBlockNumber,
       );
+
+  return {
+    asset: authoritativeAsset,
+    earliestEligibleCycleNumber,
+    ...(resolvedCurrentTeamAbbreviationByPlayerId
+      ? {
+          currentTeamAbbreviationByPlayerId:
+            resolvedCurrentTeamAbbreviationByPlayerId,
+        }
+      : {}),
+  };
+}
+
+export async function getEarliestEligibleCycleNumber(
+  asset: DraftableAsset | RosterAsset,
+  gamesPerCycle: number,
+  leagueId: string | null = null,
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
+  minimumIdentityGeneratedAtMilliseconds?: number,
+): Promise<number> {
+  return (
+    await resolveRosterMoveAssetCycleEligibility(
+      asset,
+      gamesPerCycle,
+      leagueId,
+      currentTeamAbbreviationByPlayerId,
+      minimumIdentityGeneratedAtMilliseconds,
+    )
+  ).earliestEligibleCycleNumber;
 }
 
 async function findSlotWindowContext(
@@ -628,6 +758,12 @@ async function findSlotWindowContext(
           teamWindowsRefPath: `${openCycle.snapshot.ref.path}/teamWindows/${ownerId}`,
           rosterPickRefPath:
             `${openCycle.snapshot.ref.path}/rosterPicks/${getRosterPickDocumentId(ownerId, activeSlotId)}`,
+          playoffBankRefPath: await findAssignedPlayoffBankRefPath({
+            leagueId,
+            ownerId,
+            cycleNumber: openCycle.cycleNumber,
+            cycleData: openCycle.data,
+          }),
         };
       }
     }
@@ -660,10 +796,46 @@ async function findSlotWindowContext(
       cycleRefPath: cycle.snapshot.ref.path,
       teamWindowsRefPath,
       rosterPickRefPath,
+      playoffBankRefPath: await findAssignedPlayoffBankRefPath({
+        leagueId,
+        ownerId,
+        cycleNumber: cycle.cycleNumber,
+        cycleData: cycle.data,
+      }),
     };
   }
 
   return null;
+}
+
+async function findAssignedPlayoffBankRefPath(input: {
+  leagueId: string;
+  ownerId: string;
+  cycleNumber: number;
+  cycleData: Record<string, unknown>;
+}): Promise<string | null> {
+  if (asString(input.cycleData['phase']) !== 'playoffs') {
+    return null;
+  }
+
+  const snapshot = await db.collection(
+    `leagues/${input.leagueId}/playoffWindowBanks/${input.ownerId}/windows`,
+  ).get();
+  const matches = snapshot.docs.filter((document) => {
+    const data = document.data();
+
+    return asNumber(data['sourceCycleNumber']) === input.cycleNumber &&
+      asString(data['assignmentStatus']) === 'assigned';
+  });
+
+  if (matches.length !== 1) {
+    throw new HttpsError(
+      'failed-precondition',
+      `The assigned playoff window for Cycle ${input.cycleNumber} is unavailable. Refresh and try again.`,
+    );
+  }
+
+  return matches[0].ref.path;
 }
 
 function buildResetWindow(
@@ -688,9 +860,14 @@ function buildResetWindow(
     scheduledGameIds: [],
     scheduledGameDates: [],
     scheduledGameLabels: [],
+    scheduleTeamAbbreviation: null,
+    sourceTeamAbbreviationByGameId: {},
+    teamIdentityChanged: false,
     completedGameIds: [],
     liveGameIds: [],
     appearanceGameIds: [],
+    incompleteFinalGameIds: [],
+    gameInputCompleteness: {},
     gameScores: {},
     gameStates: {},
     scheduledGames: 0,
@@ -849,17 +1026,17 @@ export const applyImmediateRosterMove = onCall(
     );
 
     let incomingEligibilityCycle = 1;
-    if (addAsset) {
-      if (!asString(addAsset.assetKey) || !asString(addAsset.position)) {
-        throw new HttpsError('invalid-argument', 'The incoming asset is invalid.');
-      }
-      incomingEligibilityCycle = await getEarliestEligibleCycleNumber(addAsset, gamesPerCycle, leagueId);
+    if (addAsset && (!asString(addAsset.assetKey) || !asString(addAsset.position))) {
+      throw new HttpsError('invalid-argument', 'The incoming asset is invalid.');
     }
 
     const rosterRef = db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`);
     const cycleRef = db.doc(context.cycleRefPath);
     const teamWindowsRef = db.doc(context.teamWindowsRefPath);
     const rosterPickRef = db.doc(context.rosterPickRefPath);
+    const playoffBankRef = context.playoffBankRefPath
+      ? db.doc(context.playoffBankRefPath)
+      : null;
     const rosterRefs = teamsSnapshot.docs.map((team) =>
       db.doc(`leagues/${leagueId}/teams/${team.id}/roster/current`),
     );
@@ -899,7 +1076,62 @@ export const applyImmediateRosterMove = onCall(
     }
 
     const preflightOutgoingAssetKey = getAssetKey(preflightRosterPickAsset);
-    const preflightActiveAsset = preflightActiveSlot.asset;
+    const rosterMoveReplayContext = await loadRosterMoveReplayContext(leagueId);
+
+    if (rosterMoveReplayContext.mode === 'blocked') {
+      throw new HttpsError(
+        'failed-precondition',
+        rosterMoveReplayContext.message,
+      );
+    }
+
+    let rosterMoveIdentity: NhlPlayerTeamIdentitySnapshot | null = null;
+    const preflightSelectedIncomingAsset = moveType === 'active-bench-swap'
+      ? preflightRoster.benchSlots.find((slot) => slot.slotId === benchSlotId)
+          ?.asset
+      : moveType === 'activate-ir-active'
+        ? preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId)
+            ?.asset
+        : null;
+    const requiredIdentityPlayerIds = getSkaterPlayerIds([
+      preflightActiveSlot.asset,
+      addAsset,
+      preflightSelectedIncomingAsset,
+    ]);
+
+    if (
+      rosterMoveReplayContext.mode === 'live' &&
+      requiredIdentityPlayerIds.length > 0
+    ) {
+      const identityBoundaryMilliseconds = Date.now();
+      rosterMoveIdentity = await loadCurrentNhlPlayerTeamIdentity({
+        requiredPlayerIds: requiredIdentityPlayerIds,
+        minimumGeneratedAtMilliseconds: identityBoundaryMilliseconds,
+      });
+    }
+
+    const currentTeamAbbreviationByPlayerId = rosterMoveIdentity?.byPlayerId;
+    const preflightActiveAsset = preflightActiveSlot.asset
+      ? applyCurrentNhlTeamIdentity(
+          preflightActiveSlot.asset,
+          currentTeamAbbreviationByPlayerId,
+        )
+      : null;
+    const authoritativeAddAsset = addAsset
+      ? applyCurrentNhlTeamIdentity(
+          addAsset,
+          currentTeamAbbreviationByPlayerId,
+        )
+      : null;
+
+    if (authoritativeAddAsset) {
+      incomingEligibilityCycle = await getEarliestEligibleCycleNumber(
+        authoritativeAddAsset,
+        gamesPerCycle,
+        leagueId,
+        currentTeamAbbreviationByPlayerId,
+      );
+    }
 
     if (preflightActiveAsset) {
       if (getAssetKey(preflightActiveAsset) !== preflightOutgoingAssetKey) {
@@ -919,7 +1151,12 @@ export const applyImmediateRosterMove = onCall(
     if (preflightActiveAsset) {
       const outgoingEligibilityCycle = Math.max(
         preflightActiveAsset.eligibleFromCycleNumber ?? 1,
-        await getEarliestEligibleCycleNumber(preflightActiveAsset, gamesPerCycle, leagueId),
+        await getEarliestEligibleCycleNumber(
+          preflightActiveAsset,
+          gamesPerCycle,
+          leagueId,
+          currentTeamAbbreviationByPlayerId,
+        ),
       );
 
       if (outgoingEligibilityCycle > context.cycleNumber) {
@@ -962,7 +1199,12 @@ export const applyImmediateRosterMove = onCall(
         const preflightBenchSlot = preflightRoster.benchSlots.find(
           (slot) => slot.slotId === benchSlotId,
         );
-        const preflightBenchAsset = preflightBenchSlot?.asset ?? null;
+        const preflightBenchAsset = preflightBenchSlot?.asset
+          ? applyCurrentNhlTeamIdentity(
+              preflightBenchSlot.asset,
+              currentTeamAbbreviationByPlayerId,
+            )
+          : null;
 
         if (!preflightBenchAsset) {
           throw new HttpsError('failed-precondition', 'The selected bench player is unavailable.');
@@ -971,11 +1213,21 @@ export const applyImmediateRosterMove = onCall(
         preflightBenchAssetKey = getAssetKey(preflightBenchAsset);
         preflightBenchEligibilityCycle = Math.max(
           preflightBenchAsset.eligibleFromCycleNumber ?? 1,
-          await getEarliestEligibleCycleNumber(preflightBenchAsset, gamesPerCycle, leagueId),
+          await getEarliestEligibleCycleNumber(
+            preflightBenchAsset,
+            gamesPerCycle,
+            leagueId,
+            currentTeamAbbreviationByPlayerId,
+          ),
         );
       } else {
         const preflightIrSlot = preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId);
-        const preflightIrAsset = preflightIrSlot?.asset ?? null;
+        const preflightIrAsset = preflightIrSlot?.asset
+          ? applyCurrentNhlTeamIdentity(
+              preflightIrSlot.asset,
+              currentTeamAbbreviationByPlayerId,
+            )
+          : null;
 
         if (!preflightIrAsset) {
           throw new HttpsError('failed-precondition', 'The selected IR player is unavailable.');
@@ -984,7 +1236,12 @@ export const applyImmediateRosterMove = onCall(
         preflightIrAssetKey = getAssetKey(preflightIrAsset);
         preflightIrEligibilityCycle = Math.max(
           preflightIrAsset.eligibleFromCycleNumber ?? 1,
-          await getEarliestEligibleCycleNumber(preflightIrAsset, gamesPerCycle, leagueId),
+          await getEarliestEligibleCycleNumber(
+            preflightIrAsset,
+            gamesPerCycle,
+            leagueId,
+            currentTeamAbbreviationByPlayerId,
+          ),
         );
 
         if (preflightActiveSlot.asset) {
@@ -1020,37 +1277,58 @@ export const applyImmediateRosterMove = onCall(
       }
     }
 
-    const preflightIncomingAsset = moveType === 'active-bench-swap'
-      ? rosterAssetToDraftableAsset(
-          preflightRoster.benchSlots.find((slot) => slot.slotId === benchSlotId)!.asset!,
-        )
-      : moveType === 'activate-ir-active'
+    const rawPreflightIncomingAsset = moveType === 'active-bench-swap'
         ? rosterAssetToDraftableAsset(
-            preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId)!.asset!,
+            preflightRoster.benchSlots.find((slot) => slot.slotId === benchSlotId)!.asset!,
           )
-        : addAsset;
-    const resolvedIncomingAsset = preflightIncomingAsset
-      ? await resolveIncomingProjectionForCycle(
-          leagueId,
-          context.cycleNumber,
-          preflightIncomingAsset,
+        : moveType === 'activate-ir-active'
+          ? rosterAssetToDraftableAsset(
+              preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId)!.asset!,
+            )
+          : authoritativeAddAsset;
+    const preflightIncomingAsset = rawPreflightIncomingAsset
+      ? applyCurrentNhlTeamIdentity(
+          rawPreflightIncomingAsset,
+          currentTeamAbbreviationByPlayerId,
         )
       : null;
+    const resolvedIncomingAsset = preflightIncomingAsset
+      ? applyCurrentNhlTeamIdentity(
+          await resolveIncomingProjectionForCycle(
+            leagueId,
+            context.cycleNumber,
+            preflightIncomingAsset,
+          ),
+          currentTeamAbbreviationByPlayerId,
+        )
+      : null;
+    const transactionRef = db.collection(`leagues/${leagueId}/transactions`).doc();
 
     return db.runTransaction(async (transaction) => {
-      const [rosterSnapshot, cycleSnapshot, teamWindowsSnapshot, rosterPickSnapshot, ...allRosterSnapshots] =
+      const [
+        rosterSnapshot,
+        cycleSnapshot,
+        teamWindowsSnapshot,
+        rosterPickSnapshot,
+        playoffBankSnapshot,
+        ...allRosterSnapshots
+      ] =
         await Promise.all([
           transaction.get(rosterRef),
           transaction.get(cycleRef),
           transaction.get(teamWindowsRef),
           transaction.get(rosterPickRef),
+          playoffBankRef
+            ? transaction.get(playoffBankRef)
+            : Promise.resolve(null),
           ...rosterRefs.map((reference) => transaction.get(reference)),
         ]);
 
       if (
         !rosterSnapshot.exists ||
         !cycleSnapshot.exists ||
-        (!canTargetOpenSlot && !rosterPickSnapshot.exists)
+        (!canTargetOpenSlot && !rosterPickSnapshot.exists) ||
+        (playoffBankRef && !playoffBankSnapshot?.exists)
       ) {
         throw new HttpsError('failed-precondition', 'The current roster assignment is unavailable.');
       }
@@ -1080,6 +1358,55 @@ export const applyImmediateRosterMove = onCall(
       const teamWindowsData = teamWindowsSnapshot.exists
         ? teamWindowsSnapshot.data() ?? {}
         : {};
+      const playoffBankData = playoffBankSnapshot?.exists
+        ? playoffBankSnapshot.data() ?? {}
+        : null;
+
+      if (playoffBankData) {
+        if (
+          asString(playoffBankData['ownerId']) !== ownerId ||
+          asNumber(playoffBankData['sourceCycleNumber']) !==
+            context.cycleNumber ||
+          asString(playoffBankData['assignmentStatus']) !== 'assigned'
+        ) {
+          throw new HttpsError(
+            'aborted',
+            'The assigned playoff window changed while the move was being checked. Refresh and try again.',
+          );
+        }
+
+        const savedBankPick = asArray(playoffBankData['picks'])
+          .map(asRecord)
+          .find((pick) => asString(pick['rosterSlotId']) === activeSlotId);
+
+        if (rosterPickSnapshot.exists) {
+          const rosterPickData = rosterPickSnapshot.data() ?? {};
+          const rosterPickAssetKey = getAssetKey(rosterPickData['asset']);
+          const bankPickAssetKey = getAssetKey(savedBankPick?.['asset']);
+          const rosterContinuityId = asString(
+            asRecord(rosterPickData['playerWindowContinuity'])['continuityId'],
+          );
+          const bankContinuityId = asString(
+            asRecord(savedBankPick?.['playerWindowContinuity'])['continuityId'],
+          );
+
+          if (
+            !savedBankPick ||
+            bankPickAssetKey !== rosterPickAssetKey ||
+            bankContinuityId !== rosterContinuityId
+          ) {
+            throw new HttpsError(
+              'aborted',
+              'The playoff bank and active cycle assignment are out of sync. No move was applied.',
+            );
+          }
+        } else if (savedBankPick) {
+          throw new HttpsError(
+            'aborted',
+            'The playoff bank still owns this open slot. No move was applied.',
+          );
+        }
+      }
 
       if (canTargetOpenSlot && asString(teamWindowsData['status']) === 'complete') {
         throw new HttpsError(
@@ -1101,7 +1428,12 @@ export const applyImmediateRosterMove = onCall(
       }
 
       let incomingAsset: DraftableAsset | null = null;
-      const outgoingAsset = activeSlot.asset;
+      const outgoingAsset = activeSlot.asset
+        ? applyCurrentNhlTeamIdentity(
+            activeSlot.asset,
+            currentTeamAbbreviationByPlayerId,
+          )
+        : null;
       let droppedAsset: RosterAsset | null = moveType === 'activate-ir-active'
         ? null
         : outgoingAsset;
@@ -1384,6 +1716,8 @@ export const applyImmediateRosterMove = onCall(
       const expectedRosterSlotIds = removesActiveAssignment
         ? existingExpectedRosterSlotIds.filter((slotId) => slotId !== activeSlotId)
         : [...new Set([...existingExpectedRosterSlotIds, activeSlotId])];
+      let nextRosterPickForBank: Record<string, unknown> | null = null;
+      let resetWindowForBank: Record<string, unknown> | null = null;
 
       if (removesActiveAssignment) {
         if (windowIndex >= 0) {
@@ -1391,6 +1725,12 @@ export const applyImmediateRosterMove = onCall(
         }
         transaction.delete(rosterPickRef);
       } else if (incomingAsset) {
+        const playerWindowContinuity = createPlayerWindowContinuity({
+          ownerId,
+          rosterSlotId: activeSlotId,
+          asset: incomingAsset,
+          activationKey: `move-${transactionRef.id}`,
+        });
         const resetWindow = buildResetWindow(
           windowIndex >= 0 ? windows[windowIndex] : {},
           incomingAsset,
@@ -1398,6 +1738,12 @@ export const applyImmediateRosterMove = onCall(
           activeSlotId,
           context.cycleNumber,
         );
+        resetWindow['playerWindowContinuity'] =
+          playerWindowContinuity ?? null;
+        resetWindowForBank = {
+          ...resetWindow,
+          updatedAt: new Date().toISOString(),
+        };
         if (windowIndex >= 0) {
           windows[windowIndex] = resetWindow;
         } else {
@@ -1405,9 +1751,34 @@ export const applyImmediateRosterMove = onCall(
         }
 
         const existingPick = rosterPickSnapshot.exists ? rosterPickSnapshot.data() ?? {} : {};
+        const {
+          sourceNhlTargetGameIds: _outgoingSourceNhlTargetGameIds,
+          ...existingPickWithoutDirectTargetIds
+        } = existingPick;
+        const cycleSourceNhlTargetGameIdsByTeam = asRecord(
+          cycleSnapshot.data()?.['sourceNhlTargetGameIdsByTeam'],
+        );
+        const savedSourceNhlTargetGameIdsByTeam = asRecord(
+          existingPick['sourceNhlTargetGameIdsByTeam'],
+        );
+        const sourceNhlTargetGameIdsByTeam =
+          Object.keys(cycleSourceNhlTargetGameIdsByTeam).length > 0
+            ? cycleSourceNhlTargetGameIdsByTeam
+            : savedSourceNhlTargetGameIdsByTeam;
+        const incomingTeamAbbreviation = getAssetTeamAbbreviation(incomingAsset)
+          .trim()
+          .toUpperCase();
+        const incomingSourceNhlTargetGameIds = asArray(
+          sourceNhlTargetGameIdsByTeam[incomingTeamAbbreviation],
+        ).filter(
+          (gameId): gameId is number =>
+            typeof gameId === 'number' &&
+            Number.isSafeInteger(gameId) &&
+            gameId > 0,
+        );
         const fallbackOrder = 100000 + activeSlotIndex + 1;
-        transaction.set(rosterPickRef, {
-          ...existingPick,
+        const nextRosterPick = {
+          ...existingPickWithoutDirectTargetIds,
           overallPick: asNumber(existingPick['overallPick'], fallbackOrder),
           round: asNumber(existingPick['round']),
           pickInRound: asNumber(existingPick['pickInRound'], activeSlot.slotNumber),
@@ -1419,8 +1790,121 @@ export const applyImmediateRosterMove = onCall(
           snapshotCycleNumber: context.cycleNumber,
           snapshotOrder: asNumber(existingPick['snapshotOrder'], fallbackOrder),
           snapshotSource: 'immediate-untouched-roster-move',
+          playerWindowContinuity: playerWindowContinuity ?? null,
           snapshottedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+          ...(incomingSourceNhlTargetGameIds.length > 0
+            ? { sourceNhlTargetGameIds: incomingSourceNhlTargetGameIds }
+            : {}),
+          sourceNhlTargetGameIdsByTeam,
+        };
+        transaction.set(rosterPickRef, nextRosterPick);
+        nextRosterPickForBank = {
+          ...nextRosterPick,
+          snapshottedAt: new Date().toISOString(),
+        };
+      }
+
+      if (playoffBankRef && playoffBankData) {
+        const bankWindowNumber = Math.floor(
+          asNumber(playoffBankData['windowNumber']),
+        );
+        const bankPicks = asArray(playoffBankData['picks']).map(asRecord);
+        const bankSlotWindows = asArray(playoffBankData['slotWindows']).map(asRecord);
+        const bankPickIndex = bankPicks.findIndex(
+          (pick) => asString(pick['rosterSlotId']) === activeSlotId,
+        );
+        const bankWindowIndex = bankSlotWindows.findIndex(
+          (window) => asString(window['rosterSlotId']) === activeSlotId,
+        );
+
+        if (removesActiveAssignment) {
+          if (bankPickIndex >= 0) {
+            bankPicks.splice(bankPickIndex, 1);
+          }
+          if (bankWindowIndex >= 0) {
+            bankSlotWindows.splice(bankWindowIndex, 1);
+          }
+        } else if (nextRosterPickForBank && resetWindowForBank) {
+          const bankPick = {
+            ...nextRosterPickForBank,
+            playoffWindowNumber: bankWindowNumber,
+          };
+
+          if (bankPickIndex >= 0) {
+            bankPicks[bankPickIndex] = bankPick;
+          } else {
+            bankPicks.push(bankPick);
+          }
+
+          if (bankWindowIndex >= 0) {
+            bankSlotWindows[bankWindowIndex] = resetWindowForBank;
+          } else {
+            bankSlotWindows.push(resetWindowForBank);
+          }
+        }
+
+        const bankExpectedRosterSlotIds = removesActiveAssignment
+          ? asArray(playoffBankData['expectedRosterSlotIds'])
+              .map(asString)
+              .filter((slotId) => slotId && slotId !== activeSlotId)
+          : [
+              ...new Set([
+                ...asArray(playoffBankData['expectedRosterSlotIds'])
+                  .map(asString)
+                  .filter(Boolean),
+                activeSlotId,
+              ]),
+            ];
+        const bankExpectedWindows = bankSlotWindows.filter((window) =>
+          bankExpectedRosterSlotIds.includes(
+            asString(window['rosterSlotId']),
+          ),
+        );
+        const bankCompletedWindowCount = bankExpectedWindows.filter(
+          (window) => asString(window['status']) === 'complete',
+        ).length;
+        const bankHasStartedWindow = bankExpectedWindows.some(
+          (window) =>
+            asString(window['status']) !== 'scheduled' ||
+            asNumber(window['gamesPlayed']) > 0 ||
+            asArray(window['liveGameIds']).length > 0,
+        );
+        const bankTotalWindowCount = bankExpectedRosterSlotIds.length;
+        const bankStatus =
+          bankTotalWindowCount > 0 &&
+          bankCompletedWindowCount === bankTotalWindowCount
+            ? 'complete'
+            : bankHasStartedWindow
+              ? 'active'
+              : 'scheduled';
+        const bankTeamScore = Number(
+          bankExpectedWindows
+            .reduce(
+              (total, window) => total + asNumber(window['fantasyPoints']),
+              0,
+            )
+            .toFixed(1),
+        );
+
+        transaction.set(
+          playoffBankRef,
+          {
+            picks: bankPicks,
+            slotWindows: bankSlotWindows,
+            expectedRosterSlotIds: bankExpectedRosterSlotIds,
+            playerWindowContinuitySchemaVersion: 1,
+            teamScore: bankTeamScore,
+            completedWindowCount: bankCompletedWindowCount,
+            totalWindowCount: bankTotalWindowCount,
+            status: bankStatus,
+            completedAt:
+              bankStatus === 'complete'
+                ? playoffBankData['completedAt'] ?? FieldValue.serverTimestamp()
+                : null,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
       }
 
       transaction.set(rosterRef, {
@@ -1512,7 +1996,6 @@ export const applyImmediateRosterMove = onCall(
               : moveType === 'add-drop-active'
                 ? 'add-drop'
                 : 'add-open-slot';
-      const transactionRef = db.collection(`leagues/${leagueId}/transactions`).doc();
       transaction.set(transactionRef, {
         type: transactionType,
         ownerId,
@@ -1548,6 +2031,13 @@ export const applyImmediateRosterMove = onCall(
         effectiveCycleNumber: context.cycleNumber,
         effectiveLabel: `Cycle ${context.cycleNumber}`,
         immediateUntouchedWindow: true,
+        ...(rosterMoveIdentity
+          ? {
+              nhlPlayerTeamIdentityHash: rosterMoveIdentity.identityHash,
+              nhlPlayerTeamIdentityGeneratedAt:
+                rosterMoveIdentity.generatedAt,
+            }
+          : {}),
         createdAt: FieldValue.serverTimestamp(),
       });
 

@@ -435,6 +435,23 @@ export interface DraftPickPreview {
   ownerId: string;
 }
 
+/**
+ * Server-owned NHL schedule continuity for one uninterrupted active-slot
+ * stint. It follows the same skater across fantasy matchup windows, but is
+ * reset whenever a different fantasy asset enters the slot.
+ */
+export interface PlayerWindowContinuity {
+  schemaVersion: 1;
+  continuityId: string;
+  ownerId: string;
+  rosterSlotId: string;
+  assetKey: string;
+  /** Exact provider games owned by earlier completed windows in this stint. */
+  priorAssignedGameIds: number[];
+  /** NHL club that supplied the immediately preceding completed window. */
+  lastScheduleTeamAbbreviation?: string;
+}
+
 export interface DraftPick extends DraftPickPreview {
   asset: DraftableAsset;
 
@@ -455,6 +472,11 @@ export interface DraftPick extends DraftPickPreview {
    * trade handling when a banked playoff pick is assigned in a later cycle.
    */
   sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
+  /** Skaters only. Team-goalie units continue to use fixed club blocks. */
+  playerWindowContinuity?: PlayerWindowContinuity;
+  /** Server timestamp written when this slot-window snapshot became active. */
+  snapshottedAt?: unknown;
+  snapshotSource?: string;
   snapshotOrder?: number;
   playoffWindowNumber?: number;
 

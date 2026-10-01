@@ -1,3 +1,5 @@
+import type { FantasyDraft } from '../draft/draft.models';
+
 export function getCycleGameStartIndex(
   cycleNumber: number,
   requiredGamesPerCycle: number
@@ -154,6 +156,112 @@ export function buildSourceNhlTargetGameIdsByTeam(
   }
 
   return targets;
+}
+
+function normalizeFrozenSeasonPlan(
+  value: unknown,
+): Record<string, number[]> | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('The frozen NHL season plan is malformed.');
+  }
+
+  const result: Record<string, number[]> = {};
+
+  for (const [rawTeam, rawGameIds] of Object.entries(value)) {
+    const team = rawTeam.trim().toUpperCase();
+
+    if (!/^[A-Z0-9]{2,4}$/.test(team) || result[team] || !Array.isArray(rawGameIds)) {
+      throw new Error('The frozen NHL season plan has malformed club evidence.');
+    }
+
+    const gameIds = rawGameIds.filter(
+      (gameId): gameId is number =>
+        typeof gameId === 'number' && Number.isSafeInteger(gameId) && gameId > 0,
+    );
+
+    if (
+      gameIds.length !== rawGameIds.length ||
+      gameIds.length === 0 ||
+      new Set(gameIds).size !== gameIds.length
+    ) {
+      throw new Error(`The frozen NHL season plan for ${team} is malformed.`);
+    }
+
+    result[team] = gameIds;
+  }
+
+  if (Object.keys(result).length === 0) {
+    throw new Error('The frozen NHL season plan is empty.');
+  }
+
+  return result;
+}
+
+/**
+ * Rehydrates the longest schedule already sealed into the Draft anchor. Older
+ * FF1.42 plans stopped at the final normal source block, while the anchor kept
+ * the remaining provider IDs. Those frozen tail games form a safe transfer
+ * reserve without consulting a mutable post-Draft schedule.
+ */
+export function resolveFrozenSeasonSourceGameIdsByTeam(
+  draft: Pick<
+    FantasyDraft,
+    'seasonWindowSourceGameIdsByTeam' | 'seasonWindowAnchorTeams'
+  > | null | undefined,
+): Record<string, number[]> | undefined {
+  const planned = normalizeFrozenSeasonPlan(
+    draft?.seasonWindowSourceGameIdsByTeam,
+  );
+
+  if (!planned) {
+    return undefined;
+  }
+
+  const anchorTeams = draft?.seasonWindowAnchorTeams;
+
+  if (!Array.isArray(anchorTeams) || anchorTeams.length === 0) {
+    return planned;
+  }
+
+  const anchorPlan = normalizeFrozenSeasonPlan(
+    Object.fromEntries(
+      anchorTeams.map((team) => [
+        team.teamAbbreviation,
+        team.regularSeasonGameIds,
+      ]),
+    ),
+  )!;
+  const plannedTeams = Object.keys(planned).sort();
+  const anchorTeamKeys = Object.keys(anchorPlan).sort();
+
+  if (
+    plannedTeams.length !== anchorTeamKeys.length ||
+    plannedTeams.some((team, index) => team !== anchorTeamKeys[index])
+  ) {
+    throw new Error(
+      'The frozen NHL season plan does not match the all-club Draft anchor.',
+    );
+  }
+
+  for (const team of plannedTeams) {
+    const plannedIds = planned[team];
+    const anchorIds = anchorPlan[team];
+
+    if (
+      anchorIds.length < plannedIds.length ||
+      plannedIds.some((gameId, index) => anchorIds[index] !== gameId)
+    ) {
+      throw new Error(
+        `The frozen NHL season plan for ${team} does not match its Draft anchor.`,
+      );
+    }
+  }
+
+  return anchorPlan;
 }
 
 export function selectCycleWindowGames<T>(

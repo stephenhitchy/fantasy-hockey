@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
-import { DraftPick } from '../draft/draft.models';
+import { DraftPick, PlayerWindowContinuity } from '../draft/draft.models';
 import { getFrozenCycleProjection } from '../projection/cycle-projection.util';
 import {
   AssetCycleWindowStatus,
@@ -108,11 +108,68 @@ function normalizeNumberArray(value: unknown): number[] {
   );
 }
 
+function normalizePlayerWindowContinuity(
+  value: unknown,
+): PlayerWindowContinuity | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const continuityId = typeof candidate['continuityId'] === 'string'
+    ? candidate['continuityId'].trim()
+    : '';
+  const ownerId = typeof candidate['ownerId'] === 'string'
+    ? candidate['ownerId'].trim()
+    : '';
+  const rosterSlotId = typeof candidate['rosterSlotId'] === 'string'
+    ? candidate['rosterSlotId'].trim()
+    : '';
+  const assetKey = typeof candidate['assetKey'] === 'string'
+    ? candidate['assetKey'].trim()
+    : '';
+
+  if (
+    candidate['schemaVersion'] !== 1 ||
+    !continuityId ||
+    !ownerId ||
+    !rosterSlotId ||
+    !assetKey ||
+    !continuityId.startsWith(`${ownerId}::${rosterSlotId}::${assetKey}::`)
+  ) {
+    return undefined;
+  }
+
+  const lastScheduleTeamAbbreviation =
+    typeof candidate['lastScheduleTeamAbbreviation'] === 'string' &&
+    /^[A-Z0-9]{2,4}$/.test(candidate['lastScheduleTeamAbbreviation'].trim().toUpperCase())
+      ? candidate['lastScheduleTeamAbbreviation'].trim().toUpperCase()
+      : undefined;
+
+  return {
+    schemaVersion: 1,
+    continuityId,
+    ownerId,
+    rosterSlotId,
+    assetKey,
+    priorAssignedGameIds: [
+      ...new Set(normalizeNumberArray(candidate['priorAssignedGameIds'])),
+    ],
+    ...(lastScheduleTeamAbbreviation
+      ? { lastScheduleTeamAbbreviation }
+      : {}),
+  };
+}
+
 function normalizeAssetCycleWindow(
   value: Partial<FantasyAssetCycleWindow>,
   ownerId: string,
   cycleNumber: number,
 ): FantasyAssetCycleWindow {
+  const playerWindowContinuity = normalizePlayerWindowContinuity(
+    value.playerWindowContinuity,
+  );
+
   return {
     id: value.id ?? '',
     ownerId: value.ownerId ?? ownerId,
@@ -138,6 +195,7 @@ function normalizeAssetCycleWindow(
       value.sourceTeamAbbreviationByGameId,
     ),
     teamIdentityChanged: value.teamIdentityChanged === true,
+    ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -236,6 +294,10 @@ function buildWindow(
   const startedAt =
     status === 'scheduled' ? (previous?.startedAt ?? null) : (previous?.startedAt ?? nowIso);
   const completedAt = status === 'complete' ? (previous?.completedAt ?? nowIso) : null;
+  const playerWindowContinuity =
+    summary?.playerWindowContinuity ??
+    previous?.playerWindowContinuity ??
+    normalizePlayerWindowContinuity(pick.playerWindowContinuity);
 
   return {
     id: windowId,
@@ -262,6 +324,7 @@ function buildWindow(
       normalizeStringRecord(previous?.sourceTeamAbbreviationByGameId),
     teamIdentityChanged:
       summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
+    ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     completedGameIds: summary?.completedGameIds ?? normalizeNumberArray(previous?.completedGameIds),
     liveGameIds: summary?.liveGameIds ?? normalizeNumberArray(previous?.liveGameIds),
     appearanceGameIds:
@@ -314,6 +377,7 @@ function stableWindowFingerprint(teamWindows: FantasyTeamCycleWindows): string {
       scheduledGameIds: window.scheduledGameIds,
       scheduledGameDates: window.scheduledGameDates,
       scheduledGameLabels: window.scheduledGameLabels,
+      playerWindowContinuity: window.playerWindowContinuity ?? null,
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,

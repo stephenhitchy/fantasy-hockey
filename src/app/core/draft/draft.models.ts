@@ -429,6 +429,16 @@ export interface DraftPickPreview {
   ownerId: string;
 }
 
+export interface PlayerWindowContinuity {
+  schemaVersion: 1;
+  continuityId: string;
+  ownerId: string;
+  rosterSlotId: string;
+  assetKey: string;
+  priorAssignedGameIds: number[];
+  lastScheduleTeamAbbreviation?: string;
+}
+
 export interface DraftPick extends DraftPickPreview {
   asset: DraftableAsset;
 
@@ -449,6 +459,9 @@ export interface DraftPick extends DraftPickPreview {
    * trade handling when a banked playoff pick is assigned in a later cycle.
    */
   sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
+  playerWindowContinuity?: PlayerWindowContinuity;
+  snapshottedAt?: unknown;
+  snapshotSource?: string;
   snapshotOrder?: number;
   playoffWindowNumber?: number;
 

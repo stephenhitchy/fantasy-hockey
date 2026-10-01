@@ -179,20 +179,20 @@ test('roster action emphasis and IR activation layout remain accessible and resp
   ]);
 
   assert.match(template, /hero-add-drop-action/);
-  assert.match(template, /activate-action roster-promote-action/);
-  assert.match(template, /mini-roster-action roster-promote-action/);
+  assert.match(template, /class="roster-manager-action-list"/);
+  assert.match(template, /\[class\]="getRosterManagerActionClass\(action\)"/);
+  assert.match(template, /\(click\)="handleRosterManagerAction\(action\.id\)"/);
   assert.match(template, /<fieldset class="ir-activation-choice-group">/);
   assert.match(template, /<fieldset class="ir-activation-choice-group ir-activation-compact-choice-group">/);
   assert.match(template, /class="ir-activation-target ir-activation-target--no-logo"/);
   assert.match(template, /<legend>[\s\S]*Choose the starting/);
-  assert.match(styles, /\.mini-roster-action\.roster-promote-action[\s\S]*background: var\(--rr-info\);[\s\S]*color: var\(--rr-scoreboard\);/);
-  assert.match(styles, /\.mini-roster-action\.roster-promote-action:focus-visible/);
-  assert.match(styles, /\.mini-roster-action\.roster-promote-action:disabled/);
+  assert.match(mobileStyles, /\.roster-manager-action--primary[\s\S]*background: var\(--rr-info\);[\s\S]*color: var\(--rr-scoreboard\);/);
+  assert.match(mobileStyles, /\.roster-manager-action--primary:focus-visible/);
+  assert.match(mobileStyles, /\.roster-manager-action:disabled/);
   assert.match(styles, /\.ir-activation-target:focus-within/);
   assert.match(styles, /@media \(max-width: 420px\)[\s\S]*\.ir-activation-dialog-actions[\s\S]*flex-direction: column-reverse/);
   assert.match(styles, /\.ir-activation-target\.ir-activation-target--no-logo[\s\S]*grid-template-columns: 18px minmax\(0, 1fr\) auto/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.ir-activation-target[\s\S]*transition: none/);
-  assert.match(mobileStyles, /\.roster-manager-action--primary[\s\S]*background: var\(--rr-info\);[\s\S]*color: var\(--rr-scoreboard\);/);
   assert.ok(contrastRatio('#78b7ff', '#07111d') >= 4.5);
 });
 

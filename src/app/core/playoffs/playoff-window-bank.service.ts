@@ -234,6 +234,10 @@ export function normalizePlayoffWindowBank(
     assignedRoundNumber:
       typeof value.assignedRoundNumber === 'number' ? value.assignedRoundNumber : null,
     expectedRosterSlotIds: normalizeStringArray(value.expectedRosterSlotIds),
+    playerWindowContinuitySchemaVersion:
+      typeof value.playerWindowContinuitySchemaVersion === 'number'
+        ? value.playerWindowContinuitySchemaVersion
+        : 0,
     picks: Array.isArray(value.picks) ? (value.picks as DraftPick[]) : [],
     slotWindows: normalizeSlotWindows(value.slotWindows),
     teamScore: typeof value.teamScore === 'number' ? value.teamScore : 0,

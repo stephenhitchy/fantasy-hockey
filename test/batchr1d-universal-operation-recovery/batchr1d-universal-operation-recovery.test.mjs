@@ -487,6 +487,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // D1L-C follows stable player identity across live NHL team changes.
     'shared/core/cycle/live-player-team-window.util.ts',
     'shared/core/nhl/nhl-player-team-identity.service.ts',
+    // D1L-E adds the isolated per-stint game-ownership continuity ledger.
+    'shared/core/cycle/player-window-continuity.util.ts',
     // D1M adds an isolated, detect-only final-score reconciliation classifier.
     'shared/core/nhl/final-score-reconciliation.util.ts',
     // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
