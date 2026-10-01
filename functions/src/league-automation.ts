@@ -81,6 +81,7 @@ import {
   FantasyAssetCycleWindow,
   FantasyCycle,
 } from './shared/core/cycle/cycle.models';
+import { resolvePlayerWindowContinuity } from './shared/core/cycle/player-window-continuity.util';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
 import {
   buildHistoricalReplaySkaterTimelineEntries,
@@ -4398,42 +4399,132 @@ async function publishCycleSnapshot(
   leagueId: string,
   workerId: string,
   cycle: FantasyCycle,
+  picks: DraftPick[],
   season: string,
   result: CycleScoringResult,
   scoringRulesFingerprint: string,
-  previous: PreviousScoringSnapshot | null,
 ): Promise<boolean> {
   const scoringFingerprint =
     `${scoringRulesFingerprint}::${result.dataFingerprint}`;
+  const snapshotRef = getCycleSnapshotRef(leagueId, cycle.cycleNumber);
+  const cycleRosterPicksQuery = db.collection(
+    `leagues/${leagueId}/cycles/cycle-${cycle.cycleNumber}/rosterPicks`,
+  );
+  const teamWindowsQuery = db.collection(
+    `leagues/${leagueId}/cycles/cycle-${cycle.cycleNumber}/teamWindows`,
+  );
+  const getRosterSlotId = (pick: DraftPick) =>
+    pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
+  const getAssignmentKey = (pick: DraftPick) =>
+    `${pick.ownerId}::${getRosterSlotId(pick)}`;
+  const getContinuityId = (pick: DraftPick): string | undefined =>
+    resolvePlayerWindowContinuity({
+      value: pick.playerWindowContinuity,
+      ownerId: pick.ownerId,
+      rosterSlotId: getRosterSlotId(pick),
+      asset: pick.asset,
+    })?.continuityId;
 
-  if (previous?.scoringFingerprint === scoringFingerprint) {
-    return false;
-  }
+  return db.runTransaction(async (transaction) => {
+    const [currentSnapshot, savedPicksSnapshot, savedTeamWindowsSnapshot] =
+      await Promise.all([
+        transaction.get(snapshotRef),
+        transaction.get(cycleRosterPicksQuery),
+        transaction.get(teamWindowsQuery),
+      ]);
+    const savedPickByAssignmentKey = new Map(
+      savedPicksSnapshot.docs.map((document) => {
+        const savedPick = document.data() as DraftPick;
+        return [getAssignmentKey(savedPick), savedPick] as const;
+      }),
+    );
 
-  const snapshot: SharedCycleScoringSnapshot = {
-    id: `cycle-${cycle.cycleNumber}`,
-    schemaVersion: 1,
-    leagueId,
-    cycleNumber: cycle.cycleNumber,
-    season,
-    scoringFingerprint,
-    scoringRulesFingerprint,
-    result,
-    workerUserId: 'server',
-    workerClientId: workerId,
-  };
+    if (
+      savedPickByAssignmentKey.size !== picks.length ||
+      savedPicksSnapshot.size !== picks.length
+    ) {
+      throw new Error(
+        `Cycle ${cycle.cycleNumber} roster assignments changed before live ` +
+        'snapshot publication. The stale snapshot was not published.',
+      );
+    }
 
-  await getCycleSnapshotRef(leagueId, cycle.cycleNumber).set(
-    {
+    const savedTeamWindowsByOwnerId = new Map(
+      savedTeamWindowsSnapshot.docs.map((document) => [
+        document.id,
+        normalizeFantasyTeamCycleWindows(
+          document.id,
+          cycle.cycleNumber,
+          document.data(),
+        ),
+      ] as const),
+    );
+
+    for (const pick of picks) {
+      const rosterSlotId = getRosterSlotId(pick);
+      const savedPick = savedPickByAssignmentKey.get(getAssignmentKey(pick));
+      const savedWindow = savedTeamWindowsByOwnerId
+        .get(pick.ownerId)
+        ?.windows.find((window) => window.rosterSlotId === rosterSlotId);
+      const resultWindowId = pick.cycleWindowId ??
+        `${pick.ownerId}__${rosterSlotId}__cycle-${cycle.cycleNumber}`;
+      const resultWindow = result.windowScores[resultWindowId];
+      const expectedContinuityId = getContinuityId(pick);
+      const savedPickContinuityId = savedPick
+        ? getContinuityId(savedPick)
+        : undefined;
+      const savedWindowContinuityId = savedWindow?.playerWindowContinuity
+        ?.continuityId;
+
+      if (
+        !savedPick ||
+        !savedWindow ||
+        !resultWindow ||
+        savedPick.asset.assetKey !== pick.asset.assetKey ||
+        savedWindow.assetKey !== pick.asset.assetKey ||
+        resultWindow.assetKey !== pick.asset.assetKey ||
+        savedPickContinuityId !== expectedContinuityId ||
+        savedWindowContinuityId !== expectedContinuityId ||
+        resultWindow.playerWindowContinuityId !== expectedContinuityId
+      ) {
+        throw new Error(
+          `Cycle ${cycle.cycleNumber} roster assignment changed before live ` +
+          `snapshot publication for ${pick.ownerId}/${rosterSlotId}. ` +
+          'The stale snapshot was not published.',
+        );
+      }
+    }
+
+    if (currentSnapshot.data()?.['scoringFingerprint'] === scoringFingerprint) {
+      return false;
+    }
+
+    const snapshot: SharedCycleScoringSnapshot = {
+      id: `cycle-${cycle.cycleNumber}`,
+      schemaVersion: 1,
+      leagueId,
+      cycleNumber: cycle.cycleNumber,
+      season,
+      scoringFingerprint,
+      scoringRulesFingerprint,
+      result,
+      workerUserId: 'server',
+      workerClientId: workerId,
+    };
+
+    // This document is wholly owned by league automation. Replacing it keeps
+    // removed asset/window keys from surviving a recursive merge after a
+    // roster change.
+    transaction.set(snapshotRef, {
       ...snapshot,
       refreshedAt: FieldValue.serverTimestamp(),
-      createdAt: previous?.createdAt ?? FieldValue.serverTimestamp(),
+      createdAt: currentSnapshot.data()?.['createdAt'] ??
+        FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+    });
 
-  return true;
+    return true;
+  });
 }
 
 function allCycleTeamsComplete(result: CycleScoringResult): boolean {
@@ -4911,7 +5002,10 @@ async function runLeagueAutomation(
           ),
         );
 
-        if (pendingMoveReconciliation.activatedMoveCount > 0) {
+        if (
+          pendingMoveReconciliation.activatedMoveCount > 0 ||
+          pendingMoveReconciliation.repairedImmediateMoveWindowCount > 0
+        ) {
           passTransitionOccurred = true;
         }
 
@@ -5087,27 +5181,6 @@ async function runLeagueAutomation(
             scheduledGameCount: summary.scheduledGameIds.length,
           });
         }
-        const published = await phaseTimer.measure(
-          'snapshot-publication',
-          () => publishCycleSnapshot(
-            leagueId,
-            workerId,
-            cycle,
-            snapshotSeason,
-            result,
-            scoringRulesFingerprint,
-            previous,
-          ),
-        );
-
-        if (published) {
-          publishedSnapshotCount += 1;
-        } else {
-          skippedSnapshotCount += 1;
-        }
-
-        allResults.push(result);
-
         const changedPeriod = await phaseTimer.measure(
           'window-and-competition-persistence',
           () => persistServerScoring(
@@ -5128,6 +5201,26 @@ async function runLeagueAutomation(
             livePlayerTeamIdentity?.generatedAt,
           ),
         );
+        const published = await phaseTimer.measure(
+          'snapshot-publication',
+          () => publishCycleSnapshot(
+            leagueId,
+            workerId,
+            cycle,
+            picks,
+            snapshotSeason,
+            result,
+            scoringRulesFingerprint,
+          ),
+        );
+
+        if (published) {
+          publishedSnapshotCount += 1;
+        } else {
+          skippedSnapshotCount += 1;
+        }
+
+        allResults.push(result);
 
         passTransitionOccurred =
           passTransitionOccurred || changedPeriod;

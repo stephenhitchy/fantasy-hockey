@@ -79,6 +79,32 @@ test('asynchronous regular rollover carries a continuing skater and resets a que
   );
 });
 
+test('legacy immediate-move recovery requires exact audit, schedule, and untouched evidence', async () => {
+  const cycleSource = await source('functions/src/shared/core/cycle/cycle.service.ts');
+  const reconciliation = section(
+    cycleSource,
+    'export async function reconcilePendingRosterMovesForRegularSeasonCycle',
+    'export async function reconcileRegularSeasonCycleMatchupCompletion',
+  );
+
+  assert.match(
+    reconciliation,
+    /where\('immediateUntouchedWindow', '==', true\)/,
+  );
+  assert.match(reconciliation, /matchingAudits\.length !== 1/);
+  assert.match(reconciliation, /transaction\.get\(cycleRef\)/);
+  assert.match(reconciliation, /savedCycle\.playerWindowContinuitySchemaVersion/);
+  assert.match(reconciliation, /legacyImmediateMoveAuditMatches\(/);
+  assert.match(reconciliation, /staleScheduleWasUnstartedAtAssignment\(/);
+  assert.match(reconciliation, /legacyImmediateMoveWindowIsProvablyUntouched\(/);
+  assert.match(reconciliation, /numberArraysAgree\(\s*persistedWindow\.scheduledGameIds/);
+  assert.match(
+    reconciliation,
+    /snapshotSource: RECONCILED_IMMEDIATE_ROSTER_MOVE_SNAPSHOT_SOURCE/,
+  );
+  assert.match(reconciliation, /snapshottedAt: pick\.snapshottedAt/);
+});
+
 test('an immediate roster removal deletes its snapshot and an immediate incoming asset gets a fresh lineage', async () => {
   const rosterMoveSource = await source('functions/src/roster-moves.ts');
   const immediateMove = section(

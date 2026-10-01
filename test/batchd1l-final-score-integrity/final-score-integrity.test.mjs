@@ -515,6 +515,123 @@ test('the real scorer retries Game 6 once and keeps Game 7 in the next window', 
   );
 });
 
+test('schedule retries exclude a replaced asset but retain both clubs for a same-stint NHL trade', async (t) => {
+  const requestedTeams = [];
+  const scheduleByTeam = new Map([
+    ['DET', [1, 2, 3, 4, 5, 6]],
+    ['CBJ', [101, 102, 103, 104, 105, 106]],
+  ]);
+  t.mock.method(
+    nhlApi,
+    'getNhlTeamSeasonSchedule',
+    async (teamAbbreviation) => {
+      requestedTeams.push(teamAbbreviation);
+      return (scheduleByTeam.get(teamAbbreviation) ?? []).map((gameId, index) => ({
+        id: gameId,
+        gameDate: `2026-11-${String(index + 1).padStart(2, '0')}`,
+        startTimeUTC: `2026-11-${String(index + 1).padStart(2, '0')}T23:00:00.000Z`,
+        gameType: 2,
+        gameState: 'FUT',
+        homeTeam: { abbrev: teamAbbreviation },
+        awayTeam: { abbrev: 'SEA' },
+      }));
+    },
+  );
+  t.mock.method(nhlApi, 'getRegularSeasonGameLog', async () => ({ gameLog: [] }));
+  t.mock.method(nhlApi, 'getGameBoxscore', async () => {
+    throw new Error('A future game must not load a boxscore.');
+  });
+  t.mock.method(nhlApi, 'getGamePlayByPlay', async () => {
+    throw new Error('A future game must not load play-by-play.');
+  });
+
+  const outgoingAsset = {
+    ...skaterAsset,
+    assetKey: 'skater-outgoing',
+    player: {
+      ...skaterAsset.player,
+      id: 31,
+      nhlTeamAbbreviation: 'DET',
+    },
+  };
+  const incomingAsset = {
+    ...skaterAsset,
+    assetKey: 'skater-incoming',
+    player: {
+      ...skaterAsset.player,
+      id: 32,
+      nhlTeamAbbreviation: 'CBJ',
+    },
+  };
+  const targetGameIdsByTeam = Object.fromEntries(scheduleByTeam);
+  const outgoingPick = {
+    ...scoringPick(outgoingAsset),
+    sourceNhlTargetGameIds: targetGameIdsByTeam.DET,
+    sourceNhlTargetGameIdsByTeam: targetGameIdsByTeam,
+  };
+  const previousResult = await calculateTestCycle({
+    picks: [outgoingPick],
+    sourceNhlTargetGameIdsByTeam: targetGameIdsByTeam,
+  });
+
+  requestedTeams.length = 0;
+  const incomingContinuity = {
+    schemaVersion: 1,
+    continuityId: 'owner-a::C-1::skater-incoming::move-transaction-1',
+    ownerId: 'owner-a',
+    rosterSlotId: 'C-1',
+    assetKey: 'skater-incoming',
+    assignmentNotBeforeMilliseconds: Date.parse('2026-10-01T00:00:00.000Z'),
+    priorAssignedGameIds: [],
+    lastScheduleTeamAbbreviation: 'CBJ',
+  };
+  const incomingPick = {
+    ...scoringPick(incomingAsset),
+    playerWindowContinuity: incomingContinuity,
+    sourceNhlTargetGameIds: targetGameIdsByTeam.CBJ,
+    sourceNhlTargetGameIdsByTeam: targetGameIdsByTeam,
+  };
+  await calculateTestCycle({
+    picks: [incomingPick],
+    sourceNhlTargetGameIdsByTeam: targetGameIdsByTeam,
+    previousResult,
+  });
+
+  assert.deepEqual(requestedTeams, ['CBJ']);
+
+  requestedTeams.length = 0;
+  const sameAssetContinuity = {
+    schemaVersion: 1,
+    continuityId: 'owner-a::C-1::skater-outgoing::draft-cycle-1',
+    ownerId: 'owner-a',
+    rosterSlotId: 'C-1',
+    assetKey: 'skater-outgoing',
+    priorAssignedGameIds: [],
+    lastScheduleTeamAbbreviation: 'DET',
+  };
+  const sameStintPick = {
+    ...outgoingPick,
+    playerWindowContinuity: sameAssetContinuity,
+  };
+  const sameStintPrevious = await calculateTestCycle({
+    picks: [sameStintPick],
+    sourceNhlTargetGameIdsByTeam: targetGameIdsByTeam,
+  });
+
+  requestedTeams.length = 0;
+  await calculateTestCycle({
+    picks: [sameStintPick],
+    sourceNhlTargetGameIdsByTeam: targetGameIdsByTeam,
+    currentTeamAbbreviationByPlayerId: new Map([[31, 'CBJ']]),
+    currentTeamConfirmedAtByPlayerId: new Map([
+      [31, '2026-10-15T00:00:00.000Z'],
+    ]),
+    previousResult: sameStintPrevious,
+  });
+
+  assert.deepEqual(requestedTeams, ['CBJ', 'DET']);
+});
+
 test('the real scorer settles a proven nonappearance as a reusable zero', async (t) => {
   const schedule = teamScheduleWithFinalCount(6, 1);
   mockDirectNhlSources(t, {
@@ -1303,6 +1420,430 @@ test('legacy ensure preserves an immediate move boundary instead of its later wr
     savedTeamWindows.data().windows[0]
       .playerWindowContinuity.assignmentNotBeforeMilliseconds,
     boundaryMilliseconds,
+  );
+});
+
+test('legacy immediate roster-move reconciliation repairs only a provably untouched future window', async (t) => {
+  const leagueId = `legacy-immediate-window-${randomUUID()}`;
+  const nowMilliseconds = Date.parse('2026-10-01T17:30:00.000Z');
+  const assignmentBoundaryMilliseconds = Date.parse(
+    '2026-10-01T17:26:07.386Z',
+  );
+  const outgoingAsset = {
+    ...skaterAsset,
+    assetKey: 'skater-11',
+    player: {
+      ...skaterAsset.player,
+      id: 11,
+      fullName: 'Outgoing Detroit Skater',
+      nhlTeamAbbreviation: 'DET',
+    },
+  };
+  const incomingAsset = {
+    ...skaterAsset,
+    assetKey: 'skater-12',
+    player: {
+      ...skaterAsset.player,
+      id: 12,
+      fullName: 'Incoming Columbus Skater',
+      nhlTeamAbbreviation: 'CBJ',
+    },
+  };
+  const outgoingTargetGameIds = [1, 2, 3, 4, 5, 6];
+  const incomingTargetGameIds = [101, 102, 103, 104, 105, 106];
+  const sourceNhlTargetGameIdsByTeam = {
+    DET: outgoingTargetGameIds,
+    CBJ: incomingTargetGameIds,
+  };
+  const cycle = {
+    id: 'cycle-1',
+    cycleNumber: 1,
+    sourceNhlBlockNumber: 1,
+    sourceNhlTargetGameIdsByTeam,
+    status: 'active',
+    phase: 'regular_season',
+    matchupIds: [],
+  };
+  const cycleRef = firestore.doc(`leagues/${leagueId}/cycles/cycle-1`);
+  const pickRef = firestore.doc(
+    `leagues/${leagueId}/cycles/cycle-1/rosterPicks/owner-a__C-1`,
+  );
+  const rosterRef = firestore.doc(
+    `leagues/${leagueId}/teams/owner-a/roster/current`,
+  );
+  const teamWindowsRef = firestore.doc(
+    `leagues/${leagueId}/cycles/cycle-1/teamWindows/owner-a`,
+  );
+  const auditRef = firestore.doc(
+    `leagues/${leagueId}/transactions/immediate-swap-audit`,
+  );
+
+  t.mock.method(Date, 'now', () => nowMilliseconds);
+  t.mock.method(
+    nhlApi,
+    'getNhlTeamSeasonSchedule',
+    async (teamAbbreviation, season) => {
+      assert.equal(teamAbbreviation, 'DET');
+      assert.equal(season, '20262027');
+      return outgoingTargetGameIds.map((gameId, index) => ({
+        id: gameId,
+        gameDate: `2026-10-${String(index + 2).padStart(2, '0')}`,
+        startTimeUTC: `2026-10-${String(index + 2).padStart(2, '0')}T23:00:00.000Z`,
+        gameType: 2,
+        gameState: 'FUT',
+        homeTeam: { abbrev: 'DET' },
+        awayTeam: { abbrev: 'SEA' },
+      }));
+    },
+  );
+  await Promise.all([
+    cycleRef.set({
+      ...cycle,
+      playerWindowContinuitySchemaVersion: 0,
+    }),
+    pickRef.set({
+      overallPick: 1,
+      round: 1,
+      pickInRound: 1,
+      ownerId: 'owner-a',
+      rosterArea: 'active',
+      rosterSlotId: 'C-1',
+      cycleWindowId: 'owner-a__C-1__cycle-1',
+      snapshotCycleNumber: 1,
+      sourceNhlBlockNumber: 1,
+      sourceNhlTargetGameIds: outgoingTargetGameIds,
+      sourceNhlTargetGameIdsByTeam,
+      snapshotSource: 'immediate-untouched-roster-move',
+      snapshottedAt: Timestamp.fromMillis(assignmentBoundaryMilliseconds),
+      asset: incomingAsset,
+    }),
+    rosterRef.set({
+      schemaVersion: 1,
+      activeSlots: [{
+        slotId: 'C-1',
+        position: 'C',
+        slotNumber: 1,
+        asset: {
+          ...incomingAsset,
+          cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+          rosterStatus: 'active',
+        },
+        pendingMove: null,
+        openFromCycleNumber: null,
+      }],
+      benchSlots: [],
+      irSlots: [],
+    }),
+    auditRef.set({
+      type: 'active-bench-swap-activated',
+      ownerId: 'owner-a',
+      activeSlotId: 'C-1',
+      rosterSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      effectiveCycleNumber: 1,
+      immediateUntouchedWindow: true,
+      movedAsset: {
+        ...incomingAsset,
+        cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+        rosterStatus: 'active',
+      },
+      createdAt: Timestamp.fromMillis(assignmentBoundaryMilliseconds),
+    }),
+    teamWindowsRef.set({
+      id: 'owner-a',
+      ownerId: 'owner-a',
+      cycleNumber: 1,
+      expectedRosterSlotIds: ['C-1'],
+      windows: [{
+        id: 'owner-a__C-1__cycle-1',
+        ownerId: 'owner-a',
+        rosterSlotId: 'C-1',
+        cycleNumber: 1,
+        sourceNhlBlockNumber: 1,
+        position: 'C',
+        assetKey: outgoingAsset.assetKey,
+        asset: outgoingAsset,
+        status: 'scheduled',
+        scheduledGameIds: outgoingTargetGameIds,
+        scheduledGameDates: [
+          '2026-10-02',
+          '2026-10-03',
+          '2026-10-04',
+          '2026-10-05',
+          '2026-10-06',
+          '2026-10-07',
+        ],
+        scheduledGameLabels: [],
+        completedGameIds: [],
+        liveGameIds: [],
+        appearanceGameIds: [],
+        gameScores: {},
+        gameStates: {},
+        gameInputCompleteness: {},
+        incompleteFinalGameIds: [],
+        scheduledGames: 6,
+        gamesPlayed: 0,
+        actualGamesPlayed: 0,
+        gamesLeft: 6,
+        fantasyPoints: 0,
+        firstScheduledGameDate: '2026-10-02',
+        lastScheduledGameDate: '2026-10-07',
+        startedAt: null,
+        completedAt: null,
+      }],
+      completedWindowCount: 0,
+      totalWindowCount: 1,
+      status: 'scheduled',
+    }),
+  ]);
+
+  const first = await cycleService.reconcilePendingRosterMovesForRegularSeasonCycle(
+    leagueId,
+    [fantasyTeam('owner-a')],
+    cycle,
+  );
+  const duplicate = await cycleService.reconcilePendingRosterMovesForRegularSeasonCycle(
+    leagueId,
+    [fantasyTeam('owner-a')],
+    cycle,
+  );
+  const migrated = await cycleService.ensureCyclePlayerWindowContinuity(
+    leagueId,
+    cycle,
+  );
+  const [savedCycle, savedPick, savedRoster, savedTeamWindows] = await Promise.all([
+    cycleRef.get(),
+    pickRef.get(),
+    rosterRef.get(),
+    teamWindowsRef.get(),
+  ]);
+
+  assert.equal(first.activatedMoveCount, 0);
+  assert.equal(first.repairedImmediateMoveWindowCount, 1);
+  assert.deepEqual(first.repairedOwnerIds, ['owner-a']);
+  assert.equal(duplicate.repairedImmediateMoveWindowCount, 0);
+  assert.equal(savedRoster.data().activeSlots[0].asset.assetKey, incomingAsset.assetKey);
+  assert.equal(savedPick.data().asset.assetKey, incomingAsset.assetKey);
+  assert.equal(
+    savedPick.data().snapshotSource,
+    'immediate-untouched-roster-move-reconciled',
+  );
+  assert.equal(
+    savedPick.data().snapshottedAt.toMillis(),
+    assignmentBoundaryMilliseconds,
+  );
+  assert.deepEqual(savedPick.data().sourceNhlTargetGameIds, incomingTargetGameIds);
+  assert.equal(
+    savedPick.data().playerWindowContinuity.assignmentNotBeforeMilliseconds,
+    assignmentBoundaryMilliseconds,
+  );
+  assert.equal(savedTeamWindows.data().windows[0].assetKey, incomingAsset.assetKey);
+  assert.deepEqual(savedTeamWindows.data().windows[0].scheduledGameIds, []);
+  assert.deepEqual(savedTeamWindows.data().windows[0].gameStates, {});
+  assert.equal(savedTeamWindows.data().windows[0].fantasyPoints, 0);
+  assert.equal(savedCycle.data().playerWindowContinuitySchemaVersion, 1);
+  assert.equal(migrated.length, 1);
+});
+
+test('legacy immediate roster-move reconciliation fails closed for same-day or started windows', async (t) => {
+  const leagueId = `legacy-immediate-window-closed-${randomUUID()}`;
+  const nowMilliseconds = Date.parse('2026-10-01T17:30:00.000Z');
+  const sourceNhlTargetGameIdsByTeam = {
+    DET: [1, 2, 3, 4, 5, 6],
+    CBJ: [101, 102, 103, 104, 105, 106],
+  };
+  const cycle = {
+    id: 'cycle-1',
+    cycleNumber: 1,
+    sourceNhlBlockNumber: 1,
+    sourceNhlTargetGameIdsByTeam,
+    status: 'active',
+    phase: 'regular_season',
+    matchupIds: [],
+  };
+
+  t.mock.method(Date, 'now', () => nowMilliseconds);
+  t.mock.method(
+    nhlApi,
+    'getNhlTeamSeasonSchedule',
+    async () => sourceNhlTargetGameIdsByTeam.DET.map((gameId, index) => ({
+      id: gameId,
+      gameDate: `2026-10-${String(index + 1).padStart(2, '0')}`,
+      startTimeUTC: index === 0
+        ? '2026-10-01T16:00:00.000Z'
+        : `2026-10-${String(index + 2).padStart(2, '0')}T23:00:00.000Z`,
+      gameType: 2,
+      gameState: index === 0 ? 'FINAL' : 'FUT',
+      homeTeam: { abbrev: 'DET' },
+      awayTeam: { abbrev: 'SEA' },
+    })),
+  );
+
+  const seedOwner = async (ownerId, started) => {
+    const outgoingAsset = {
+      ...skaterAsset,
+      assetKey: `skater-${ownerId}-out`,
+      player: {
+        ...skaterAsset.player,
+        id: started ? 21 : 11,
+        nhlTeamAbbreviation: 'DET',
+      },
+    };
+    const incomingAsset = {
+      ...skaterAsset,
+      assetKey: `skater-${ownerId}-in`,
+      player: {
+        ...skaterAsset.player,
+        id: started ? 22 : 12,
+        nhlTeamAbbreviation: 'CBJ',
+      },
+    };
+    const pickRef = firestore.doc(
+      `leagues/${leagueId}/cycles/cycle-1/rosterPicks/${ownerId}__C-1`,
+    );
+    const rosterRef = firestore.doc(
+      `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+    );
+    const teamWindowsRef = firestore.doc(
+      `leagues/${leagueId}/cycles/cycle-1/teamWindows/${ownerId}`,
+    );
+    const auditRef = firestore.doc(
+      `leagues/${leagueId}/transactions/audit-${ownerId}`,
+    );
+    const assignmentBoundaryMilliseconds = nowMilliseconds - 60_000;
+
+    await Promise.all([
+      pickRef.set({
+        overallPick: started ? 2 : 1,
+        round: 1,
+        pickInRound: started ? 2 : 1,
+        ownerId,
+        rosterArea: 'active',
+        rosterSlotId: 'C-1',
+        cycleWindowId: `${ownerId}__C-1__cycle-1`,
+        snapshotCycleNumber: 1,
+        sourceNhlBlockNumber: 1,
+        sourceNhlTargetGameIds: sourceNhlTargetGameIdsByTeam.DET,
+        sourceNhlTargetGameIdsByTeam,
+        snapshotSource: 'immediate-untouched-roster-move',
+        snapshottedAt: Timestamp.fromMillis(assignmentBoundaryMilliseconds),
+        asset: incomingAsset,
+      }),
+      rosterRef.set({
+        schemaVersion: 1,
+        activeSlots: [{
+          slotId: 'C-1',
+          position: 'C',
+          slotNumber: 1,
+          asset: {
+            ...incomingAsset,
+            cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+            rosterStatus: 'active',
+          },
+          pendingMove: null,
+          openFromCycleNumber: null,
+        }],
+        benchSlots: [],
+        irSlots: [],
+      }),
+      auditRef.set({
+        type: 'active-bench-swap-activated',
+        ownerId,
+        activeSlotId: 'C-1',
+        rosterSlotId: 'C-1',
+        benchSlotId: 'B-1',
+        effectiveCycleNumber: 1,
+        immediateUntouchedWindow: true,
+        movedAsset: {
+          ...incomingAsset,
+          cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+          rosterStatus: 'active',
+        },
+        createdAt: Timestamp.fromMillis(assignmentBoundaryMilliseconds),
+      }),
+      teamWindowsRef.set({
+        id: ownerId,
+        ownerId,
+        cycleNumber: 1,
+        expectedRosterSlotIds: ['C-1'],
+        windows: [{
+          id: `${ownerId}__C-1__cycle-1`,
+          ownerId,
+          rosterSlotId: 'C-1',
+          cycleNumber: 1,
+          position: 'C',
+          assetKey: outgoingAsset.assetKey,
+          asset: outgoingAsset,
+          status: started ? 'active' : 'scheduled',
+          scheduledGameIds: sourceNhlTargetGameIdsByTeam.DET,
+          scheduledGameDates: [
+            '2026-10-01',
+            '2026-10-02',
+            '2026-10-03',
+            '2026-10-04',
+            '2026-10-05',
+            '2026-10-06',
+          ],
+          scheduledGameLabels: [],
+          completedGameIds: [],
+          liveGameIds: started ? [1] : [],
+          appearanceGameIds: [],
+          gameScores: {},
+          gameStates: started ? { 1: 'live' } : {},
+          gameInputCompleteness: {},
+          incompleteFinalGameIds: [],
+          scheduledGames: 6,
+          gamesPlayed: 0,
+          actualGamesPlayed: 0,
+          gamesLeft: 6,
+          fantasyPoints: 0,
+          firstScheduledGameDate: '2026-10-01',
+          lastScheduledGameDate: '2026-10-06',
+          startedAt: started ? '2026-10-01T17:00:00.000Z' : null,
+          completedAt: null,
+        }],
+        completedWindowCount: 0,
+        totalWindowCount: 1,
+        status: started ? 'active' : 'scheduled',
+      }),
+    ]);
+
+    return { pickRef, teamWindowsRef, outgoingAsset };
+  };
+
+  await firestore.doc(`leagues/${leagueId}/cycles/cycle-1`).set({
+    ...cycle,
+    playerWindowContinuitySchemaVersion: 0,
+  });
+  const sameDay = await seedOwner('owner-same-day', false);
+  const started = await seedOwner('owner-started', true);
+  const result = await cycleService.reconcilePendingRosterMovesForRegularSeasonCycle(
+    leagueId,
+    [fantasyTeam('owner-same-day'), fantasyTeam('owner-started')],
+    cycle,
+  );
+  const [sameDayPick, sameDayWindows, startedPick, startedWindows] = await Promise.all([
+    sameDay.pickRef.get(),
+    sameDay.teamWindowsRef.get(),
+    started.pickRef.get(),
+    started.teamWindowsRef.get(),
+  ]);
+
+  assert.equal(result.repairedImmediateMoveWindowCount, 0);
+  assert.equal(result.skippedMoveCount, 2);
+  assert.equal(sameDayPick.data().snapshotSource, 'immediate-untouched-roster-move');
+  assert.deepEqual(
+    sameDayPick.data().sourceNhlTargetGameIds,
+    sourceNhlTargetGameIdsByTeam.DET,
+  );
+  assert.equal(
+    sameDayWindows.data().windows[0].assetKey,
+    sameDay.outgoingAsset.assetKey,
+  );
+  assert.equal(startedPick.data().snapshotSource, 'immediate-untouched-roster-move');
+  assert.equal(
+    startedWindows.data().windows[0].assetKey,
+    started.outgoingAsset.assetKey,
   );
 });
 

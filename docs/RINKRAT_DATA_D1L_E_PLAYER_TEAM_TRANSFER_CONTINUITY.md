@@ -127,6 +127,36 @@ stint. Pick and team-window copies are written atomically with the cycle marker.
 Conflicting, missing, divergent, or unstarted historical ownership evidence
 fails closed.
 
+One older immediate active/bench-swap writer could leave the current roster
+pick on the incoming asset while a pre-swap, still-untouched team window kept
+the outgoing asset and its direct NHL target IDs. Regular-season automation
+may repair that exact mixed-version shape before continuity bootstrap, but
+only when all of the following evidence agrees:
+
+- the cycle still uses legacy continuity schema 0;
+- roster and pick agree on the incoming asset and no later move is pending;
+- the pick is labeled as an immediate untouched move and retains its original
+  server snapshot timestamp;
+- exactly one immediate active/bench-swap audit has the same owner, slot,
+  cycle, moved asset, and server timestamp;
+- the stale window has no score, appearance, live/final, completeness, or
+  start/completion evidence; and
+- every stale frozen game has an exact provider start time strictly after the
+  original swap boundary.
+
+The transaction re-reads the cycle, roster, pick, window, and audit, resets
+only that slot, derives the incoming direct IDs only from the cycle's frozen
+all-club plan, and preserves the original assignment boundary. Ambiguous or
+started evidence remains blocked. A second run is a no-op. The derived live
+score is regenerated normally; it is never hand-edited.
+
+Live-score publication now follows guarded team-window persistence and performs
+its own transactional asset/stint comparison before replacing the complete
+function-owned snapshot. This prevents a scorer that raced a roster move from
+publishing stale assignment data and prevents removed nested asset keys from
+surviving a recursive merge. Retry schedule discovery likewise considers only
+prior summaries that still match a current pick's asset and continuity ID.
+
 Legacy playoff banks created before schema 1 remain deliberately fail-closed
 at the next-bank boundary. They require a separate, evidence-preserving bank
 migration before they can advance; the implementation does not guess their

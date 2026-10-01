@@ -69,6 +69,27 @@ rules. It changes only which immutable NHL schedule block a new late-season
 league uses as its starting source window and carries that explicit offset
 through projection and scoring selection.
 
+### Injured players drafted into a historical opening block
+
+An NHL team game in the frozen opening block consumes one of the slot's six
+games even when an injured skater did not appear and earned zero points. Once
+any game in that slot's block is live or final, RinkRat does not replace the
+player retroactively or discard the known zero. Doing so would let a manager
+choose between already-known outcomes and would break immutable six-game
+ownership and seventh-game rollover.
+
+An officially Out, IR, or LTIR skater may still move to a fantasy IR slot under
+the existing server authority. That ownership change lets the manager add a
+replacement now, but the started scoring window remains with the drafted
+player and the replacement begins at the first fair later boundary. DTD alone
+does not qualify for fantasy IR, the three-slot IR limit still applies, and
+team-goalie units are not IR eligible. There is no commissioner injury amnesty
+or post-draft historical-stat rewrite.
+
+Future draft UX may warn more strongly about unavailable skaters or make
+Auto-Draft prefer a healthy legal option, but that is prevention rather than a
+change to an already-started league's competitive results.
+
 ## Mixed-version release requirement
 
 Anchored Projection V11 snapshots use integrity hash schema 3 so the NHL

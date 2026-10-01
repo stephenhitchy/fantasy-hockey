@@ -204,6 +204,59 @@ test('team-window publication uses transactionally checked assignment and stint 
   assert.match(sync, /savedContinuityId !== expectedContinuityId/);
 });
 
+test('live scoring publishes only after durable windows and replaces the whole guarded result', async () => {
+  const automation = await source('functions/src/league-automation.ts');
+  const publication = section(
+    automation,
+    'async function publishCycleSnapshot',
+    'function allCycleTeamsComplete',
+  );
+  const scoringLoop = section(
+    automation,
+    'for (const cycle of activeCycles)',
+    'const refreshedActiveCycles =',
+  );
+
+  assert.match(publication, /return db\.runTransaction\(async \(transaction\) =>/);
+  assert.match(publication, /transaction\.get\(cycleRosterPicksQuery\)/);
+  assert.match(publication, /transaction\.get\(teamWindowsQuery\)/);
+  assert.match(publication, /savedPick\.asset\.assetKey !== pick\.asset\.assetKey/);
+  assert.match(publication, /savedWindow\.assetKey !== pick\.asset\.assetKey/);
+  assert.match(publication, /savedPickContinuityId !== expectedContinuityId/);
+  assert.match(publication, /savedWindowContinuityId !== expectedContinuityId/);
+  assert.match(publication, /transaction\.set\(snapshotRef,/);
+  assert.doesNotMatch(publication, /\{ merge: true \}/);
+  assert.ok(
+    scoringLoop.indexOf("'window-and-competition-persistence'") <
+      scoringLoop.indexOf("'snapshot-publication'"),
+  );
+});
+
+test('retry schedule discovery and fingerprints are scoped to the current asset stint', async () => {
+  const scoring = await source(
+    'functions/src/shared/core/cycle/cycle-scoring.service.ts',
+  );
+  const teamDiscovery = section(
+    scoring,
+    'function getUniqueDraftedTeams',
+    'function getUniqueSkaterAssets',
+  );
+  const fingerprint = section(
+    scoring,
+    'function buildResultFingerprint',
+    'function buildCurrentPickIdentityDigest',
+  );
+
+  assert.match(teamDiscovery, /getPreviousWindowSummary\(/);
+  assert.match(teamDiscovery, /pick\.asset\.assetKey/);
+  assert.match(teamDiscovery, /continuity\?\.continuityId/);
+  assert.doesNotMatch(
+    teamDiscovery,
+    /Object\.values\(\s*input\.previousResult\?\.windowScores/,
+  );
+  assert.match(fingerprint, /summary\.assetKey/);
+});
+
 test('the first playoff bank activates ready queued moves atomically', async () => {
   const cycle = await source(
     'functions/src/shared/core/cycle/cycle.service.ts',

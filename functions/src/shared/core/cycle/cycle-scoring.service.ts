@@ -521,17 +521,31 @@ function getUniqueDraftedTeams(
         teams.add(currentTeam);
       }
     }
-  }
 
-  for (const summary of Object.values(
-    input.previousResult?.windowScores ?? {},
-  )) {
-    if (summary.scheduleTeamAbbreviation) {
-      teams.add(summary.scheduleTeamAbbreviation.trim().toUpperCase());
+    const rosterSlotId = getRosterSlotId(pick);
+    const continuity = resolvePlayerWindowContinuity({
+      value: pick.playerWindowContinuity,
+      ownerId: pick.ownerId,
+      rosterSlotId,
+      asset: pick.asset,
+    });
+    const previousSummary = getPreviousWindowSummary(
+      input.previousResult,
+      getWindowId(pick, getPickWindowCycleNumber(pick, input.cycleNumber)),
+      pick.asset.assetKey,
+      continuity?.continuityId,
+    );
+
+    // Only a prior summary that still belongs to this exact asset stint may
+    // expand schedule loading. A replaced outgoing asset must not keep its
+    // old NHL club in the next retry, while a same-stint NHL trade still needs
+    // both clubs to preserve already-owned games.
+    if (previousSummary?.scheduleTeamAbbreviation) {
+      teams.add(previousSummary.scheduleTeamAbbreviation.trim().toUpperCase());
     }
 
     for (const sourceTeam of Object.values(
-      summary.sourceTeamAbbreviationByGameId ?? {},
+      previousSummary?.sourceTeamAbbreviationByGameId ?? {},
     )) {
       if (sourceTeam) {
         teams.add(sourceTeam.trim().toUpperCase());
@@ -1281,6 +1295,7 @@ function buildResultFingerprint(
       .sort((first, second) => first.windowId.localeCompare(second.windowId))
       .map((summary) => [
         summary.windowId,
+        summary.assetKey,
         `nhl-block-${resolveSourceNhlBlockNumber(summary.sourceNhlBlockNumber, cycleNumber)}`,
         summary.currentScore.toFixed(1),
         summary.gamesPlayed,

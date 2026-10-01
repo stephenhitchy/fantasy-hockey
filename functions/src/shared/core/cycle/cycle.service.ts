@@ -96,6 +96,10 @@ import {
   resolveConsistentPlayerWindowContinuity,
   resolvePlayerWindowContinuity,
 } from './player-window-continuity.util';
+import {
+  getNhlTeamSeasonSchedule,
+  NhlTeamSeasonGame,
+} from '../nhl/nhl-api.service';
 
 const FIRST_CYCLE_NUMBER = 1;
 
@@ -3573,6 +3577,11 @@ interface SavedCycleRosterPick extends DraftPick {
   snapshottedAt?: unknown;
 }
 
+const LEGACY_IMMEDIATE_ROSTER_MOVE_SNAPSHOT_SOURCE =
+  'immediate-untouched-roster-move';
+const RECONCILED_IMMEDIATE_ROSTER_MOVE_SNAPSHOT_SOURCE =
+  'immediate-untouched-roster-move-reconciled';
+
 function getStoredTimestampMilliseconds(value: unknown): number | null {
   if (value instanceof Date) {
     const milliseconds = value.getTime();
@@ -3707,10 +3716,137 @@ function wasPendingMoveQueuedBeforeCycleSnapshot(
     snapshottedAtMilliseconds >= queuedAtMilliseconds;
 }
 
+/**
+ * A legacy immediate-move repair is allowed only when persisted evidence
+ * contains no score or runtime evidence. Exact provider start times are
+ * checked separately against the original move boundary; saved `scheduled`
+ * labels alone are never treated as proof that a game had not started.
+ */
+function legacyImmediateMoveWindowIsProvablyUntouched(
+  window: FantasyAssetCycleWindow,
+): boolean {
+  return (
+    window.status === 'scheduled' &&
+    !fantasyAssetWindowOwnershipStarted(window) &&
+    window.gamesPlayed === 0 &&
+    window.actualGamesPlayed === 0 &&
+    window.fantasyPoints === 0 &&
+    window.completedGameIds.length === 0 &&
+    window.liveGameIds.length === 0 &&
+    window.appearanceGameIds.length === 0 &&
+    (window.incompleteFinalGameIds?.length ?? 0) === 0 &&
+    Object.keys(window.gameScores).length === 0 &&
+    Object.keys(window.gameStates).length === 0 &&
+    Object.keys(window.gameInputCompleteness ?? {}).length === 0
+  );
+}
+
+function getExactSourceNhlTargetGameIdsForAsset(input: {
+  cycle: FantasyCycle;
+  asset: DraftableAsset;
+}): { gameIds: number[]; gameIdsByTeam: Record<string, number[]> } | null {
+  const cycleTargets = normalizeSourceNhlTargetGameIdsByTeam(
+    input.cycle.sourceNhlTargetGameIdsByTeam,
+  );
+  const gameIdsByTeam = cycleTargets;
+  const teamAbbreviation = getAssetTeamAbbreviation(input.asset);
+  const gameIds = gameIdsByTeam[teamAbbreviation] ?? [];
+
+  if (
+    gameIds.length !== defaultScoringRules.requiredGamesPerCycle ||
+    new Set(gameIds).size !== gameIds.length
+  ) {
+    return null;
+  }
+
+  return {
+    gameIds: [...gameIds],
+    gameIdsByTeam,
+  };
+}
+
+function numberArraysAgree(
+  first: readonly number[],
+  second: readonly number[],
+): boolean {
+  return first.length === second.length &&
+    first.every((value, index) => value === second[index]);
+}
+
+function getNhlSeasonForTimestamp(milliseconds: number): string {
+  const date = new Date(milliseconds);
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const seasonStartYear = month >= 7 ? year : year - 1;
+
+  return `${seasonStartYear}${seasonStartYear + 1}`;
+}
+
+interface LegacyImmediateMoveRepairProof {
+  auditDocumentId: string;
+  assignmentNotBeforeMilliseconds: number;
+  staleScheduledGameIds: number[];
+  staleScheduleTeamAbbreviation: string;
+  staleScheduleSeason: string;
+  staleScheduleGames: NhlTeamSeasonGame[];
+}
+
+function legacyImmediateMoveAuditMatches(input: {
+  audit: Record<string, unknown>;
+  ownerId: string;
+  rosterSlotId: string;
+  cycleNumber: number;
+  assetKey: string;
+  assignmentNotBeforeMilliseconds: number;
+}): boolean {
+  const movedAsset = input.audit['movedAsset'] as RosterAsset | null | undefined;
+  const auditSlotId = typeof input.audit['rosterSlotId'] === 'string'
+    ? input.audit['rosterSlotId']
+    : input.audit['activeSlotId'];
+
+  return (
+    input.audit['type'] === 'active-bench-swap-activated' &&
+    input.audit['ownerId'] === input.ownerId &&
+    auditSlotId === input.rosterSlotId &&
+    input.audit['effectiveCycleNumber'] === input.cycleNumber &&
+    input.audit['immediateUntouchedWindow'] === true &&
+    getRosterAssetKey(movedAsset ?? null) === input.assetKey &&
+    getStoredTimestampMilliseconds(input.audit['createdAt']) ===
+      input.assignmentNotBeforeMilliseconds
+  );
+}
+
+function staleScheduleWasUnstartedAtAssignment(
+  proof: LegacyImmediateMoveRepairProof,
+): boolean {
+  if (proof.staleScheduledGameIds.length === 0) {
+    return true;
+  }
+
+  const gameById = new Map(
+    proof.staleScheduleGames.map((game) => [game.id, game] as const),
+  );
+
+  return proof.staleScheduledGameIds.every((gameId) => {
+    const game = gameById.get(gameId);
+    const startMilliseconds = typeof game?.startTimeUTC === 'string'
+      ? Date.parse(game.startTimeUTC)
+      : Number.NaN;
+
+    return (
+      game !== undefined &&
+      Number.isFinite(startMilliseconds) &&
+      startMilliseconds > proof.assignmentNotBeforeMilliseconds
+    );
+  });
+}
+
 export interface PendingRosterMoveReconciliationResult {
   activatedMoveCount: number;
+  repairedImmediateMoveWindowCount: number;
   skippedMoveCount: number;
   activatedOwnerIds: string[];
+  repairedOwnerIds: string[];
 }
 
 /**
@@ -3734,8 +3870,10 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
   if (cycle.phase !== 'regular_season' || cycle.status !== 'active') {
     return {
       activatedMoveCount: 0,
+      repairedImmediateMoveWindowCount: 0,
       skippedMoveCount: 0,
       activatedOwnerIds: [],
+      repairedOwnerIds: [],
     };
   }
 
@@ -3744,8 +3882,10 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
   if (cyclePicks.length === 0) {
     return {
       activatedMoveCount: 0,
+      repairedImmediateMoveWindowCount: 0,
       skippedMoveCount: 0,
       activatedOwnerIds: [],
+      repairedOwnerIds: [],
     };
   }
 
@@ -3762,6 +3902,12 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
     ownerEntries.map(([ownerId]) => getDoc(getTeamRosterRef(leagueId, ownerId))),
   );
   const candidateOwnerIds = new Set<string>();
+  const pendingMoveCandidateOwnerIds = new Set<string>();
+  const legacyImmediateCandidatesBySlotKey = new Map<string, {
+    ownerId: string;
+    rosterSlotId: string;
+    pick: SavedCycleRosterPick;
+  }>();
 
   ownerEntries.forEach(([ownerId, ownerPicks], index) => {
     const rosterSnapshot = rosterPreflightSnapshots[index];
@@ -3789,8 +3935,39 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
         wasPendingMoveQueuedBeforeCycleSnapshot(pendingMove, pick),
       );
     });
+    const hasLegacyImmediateMoveSnapshot = roster.activeSlots.some((slot) => {
+      const pick = pickBySlotId.get(slot.slotId);
+      const isCandidate = Boolean(
+        (cycle.playerWindowContinuitySchemaVersion ?? 0) === 0 &&
+        pick &&
+        !slot.pendingMove &&
+        pick.snapshotSource === LEGACY_IMMEDIATE_ROSTER_MOVE_SNAPSHOT_SOURCE &&
+        getRosterAssetKey(slot.asset) === pick.asset.assetKey &&
+        slot.asset &&
+        getAssetTeamAbbreviation(slot.asset) ===
+          getAssetTeamAbbreviation(pick.asset),
+      );
+
+      if (isCandidate && pick) {
+        legacyImmediateCandidatesBySlotKey.set(
+          `${ownerId}::${slot.slotId}`,
+          {
+            ownerId,
+            rosterSlotId: slot.slotId,
+            pick,
+          },
+        );
+      }
+
+      return isCandidate;
+    });
 
     if (hasReadyMove) {
+      candidateOwnerIds.add(ownerId);
+      pendingMoveCandidateOwnerIds.add(ownerId);
+    }
+
+    if (hasLegacyImmediateMoveSnapshot) {
       candidateOwnerIds.add(ownerId);
     }
   });
@@ -3798,35 +3975,222 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
   if (candidateOwnerIds.size === 0) {
     return {
       activatedMoveCount: 0,
+      repairedImmediateMoveWindowCount: 0,
       skippedMoveCount: 0,
       activatedOwnerIds: [],
+      repairedOwnerIds: [],
     };
   }
 
-  const draftPicksQuery = query(getDraftPicksRef(leagueId), orderBy('overallPick', 'asc'));
-  const [draftPicksSnapshot, draftAuthoritySnapshot] = await Promise.all([
-    getDocs(draftPicksQuery),
-    getDoc(getDraftRef(leagueId)),
-  ]);
-  const draftAuthority = draftAuthoritySnapshot.exists()
-    ? (draftAuthoritySnapshot.data() as FantasyDraft)
-    : null;
-  const projectionAssetsByKey = await loadWindowProjectionAssetsByKey(
-    leagueId,
-    teams.length,
-    cycle.cycleNumber,
-    resolveSourceNhlBlockNumber(cycle.sourceNhlBlockNumber, cycle.cycleNumber),
-    cycle.sourceNhlTargetGameIdsByTeam ?? {},
-    draftAuthority?.seasonWindowAnchorEvidenceHash,
-  );
-  const draftPicks = draftPicksSnapshot.docs.map((snapshot) => snapshot.data() as DraftPick);
-  const draftPickByOwnerAndAssetKey = new Map(
-    draftPicks.map((pick) => [`${pick.ownerId}::${pick.asset.assetKey}`, pick] as const),
-  );
+  const legacyImmediateRepairProofBySlotKey = new Map<
+    string,
+    LegacyImmediateMoveRepairProof
+  >();
+
+  if (
+    (cycle.playerWindowContinuitySchemaVersion ?? 0) === 0 &&
+    legacyImmediateCandidatesBySlotKey.size > 0
+  ) {
+    const legacyCandidateOwnerIds = [
+      ...new Set(
+        [...legacyImmediateCandidatesBySlotKey.values()].map(
+          (candidate) => candidate.ownerId,
+        ),
+      ),
+    ];
+    const [candidateTeamWindowSnapshots, immediateMoveAuditSnapshot] =
+      await Promise.all([
+        Promise.all(
+          legacyCandidateOwnerIds.map((ownerId) =>
+            getDoc(getCycleTeamWindowsRef(
+              leagueId,
+              cycle.cycleNumber,
+              ownerId,
+            )),
+          ),
+        ),
+        getDocs(query(
+          getTransactionsRef(leagueId),
+          where('immediateUntouchedWindow', '==', true),
+          // A truncated audit query is ambiguous, so 501 results disable all
+          // automatic repairs instead of selecting a possibly older move.
+          limit(501),
+        )),
+      ]);
+    const teamWindowsByOwnerId = new Map(
+      legacyCandidateOwnerIds.flatMap((ownerId, index) => {
+        const snapshot = candidateTeamWindowSnapshots[index];
+
+        return snapshot?.exists()
+          ? [[
+              ownerId,
+              normalizeFantasyTeamCycleWindows(
+                ownerId,
+                cycle.cycleNumber,
+                snapshot.data()!,
+              ),
+            ] as const]
+          : [];
+      }),
+    );
+    const auditDocuments = immediateMoveAuditSnapshot.size < 501
+      ? immediateMoveAuditSnapshot.docs
+      : [];
+    const provisionalProofsBySlotKey = new Map<
+      string,
+      Omit<LegacyImmediateMoveRepairProof, 'staleScheduleGames'>
+    >();
+
+    for (const [slotKey, candidate] of legacyImmediateCandidatesBySlotKey) {
+      const assignmentNotBeforeMilliseconds = getStoredTimestampMilliseconds(
+        candidate.pick.snapshottedAt,
+      );
+      const persistedWindow = teamWindowsByOwnerId
+        .get(candidate.ownerId)
+        ?.windows.find(
+          (window) => window.rosterSlotId === candidate.rosterSlotId,
+        );
+      const staleScheduledGameIds = persistedWindow?.scheduledGameIds ?? [];
+      const directTargetGameIds = Array.isArray(
+        candidate.pick.sourceNhlTargetGameIds,
+      )
+        ? candidate.pick.sourceNhlTargetGameIds.filter(
+            (gameId): gameId is number =>
+              Number.isSafeInteger(gameId) && gameId > 0,
+          )
+        : [];
+
+      if (
+        assignmentNotBeforeMilliseconds === null ||
+        !persistedWindow ||
+        persistedWindow.assetKey === candidate.pick.asset.assetKey ||
+        !numberArraysAgree(staleScheduledGameIds, directTargetGameIds)
+      ) {
+        continue;
+      }
+
+      const matchingAudits = auditDocuments.filter((snapshot) =>
+        legacyImmediateMoveAuditMatches({
+          audit: snapshot.data() as Record<string, unknown>,
+          ownerId: candidate.ownerId,
+          rosterSlotId: candidate.rosterSlotId,
+          cycleNumber: cycle.cycleNumber,
+          assetKey: candidate.pick.asset.assetKey,
+          assignmentNotBeforeMilliseconds,
+        })
+      );
+
+      if (matchingAudits.length !== 1) {
+        continue;
+      }
+
+      const staleScheduleTeamAbbreviation = getAssetTeamAbbreviation(
+        persistedWindow.asset,
+      );
+      provisionalProofsBySlotKey.set(slotKey, {
+        auditDocumentId: matchingAudits[0].id,
+        assignmentNotBeforeMilliseconds,
+        staleScheduledGameIds: [...staleScheduledGameIds],
+        staleScheduleTeamAbbreviation,
+        staleScheduleSeason: getNhlSeasonForTimestamp(
+          assignmentNotBeforeMilliseconds,
+        ),
+      });
+    }
+
+    const scheduleRequestKeys = [
+      ...new Set(
+        [...provisionalProofsBySlotKey.values()]
+          .filter((proof) => proof.staleScheduledGameIds.length > 0)
+          .map((proof) =>
+            `${proof.staleScheduleTeamAbbreviation}::${proof.staleScheduleSeason}`
+          ),
+      ),
+    ];
+    const schedulesByRequestKey = new Map<string, NhlTeamSeasonGame[] | null>(
+      await Promise.all(scheduleRequestKeys.map(async (requestKey) => {
+        const [teamAbbreviation, season] = requestKey.split('::');
+
+        try {
+          const schedule = await getNhlTeamSeasonSchedule(
+            teamAbbreviation,
+            season,
+          );
+          return [requestKey, schedule] as const;
+        } catch (error: unknown) {
+          console.warn(
+            `Legacy immediate-move schedule proof was unavailable for ` +
+            `${teamAbbreviation}/${season}.`,
+            error instanceof Error ? error.message : error,
+          );
+          return [requestKey, null] as const;
+        }
+      })),
+    );
+
+    for (const [slotKey, proof] of provisionalProofsBySlotKey) {
+      const requestKey =
+        `${proof.staleScheduleTeamAbbreviation}::${proof.staleScheduleSeason}`;
+      const staleScheduleGames = proof.staleScheduledGameIds.length === 0
+        ? []
+        : schedulesByRequestKey.get(requestKey) ?? null;
+
+      if (!staleScheduleGames) {
+        continue;
+      }
+
+      const completeProof: LegacyImmediateMoveRepairProof = {
+        ...proof,
+        staleScheduleGames,
+      };
+
+      if (staleScheduleWasUnstartedAtAssignment(completeProof)) {
+        legacyImmediateRepairProofBySlotKey.set(slotKey, completeProof);
+      }
+    }
+  }
+
+  let projectionAssetsByKey = new Map<string, DraftableAsset>();
+  let draftPickByOwnerAndAssetKey = new Map<string, DraftPick>();
+
+  // The legacy immediate-move repair uses the already-frozen cycle pick. Do
+  // not make that recovery depend on projection refresh availability when no
+  // delayed queued move also needs projection data.
+  if (pendingMoveCandidateOwnerIds.size > 0) {
+    const draftPicksQuery = query(
+      getDraftPicksRef(leagueId),
+      orderBy('overallPick', 'asc'),
+    );
+    const [draftPicksSnapshot, draftAuthoritySnapshot] = await Promise.all([
+      getDocs(draftPicksQuery),
+      getDoc(getDraftRef(leagueId)),
+    ]);
+    const draftAuthority = draftAuthoritySnapshot.exists()
+      ? (draftAuthoritySnapshot.data() as FantasyDraft)
+      : null;
+    projectionAssetsByKey = await loadWindowProjectionAssetsByKey(
+      leagueId,
+      teams.length,
+      cycle.cycleNumber,
+      resolveSourceNhlBlockNumber(cycle.sourceNhlBlockNumber, cycle.cycleNumber),
+      cycle.sourceNhlTargetGameIdsByTeam ?? {},
+      draftAuthority?.seasonWindowAnchorEvidenceHash,
+    );
+    const draftPicks = draftPicksSnapshot.docs.map(
+      (snapshot) => snapshot.data() as DraftPick,
+    );
+    draftPickByOwnerAndAssetKey = new Map(
+      draftPicks.map(
+        (pick) => [`${pick.ownerId}::${pick.asset.assetKey}`, pick] as const,
+      ),
+    );
+  }
 
   let activatedMoveCount = 0;
+  let repairedImmediateMoveWindowCount = 0;
   let skippedMoveCount = 0;
   const activatedOwnerIds = new Set<string>();
+  const repairedOwnerIds = new Set<string>();
 
   // Process one roster at a time. A malformed reservation on one team must
   // never prevent another team's ready slot from entering its next window.
@@ -3849,24 +4213,53 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
         getRosterSlotIdFromPick(pick),
       ),
     );
+    const ownerRepairProofs = ownerPicks.flatMap((pick) => {
+      const rosterSlotId = getRosterSlotIdFromPick(pick);
+      const proof = legacyImmediateRepairProofBySlotKey.get(
+        `${ownerId}::${rosterSlotId}`,
+      );
+
+      return proof ? [proof] : [];
+    });
+    const auditRefs = [...new Map(
+      ownerRepairProofs.map((proof) => [
+        proof.auditDocumentId,
+        doc(getTransactionsRef(leagueId), proof.auditDocumentId),
+      ] as const),
+    ).values()];
+    const cycleRef = getCycleRef(leagueId, cycle.cycleNumber);
 
     const ownerResult = await runTransaction(db, async (transaction) => {
       const snapshots = await Promise.all([
+        transaction.get(cycleRef),
         transaction.get(rosterRef),
         transaction.get(teamWindowsRef),
         ...pickRefs.map((reference) => transaction.get(reference)),
+        ...auditRefs.map((reference) => transaction.get(reference)),
       ]);
-      const rosterSnapshot = snapshots[0];
-      const teamWindowsSnapshot = snapshots[1];
+      const cycleSnapshot = snapshots[0];
+      const rosterSnapshot = snapshots[1];
+      const teamWindowsSnapshot = snapshots[2];
 
-      if (!rosterSnapshot.exists()) {
-        return { activated: 0, skipped: 0 };
+      if (!cycleSnapshot.exists() || !rosterSnapshot.exists()) {
+        return { activated: 0, repaired: 0, skipped: 0 };
       }
 
+      const savedCycle = normalizeCycle(
+        cycleSnapshot.data() as Partial<FantasyCycle>,
+        cycle.cycleNumber,
+      );
       const roster = normalizeFantasyRoster(
         rosterSnapshot.data() as Partial<FantasyRoster>,
       );
-      const savedPickSnapshots = snapshots.slice(2);
+      const savedPickSnapshots = snapshots.slice(3, 3 + pickRefs.length);
+      const savedAuditSnapshots = snapshots.slice(3 + pickRefs.length);
+      const savedAuditSnapshotById = new Map(
+        savedAuditSnapshots.map((snapshot, index) => [
+          auditRefs[index].id,
+          snapshot,
+        ] as const),
+      );
       const persistedTeamWindows = teamWindowsSnapshot.exists()
         ? normalizeFantasyTeamCycleWindows(
             ownerId,
@@ -3876,6 +4269,7 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
         : null;
       let reconciledTeamWindows = persistedTeamWindows;
       let activated = 0;
+      let repaired = 0;
       let skipped = 0;
 
       ownerPicks.forEach((fallbackPick, index) => {
@@ -3898,6 +4292,135 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
         }
 
         const savedSlot = roster.activeSlots[slotIndex];
+        const persistedWindowIndex = reconciledTeamWindows?.windows.findIndex(
+          (window) => window.rosterSlotId === rosterSlotId,
+        ) ?? -1;
+        const persistedWindow = persistedWindowIndex >= 0
+          ? reconciledTeamWindows?.windows[persistedWindowIndex]
+          : undefined;
+        const savedSlotAssetKey = getRosterAssetKey(savedSlot.asset);
+        const legacyImmediateMoveWindowMismatch =
+          pick.snapshotSource === LEGACY_IMMEDIATE_ROSTER_MOVE_SNAPSHOT_SOURCE &&
+          savedSlot.asset !== null &&
+          savedSlotAssetKey === pick.asset.assetKey &&
+          getAssetTeamAbbreviation(savedSlot.asset) ===
+            getAssetTeamAbbreviation(pick.asset) &&
+          persistedWindow !== undefined &&
+          persistedWindow.assetKey !== pick.asset.assetKey;
+
+        if (legacyImmediateMoveWindowMismatch) {
+          const targetWindowSnapshotMilliseconds =
+            getStoredTimestampMilliseconds(pick.snapshottedAt);
+          const repairProof = legacyImmediateRepairProofBySlotKey.get(
+            `${ownerId}::${rosterSlotId}`,
+          );
+          const auditSnapshot = repairProof
+            ? savedAuditSnapshotById.get(repairProof.auditDocumentId)
+            : undefined;
+          const savedAudit = auditSnapshot?.exists()
+            ? auditSnapshot.data() as Record<string, unknown>
+            : null;
+          const targetGames = getExactSourceNhlTargetGameIdsForAsset({
+            cycle: savedCycle,
+            asset: pick.asset,
+          });
+          const savedDirectTargetGameIds = Array.isArray(
+            pick.sourceNhlTargetGameIds,
+          )
+            ? pick.sourceNhlTargetGameIds.filter(
+                (gameId): gameId is number =>
+                  Number.isSafeInteger(gameId) && gameId > 0,
+              )
+            : [];
+          const canRepair =
+            savedCycle.phase === 'regular_season' &&
+            savedCycle.status === 'active' &&
+            (savedCycle.playerWindowContinuitySchemaVersion ?? 0) === 0 &&
+            pick.snapshotCycleNumber === savedCycle.cycleNumber &&
+            targetWindowSnapshotMilliseconds !== null &&
+            targetGames !== null &&
+            !savedSlot.pendingMove &&
+            repairProof !== undefined &&
+            targetWindowSnapshotMilliseconds ===
+              repairProof.assignmentNotBeforeMilliseconds &&
+            numberArraysAgree(
+              persistedWindow.scheduledGameIds,
+              savedDirectTargetGameIds,
+            ) &&
+            numberArraysAgree(
+              persistedWindow.scheduledGameIds,
+              repairProof.staleScheduledGameIds,
+            ) &&
+            getAssetTeamAbbreviation(persistedWindow.asset) ===
+              repairProof.staleScheduleTeamAbbreviation &&
+            repairProof.staleScheduleSeason === getNhlSeasonForTimestamp(
+              repairProof.assignmentNotBeforeMilliseconds,
+            ) &&
+            staleScheduleWasUnstartedAtAssignment(repairProof) &&
+            legacyImmediateMoveWindowIsProvablyUntouched(persistedWindow) &&
+            savedAudit !== null &&
+            legacyImmediateMoveAuditMatches({
+              audit: savedAudit,
+              ownerId,
+              rosterSlotId,
+              cycleNumber: savedCycle.cycleNumber,
+              assetKey: pick.asset.assetKey,
+              assignmentNotBeforeMilliseconds:
+                repairProof.assignmentNotBeforeMilliseconds,
+            });
+
+          if (!canRepair || !reconciledTeamWindows) {
+            skipped += 1;
+            console.warn(
+              `Unable to reconcile legacy immediate move for ` +
+              `${ownerId}/${rosterSlotId}: the frozen target plan or ` +
+              'untouched-window evidence is incomplete.',
+            );
+            return;
+          }
+
+          const playerWindowContinuity = createPlayerWindowContinuity({
+            ownerId,
+            rosterSlotId,
+            asset: pick.asset,
+            activationKey: `move-${repairProof.auditDocumentId}`,
+            assignmentNotBefore: targetWindowSnapshotMilliseconds,
+          });
+          const windows = [...reconciledTeamWindows.windows];
+          windows[persistedWindowIndex] = resetUntouchedWindowForReconciledMove({
+            previous: persistedWindow,
+            asset: pick.asset,
+            playerWindowContinuity,
+          });
+          reconciledTeamWindows = {
+            ...reconciledTeamWindows,
+            windows,
+          };
+
+          const {
+            sourceNhlTargetGameIds: _staleSourceNhlTargetGameIds,
+            playerWindowContinuity: _stalePlayerWindowContinuity,
+            ...pickWithoutStaleScheduleEvidence
+          } = pick;
+          transaction.set(pickRefs[index], {
+            ...pickWithoutStaleScheduleEvidence,
+            sourceNhlBlockNumber: resolveSourceNhlBlockNumber(
+              savedCycle.sourceNhlBlockNumber,
+              savedCycle.cycleNumber,
+            ),
+            sourceNhlTargetGameIds: targetGames.gameIds,
+            sourceNhlTargetGameIdsByTeam: targetGames.gameIdsByTeam,
+            ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+            snapshotSource: RECONCILED_IMMEDIATE_ROSTER_MOVE_SNAPSHOT_SOURCE,
+            // Preserve the original assignment boundary. The recovery time is
+            // not a new fantasy acquisition and must not skip intervening NHL
+            // games that began after the actual swap.
+            snapshottedAt: pick.snapshottedAt,
+          });
+          repaired += 1;
+          return;
+        }
+
         const pendingMove = savedSlot.pendingMove;
 
         if (!canActivatePendingMoveInCycle(pendingMove, cycle.cycleNumber)) {
@@ -3926,12 +4449,6 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
           return;
         }
 
-        const persistedWindowIndex = reconciledTeamWindows?.windows.findIndex(
-          (window) => window.rosterSlotId === rosterSlotId,
-        ) ?? -1;
-        const persistedWindow = persistedWindowIndex >= 0
-          ? reconciledTeamWindows?.windows[persistedWindowIndex]
-          : undefined;
         const persistedWindowIsUntouched = Boolean(
           persistedWindow &&
           persistedWindow.status === 'scheduled' &&
@@ -4144,24 +4661,26 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
         activated += 1;
       });
 
-      if (activated > 0) {
+      if (activated > 0 || repaired > 0) {
         if (!reconciledTeamWindows) {
           throw new Error(
-            `Unable to reconcile queued moves for ${ownerId}: team windows are missing.`,
+            `Unable to reconcile roster moves for ${ownerId}: team windows are missing.`,
           );
         }
 
-        transaction.set(
-          rosterRef,
-          {
-            schemaVersion: roster.schemaVersion,
-            activeSlots: roster.activeSlots,
-            benchSlots: roster.benchSlots,
-            irSlots: roster.irSlots,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
+        if (activated > 0) {
+          transaction.set(
+            rosterRef,
+            {
+              schemaVersion: roster.schemaVersion,
+              activeSlots: roster.activeSlots,
+              benchSlots: roster.benchSlots,
+              irSlots: roster.irSlots,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
         transaction.set(
           teamWindowsRef,
           {
@@ -4174,21 +4693,37 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
         );
       }
 
-      return { activated, skipped };
+      return { activated, repaired, skipped };
     });
 
     activatedMoveCount += ownerResult.activated;
+    repairedImmediateMoveWindowCount += ownerResult.repaired;
     skippedMoveCount += ownerResult.skipped;
 
     if (ownerResult.activated > 0) {
       activatedOwnerIds.add(ownerId);
     }
+
+    if (ownerResult.repaired > 0) {
+      repairedOwnerIds.add(ownerId);
+    }
+  }
+
+  if (repairedImmediateMoveWindowCount > 0) {
+    console.info('Reconciled legacy untouched immediate-move windows.', {
+      leagueId,
+      cycleNumber: cycle.cycleNumber,
+      repairedWindowCount: repairedImmediateMoveWindowCount,
+      repairedTeamCount: repairedOwnerIds.size,
+    });
   }
 
   return {
     activatedMoveCount,
+    repairedImmediateMoveWindowCount,
     skippedMoveCount,
     activatedOwnerIds: [...activatedOwnerIds].sort(),
+    repairedOwnerIds: [...repairedOwnerIds].sort(),
   };
 }
 

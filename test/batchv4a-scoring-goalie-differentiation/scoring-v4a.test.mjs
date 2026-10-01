@@ -419,7 +419,7 @@ test('the six-game window remains frozen and server scoring matches the D1L-E tr
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), '83761b67632cd35838bb3e10a4ce5a64741926ebddb035a28503c67f440862c6');
-  assert.equal(sha256(serverScoring), '910b7692956e08cb4fac11a9442e02dcbd7e83b3c8473cc085f2db2ba11494c6');
+  assert.equal(sha256(serverScoring), 'aca5065b5ff6b807c8194203bdf3bd2d6c1e67ca169bb096c5cc4c386c503a31');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {
