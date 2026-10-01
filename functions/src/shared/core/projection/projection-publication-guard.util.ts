@@ -32,6 +32,59 @@ export interface ProjectionPublicationGuardInput {
 }
 
 /**
+ * Firestore map field order is not stable across a write/read round trip.
+ * Team keys are therefore compared as a set while each team's frozen NHL game
+ * sequence remains order-sensitive.
+ */
+export function projectionGameIdMapsMatch(
+  left: unknown,
+  right: unknown,
+): boolean {
+  const normalizedLeft = left ?? null;
+  const normalizedRight = right ?? null;
+
+  if (normalizedLeft === null || normalizedRight === null) {
+    return normalizedLeft === normalizedRight;
+  }
+
+  if (
+    typeof normalizedLeft !== 'object' ||
+    Array.isArray(normalizedLeft) ||
+    typeof normalizedRight !== 'object' ||
+    Array.isArray(normalizedRight)
+  ) {
+    return false;
+  }
+
+  const leftRecord = normalizedLeft as Record<string, unknown>;
+  const rightRecord = normalizedRight as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort((a, b) => a.localeCompare(b));
+  const rightKeys = Object.keys(rightRecord).sort((a, b) => a.localeCompare(b));
+
+  if (
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key, index) => key !== rightKeys[index])
+  ) {
+    return false;
+  }
+
+  return leftKeys.every((key) => {
+    const leftGameIds = leftRecord[key];
+    const rightGameIds = rightRecord[key];
+
+    return Array.isArray(leftGameIds) &&
+      Array.isArray(rightGameIds) &&
+      leftGameIds.length === rightGameIds.length &&
+      leftGameIds.every((gameId, index) =>
+        typeof gameId === 'number' &&
+        Number.isSafeInteger(gameId) &&
+        gameId > 0 &&
+        gameId === rightGameIds[index]
+      );
+  });
+}
+
+/**
  * Final compare-and-set predicate used after a long Projection V11 build.
  * An immutable snapshot may exist even when this returns false, but shared
  * pointers and readiness must not move.
