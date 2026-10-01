@@ -9,6 +9,48 @@ import type {
 const LIVE_GAME_STATES = new Set(['LIVE', 'CRIT']);
 const FINAL_GAME_STATES = new Set(['OFF', 'FINAL']);
 
+export function clampNhlScoreboardRailIndex(index: number, gameCount: number): number {
+  const boundedGameCount = Number.isFinite(gameCount)
+    ? Math.max(0, Math.trunc(gameCount))
+    : 0;
+
+  if (boundedGameCount === 0 || !Number.isFinite(index)) {
+    return 0;
+  }
+
+  return Math.min(boundedGameCount - 1, Math.max(0, Math.trunc(index)));
+}
+
+export function getNhlScoreboardRailIndex(
+  scrollLeft: number,
+  cardOffsets: readonly number[],
+): number {
+  if (cardOffsets.length === 0) {
+    return 0;
+  }
+
+  const boundedScrollLeft = Number.isFinite(scrollLeft)
+    ? Math.max(0, scrollLeft)
+    : 0;
+  let closestIndex = 0;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  cardOffsets.forEach((offset, index) => {
+    if (!Number.isFinite(offset)) {
+      return;
+    }
+
+    const distance = Math.abs(offset - boundedScrollLeft);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+
+  return clampNhlScoreboardRailIndex(closestIndex, cardOffsets.length);
+}
+
 function normalizeTeamAbbreviation(value: string | null | undefined): string {
   return value?.trim().toUpperCase() ?? '';
 }

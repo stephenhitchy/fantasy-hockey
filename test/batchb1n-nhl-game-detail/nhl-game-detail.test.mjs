@@ -408,6 +408,23 @@ test('Batch B1N NHL game detail source contracts', async (suite) => {
     assert.match(scoreboardComponent, /sessionStorage\.setItem\('rinkrat:nhl-scoreboard-view:v1'/);
     assert.match(scoreboardComponent, /strip\.scrollLeft = Math\.max\(0, scrollLeft\)/);
     assert.match(scoreboardComponent, /Date\.now\(\) - value\.savedAt > 30 \* 60 \* 1000/);
+    assert.match(scoreboardComponent, /pointer\.pointerId !== event\.pointerId/);
+    assert.match(scoreboardComponent, /strip\.scrollLeft - pointer\.startScrollLeft/);
+    assert.match(scoreboardTemplate, /\(scroll\)="handleGameStripScroll\(\)"/);
+  });
+
+  await suite.test('adds bounded one-game controls without replacing native touch scrolling', () => {
+    assert.match(scoreboardTemplate, /aria-label="Previous NHL game"/);
+    assert.match(scoreboardTemplate, /aria-label="Next NHL game"/);
+    assert.match(scoreboardTemplate, /Game \{\{ activeGameNumber\(\) \}\} of \{\{ visibleGames\(\)\.length \}\}/);
+    assert.match(scoreboardTemplate, /role="region"[\s\S]*?tabindex="0"/);
+    assert.match(scoreboardTemplate, /Left and Right Arrow keys/);
+    assert.match(scoreboardComponent, /scrollToGame\(this\.activeGameIndex\(\) - 1\)/);
+    assert.match(scoreboardComponent, /scrollToGame\(this\.activeGameIndex\(\) \+ 1\)/);
+    assert.match(scoreboardStyles, /overscroll-behavior-x:\s*contain/);
+    assert.match(scoreboardStyles, /scroll-snap-type:\s*x proximity/);
+    assert.match(scoreboardStyles, /touch-action:\s*pan-x pan-y pinch-zoom/);
+    assert.doesNotMatch(scoreboardComponent, /setPointerCapture|releasePointerCapture/);
   });
 
   await suite.test('loads game details on demand, deduplicates through the shared cache, and stops live polling', () => {

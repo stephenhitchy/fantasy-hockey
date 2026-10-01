@@ -1,6 +1,7 @@
 import {
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   computed,
   input,
@@ -24,8 +25,10 @@ import {
   formatNhlGameDate,
   formatNhlGameStatus,
   formatNhlScoreboardHeading,
+  clampNhlScoreboardRailIndex,
   getDashboardNhlRosterGamePointDisplay,
   getDashboardNhlRosterEntryRoute,
+  getNhlScoreboardRailIndex,
   getNhlScoreboardRefreshDelay,
   isNhlScoreboardDateToday,
   isFavoriteTeamGame,
@@ -58,6 +61,9 @@ export class NhlScoreboard implements OnDestroy {
   readonly rosterGameContexts = signal<DashboardNhlRosterGameContext[]>([]);
   readonly rosterPointsLoading = signal(false);
   readonly rosterPointsError = signal('');
+  readonly activeGameIndex = signal(0);
+  readonly canScrollToPreviousGame = signal(false);
+  readonly canScrollToNextGame = signal(false);
   readonly rosterDialog = viewChild<ElementRef<HTMLDialogElement>>('rosterDialog');
   readonly gameStrip = viewChild<ElementRef<HTMLDivElement>>('gameStrip');
 
@@ -75,6 +81,14 @@ export class NhlScoreboard implements OnDestroy {
 
   readonly hasLiveGames = computed(() =>
     this.games().some(isNhlScoreGameLive),
+  );
+
+  readonly activeGameNumber = computed(() => this.visibleGames().length === 0
+    ? 0
+    : clampNhlScoreboardRailIndex(
+      this.activeGameIndex(),
+      this.visibleGames().length,
+    ) + 1,
   );
 
   readonly rosteredPresenceByTeam = computed(() => new Map(
@@ -98,13 +112,16 @@ export class NhlScoreboard implements OnDestroy {
   private refreshTimer: number | null = null;
   private requestGeneration = 0;
   private rosterRefreshGeneration = 0;
+  private gameStripPositionFrame: number | null = null;
   private rosterTrigger: HTMLElement | null = null;
   private restoreRosterTriggerFocus = true;
   private pendingScrollRestore: number | null = null;
   private gameCardPointer: {
     gameId: number;
+    pointerId: number;
     startX: number;
     startY: number;
+    startScrollLeft: number;
     moved: boolean;
   } | null = null;
   private lastGameCardDragAt = 0;
@@ -123,11 +140,21 @@ export class NhlScoreboard implements OnDestroy {
     this.rosterRefreshGeneration += 1;
     this.clearRefreshTimer();
 
+    if (this.gameStripPositionFrame !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.gameStripPositionFrame);
+      this.gameStripPositionFrame = null;
+    }
+
     const dialog = this.rosterDialog()?.nativeElement;
 
     if (dialog?.open) {
       dialog.close();
     }
+  }
+
+  @HostListener('window:resize')
+  handleViewportResize(): void {
+    this.scheduleGameStripPositionUpdate();
   }
 
   async openPreviousScoreDate(): Promise<void> {
@@ -167,6 +194,48 @@ export class NhlScoreboard implements OnDestroy {
     return `Open ${game.awayTeam.abbrev} at ${game.homeTeam.abbrev} NHL game details`;
   }
 
+  openPreviousGame(): void {
+    if (!this.canScrollToPreviousGame()) {
+      return;
+    }
+
+    this.scrollToGame(this.activeGameIndex() - 1);
+  }
+
+  openNextGame(): void {
+    if (!this.canScrollToNextGame()) {
+      return;
+    }
+
+    this.scrollToGame(this.activeGameIndex() + 1);
+  }
+
+  handleGameStripKeydown(event: KeyboardEvent): void {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && this.canScrollToPreviousGame()) {
+      event.preventDefault();
+      this.openPreviousGame();
+    } else if (event.key === 'ArrowRight' && this.canScrollToNextGame()) {
+      event.preventDefault();
+      this.openNextGame();
+    }
+  }
+
+  handleGameStripScroll(): void {
+    const strip = this.gameStrip()?.nativeElement;
+    const pointer = this.gameCardPointer;
+
+    if (strip && pointer && Math.abs(strip.scrollLeft - pointer.startScrollLeft) > 2) {
+      pointer.moved = true;
+      this.lastGameCardDragAt = Date.now();
+    }
+
+    this.updateGameStripPosition();
+  }
+
   beginGameCardPointer(game: NhlScoreGame, event: PointerEvent): void {
     if (!event.isPrimary) {
       return;
@@ -174,8 +243,10 @@ export class NhlScoreboard implements OnDestroy {
 
     this.gameCardPointer = {
       gameId: game.id,
+      pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      startScrollLeft: this.gameStrip()?.nativeElement.scrollLeft ?? 0,
       moved: false,
     };
   }
@@ -183,7 +254,11 @@ export class NhlScoreboard implements OnDestroy {
   trackGameCardPointer(game: NhlScoreGame, event: PointerEvent): void {
     const pointer = this.gameCardPointer;
 
-    if (!pointer || pointer.gameId !== game.id) {
+    if (
+      !pointer ||
+      pointer.gameId !== game.id ||
+      pointer.pointerId !== event.pointerId
+    ) {
       return;
     }
 
@@ -195,8 +270,19 @@ export class NhlScoreboard implements OnDestroy {
     }
   }
 
-  finishGameCardPointer(): void {
-    if (this.gameCardPointer?.moved) {
+  finishGameCardPointer(event: PointerEvent): void {
+    const pointer = this.gameCardPointer;
+
+    if (!pointer || pointer.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const strip = this.gameStrip()?.nativeElement;
+    const railMoved = strip
+      ? Math.abs(strip.scrollLeft - pointer.startScrollLeft) > 2
+      : false;
+
+    if (pointer.moved || railMoved) {
       this.lastGameCardDragAt = Date.now();
     }
 
@@ -452,6 +538,7 @@ export class NhlScoreboard implements OnDestroy {
       this.previousDate.set(response.prevDate ?? '');
       this.nextDate.set(response.nextDate ?? '');
       this.lastUpdatedAt.set(new Date());
+      this.scheduleGameStripPositionUpdate();
 
       if (this.pendingScrollRestore !== null) {
         this.restoreGameStripScroll(this.pendingScrollRestore);
@@ -537,6 +624,7 @@ export class NhlScoreboard implements OnDestroy {
 
       if (strip) {
         strip.scrollLeft = 0;
+        this.updateGameStripPosition();
       }
     });
   }
@@ -552,8 +640,83 @@ export class NhlScoreboard implements OnDestroy {
 
         if (strip) {
           strip.scrollLeft = Math.max(0, scrollLeft);
+          this.updateGameStripPosition();
         }
       });
+    });
+  }
+
+  private scrollToGame(index: number): void {
+    const strip = this.gameStrip()?.nativeElement;
+
+    if (!strip) {
+      return;
+    }
+
+    const cards = this.getGameCards(strip);
+    const targetIndex = clampNhlScoreboardRailIndex(index, cards.length);
+    const targetCard = cards[targetIndex];
+
+    if (!targetCard) {
+      return;
+    }
+
+    const targetLeft = this.getGameCardOffset(strip, targetCard);
+    const maxScrollLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+    const reducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    strip.scrollTo({
+      left: Math.min(maxScrollLeft, Math.max(0, targetLeft)),
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    });
+    this.activeGameIndex.set(targetIndex);
+    this.updateGameStripBoundaries(strip);
+  }
+
+  private updateGameStripPosition(): void {
+    const strip = this.gameStrip()?.nativeElement;
+
+    if (!strip) {
+      this.activeGameIndex.set(0);
+      this.canScrollToPreviousGame.set(false);
+      this.canScrollToNextGame.set(false);
+      return;
+    }
+
+    const cards = this.getGameCards(strip);
+    const offsets = cards.map((card) => this.getGameCardOffset(strip, card));
+    this.activeGameIndex.set(getNhlScoreboardRailIndex(strip.scrollLeft, offsets));
+    this.updateGameStripBoundaries(strip);
+  }
+
+  private updateGameStripBoundaries(strip: HTMLDivElement): void {
+    const maxScrollLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+    const boundaryTolerance = 2;
+    this.canScrollToPreviousGame.set(strip.scrollLeft > boundaryTolerance);
+    this.canScrollToNextGame.set(strip.scrollLeft < maxScrollLeft - boundaryTolerance);
+  }
+
+  private getGameCards(strip: HTMLDivElement): HTMLElement[] {
+    return Array.from(strip.querySelectorAll<HTMLElement>('.nhl-game-card'));
+  }
+
+  private getGameCardOffset(strip: HTMLDivElement, card: HTMLElement): number {
+    return strip.scrollLeft + card.getBoundingClientRect().left - strip.getBoundingClientRect().left;
+  }
+
+  private scheduleGameStripPositionUpdate(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.gameStripPositionFrame !== null) {
+      window.cancelAnimationFrame(this.gameStripPositionFrame);
+    }
+
+    this.gameStripPositionFrame = window.requestAnimationFrame(() => {
+      this.gameStripPositionFrame = null;
+      this.updateGameStripPosition();
     });
   }
 

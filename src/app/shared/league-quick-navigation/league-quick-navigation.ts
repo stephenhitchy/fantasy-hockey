@@ -7,6 +7,7 @@ export type LeagueNavigationDestination =
   | 'team'
   | 'matchup'
   | 'matchups'
+  | 'leaders'
   | 'schedule'
   | 'standings'
   | 'playoffs';

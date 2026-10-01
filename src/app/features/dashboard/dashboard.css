@@ -150,7 +150,8 @@
 .quick-actions a,
 .empty-actions a,
 .open-league,
-.team-shortcut {
+.team-shortcut,
+.leaders-shortcut {
   display: inline-flex;
   min-height: 46px;
   align-items: center;
@@ -345,6 +346,30 @@
   width: 48px;
   flex: 0 0 48px;
   font-size: 18px;
+}
+
+.leaders-shortcut {
+  flex: 0 0 auto;
+  padding-inline: 12px;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 390px) {
+  .leaders-shortcut {
+    width: 48px;
+    flex-basis: 48px;
+    padding-inline: 0;
+  }
+
+  .leaders-shortcut > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 .empty-state {
   padding: 28px;

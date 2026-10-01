@@ -27,6 +27,15 @@ other competitive record.
   horizontal scoreboard swiping remains separate from a deliberate tap.
   Existing roster badges remain independent sibling controls above the card
   entry surface.
+- The rail also exposes compact previous/next-game controls and a live
+  `Game N of M` position. Each control advances exactly one card, disables at
+  its physical scroll boundary, and gives Android users a reliable fallback
+  when a browser or system back-edge gesture competes with a horizontal swipe.
+- The rail itself is a named focus target. Left/Right Arrow keys use the same
+  one-card navigation, while native touch scrolling, vertical page scrolling,
+  and pinch zoom remain browser-owned. Drag suppression validates pointer
+  identity and actual rail movement; it does not install custom drag physics or
+  call `preventDefault()` from pointer movement.
 
 ## Available provider fields
 
@@ -74,6 +83,7 @@ The B1N suite covers stable-id validation, scheduled/live/intermission/final/
 overtime/shootout formatting, chronological event ordering, supported goal
 labels, shootout totals, missing-versus-zero comparison values, deterministic
 non-official leaders, exact route wiring, swipe suppression, session restore,
+bounded one-card navigation, keyboard behavior, physical-axis scroll fallbacks,
 request deduplication, polling cleanup, fantasy isolation, real-player detail
 resolution, and mobile layout contracts.
 
@@ -81,7 +91,10 @@ Browser verification used real NHL final, pregame, and shootout payloads. It
 checked keyboard team filtering, exact-card navigation, browser Back/date/rail
 restoration, real-player navigation, and page overflow at 320, 375, 390, 430,
 768, and 1280 pixels. Desktop/browser emulation does not replace a physical
-iPhone Safari pass for browser chrome and safe-area behavior.
+iPhone Safari pass for browser chrome and safe-area behavior. Likewise,
+Chromium touch emulation can verify the native-scroll contract but does not
+replace a physical Android Chrome/Samsung Internet pass, including installed
+PWA mode and the device's configured edge-back gesture.
 
 ## Deployment and rollback
 

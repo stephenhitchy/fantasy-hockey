@@ -164,6 +164,7 @@ test('keeps primitive adoption limited to deliberately reviewed templates', asyn
     'src/app/features/leagues/league-detail/league-detail.html',
     'src/app/features/leagues/commissioner-playbook/commissioner-playbook.html',
     'src/app/features/leagues/league-wire/league-wire.html',
+    'src/app/features/leaders/point-leaders/point-leaders.html',
     'src/app/features/players/league-player-board/league-player-board.html',
     'src/app/features/players/player-detail/player-detail.html',
     'src/app/features/errors/access-denied/access-denied.html',

@@ -213,11 +213,12 @@ export class CoachHelp implements OnDestroy {
     if (url.includes('/leaders')) {
       return {
         id: 'point-leaders',
-        title: 'Point Leaders',
-        subtitle: 'Completed six-game scoring windows ranked by fantasy points.',
+        title: 'League Leaders',
+        subtitle: 'Compare the current matchup, completed season windows, or verified next-six projections.',
         tips: [
-          'Point Leaders uses finalized window totals rather than projections or partial live scores.',
-          'Open a player for current-season context, ownership, and next-six ranks.',
+          'Current Matchup is live and provisional; Season includes completed immutable windows only.',
+          'Projected Next 6 uses the verified Projection V11 snapshot and shows missing values as unavailable, never zero.',
+          'Open any player for deeper scoring, ownership, schedule, and projection context.',
         ],
       };
     }

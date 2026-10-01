@@ -113,16 +113,78 @@
   font-size: 10px;
 }
 
+.nhl-game-navigation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.nhl-game-navigation-button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--rr-mobile-text-micro);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.nhl-game-navigation-button--next {
+  justify-self: end;
+}
+
+.nhl-game-navigation-button:hover:not(:disabled),
+.nhl-game-navigation-button:focus-visible {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-accent) 12%, var(--surface-2));
+  outline: none;
+}
+
+.nhl-game-navigation-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.nhl-game-position {
+  color: var(--text-secondary);
+  font-family: var(--rr-font-numeric);
+  font-size: var(--rr-mobile-text-micro);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .nhl-game-strip {
   display: grid;
   grid-auto-columns: minmax(210px, 1fr);
   grid-auto-flow: column;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 8px;
   padding-bottom: 5px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
   scroll-snap-type: inline proximity;
+  touch-action: auto;
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nhl-game-strip:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: 3px;
 }
 
 .nhl-game-card {
@@ -142,7 +204,8 @@
   border: 0;
   background: transparent;
   color: inherit;
-  touch-action: pan-x pan-y;
+  touch-action: auto;
+  touch-action: pan-x pan-y pinch-zoom;
   cursor: pointer;
 }
 
@@ -554,6 +617,18 @@
   .nhl-roster-dialog-score-status {
     align-items: flex-start;
     padding-inline: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .nhl-game-navigation {
+    gap: 5px;
+  }
+
+  .nhl-game-navigation-button {
+    min-height: 44px;
+    gap: 4px;
+    padding-inline: 7px;
   }
 }
 

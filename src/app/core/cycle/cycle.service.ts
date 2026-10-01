@@ -83,6 +83,7 @@ import {
 } from './cycle-window-selection.util';
 
 const FIRST_CYCLE_NUMBER = 1;
+const MAX_LEAGUE_SEASON_CYCLE_READ = 32;
 
 function reportCycleListenerError(
   error: unknown,
@@ -1166,6 +1167,28 @@ export function listenToLeagueCycles(
       reportCycleListenerError(error, 'Unable to load league cycles.', onError);
     },
   ));
+}
+
+/**
+ * Bounded season-history read for views that do not need every historical
+ * cycle kept alive as a realtime listener.
+ */
+export async function getLeagueCycles(leagueId: string): Promise<FantasyCycle[]> {
+  const cyclesQuery = query(
+    getCyclesRef(leagueId),
+    orderBy('cycleNumber', 'asc'),
+    limit(MAX_LEAGUE_SEASON_CYCLE_READ + 1),
+  );
+  const snapshot = await getDocs(cyclesQuery);
+
+  if (snapshot.size > MAX_LEAGUE_SEASON_CYCLE_READ) {
+    throw new Error('League season history exceeds the supported leaderboard read limit.');
+  }
+
+  return snapshot.docs.map((cycleDoc) => {
+    const data = cycleDoc.data() as Partial<FantasyCycle>;
+    return normalizeCycle(data, data.cycleNumber ?? FIRST_CYCLE_NUMBER);
+  });
 }
 
 export function listenToLatestCycle(

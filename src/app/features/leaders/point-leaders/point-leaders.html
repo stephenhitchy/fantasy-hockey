@@ -1,139 +1,226 @@
 @if (loading()) {
-  <p class="page-loading">Loading league point leaders...</p>
+  <p class="page-loading" role="status">Loading league leaders…</p>
 } @else if (!league()) {
-  <p class="page-loading">{{ errorMessage() || 'League not found.' }}</p>
+  <section class="page-loading" role="alert">
+    <p>{{ errorMessage() || 'League not found.' }}</p>
+    <button type="button" class="rr-button rr-button--secondary" (click)="retryPage()">
+      Try again
+    </button>
+  </section>
 } @else {
-  <section class="point-leaders-page">
-    <a class="league-return-link" [routerLink]="['/leagues', leagueId]" aria-label="Back to the previous RinkRat page">Back</a>
+  <main class="point-leaders-page rr-page-shell">
+    <a class="league-return-link" [routerLink]="['/leagues', leagueId]">Back to League HQ</a>
 
-    <header class="point-leaders-header">
+    <header class="point-leaders-header rr-card rr-card--padded">
       <div>
-        <span class="eyebrow">League Scoreboard</span>
-        <h1>Point Leaders</h1>
+        <span class="eyebrow">{{ league()?.name }}</span>
+        <h1>League Leaders</h1>
+        <p>See who is producing now, who has finished the season’s strongest windows, and who Projection V11 expects to lead next.</p>
       </div>
-
-      <label class="scope-control">
-        <span>Show</span>
-        <select [value]="selectedCycleNumber()" (change)="setCycleScope($any($event.target).value)">
-          <option value="0">Season total</option>
-          @for (cycle of sortedCycles(); track cycle.cycleNumber) {
-            <option [value]="cycle.cycleNumber">Matchup {{ cycle.cycleNumber }}</option>
-          }
-        </select>
-      </label>
+      <span class="leaders-live-key">Six-game fantasy scoring</span>
     </header>
 
+    <section class="league-navigation-card">
+      <app-league-quick-navigation
+        [leagueId]="leagueId"
+        [cycleNumber]="currentCycle()?.cycleNumber ?? null"
+        currentDestination="leaders"
+      />
+    </section>
+
     @if (errorMessage()) {
-      <p class="leader-status error-status">{{ errorMessage() }}</p>
+      <div class="leader-status rr-notice rr-notice--danger" role="alert">
+        <span>{{ errorMessage() }}</span>
+        <button type="button" class="rr-button rr-button--quiet" (click)="retryPage()">Reload</button>
+      </div>
     }
 
-    <section class="leader-summary-grid" aria-label="Current category leaders">
-      <button type="button" (click)="setGroup('forwards')" [class.active]="selectedGroup() === 'forwards'">
-        <span>Top Forward</span>
-        @if (topForward(); as leader) {
-          <strong>{{ getAssetName(leader.asset) }}</strong>
-          <small>{{ getPointsLabel(leader.totalPoints) }} points</small>
-        } @else {
-          <strong>No scoring yet</strong>
-          <small>Waiting for a counted game</small>
-        }
-      </button>
-
-      <button type="button" (click)="setGroup('defense')" [class.active]="selectedGroup() === 'defense'">
-        <span>Top Defenseman</span>
-        @if (topDefense(); as leader) {
-          <strong>{{ getAssetName(leader.asset) }}</strong>
-          <small>{{ getPointsLabel(leader.totalPoints) }} points</small>
-        } @else {
-          <strong>No scoring yet</strong>
-          <small>Waiting for a counted game</small>
-        }
-      </button>
-
-      <button type="button" (click)="setGroup('goalies')" [class.active]="selectedGroup() === 'goalies'">
-        <span>Top Goalie Unit</span>
-        @if (topGoalie(); as leader) {
-          <strong>{{ getAssetName(leader.asset) }}</strong>
-          <small>{{ getPointsLabel(leader.totalPoints) }} points</small>
-        } @else {
-          <strong>No scoring yet</strong>
-          <small>Waiting for a counted game</small>
-        }
-      </button>
-    </section>
-
-    <section class="leaderboard-card">
-      <div class="leaderboard-heading">
+    <section class="leader-controls rr-card rr-card--padded" aria-labelledby="leader-scope-title">
+      <div class="leader-controls-heading">
         <div>
-          <span class="eyebrow">{{ getScopeLabel() }}</span>
-          <h2>{{ getGroupLabel() }}</h2>
+          <span class="eyebrow">Choose a view</span>
+          <h2 id="leader-scope-title">{{ getScopeTitle() }}</h2>
         </div>
-
-        <div class="leader-tabs" role="tablist" aria-label="Player position group">
-          <button type="button" role="tab" [attr.aria-selected]="selectedGroup() === 'forwards'" [class.active]="selectedGroup() === 'forwards'" (click)="setGroup('forwards')">
-            Forwards <span>{{ forwardRows().length }}</span>
-          </button>
-          <button type="button" role="tab" [attr.aria-selected]="selectedGroup() === 'defense'" [class.active]="selectedGroup() === 'defense'" (click)="setGroup('defense')">
-            Defense <span>{{ defenseRows().length }}</span>
-          </button>
-          <button type="button" role="tab" [attr.aria-selected]="selectedGroup() === 'goalies'" [class.active]="selectedGroup() === 'goalies'" (click)="setGroup('goalies')">
-            Goalies <span>{{ goalieRows().length }}</span>
-          </button>
-        </div>
+        @if (selectedScope() === 'projected' && projectionMetadata()) {
+          <span class="verified-snapshot-badge">{{ getProjectionAsOfLabel() }}</span>
+        }
       </div>
 
-      @if (displayedRows().length === 0) {
-        <div class="empty-leaderboard">
-          <strong>No points have been recorded for this group yet.</strong>
-          <span>The leaderboard will update automatically as NHL games are counted.</span>
-        </div>
-      } @else {
-        <div class="leaderboard-list">
-          <div class="leaderboard-column-headings" aria-hidden="true">
-            <span>Rank</span>
-            <span>Player</span>
-            <span>Fantasy Team</span>
-            <span>Points</span>
-            <span>Pts/Game</span>
-            <span>Games</span>
-          </div>
+      <div class="scope-tabs" role="group" aria-label="Leaderboard timeframe">
+        <button
+          type="button"
+          [class.active]="selectedScope() === 'current'"
+          [attr.aria-pressed]="selectedScope() === 'current'"
+          (click)="setScope('current')"
+        >
+          <span>Current Matchup</span>
+          <small>Live / provisional</small>
+        </button>
+        <button
+          type="button"
+          [class.active]="selectedScope() === 'season'"
+          [attr.aria-pressed]="selectedScope() === 'season'"
+          (click)="setScope('season')"
+        >
+          <span>Season</span>
+          <small>Completed windows</small>
+        </button>
+        <button
+          type="button"
+          [class.active]="selectedScope() === 'projected'"
+          [attr.aria-pressed]="selectedScope() === 'projected'"
+          (click)="setScope('projected')"
+        >
+          <span>Projected Next 6</span>
+          <small>Projection V11</small>
+        </button>
+      </div>
 
-          @for (row of displayedRows(); track row.assetKey) {
-            <article class="leader-row" [class.top-three-row]="row.rank <= 3">
-              <strong class="leader-rank">#{{ row.rank }}</strong>
+      <p class="scope-description">{{ getScopeDescription() }}</p>
 
-              <a class="leader-player" [routerLink]="['/leagues', leagueId, 'players', row.assetKey]">
-                @if (getAssetLogoUrl(row.asset); as logoUrl) {
-                  <img [src]="logoUrl" [alt]="getAssetTeamLabel(row.asset) + ' logo'" />
-                } @else {
-                  <span class="leader-logo-fallback">{{ getAssetTeamLabel(row.asset) }}</span>
-                }
+      <div class="position-filters" role="group" aria-label="Filter leaders by position">
+        @for (position of ['ALL', 'LW', 'C', 'RW', 'D', 'G']; track position) {
+          <button
+            type="button"
+            [class.active]="selectedPosition() === position"
+            [attr.aria-pressed]="selectedPosition() === position"
+            (click)="setPosition($any(position))"
+          >
+            <span>{{ getPositionLabel($any(position)) }}</span>
+            <small>{{ getPositionCount($any(position)) }}</small>
+          </button>
+        }
+      </div>
+    </section>
 
-                <div>
-                  <strong>{{ getAssetName(row.asset) }}</strong>
-                  <span>
-                    {{ getAssetTeamLabel(row.asset) }} · {{ row.asset.position }} ·
-                    {{ getFantasyTeamName(row.ownerId) }}
-                  </span>
-                  <small>{{ row.cycleCount }} completed {{ row.cycleCount === 1 ? 'matchup' : 'matchups' }}</small>
-                </div>
-              </a>
-
-              <span class="leader-owner manager-name-with-avatar">
-                <app-manager-avatar [profileIconId]="getTeamProfileIconId(row.ownerId)" [label]="getTeamManagerLabel(row.ownerId)" size="xs" />
-                <span>{{ getFantasyTeamName(row.ownerId) }}</span>
-              </span>
-              <strong class="leader-points">{{ getPointsLabel(row.totalPoints) }}</strong>
-              <span class="leader-ppg">{{ getPointsPerGameLabel(row) }}</span>
-              <span class="leader-games" [attr.title]="getGamesTitle(row)">{{ getGamesLabel(row) }}</span>
-            </article>
+    @if (selectedScope() === 'projected' && projectionLoading()) {
+      <section class="leader-state rr-state rr-card rr-card--padded" role="status">
+        <strong>Loading verified Projection V11 leaders…</strong>
+        <span>The player pool is fetched only when you open this view.</span>
+      </section>
+    } @else if (selectedScope() === 'projected' && projectionError()) {
+      <section class="leader-state rr-state rr-card rr-card--padded" role="alert">
+        <strong>Projected leaders are unavailable</strong>
+        <span>{{ projectionError() }}</span>
+        <button type="button" class="rr-button rr-button--secondary" (click)="retryProjection()">
+          Try again
+        </button>
+      </section>
+    } @else {
+      @if (featuredRows().length > 0) {
+        <section class="leader-podium" aria-label="Top three leaders">
+          @for (row of featuredRows(); track row.assetKey) {
+            <a
+              class="podium-card rr-card"
+              [class.podium-card--first]="row.rank === 1"
+              [routerLink]="['/leagues', leagueId, 'players', row.assetKey]"
+            >
+              <span class="podium-rank">#{{ row.rank }}</span>
+              <app-asset-portrait [asset]="row.asset" />
+              <div>
+                <strong>{{ getAssetName(row.asset) }}</strong>
+                <span>{{ getAssetTeamLabel(row.asset) }} · {{ row.position }}</span>
+              </div>
+              <b>{{ getValueLabel(row.value) }}</b>
+              <small>{{ selectedScope() === 'projected' ? 'projected points' : 'fantasy points' }}</small>
+            </a>
           }
-        </div>
+        </section>
       }
 
-      <p class="games-note">
-        Skater games display appearances/team games when a player missed one of their NHL team’s counted games.
-      </p>
-    </section>
-  </section>
+      <section class="leaderboard-card rr-card rr-card--padded" [attr.aria-labelledby]="'leaderboard-title'">
+        <div class="leaderboard-heading">
+          <div>
+            <span class="eyebrow">{{ getPositionLabel(selectedPosition()) }}</span>
+            <h2 id="leaderboard-title">{{ getScopeTitle() }}</h2>
+          </div>
+          <span>{{ rankedRows().length }} {{ rankedRows().length === 1 ? 'player' : 'players' }}</span>
+        </div>
+
+        @if (rankedRows().length === 0) {
+          <div class="empty-leaderboard">
+            <strong>No leaders are available for this view yet.</strong>
+            <span>
+              @if (selectedScope() === 'season') {
+                A player appears here after an immutable six-game window is complete.
+              } @else {
+                This list will populate when the league has qualifying player data.
+              }
+            </span>
+          </div>
+        } @else {
+          <div class="leaderboard-list">
+            @for (row of visibleRows(); track row.assetKey) {
+              <article class="leader-row" [class.top-three-row]="row.rank !== null && row.rank <= 3">
+                <span class="leader-rank">{{ row.rank === null ? '—' : '#' + row.rank }}</span>
+
+                <a class="leader-player" [routerLink]="['/leagues', leagueId, 'players', row.assetKey]">
+                  <app-asset-portrait [asset]="row.asset" />
+                  <span class="leader-player-copy">
+                    <strong>{{ getAssetName(row.asset) }}</strong>
+                    <span>{{ getAssetTeamLabel(row.asset) }} · {{ row.position }}</span>
+                    <small>Open Player Intel <span aria-hidden="true">→</span></small>
+                  </span>
+                </a>
+
+                <div class="leader-primary-value">
+                  <strong>{{ getValueLabel(row.value) }}</strong>
+                  <span>{{ selectedScope() === 'projected' ? 'Projected pts' : 'Fantasy pts' }}</span>
+                </div>
+
+                @if (selectedScope() === 'projected') {
+                  <div class="leader-context leader-context--projection">
+                    <span>{{ getProjectionOwnershipLabel(row) }}</span>
+                    <small>{{ getProjectionRangeLabel(row) }}</small>
+                    <small>{{ getProjectionAvailabilityLabel(row) }}</small>
+                  </div>
+                } @else {
+                  <div class="leader-context leader-context--scoring">
+                    <span class="leader-context-label">Scored for</span>
+                    <div class="scored-for-list">
+                      @for (contribution of row.ownerContributions; track contribution.ownerId) {
+                        <span class="scored-for-chip">
+                          <strong>{{ getFantasyTeamName(contribution.ownerId) }}</strong>
+                          @if (row.ownerContributions.length > 1) {
+                            <small>{{ getValueLabel(contribution.totalPoints) }} pts</small>
+                          }
+                        </span>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="leader-secondary-metrics">
+                    <span>
+                      <small>Pts / game</small>
+                      <strong>{{ getPointsPerGameLabel(row) }}</strong>
+                    </span>
+                    <span>
+                      <small>{{ row.asset.assetType === 'team-goalie-unit' ? 'Team games' : 'Appearances / games' }}</small>
+                      <strong>{{ getGamesLabel(row) }}</strong>
+                    </span>
+                  </div>
+                }
+              </article>
+            }
+          </div>
+
+          @if (hiddenRowCount() > 0) {
+            <button type="button" class="show-more-leaders rr-button rr-button--secondary" (click)="showMore()">
+              Show {{ hiddenRowCount() > 50 ? 50 : hiddenRowCount() }} more
+            </button>
+          }
+        }
+
+        <p class="leader-footnote">
+          @if (selectedScope() === 'current') {
+            Live totals are provisional and update from the current matchup’s saved server windows.
+          } @else if (selectedScope() === 'season') {
+            “Scored for” follows the fantasy team that owned each completed immutable window, including players who changed teams later.
+          } @else {
+            Missing Projection V11 values display as — and are never converted to zero. Goalie entries are RinkRat fantasy team-goalie units.
+          }
+        </p>
+      </section>
+    }
+  </main>
 }

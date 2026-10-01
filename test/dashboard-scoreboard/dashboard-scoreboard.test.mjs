@@ -95,6 +95,7 @@ function makeGame(overrides = {}) {
 
 test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
   const {
+    clampNhlScoreboardRailIndex,
     combineDashboardNhlTeamRosterCounts,
     formatNhlGameDate,
     formatNhlGameStatus,
@@ -102,8 +103,24 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     getDashboardNhlRosterGamePointDisplay,
     getDashboardNhlRosterEntryRoute,
     getNhlScoreboardRefreshDelay,
+    getNhlScoreboardRailIndex,
     selectDashboardNhlGames,
   } = await loadUtility();
+
+  await suite.test('keeps game-rail controls on one exact bounded card', () => {
+    assert.equal(clampNhlScoreboardRailIndex(-2, 5), 0);
+    assert.equal(clampNhlScoreboardRailIndex(3, 5), 3);
+    assert.equal(clampNhlScoreboardRailIndex(9, 5), 4);
+    assert.equal(clampNhlScoreboardRailIndex(Number.NaN, 5), 0);
+    assert.equal(clampNhlScoreboardRailIndex(2, 0), 0);
+
+    const cardOffsets = [0, 218, 436, 654];
+    assert.equal(getNhlScoreboardRailIndex(0, cardOffsets), 0);
+    assert.equal(getNhlScoreboardRailIndex(220, cardOffsets), 1);
+    assert.equal(getNhlScoreboardRailIndex(640, cardOffsets), 3);
+    assert.equal(getNhlScoreboardRailIndex(-30, cardOffsets), 0);
+    assert.equal(getNhlScoreboardRailIndex(200, []), 0);
+  });
 
   await suite.test('combines roster spots across leagues by NHL team', () => {
     assert.deepEqual(
@@ -464,6 +481,24 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.doesNotMatch(template, /class="[^"]*nhl-scoreboard-(?!title)[^"]*"/);
     assert.match(template, /class="nhl-panel-heading"/);
     assert.match(template, /class="nhl-panel-status"/);
+  });
+
+  await suite.test('offers Android-safe swipe, button, and keyboard game navigation', () => {
+    assert.match(template, /class="nhl-game-navigation"/);
+    assert.match(template, /Game \{\{ activeGameNumber\(\) \}\} of \{\{ visibleGames\(\)\.length \}\}/);
+    assert.match(template, /\[disabled\]="!canScrollToPreviousGame\(\)"/);
+    assert.match(template, /\[disabled\]="!canScrollToNextGame\(\)"/);
+    assert.match(template, /role="region"[\s\S]*?tabindex="0"[\s\S]*?handleGameStripKeydown/);
+    assert.match(component, /event\.key === 'ArrowLeft'/);
+    assert.match(component, /event\.key === 'ArrowRight'/);
+    assert.match(component, /strip\.scrollTo\(\{/);
+    assert.match(component, /pointer\.pointerId !== event\.pointerId/);
+    assert.match(component, /Math\.abs\(strip\.scrollLeft - pointer\.startScrollLeft\) > 2/);
+    assert.doesNotMatch(component, /pointermove[\s\S]{0,300}preventDefault/);
+    assert.match(scoreboardStyles, /overscroll-behavior-x:\s*contain/);
+    assert.match(scoreboardStyles, /scroll-snap-type:\s*x proximity/);
+    assert.match(scoreboardStyles, /touch-action:\s*pan-x pan-y pinch-zoom/);
+    assert.match(scoreboardStyles, /@media \(max-width: 360px\)[\s\S]*?\.nhl-game-navigation/);
   });
 
   await suite.test('collapses decorative manager-profile artwork on narrow screens', () => {

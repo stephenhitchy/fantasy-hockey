@@ -413,6 +413,8 @@ Rows include current-season fantasy points, all-position rank, position rank, ne
 
 A1B deploys RC40 Hosting only. It adds no Function, permanent listener, Firestore Rule, index, TTL policy, migration, or competitive mutation. Full guidance is in `docs/RINKRAT_PRODUCT_A1B_PLAYER_BOARD.md`.
 
+The later B1W League Leaders presentation expands `/leagues/:leagueId/leaders` with clearly separated Current Matchup, finalized Season, and verified Projected Next 6 views; exact-position filters; immutable-window owner attribution; and lightweight League HQ/Dashboard entry points. It remains read-only and Hosting-only. See `docs/RINKRAT_PRODUCT_B1W_LEAGUE_LEADERS.md`.
+
 
 ## Product Batch A1A — Player Watchlist and Clear Ice
 

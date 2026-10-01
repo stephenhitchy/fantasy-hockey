@@ -79,7 +79,52 @@
       No NHL games are available on the current scoreboard.
     </div>
   } @else {
-    <div #gameStrip class="nhl-game-strip" [attr.aria-label]="heading()">
+    <div class="nhl-game-navigation" aria-label="Browse NHL games">
+      <button
+        type="button"
+        class="nhl-game-navigation-button"
+        aria-label="Previous NHL game"
+        aria-controls="nhl-game-strip"
+        [disabled]="!canScrollToPreviousGame()"
+        (click)="openPreviousGame()"
+      >
+        <span aria-hidden="true">←</span>
+        <span>Prev game</span>
+      </button>
+
+      <span
+        id="nhl-game-position"
+        class="nhl-game-position"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        Game {{ activeGameNumber() }} of {{ visibleGames().length }}
+      </span>
+
+      <button
+        type="button"
+        class="nhl-game-navigation-button nhl-game-navigation-button--next"
+        aria-label="Next NHL game"
+        aria-controls="nhl-game-strip"
+        [disabled]="!canScrollToNextGame()"
+        (click)="openNextGame()"
+      >
+        <span>Next game</span>
+        <span aria-hidden="true">→</span>
+      </button>
+    </div>
+
+    <div
+      #gameStrip
+      id="nhl-game-strip"
+      class="nhl-game-strip"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="heading() + '. Swipe or use the Left and Right Arrow keys to browse games.'"
+      aria-describedby="nhl-game-position"
+      (keydown)="handleGameStripKeydown($event)"
+      (scroll)="handleGameStripScroll()"
+    >
       @for (game of visibleGames(); track game.id) {
         <article
           class="nhl-game-card"
@@ -93,8 +138,8 @@
             [attr.aria-label]="getGameDetailsLabel(game)"
             (pointerdown)="beginGameCardPointer(game, $event)"
             (pointermove)="trackGameCardPointer(game, $event)"
-            (pointerup)="finishGameCardPointer()"
-            (pointercancel)="finishGameCardPointer()"
+            (pointerup)="finishGameCardPointer($event)"
+            (pointercancel)="finishGameCardPointer($event)"
             (click)="openGameDetails(game, $event)"
           ></button>
 

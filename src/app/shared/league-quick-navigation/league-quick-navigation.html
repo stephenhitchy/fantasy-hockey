@@ -59,6 +59,16 @@
 
   <a
     class="league-nav-action"
+    [class.league-nav-action--current]="isCurrent('leaders')"
+    [attr.aria-current]="isCurrent('leaders') ? 'page' : null"
+    [routerLink]="['/leagues', leagueId, 'leaders']"
+  >
+    <span class="pixel-icon icon-standings icon-sm" aria-hidden="true"></span>
+    <span>League Leaders</span>
+  </a>
+
+  <a
+    class="league-nav-action"
     [class.league-nav-action--current]="isCurrent('schedule')"
     [attr.aria-current]="isCurrent('schedule') ? 'page' : null"
     [routerLink]="['/leagues', leagueId, 'cycles', 'schedule-preview']"
