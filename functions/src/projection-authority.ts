@@ -49,6 +49,7 @@ import {
   projectionGenerationRequiresCommissioner,
 } from './shared/core/projection/projection-generation-access.util';
 import {
+  projectionGameIdMapsMatch,
   shouldMutateProjectionControl,
   shouldPublishProjectionResult,
   shouldReuseActiveProjectionRequest,
@@ -490,13 +491,6 @@ function normalizeAnchorTargetGameIdsByTeam(
   );
 }
 
-function targetGameIdsMatch(
-  left: Record<string, number[]> | null | undefined,
-  right: Record<string, number[]> | null | undefined,
-): boolean {
-  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
-}
-
 function normalizeSourceGameIdsByTeam(
   value: unknown,
 ): Record<string, number[]> | null {
@@ -662,7 +656,7 @@ async function resolveProjectionRequestContext(
 
       if (
         expectedTargetSourceBlockNumber === initialNhlBlockNumber &&
-        !targetGameIdsMatch(
+        !projectionGameIdMapsMatch(
           targetGameIdsByTeam,
           openingTargetGameIdsByTeam,
         )
@@ -2015,12 +2009,12 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
             claimed.targetCycleNumber,
           requestSeasonWindowAnchorEvidenceHash:
             latestRequest['seasonWindowAnchorEvidenceHash'],
-          requestTargetGameIdsMatch: targetGameIdsMatch(
+          requestTargetGameIdsMatch: projectionGameIdMapsMatch(
             latestRequest['targetGameIdsByTeam'] as Record<string, number[]> | null,
             claimed.targetGameIdsByTeam,
           ),
           requestSourceGamePlanMatches:
-            targetGameIdsMatch(
+            projectionGameIdMapsMatch(
               latestRequestSourceGamePlan,
               claimedSourceGamePlan,
             ) &&
@@ -2052,12 +2046,12 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
           draftInitialNhlBlockNumber: latestDraft['initialNhlBlockNumber'],
           draftSeasonWindowAnchorEvidenceHash:
             latestDraft['seasonWindowAnchorEvidenceHash'],
-          draftTargetGameIdsMatch: targetGameIdsMatch(
+          draftTargetGameIdsMatch: projectionGameIdMapsMatch(
             latestAnchorTargets,
             claimed.targetGameIdsByTeam,
           ),
           draftSourceGamePlanMatches:
-            targetGameIdsMatch(
+            projectionGameIdMapsMatch(
               latestDraftSourceGamePlan,
               claimedSourceGamePlan,
             ) &&

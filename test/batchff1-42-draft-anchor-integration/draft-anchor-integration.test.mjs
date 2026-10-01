@@ -16,6 +16,7 @@ import {
   buildSourceNhlTargetGameIdsByTeam,
 } from '../../functions/lib/shared/core/cycle/cycle-window-selection.util.js';
 import {
+  projectionGameIdMapsMatch,
   shouldMutateProjectionControl,
   shouldPublishProjectionResult,
   shouldReuseActiveProjectionRequest,
@@ -337,6 +338,56 @@ test('stale worker A cannot publish after reschedule B replaces the active reque
   })), false);
   assert.equal(shouldMutateProjectionControl('request-b', 'request-a'), false);
   assert.equal(shouldMutateProjectionControl('request-a', 'request-a'), true);
+});
+
+test('pre-draft publication ignores Firestore map key order but preserves each team game sequence', () => {
+  const canonical = Object.fromEntries(
+    Array.from({ length: 32 }, (_, index) => [
+      `T${String(index).padStart(2, '0')}`,
+      [index * 10 + 1, index * 10 + 2, index * 10 + 3],
+    ]),
+  );
+  const firestoreOrdered = Object.fromEntries(
+    Object.entries(canonical).reverse(),
+  );
+
+  assert.equal(
+    projectionGameIdMapsMatch(canonical, firestoreOrdered),
+    true,
+  );
+  assert.equal(shouldPublishProjectionResult(anchoredPublication({
+    requestTargetGameIdsMatch: projectionGameIdMapsMatch(
+      canonical,
+      firestoreOrdered,
+    ),
+    draftTargetGameIdsMatch: projectionGameIdMapsMatch(
+      canonical,
+      firestoreOrdered,
+    ),
+  })), true);
+
+  const changedSequence = structuredClone(firestoreOrdered);
+  changedSequence.T00 = [2, 1, 3];
+  assert.equal(
+    projectionGameIdMapsMatch(canonical, changedSequence),
+    false,
+  );
+
+  const changedGame = structuredClone(firestoreOrdered);
+  changedGame.T00 = [1, 2, 999];
+  assert.equal(projectionGameIdMapsMatch(canonical, changedGame), false);
+
+  const missingTeam = structuredClone(firestoreOrdered);
+  delete missingTeam.T31;
+  assert.equal(projectionGameIdMapsMatch(canonical, missingTeam), false);
+
+  const extraTeam = structuredClone(firestoreOrdered);
+  extraTeam.EXTRA = [1, 2, 3];
+  assert.equal(projectionGameIdMapsMatch(canonical, extraTeam), false);
+
+  const invalidGame = structuredClone(firestoreOrdered);
+  invalidGame.T00 = [1, 2, 0];
+  assert.equal(projectionGameIdMapsMatch(canonical, invalidGame), false);
 });
 
 test('publication rejects source/hash/ID drift and preserves legacy requests only without a new anchor', () => {
