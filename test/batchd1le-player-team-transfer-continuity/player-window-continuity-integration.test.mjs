@@ -61,6 +61,10 @@ test('asynchronous regular rollover carries a continuing skater and resets a que
     rollover,
     /previousPick && previousSummary\s*\? advancePlayerWindowContinuity\(\{[\s\S]*?completedScheduledGameIds: previousSummary\.scheduledGameIds/,
   );
+  assert.match(
+    rollover,
+    /assignmentNotBefore: previousPick\.snapshottedAt/,
+  );
   assert.match(rollover, /\.\.\.\(playerWindowContinuity \? \{ playerWindowContinuity \} : \{\}\)/);
 
   const reconciliation = section(
@@ -114,6 +118,10 @@ test('playoff banks require the preceding bank to complete, then carry or reset 
   assert.match(
     nextBank,
     /previousPick && previousWindow\s*\? advancePlayerWindowContinuity\(\{[\s\S]*?previousContinuity,[\s\S]*?completedScheduledGameIds: previousWindow\.scheduledGameIds/,
+  );
+  assert.match(
+    nextBank,
+    /assignmentNotBefore: previousPick\.snapshottedAt/,
   );
   assert.match(
     nextBank,

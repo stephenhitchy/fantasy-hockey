@@ -1,6 +1,9 @@
 import type { DraftableAsset } from '../draft/draft.models';
 import type { NhlTeamSeasonGame } from '../nhl/nhl-api.service';
-import { getNhlGameRuntimeState } from '../nhl/nhl-game-runtime-state.util';
+import {
+  getNhlGameRuntimeState,
+  hasNhlGameReachedStartSafetyBoundary,
+} from '../nhl/nhl-game-runtime-state.util';
 import {
   selectCycleWindowGames,
   selectGamesByStableIds,
@@ -195,6 +198,7 @@ function selectPlanSuffixGames(input: {
   excludedGameIds: ReadonlySet<number>;
   confirmedAppearanceGameIds: ReadonlySet<number>;
   requireFinalAppearanceEvidence: boolean;
+  scheduleDecisionAtMilliseconds: number;
   hardNotBeforeMilliseconds?: number;
   teamIdentityNotBeforeMilliseconds?: number;
 }): NhlTeamSeasonGame[] {
@@ -215,6 +219,23 @@ function selectPlanSuffixGames(input: {
       input.requireFinalAppearanceEvidence ||
       input.hardNotBeforeMilliseconds !== undefined ||
       input.teamIdentityNotBeforeMilliseconds !== undefined;
+    const reachedStartSafetyBoundary =
+      hasNhlGameReachedStartSafetyBoundary({
+        source: game,
+        observedAtMilliseconds: input.scheduleDecisionAtMilliseconds,
+      });
+
+    if (
+      requiresIdentityCutoverEvidence &&
+      runtimeState === 'scheduled' &&
+      reachedStartSafetyBoundary
+    ) {
+      throw new Error(
+        `NHL game ${game.id} reached its scheduled start while the provider ` +
+        `still reports ${game.gameState?.trim().toUpperCase() || 'an unrecognized state'}. ` +
+        'Window publication cannot prove the player-team identity cutover and will retry.',
+      );
+    }
 
     if (
       requiresIdentityCutoverEvidence &&
@@ -322,6 +343,8 @@ export function resolveLivePlayerTeamWindow(input: {
   assignmentNotBeforeMilliseconds?: number;
   /** Current-team confirmation is soft: prior finals need appearance proof. */
   teamIdentityNotBeforeMilliseconds?: number;
+  /** Server time at which mutable schedule ownership is being decided. */
+  scheduleDecisionAtMilliseconds: number;
 }): ResolvedLivePlayerWindow {
   const storedTeamAbbreviation = getAssetTeamAbbreviation(input.asset);
   const currentTeamAbbreviation = input.asset.assetType === 'skater'
@@ -409,6 +432,8 @@ export function resolveLivePlayerTeamWindow(input: {
           excludedGameIds: priorAssignedGameIds,
           confirmedAppearanceGameIds,
           requireFinalAppearanceEvidence: !continuesSameTeam,
+          scheduleDecisionAtMilliseconds:
+            input.scheduleDecisionAtMilliseconds,
           hardNotBeforeMilliseconds:
             input.assignmentNotBeforeMilliseconds,
           teamIdentityNotBeforeMilliseconds:
@@ -445,6 +470,8 @@ export function resolveLivePlayerTeamWindow(input: {
           excludedGameIds: priorAssignedGameIds,
           confirmedAppearanceGameIds,
           requireFinalAppearanceEvidence: true,
+          scheduleDecisionAtMilliseconds:
+            input.scheduleDecisionAtMilliseconds,
           hardNotBeforeMilliseconds:
             input.assignmentNotBeforeMilliseconds,
           teamIdentityNotBeforeMilliseconds:
@@ -484,6 +511,8 @@ export function resolveLivePlayerTeamWindow(input: {
           excludedGameIds: priorAssignedGameIds,
           confirmedAppearanceGameIds,
           requireFinalAppearanceEvidence: true,
+          scheduleDecisionAtMilliseconds:
+            input.scheduleDecisionAtMilliseconds,
           hardNotBeforeMilliseconds:
             input.assignmentNotBeforeMilliseconds,
           teamIdentityNotBeforeMilliseconds:
@@ -548,12 +577,18 @@ export function resolveLivePlayerTeamWindow(input: {
   for (const game of previousWindow.games) {
     const savedState = input.previous?.gameStates?.[String(game.id)];
     const currentState = getNhlGameRuntimeState(game);
+    const reachedStartSafetyBoundary =
+      hasNhlGameReachedStartSafetyBoundary({
+        source: game,
+        observedAtMilliseconds: input.scheduleDecisionAtMilliseconds,
+      });
     const isProtected =
       explicitlyProtectedGameIds.has(game.id) ||
       savedState === 'live' ||
       savedState === 'final' ||
       currentState === 'live' ||
-      currentState === 'final';
+      currentState === 'final' ||
+      reachedStartSafetyBoundary;
 
     if (isProtected && !protectedGameIds.has(game.id)) {
       protectedGames.push(game);
@@ -591,6 +626,7 @@ export function resolveLivePlayerTeamWindow(input: {
     excludedGameIds,
     confirmedAppearanceGameIds,
     requireFinalAppearanceEvidence: true,
+    scheduleDecisionAtMilliseconds: input.scheduleDecisionAtMilliseconds,
     hardNotBeforeMilliseconds: input.assignmentNotBeforeMilliseconds,
     teamIdentityNotBeforeMilliseconds:
       input.teamIdentityNotBeforeMilliseconds,

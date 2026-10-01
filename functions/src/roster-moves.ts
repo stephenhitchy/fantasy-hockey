@@ -1730,6 +1730,7 @@ export const applyImmediateRosterMove = onCall(
           rosterSlotId: activeSlotId,
           asset: incomingAsset,
           activationKey: `move-${transactionRef.id}`,
+          assignmentNotBefore: Date.now(),
         });
         const resetWindow = buildResetWindow(
           windowIndex >= 0 ? windows[windowIndex] : {},

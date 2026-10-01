@@ -62,6 +62,20 @@ substitutes a date-derived noon timestamp for puck drop. A game already owned
 by the same fantasy stint is excluded before this ambiguity check, so a shared
 former-club-versus-destination-club game cannot block its own continuation.
 
+The player game-log feed exposes only a calendar date, not puck-drop time. If
+it reports both the former and current NHL club on the same affiliation-boundary
+date, RinkRat does not use game-ID order as a substitute for chronology. The
+scoring pass fails closed until exact ordering evidence is available or can be
+reconciled deliberately.
+
+An exact `startTimeUTC` that is already at or before the server's ownership
+decision time also prevents a cached `FUT` or unrecognized provider state from
+being treated as proof that the game is still future. A former-club game at
+that boundary remains owned; an unsettled destination candidate fails closed
+until the provider state catches up. Explicit postponed or canceled schedule
+evidence keeps its existing deferred-game semantics instead of being inferred
+as puck drop from the superseded start time alone.
+
 If the provider omits a rostered player, assigns one stable ID to conflicting
 clubs, omits a club roster, or cannot provide required final appearance
 evidence, scoring fails visibly and retries. Missing evidence is never replaced
@@ -78,6 +92,7 @@ older miss and request a fresh check.
 Each active skater slot carries schema-1 `PlayerWindowContinuity` evidence:
 
 - an owner/slot/asset/stint identity;
+- the original server assignment boundary for a move-acquired skater;
 - all NHL game IDs assigned by earlier completed windows in that stint; and
 - the NHL club that supplied the immediately preceding completed window.
 
@@ -89,7 +104,10 @@ Cycle/window publication uses transactionally checked asset and continuity
 identity. A stale scoring worker cannot overwrite a newer roster move. Regular
 rollover, queued move activation, first-playoff-window creation, later playoff
 banks, and immediate untouched moves either carry or reset the cursor according
-to the same fantasy-stint rule.
+to the same fantasy-stint rule. A later regular or playoff window carries the
+move's original assignment boundary; its own snapshot time is never treated as
+a second activation. Legacy move snapshots may bootstrap that boundary from
+their persisted snapshot timestamp, but missing boundary evidence fails closed.
 
 For assigned playoff banks, the active cycle and bank are updated together.
 Bank scoring re-reads the current authority and rejects stale pick, assignment,

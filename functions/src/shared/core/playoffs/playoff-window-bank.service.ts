@@ -1516,6 +1516,7 @@ async function createNextPlayoffBankWindow(
             rosterSlotId: slot.slotId,
             asset: nextDraftableAsset,
             activationKey: `move-${slot.pendingMove.id}`,
+            assignmentNotBefore: Date.now(),
           })
         : previousPick && previousWindow
           ? advancePlayerWindowContinuity({
@@ -1528,6 +1529,7 @@ async function createNextPlayoffBankWindow(
               ownerId,
               rosterSlotId: slot.slotId,
               activationKey: `playoff-window-${windowNumber}`,
+              assignmentNotBefore: previousPick.snapshottedAt,
             })
           : createPlayerWindowContinuity({
               ownerId,

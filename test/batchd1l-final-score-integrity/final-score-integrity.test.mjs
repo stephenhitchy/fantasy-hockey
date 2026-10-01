@@ -36,6 +36,9 @@ const cadence = require(`${ROOT_PATH}functions/lib/shared/core/live-scoring/live
 const cycleWindow = require(`${ROOT_PATH}functions/lib/shared/core/cycle/cycle-window-selection.util.js`);
 const cycleScoring = require(`${ROOT_PATH}functions/lib/shared/core/cycle/cycle-scoring.service.js`);
 const cycleService = require(`${ROOT_PATH}functions/lib/shared/core/cycle/cycle.service.js`);
+const livePlayerTeamWindow = require(
+  `${ROOT_PATH}functions/lib/shared/core/cycle/live-player-team-window.util.js`,
+);
 const nhlApi = require(`${ROOT_PATH}functions/lib/shared/core/nhl/nhl-api.service.js`);
 const outbox = require(`${ROOT_PATH}functions/lib/shared/core/nhl/nhl-canonical-publication-outbox.service.js`);
 const playoffService = require(`${ROOT_PATH}functions/lib/shared/core/playoffs/playoff.service.js`);
@@ -1194,11 +1197,130 @@ test('an older incomplete scorer result cannot downgrade a completed slot window
   assert.deepEqual(savedWindow.incompleteFinalGameIds, []);
 });
 
-test('duplicate roster-move reconciliation activates once and writes one transaction', async (t) => {
+test('legacy ensure preserves an immediate move boundary instead of its later write timestamp', async () => {
+  const leagueId = `immediate-continuity-${randomUUID()}`;
+  const boundaryMilliseconds = Date.parse('2020-10-01T20:00:00.000Z');
+  const writeMilliseconds = Date.parse('2020-10-01T20:05:00.000Z');
+  const cycle = {
+    id: 'cycle-1',
+    cycleNumber: 1,
+    status: 'active',
+    phase: 'regular_season',
+    matchupIds: [],
+  };
+  const continuity = {
+    schemaVersion: 1,
+    continuityId: 'owner-a::C-1::skater-7::move-transaction-1',
+    ownerId: 'owner-a',
+    rosterSlotId: 'C-1',
+    assetKey: 'skater-7',
+    assignmentNotBeforeMilliseconds: boundaryMilliseconds,
+    priorAssignedGameIds: [],
+    lastScheduleTeamAbbreviation: 'SEA',
+  };
+  const cycleRef = firestore.doc(`leagues/${leagueId}/cycles/cycle-1`);
+  const pickRef = firestore.doc(
+    `leagues/${leagueId}/cycles/cycle-1/rosterPicks/owner-a__C-1`,
+  );
+  const teamWindowsRef = firestore.doc(
+    `leagues/${leagueId}/cycles/cycle-1/teamWindows/owner-a`,
+  );
+
+  await Promise.all([
+    cycleRef.set({
+      ...cycle,
+      playerWindowContinuitySchemaVersion: 0,
+    }),
+    pickRef.set({
+      overallPick: 1,
+      round: 1,
+      pickInRound: 1,
+      ownerId: 'owner-a',
+      rosterSlotId: 'C-1',
+      cycleWindowId: 'owner-a__C-1__cycle-1',
+      snapshotCycleNumber: 1,
+      snapshotSource: 'immediate-untouched-roster-move',
+      snapshottedAt: Timestamp.fromMillis(writeMilliseconds),
+      playerWindowContinuity: continuity,
+      asset: skaterAsset,
+    }),
+    teamWindowsRef.set({
+      id: 'owner-a',
+      ownerId: 'owner-a',
+      cycleNumber: 1,
+      expectedRosterSlotIds: ['C-1'],
+      windows: [{
+        id: 'owner-a__C-1__cycle-1',
+        ownerId: 'owner-a',
+        rosterSlotId: 'C-1',
+        cycleNumber: 1,
+        position: 'C',
+        assetKey: 'skater-7',
+        asset: skaterAsset,
+        playerWindowContinuity: continuity,
+        status: 'scheduled',
+        fantasyPoints: 0,
+        scheduledGameIds: [],
+        completedGameIds: [],
+        incompleteFinalGameIds: [],
+        liveGameIds: [],
+        appearanceGameIds: [],
+        gameScores: {},
+        gameStates: {},
+        scheduledGames: 0,
+        gamesPlayed: 0,
+        actualGamesPlayed: 0,
+        gamesLeft: 0,
+      }],
+      completedWindowCount: 0,
+      totalWindowCount: 1,
+      status: 'scheduled',
+    }),
+  ]);
+
+  const migrated = await cycleService.ensureCyclePlayerWindowContinuity(
+    leagueId,
+    cycle,
+  );
+  const [savedCycle, savedPick, savedTeamWindows] = await Promise.all([
+    cycleRef.get(),
+    pickRef.get(),
+    teamWindowsRef.get(),
+  ]);
+
+  assert.equal(migrated.length, 1);
+  assert.equal(
+    migrated[0].playerWindowContinuity.assignmentNotBeforeMilliseconds,
+    boundaryMilliseconds,
+  );
+  assert.equal(savedCycle.data().playerWindowContinuitySchemaVersion, 1);
+  assert.equal(savedPick.data().snapshottedAt.toMillis(), writeMilliseconds);
+  assert.equal(
+    savedPick.data().playerWindowContinuity.assignmentNotBeforeMilliseconds,
+    boundaryMilliseconds,
+  );
+  assert.equal(
+    savedTeamWindows.data().windows[0]
+      .playerWindowContinuity.assignmentNotBeforeMilliseconds,
+    boundaryMilliseconds,
+  );
+});
+
+test('delayed roster-move reconciliation resets the untouched window before legacy ensure', async (t) => {
   const leagueId = `roster-${randomUUID()}`;
   const outgoingAsset = rosterSkater(11, 'skater-11', 'active');
   const incomingAsset = rosterSkater(12, 'skater-12', 'new');
-  const queuedAt = '2026-10-01T00:00:00.000Z';
+  const queuedAt = '2020-10-01T00:00:00.000Z';
+  const targetWindowSnapshotMilliseconds = Date.parse(
+    '2020-10-02T00:00:00.000Z',
+  );
+  const gameBetweenSnapshotAndRecoveryMilliseconds = Date.parse(
+    '2020-10-02T12:00:00.000Z',
+  );
+  const delayedRecoveryMilliseconds = Date.parse(
+    '2020-10-03T00:00:00.000Z',
+  );
+  const cycleRef = firestore.doc(`leagues/${leagueId}/cycles/cycle-2`);
   const pickRef = firestore.doc(
     `leagues/${leagueId}/cycles/cycle-2/rosterPicks/owner-a__C-1`,
   );
@@ -1222,6 +1344,7 @@ test('duplicate roster-move reconciliation activates once and writes one transac
     targetProjectionCycleNumber: 2,
   };
 
+  t.mock.method(Date, 'now', () => delayedRecoveryMilliseconds);
   t.mock.method(windowProjection, 'ensureWindowProjectionBundle', async () => ({
     metadata: null,
     assetsByKey: new Map([['skater-12', projectedIncomingAsset]]),
@@ -1231,6 +1354,10 @@ test('duplicate roster-move reconciliation activates once and writes one transac
     errorMessage: '',
   }));
   await Promise.all([
+    cycleRef.set({
+      ...cycle,
+      playerWindowContinuitySchemaVersion: 0,
+    }),
     pickRef.set({
       overallPick: 1,
       round: 1,
@@ -1239,7 +1366,7 @@ test('duplicate roster-move reconciliation activates once and writes one transac
       rosterSlotId: 'C-1',
       cycleWindowId: 'owner-a__C-1__cycle-2',
       snapshotCycleNumber: 2,
-      snapshottedAt: Timestamp.fromDate(new Date('2026-10-02T00:00:00.000Z')),
+      snapshottedAt: Timestamp.fromMillis(targetWindowSnapshotMilliseconds),
       asset: {
         ...skaterAsset,
         assetKey: 'skater-11',
@@ -1311,14 +1438,20 @@ test('duplicate roster-move reconciliation activates once and writes one transac
     [team],
     cycle,
   );
+  const migrated = await cycleService.ensureCyclePlayerWindowContinuity(
+    leagueId,
+    cycle,
+  );
   const duplicate = await cycleService.reconcilePendingRosterMovesForRegularSeasonCycle(
     leagueId,
     [team],
     cycle,
   );
-  const [savedRoster, savedPick, transactions] = await Promise.all([
+  const [savedCycle, savedRoster, savedPick, savedTeamWindows, transactions] = await Promise.all([
+    cycleRef.get(),
     rosterRef.get(),
     pickRef.get(),
+    teamWindowsRef.get(),
     firestore.collection(`leagues/${leagueId}/transactions`).get(),
   ]);
 
@@ -1328,12 +1461,72 @@ test('duplicate roster-move reconciliation activates once and writes one transac
   assert.equal(savedRoster.data().activeSlots[0].pendingMove, null);
   assert.equal(savedPick.data().asset.assetKey, 'skater-12');
   assert.equal(savedPick.data().snapshotSource, 'queued-slot-move-reconciled');
+  assert.ok(
+    savedPick.data().snapshottedAt.toMillis() > targetWindowSnapshotMilliseconds,
+    'the reconciliation write time must remain audit evidence, not replace the earlier assignment boundary',
+  );
+  assert.equal(migrated.length, 1);
+  assert.equal(savedCycle.data().playerWindowContinuitySchemaVersion, 1);
+  assert.equal(
+    savedPick.data().playerWindowContinuity.assignmentNotBeforeMilliseconds,
+    targetWindowSnapshotMilliseconds,
+  );
+  assert.equal(savedTeamWindows.data().windows[0].assetKey, 'skater-12');
+  assert.equal(savedTeamWindows.data().windows[0].asset.assetKey, 'skater-12');
+  assert.deepEqual(savedTeamWindows.data().windows[0].scheduledGameIds, []);
+  assert.equal(savedTeamWindows.data().windows[0].gamesPlayed, 0);
+  assert.equal(
+    savedTeamWindows.data().windows[0]
+      .playerWindowContinuity.assignmentNotBeforeMilliseconds,
+    targetWindowSnapshotMilliseconds,
+  );
   assert.equal(
     Object.hasOwn(savedPick.data(), 'sourceNhlTargetGameIds'),
     false,
   );
   assert.equal(transactions.size, 1);
   assert.equal(transactions.docs[0].data().queuedMoveId, 'queued-move-1');
+
+  const recoveredSchedule = Array.from({ length: 6 }, (_, index) => {
+    const startMilliseconds = index === 0
+      ? gameBetweenSnapshotAndRecoveryMilliseconds
+      : delayedRecoveryMilliseconds + index * 86_400_000;
+    const state = index === 0 ? 'FINAL' : 'FUT';
+
+    return {
+      id: 201 + index,
+      gameDate: new Date(startMilliseconds).toISOString().slice(0, 10),
+      startTimeUTC: new Date(startMilliseconds).toISOString(),
+      gameType: 2,
+      gameState: state,
+      homeTeam: {
+        abbrev: 'SEA',
+        ...(state === 'FINAL' ? { score: 3 } : {}),
+      },
+      awayTeam: {
+        abbrev: 'VAN',
+        ...(state === 'FINAL' ? { score: 2 } : {}),
+      },
+    };
+  });
+  const resolvedWindow = livePlayerTeamWindow.resolveLivePlayerTeamWindow({
+    asset: savedPick.data().asset,
+    schedulesByTeam: { SEA: recoveredSchedule },
+    cycleNumber: 2,
+    requiredGamesPerCycle: 6,
+    currentTeamAbbreviation: 'SEA',
+    seasonSourceGameIds: recoveredSchedule.map((game) => game.id),
+    assignmentNotBeforeMilliseconds:
+      savedPick.data().playerWindowContinuity
+        .assignmentNotBeforeMilliseconds,
+    scheduleDecisionAtMilliseconds: delayedRecoveryMilliseconds,
+  });
+
+  assert.deepEqual(
+    resolvedWindow.games.map((game) => game.id),
+    [201, 202, 203, 204, 205, 206],
+    'delayed recovery must retain the game after the target snapshot but before worker recovery',
+  );
 });
 
 test('duplicate playoff results cannot advance the bracket twice', () => {

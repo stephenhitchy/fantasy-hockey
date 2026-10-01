@@ -145,6 +145,12 @@ function normalizePlayerWindowContinuity(
     /^[A-Z0-9]{2,4}$/.test(candidate['lastScheduleTeamAbbreviation'].trim().toUpperCase())
       ? candidate['lastScheduleTeamAbbreviation'].trim().toUpperCase()
       : undefined;
+  const assignmentNotBeforeMilliseconds =
+    typeof candidate['assignmentNotBeforeMilliseconds'] === 'number' &&
+    Number.isFinite(candidate['assignmentNotBeforeMilliseconds']) &&
+    candidate['assignmentNotBeforeMilliseconds'] >= 0
+      ? Math.trunc(candidate['assignmentNotBeforeMilliseconds'])
+      : undefined;
 
   return {
     schemaVersion: 1,
@@ -152,6 +158,9 @@ function normalizePlayerWindowContinuity(
     ownerId,
     rosterSlotId,
     assetKey,
+    ...(assignmentNotBeforeMilliseconds !== undefined
+      ? { assignmentNotBeforeMilliseconds }
+      : {}),
     priorAssignedGameIds: [
       ...new Set(normalizeNumberArray(candidate['priorAssignedGameIds'])),
     ],

@@ -276,6 +276,7 @@ export interface NhlTeamSeasonGame {
   startTimeUTC?: string;
   gameType: number;
   gameState?: string;
+  gameScheduleState?: string;
   homeTeam: {
     abbrev: string;
     score?: number;

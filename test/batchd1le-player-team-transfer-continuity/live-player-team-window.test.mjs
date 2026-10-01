@@ -7,9 +7,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = new URL('../../', import.meta.url);
 const ROOT_PATH = fileURLToPath(ROOT);
 const require = createRequire(import.meta.url);
-const { resolveLivePlayerTeamWindow } = require(
+const { resolveLivePlayerTeamWindow: resolveLivePlayerTeamWindowBase } = require(
   `${ROOT_PATH}functions/lib/shared/core/cycle/live-player-team-window.util.js`,
 );
+const resolveLivePlayerTeamWindow = (input) =>
+  resolveLivePlayerTeamWindowBase({
+    scheduleDecisionAtMilliseconds: Date.parse('2026-09-30T00:00:00Z'),
+    ...input,
+  });
 const cycleScoring = require(
   `${ROOT_PATH}functions/lib/shared/core/cycle/cycle-scoring.service.js`,
 );
@@ -102,6 +107,28 @@ function secondScoringPick() {
   };
 }
 
+test('current-affiliation appearance proof fails closed for an ambiguous same-day team change', () => {
+  assert.throws(
+    () => cycleScoring.getCurrentAffiliationAppearanceGameIds([
+      { gameId: 9002, teamAbbrev: 'CBJ', gameDate: '2026-10-01' },
+      { gameId: 9001, teamAbbrev: 'TOR', gameDate: '2026-10-01' },
+    ], 'CBJ'),
+    /multiple team affiliations.*does not provide exact game times/,
+  );
+});
+
+test('current-affiliation appearance proof keeps only games after an unambiguous team-change date', () => {
+  assert.deepEqual(
+    cycleScoring.getCurrentAffiliationAppearanceGameIds([
+      { gameId: 12, teamAbbrev: 'CBJ', gameDate: '2026-10-04' },
+      { gameId: 2, teamAbbrev: 'TOR', gameDate: '2026-10-02' },
+      { gameId: 11, teamAbbrev: 'CBJ', gameDate: '2026-10-03' },
+      { gameId: 1, teamAbbrev: 'TOR', gameDate: '2026-10-01' },
+    ], 'CBJ'),
+    [11, 12],
+  );
+});
+
 test('a team change protects every started or settled ownership signal', () => {
   const tor = schedule('TOR', 1, 6, { 2: 'LIVE' });
   const cbj = schedule('CBJ', 101, 12);
@@ -156,6 +183,100 @@ test('a game that became live after the saved snapshot cannot be remapped away',
 
   assert.deepEqual(ids(resolved), [2, 101, 102, 103, 104, 105]);
   assert.equal(resolved.sourceTeamAbbreviationByGameId['2'], 'TOR');
+});
+
+test('a stale FUT former-club game at puck drop cannot be remapped away', () => {
+  const tor = schedule('TOR', 1, 6);
+  const cbj = schedule('CBJ', 101, 12);
+  const resolved = resolveLivePlayerTeamWindow({
+    asset: tradedAsset,
+    schedulesByTeam: { TOR: tor, CBJ: cbj },
+    cycleNumber: 1,
+    requiredGamesPerCycle: 6,
+    previous: {
+      status: 'scheduled',
+      scheduledGameIds: tor.map((entry) => entry.id),
+      gameStates: Object.fromEntries(
+        tor.map((entry) => [String(entry.id), 'scheduled']),
+      ),
+      scheduleTeamAbbreviation: 'TOR',
+    },
+    currentTeamAbbreviation: 'CBJ',
+    seasonSourceGameIds: cbj.map((entry) => entry.id),
+    scheduleDecisionAtMilliseconds: Date.parse(tor[0].startTimeUTC),
+  });
+
+  assert.deepEqual(ids(resolved), [1, 101, 102, 103, 104, 105]);
+  assert.equal(resolved.sourceTeamAbbreviationByGameId['1'], 'TOR');
+});
+
+test('a genuinely future former-club game remains eligible for transfer remapping', () => {
+  const tor = schedule('TOR', 1, 6);
+  const cbj = schedule('CBJ', 101, 12);
+  const resolved = resolveLivePlayerTeamWindow({
+    asset: tradedAsset,
+    schedulesByTeam: { TOR: tor, CBJ: cbj },
+    cycleNumber: 1,
+    requiredGamesPerCycle: 6,
+    previous: {
+      status: 'scheduled',
+      scheduledGameIds: tor.map((entry) => entry.id),
+      gameStates: Object.fromEntries(
+        tor.map((entry) => [String(entry.id), 'scheduled']),
+      ),
+      scheduleTeamAbbreviation: 'TOR',
+    },
+    currentTeamAbbreviation: 'CBJ',
+    seasonSourceGameIds: cbj.map((entry) => entry.id),
+    scheduleDecisionAtMilliseconds: Date.parse(tor[0].startTimeUTC) - 1,
+  });
+
+  assert.deepEqual(ids(resolved), [101, 102, 103, 104, 105, 106]);
+});
+
+test('a stale FUT destination game at puck drop fails closed during a transfer cutover', () => {
+  const cbj = schedule('CBJ', 101, 12);
+
+  assert.throws(
+    () => resolveLivePlayerTeamWindow({
+      asset: tradedAsset,
+      schedulesByTeam: { CBJ: cbj },
+      cycleNumber: 1,
+      requiredGamesPerCycle: 6,
+      currentTeamAbbreviation: 'CBJ',
+      seasonSourceGameIds: cbj.map((entry) => entry.id),
+      scheduleDecisionAtMilliseconds: Date.parse(cbj[0].startTimeUTC),
+    }),
+    /reached its scheduled start.*cannot prove the player-team identity cutover/,
+  );
+});
+
+test('explicit postponed or canceled evidence is not inferred as puck drop', () => {
+  for (const gameScheduleState of ['PPD', 'CANCELLED']) {
+    const tor = schedule('TOR', 1, 6);
+    const cbj = schedule('CBJ', 101, 12);
+    tor[0].gameScheduleState = gameScheduleState;
+    const resolved = resolveLivePlayerTeamWindow({
+      asset: tradedAsset,
+      schedulesByTeam: { TOR: tor, CBJ: cbj },
+      cycleNumber: 1,
+      requiredGamesPerCycle: 6,
+      previous: {
+        status: 'scheduled',
+        scheduledGameIds: tor.map((entry) => entry.id),
+        scheduleTeamAbbreviation: 'TOR',
+      },
+      currentTeamAbbreviation: 'CBJ',
+      seasonSourceGameIds: cbj.map((entry) => entry.id),
+      scheduleDecisionAtMilliseconds: Date.parse(tor[0].startTimeUTC),
+    });
+
+    assert.deepEqual(
+      ids(resolved),
+      [101, 102, 103, 104, 105, 106],
+      `${gameScheduleState} should preserve explicit deferred-game semantics`,
+    );
+  }
 });
 
 test('a fresh fantasy activation excludes destination games that already started', () => {
@@ -273,6 +394,33 @@ test('scoring rejects live identity boundaries without exact puck-drop time', as
       currentTeamIdentityGeneratedAt: '2026-10-01T23:30:00Z',
     }),
     /exact startTimeUTC is unavailable/,
+  );
+});
+
+test('scoring refreshes identity evidence when cached FUT state is past puck drop', async (t) => {
+  const tor = schedule('TOR', 1, 6).map((entry, index) => ({
+    ...entry,
+    gameDate: `2000-01-${String(index + 1).padStart(2, '0')}`,
+    startTimeUTC: `2000-01-${String(index + 1).padStart(2, '0')}T23:00:00Z`,
+  }));
+
+  t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async () => tor);
+
+  await assert.rejects(
+    cycleScoring.calculateCycleScoring({
+      picks: [scoringPick()],
+      cycleNumber: 1,
+      season: '20262027',
+      requiredGamesPerCycle: 6,
+      scoringRules: scoringRules.defaultScoringRules,
+      currentTeamAbbreviationByPlayerId: new Map([[PLAYER_ID, 'TOR']]),
+      currentTeamConfirmedAtByPlayerId: new Map([
+        [PLAYER_ID, '1999-12-01T00:00:00Z'],
+      ]),
+      currentTeamIdentityHash: 'stale-fut-identity-boundary-test',
+      currentTeamIdentityGeneratedAt: '1999-12-01T00:00:00Z',
+    }),
+    /predates a game that has now started/,
   );
 });
 
@@ -628,6 +776,156 @@ test('a delayed trade detection keeps a proven new-team appearance before the no
   });
 
   assert.deepEqual(ids(resolved), [7, 8, 105, 106, 107, 108]);
+});
+
+test('cycle scoring forwards a proven destination appearance before the frozen nominal block', async (t) => {
+  const now = Date.now();
+  const buildRelativeGame = (id, team, startMilliseconds, state = 'FUT') => ({
+    id,
+    gameDate: new Date(startMilliseconds).toISOString().slice(0, 10),
+    startTimeUTC: new Date(startMilliseconds).toISOString(),
+    gameType: 2,
+    gameState: state,
+    homeTeam: {
+      abbrev: team,
+      ...(state === 'FINAL' ? { score: 3 } : {}),
+    },
+    awayTeam: {
+      abbrev: team === 'TOR' ? 'MTL' : 'PIT',
+      ...(state === 'FINAL' ? { score: 2 } : {}),
+    },
+  });
+  const tor = Array.from({ length: 12 }, (_, index) =>
+    buildRelativeGame(1 + index, 'TOR', now + (index + 1) * 86_400_000)
+  );
+  const cbj = Array.from({ length: 12 }, (_, index) => {
+    const id = 101 + index;
+    const isProvenAppearance = id === 105;
+    const isEarlierFinal = id < 105;
+    const startMilliseconds = isProvenAppearance
+      ? now - 2 * 60 * 60 * 1000
+      : isEarlierFinal
+        ? now - (6 - index) * 86_400_000
+        : now + (index - 3) * 86_400_000;
+
+    return buildRelativeGame(
+      id,
+      'CBJ',
+      startMilliseconds,
+      isProvenAppearance || isEarlierFinal ? 'FINAL' : 'FUT',
+    );
+  });
+  const appearance = cbj.find((entry) => entry.id === 105);
+  const gameLogEntry = {
+    gameId: 105,
+    teamAbbrev: 'CBJ',
+    homeRoadFlag: 'H',
+    gameDate: appearance.gameDate,
+    goals: 1,
+    assists: 0,
+    points: 1,
+    plusMinus: 1,
+    powerPlayPoints: 0,
+    gameWinningGoals: 0,
+    otGoals: 0,
+    shots: 2,
+    shorthandedPoints: 0,
+    toi: '10:00',
+    opponentAbbrev: 'PIT',
+  };
+
+  t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async (team) =>
+    team === 'CBJ' ? cbj : tor
+  );
+  t.mock.method(nhlApi, 'getRegularSeasonGameLog', async () => ({
+    gameLog: [gameLogEntry],
+  }));
+  t.mock.method(nhlApi, 'getGameBoxscore', async (gameId) => {
+    assert.equal(gameId, 105);
+    return {
+      homeTeam: { abbrev: 'CBJ', score: 3 },
+      awayTeam: { abbrev: 'PIT', score: 2 },
+      playerByGameStats: {
+        homeTeam: {
+          forwards: [{
+            playerId: PLAYER_ID,
+            name: { default: 'Trade Continuity Test Skater' },
+            position: 'L',
+            goals: 1,
+            assists: 0,
+            points: 1,
+            plusMinus: 1,
+            hits: 0,
+            powerPlayGoals: 0,
+            sog: 2,
+            toi: '10:00',
+            blockedShots: 0,
+          }],
+          defense: [],
+          goalies: [],
+        },
+        awayTeam: { forwards: [], defense: [], goalies: [] },
+      },
+    };
+  });
+  t.mock.method(nhlApi, 'getGamePlayByPlay', async () => ({
+    plays: [{
+      eventId: 1,
+      typeDescKey: 'goal',
+      details: {
+        scoringPlayerId: PLAYER_ID,
+        homeScore: 1,
+        awayScore: 0,
+      },
+    }],
+  }));
+
+  const pick = {
+    ...scoringPick(),
+    cycleWindowId: 'owner-a__LW-1__cycle-2',
+    snapshotCycleNumber: 2,
+    sourceNhlBlockNumber: 2,
+    sourceNhlTargetGameIds: [7, 8, 9, 10, 11, 12],
+    sourceNhlTargetGameIdsByTeam: {
+      TOR: [7, 8, 9, 10, 11, 12],
+      CBJ: [107, 108, 109, 110, 111, 112],
+    },
+    playerWindowContinuity: {
+      schemaVersion: 1,
+      continuityId: 'owner-a::LW-1::skater-8482720::draft-1',
+      ownerId: 'owner-a',
+      rosterSlotId: 'LW-1',
+      assetKey: 'skater-8482720',
+      priorAssignedGameIds: [1, 2, 3, 4, 5, 6],
+      lastScheduleTeamAbbreviation: 'TOR',
+    },
+  };
+  const result = await cycleScoring.calculateCycleScoring({
+    picks: [pick],
+    cycleNumber: 2,
+    season: '20262027',
+    requiredGamesPerCycle: 6,
+    scoringRules: scoringRules.defaultScoringRules,
+    currentTeamAbbreviationByPlayerId: new Map([[PLAYER_ID, 'CBJ']]),
+    currentTeamConfirmedAtByPlayerId: new Map([
+      [PLAYER_ID, new Date(now - 60 * 60 * 1000).toISOString()],
+    ]),
+    currentTeamIdentityHash: 'pre-nominal-appearance-test',
+    currentTeamIdentityGeneratedAt: new Date(now - 30 * 60 * 1000).toISOString(),
+    sourceNhlTargetGameIdsByTeam: {
+      TOR: [7, 8, 9, 10, 11, 12],
+      CBJ: [107, 108, 109, 110, 111, 112],
+    },
+    seasonSourceGameIdsByTeam: {
+      TOR: tor.map((entry) => entry.id),
+      CBJ: cbj.map((entry) => entry.id),
+    },
+  });
+
+  assert.deepEqual(
+    result.windowScores[pick.cycleWindowId].scheduledGameIds,
+    [105, 106, 107, 108, 109, 110],
+  );
 });
 
 test('new assignments fail visibly when six unique eligible games are unavailable', () => {

@@ -865,6 +865,7 @@ async function buildCurrentRosterSnapshotPicks(
             rosterSlotId: slot.slotId,
             asset: draftableAsset,
             activationKey: `move-${slot.pendingMove.id}`,
+            assignmentNotBefore: Date.now(),
           })
         : continuitySeed?.assetKey === draftableAsset.assetKey
           ? continuitySeed.continuity
@@ -1235,6 +1236,28 @@ interface LegacyCycleWindowHistory {
   windowsByOwnerId: Map<string, ReturnType<typeof normalizeFantasyTeamCycleWindows>>;
 }
 
+function prepareCycleWindowsForFirestore(
+  windows: readonly FantasyAssetCycleWindow[],
+): Array<Record<string, unknown>> {
+  return windows.map((window) => {
+    const {
+      scheduleTeamAbbreviation,
+      createdAt,
+      updatedAt,
+      ...requiredFields
+    } = window;
+
+    return {
+      ...requiredFields,
+      ...(scheduleTeamAbbreviation !== undefined
+        ? { scheduleTeamAbbreviation }
+        : {}),
+      ...(createdAt !== undefined ? { createdAt } : {}),
+      ...(updatedAt !== undefined ? { updatedAt } : {}),
+    };
+  });
+}
+
 /**
  * One-time mixed-version bridge for active regular-season cycles created
  * before per-slot continuity existed. The marker is committed only after all
@@ -1438,6 +1461,9 @@ export async function ensureCyclePlayerWindowContinuity(
         ...(priorPick.snapshotSource
           ? { snapshotSource: priorPick.snapshotSource }
           : {}),
+        ...(priorPick.snapshottedAt
+          ? { assignmentNotBefore: priorPick.snapshottedAt }
+          : {}),
       });
     }
 
@@ -1468,6 +1494,7 @@ export async function ensureCyclePlayerWindowContinuity(
       currentAsset: pick.asset,
       currentContinuity,
       currentSnapshotSource: pick.snapshotSource,
+      currentAssignmentNotBefore: pick.snapshottedAt,
       assignmentsNewestFirst: assignments,
     });
 
@@ -1603,6 +1630,7 @@ export async function ensureCyclePlayerWindowContinuity(
         currentAsset: savedPick.asset,
         currentContinuity: savedCurrentContinuity,
         currentSnapshotSource: savedPick.snapshotSource,
+        currentAssignmentNotBefore: savedPick.snapshottedAt,
         assignmentsNewestFirst: assignmentsBySlotKey.get(slotKey) ?? [],
       }) ?? rebuiltBySlotKey.get(slotKey);
 
@@ -1649,7 +1677,7 @@ export async function ensureCyclePlayerWindowContinuity(
       transaction.set(
         currentTeamWindowRefs[ownerIndex],
         {
-          windows: teamWindows.windows,
+          windows: prepareCycleWindowsForFirestore(teamWindows.windows),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -2090,6 +2118,7 @@ async function loadCompletedContinuitySeeds(input: {
       ownerId: pick.ownerId,
       rosterSlotId,
       activationKey: `cycle-${cycleNumber + 1}`,
+      assignmentNotBefore: pick.snapshottedAt,
     });
 
     if (continuity) {
@@ -2973,6 +3002,7 @@ async function buildNextWindowSnapshotPicks(
               rosterSlotId: slot.slotId,
               asset: nextDraftableAsset,
               activationKey: `move-${slot.pendingMove.id}`,
+              assignmentNotBefore: Date.now(),
             })
           : previousPick && previousSummary
             ? advancePlayerWindowContinuity({
@@ -2985,6 +3015,7 @@ async function buildNextWindowSnapshotPicks(
                 ownerId: rosterSnapshot.ownerId,
                 rosterSlotId: slot.slotId,
                 activationKey: `cycle-${nextCycleNumber}`,
+                assignmentNotBefore: previousPick.snapshottedAt,
               })
             : createPlayerWindowContinuity({
                 ownerId: rosterSnapshot.ownerId,
@@ -3598,6 +3629,68 @@ function getStoredTimestampMilliseconds(value: unknown): number | null {
   return seconds * 1000 + (Number.isFinite(nanoseconds) ? nanoseconds / 1_000_000 : 0);
 }
 
+function resetUntouchedWindowForReconciledMove(input: {
+  previous: FantasyAssetCycleWindow;
+  asset: DraftableAsset;
+  playerWindowContinuity?: PlayerWindowContinuity;
+}): FantasyAssetCycleWindow {
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: input.previous.id,
+    ownerId: input.previous.ownerId,
+    rosterSlotId: input.previous.rosterSlotId,
+    cycleNumber: input.previous.cycleNumber,
+    sourceNhlBlockNumber: input.previous.sourceNhlBlockNumber,
+    position: input.asset.position,
+    assetKey: input.asset.assetKey,
+    asset: input.asset,
+    status: 'scheduled',
+    scheduledGameIds: [],
+    scheduledGameDates: [],
+    scheduledGameLabels: [],
+    sourceTeamAbbreviationByGameId: {},
+    teamIdentityChanged: false,
+    ...(input.playerWindowContinuity
+      ? { playerWindowContinuity: input.playerWindowContinuity }
+      : {}),
+    completedGameIds: [],
+    liveGameIds: [],
+    appearanceGameIds: [],
+    gameScores: {},
+    gameStates: {},
+    gameInputCompleteness: {},
+    incompleteFinalGameIds: [],
+    scheduledGames: 0,
+    gamesPlayed: 0,
+    actualGamesPlayed: 0,
+    gamesLeft: 0,
+    fantasyPoints: 0,
+    frozenProjectionPoints:
+      input.asset.frozenCycleProjectionPoints ??
+      input.asset.projectedCyclePoints ??
+      null,
+    frozenProjectionVersion: input.asset.frozenProjectionVersion ?? null,
+    frozenProjectionSource: input.asset.frozenProjectionSource ?? null,
+    frozenProjectionSnapshotId:
+      input.asset.frozenProjectionSnapshotId ??
+      input.asset.sharedProjectionSnapshotId ??
+      null,
+    frozenProjectionGeneratedAt:
+      input.asset.frozenProjectionGeneratedAt ??
+      input.asset.projectionGeneratedAt ??
+      null,
+    frozenProjectionFrozenAt: nowIso,
+    frozenProjectionTargetGameIds: [],
+    firstScheduledGameDate: null,
+    lastScheduledGameDate: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: input.previous.createdAt ?? nowIso,
+    updatedAt: nowIso,
+  };
+}
+
 function wasPendingMoveQueuedBeforeCycleSnapshot(
   pendingMove: PendingRosterSlotMove,
   pick: SavedCycleRosterPick,
@@ -3781,6 +3874,7 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
             teamWindowsSnapshot.data()!,
           )
         : null;
+      let reconciledTeamWindows = persistedTeamWindows;
       let activated = 0;
       let skipped = 0;
 
@@ -3814,15 +3908,30 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
           return;
         }
 
+        const targetWindowSnapshotMilliseconds =
+          getStoredTimestampMilliseconds(pick.snapshottedAt);
+
+        if (targetWindowSnapshotMilliseconds === null) {
+          skipped += 1;
+          console.warn(
+            `Unable to reconcile queued move for ${ownerId}/${rosterSlotId}: ` +
+            'the target window snapshot time is missing or malformed.',
+          );
+          return;
+        }
+
         if (!wasPendingMoveQueuedBeforeCycleSnapshot(pendingMove, pick)) {
           // This is the current window that existed before the move was
           // queued, not a target window opened with the wrong player.
           return;
         }
 
-        const persistedWindow = persistedTeamWindows?.windows.find(
+        const persistedWindowIndex = reconciledTeamWindows?.windows.findIndex(
           (window) => window.rosterSlotId === rosterSlotId,
-        );
+        ) ?? -1;
+        const persistedWindow = persistedWindowIndex >= 0
+          ? reconciledTeamWindows?.windows[persistedWindowIndex]
+          : undefined;
         const persistedWindowIsUntouched = Boolean(
           persistedWindow &&
           persistedWindow.status === 'scheduled' &&
@@ -3965,7 +4074,34 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
           rosterSlotId,
           asset: repairedAsset,
           activationKey: `move-${pendingMove.id}`,
+          // This target window existed before delayed recovery ran. Its
+          // persisted snapshot boundary, not worker wall-clock time, is the
+          // authoritative earliest game the incoming assignment may own.
+          assignmentNotBefore: targetWindowSnapshotMilliseconds,
         });
+
+        if (!reconciledTeamWindows || !persistedWindow) {
+          // The untouched-window guard above should make this unreachable,
+          // but keep the competitive write closed if the persisted shape is
+          // ever changed without the reconciliation path being updated.
+          skipped += 1;
+          console.warn(
+            `Unable to reconcile queued move for ${ownerId}/${rosterSlotId}: ` +
+            'the persisted slot window disappeared.',
+          );
+          return;
+        }
+
+        const windows = [...reconciledTeamWindows.windows];
+        windows[persistedWindowIndex] = resetUntouchedWindowForReconciledMove({
+          previous: persistedWindow,
+          asset: repairedAsset,
+          playerWindowContinuity,
+        });
+        reconciledTeamWindows = {
+          ...reconciledTeamWindows,
+          windows,
+        };
 
         transaction.set(pickRefs[index], {
           ...pick,
@@ -4009,6 +4145,12 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
       });
 
       if (activated > 0) {
+        if (!reconciledTeamWindows) {
+          throw new Error(
+            `Unable to reconcile queued moves for ${ownerId}: team windows are missing.`,
+          );
+        }
+
         transaction.set(
           rosterRef,
           {
@@ -4016,6 +4158,16 @@ export async function reconcilePendingRosterMovesForRegularSeasonCycle(
             activeSlots: roster.activeSlots,
             benchSlots: roster.benchSlots,
             irSlots: roster.irSlots,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          teamWindowsRef,
+          {
+            windows: prepareCycleWindowsForFirestore(
+              reconciledTeamWindows.windows,
+            ),
             updatedAt: serverTimestamp(),
           },
           { merge: true },

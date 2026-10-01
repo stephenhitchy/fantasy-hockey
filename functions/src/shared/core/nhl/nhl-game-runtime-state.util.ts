@@ -2,8 +2,61 @@ export type NhlGameRuntimeState = 'scheduled' | 'live' | 'final';
 
 export interface NhlGameRuntimeStateSource {
   gameState?: string;
+  gameScheduleState?: string;
+  startTimeUTC?: string;
   homeTeam?: { score?: number };
   awayTeam?: { score?: number };
+}
+
+const EXPLICITLY_DEFERRED_GAME_STATES = new Set([
+  'PPD',
+  'POSTPONED',
+  'CNCL',
+  'CANCELLED',
+  'CANCELED',
+]);
+
+/**
+ * A stale FUT response must not imply that puck drop has not happened. This
+ * boundary is deliberately separate from runtime scoring state: it protects
+ * immutable ownership, but it does not invent live stats. Explicit provider
+ * postponement/cancellation evidence keeps the old start time from being
+ * treated as an actual puck-drop boundary.
+ */
+export function hasNhlGameReachedStartSafetyBoundary(input: {
+  source: NhlGameRuntimeStateSource | null | undefined;
+  observedAtMilliseconds: number;
+}): boolean {
+  const runtimeState = getNhlGameRuntimeState(input.source);
+
+  if (runtimeState === 'live' || runtimeState === 'final') {
+    return true;
+  }
+
+  const gameState = (input.source?.gameState ?? '').trim().toUpperCase();
+  const scheduleState = (input.source?.gameScheduleState ?? '')
+    .trim()
+    .toUpperCase();
+
+  if (
+    EXPLICITLY_DEFERRED_GAME_STATES.has(gameState) ||
+    EXPLICITLY_DEFERRED_GAME_STATES.has(scheduleState)
+  ) {
+    return false;
+  }
+
+  if (
+    !Number.isFinite(input.observedAtMilliseconds) ||
+    typeof input.source?.startTimeUTC !== 'string' ||
+    !input.source.startTimeUTC.trim()
+  ) {
+    return false;
+  }
+
+  const startMilliseconds = Date.parse(input.source.startTimeUTC);
+
+  return Number.isFinite(startMilliseconds) &&
+    startMilliseconds <= input.observedAtMilliseconds;
 }
 
 /** Normalizes the NHL provider's schedule and game-detail state values. */

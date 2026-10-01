@@ -79,6 +79,19 @@ test('active regular-season periods self-heal queued moves that an older manual 
   assert.match(recovery, /canActivatePendingMoveInCycle\(pendingMove, cycle\.cycleNumber\)/);
   assert.match(recovery, /wasPendingMoveQueuedBeforeCycleSnapshot\(pendingMove, pick\)/);
   assert.match(recovery, /snapshotSource: 'queued-slot-move-reconciled'/);
+  assert.match(
+    recovery,
+    /const targetWindowSnapshotMilliseconds =\s*getStoredTimestampMilliseconds\(pick\.snapshottedAt\)/,
+  );
+  assert.match(
+    recovery,
+    /targetWindowSnapshotMilliseconds === null[\s\S]*?return;/,
+  );
+  assert.match(
+    recovery,
+    /assignmentNotBefore: targetWindowSnapshotMilliseconds/,
+  );
+  assert.doesNotMatch(recovery, /assignmentNotBefore: Date\.now\(\)/);
   assert.match(recovery, /pendingMove: null/);
   assert.match(recovery, /Process one roster at a time/);
 });

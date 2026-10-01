@@ -446,6 +446,12 @@ export interface PlayerWindowContinuity {
   ownerId: string;
   rosterSlotId: string;
   assetKey: string;
+  /**
+   * Server clock boundary for a skater acquired after the fantasy season
+   * started. Later windows keep this original value so they never reinterpret
+   * their own snapshot time as a new acquisition.
+   */
+  assignmentNotBeforeMilliseconds?: number;
   /** Exact provider games owned by earlier completed windows in this stint. */
   priorAssignedGameIds: number[];
   /** NHL club that supplied the immediately preceding completed window. */

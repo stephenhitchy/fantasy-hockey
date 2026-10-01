@@ -8,9 +8,14 @@ const ROOT = new URL('../../', import.meta.url);
 const ROOT_PATH = fileURLToPath(ROOT);
 const read = (relativePath) => readFile(new URL(relativePath, ROOT), 'utf8');
 const require = createRequire(import.meta.url);
-const { resolveLivePlayerTeamWindow } = require(
+const { resolveLivePlayerTeamWindow: resolveLivePlayerTeamWindowBase } = require(
   `${ROOT_PATH}functions/lib/shared/core/cycle/live-player-team-window.util.js`,
 );
+const resolveLivePlayerTeamWindow = (input) =>
+  resolveLivePlayerTeamWindowBase({
+    scheduleDecisionAtMilliseconds: Date.parse('2026-09-30T00:00:00Z'),
+    ...input,
+  });
 const cycleScoring = require(`${ROOT_PATH}functions/lib/shared/core/cycle/cycle-scoring.service.js`);
 const nhlApi = require(`${ROOT_PATH}functions/lib/shared/core/nhl/nhl-api.service.js`);
 const scoringRules = require(`${ROOT_PATH}functions/lib/shared/core/scoring/scoring-rules.js`);

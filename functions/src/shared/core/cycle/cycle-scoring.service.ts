@@ -55,6 +55,7 @@ import {
 } from '../nhl/nhl-final-input-completeness.util';
 import {
   getNhlGameRuntimeState,
+  hasNhlGameReachedStartSafetyBoundary,
   resolveNhlGameRuntimeState,
 } from '../nhl/nhl-game-runtime-state.util';
 import {
@@ -392,17 +393,39 @@ export function getCurrentAffiliationAppearanceGameIds(
       first.gameDate.localeCompare(second.gameDate) ||
       first.gameId - second.gameId
     );
-  let latestDifferentTeamIndex = -1;
+  const latestDifferentTeamDate = ordered.reduce<string | undefined>(
+    (latest, entry) =>
+      entry.teamAbbrev?.trim().toUpperCase() !== currentTeam &&
+      (!latest || entry.gameDate > latest)
+        ? entry.gameDate
+        : latest,
+    undefined,
+  );
 
-  ordered.forEach((entry, index) => {
-    if (entry.teamAbbrev?.trim().toUpperCase() !== currentTeam) {
-      latestDifferentTeamIndex = index;
-    }
-  });
+  if (!latestDifferentTeamDate) {
+    return ordered
+      .filter((entry) => entry.teamAbbrev?.trim().toUpperCase() === currentTeam)
+      .map((entry) => entry.gameId);
+  }
+
+  const boundaryDateIncludesCurrentTeam = ordered.some((entry) =>
+    entry.gameDate === latestDifferentTeamDate &&
+    entry.teamAbbrev?.trim().toUpperCase() === currentTeam
+  );
+
+  if (boundaryDateIncludesCurrentTeam) {
+    throw new Error(
+      `NHL game-log evidence contains multiple team affiliations on ` +
+      `${latestDifferentTeamDate}, but the feed does not provide exact game ` +
+      'times. Scoring cannot prove the current affiliation boundary and was left unchanged.',
+    );
+  }
 
   return ordered
-    .slice(latestDifferentTeamIndex + 1)
-    .filter((entry) => entry.teamAbbrev?.trim().toUpperCase() === currentTeam)
+    .filter((entry) =>
+      entry.gameDate > latestDifferentTeamDate &&
+      entry.teamAbbrev?.trim().toUpperCase() === currentTeam
+    )
     .map((entry) => entry.gameId);
 }
 
@@ -904,6 +927,7 @@ function getRelevantAssetGames(
   sourceNhlBlockNumber: number,
   requiredGamesPerCycle: number,
   previous: CycleAssetScoreSummary | undefined,
+  scheduleDecisionAtMilliseconds: number,
   replayGamesByAssetKey?: Record<string, NhlTeamSeasonGame[]>,
   currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
   currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>,
@@ -1003,14 +1027,16 @@ function getRelevantAssetGames(
   const teamCutoverDetected =
     pick.asset.assetType === 'skater' &&
     priorScheduleTeamAbbreviation !== currentTeamAbbreviation;
-  const frozenTargetGameIdSet = new Set(frozenTargetGameIds ?? []);
+  const snapshotStartsRosterMove =
+    pick.snapshotSource?.toLowerCase().includes('move') === true;
   const continuityCameFromRosterMove = Boolean(
+    playerWindowContinuity?.assignmentNotBeforeMilliseconds !== undefined ||
     playerWindowContinuity?.continuityId.includes('::move-') ||
-    pick.snapshotSource?.includes('move'),
+    snapshotStartsRosterMove,
   );
-  const assignmentNotBeforeMilliseconds = continuityCameFromRosterMove
-    ? activationMilliseconds ?? undefined
-    : undefined;
+  const assignmentNotBeforeMilliseconds =
+    playerWindowContinuity?.assignmentNotBeforeMilliseconds ??
+    (snapshotStartsRosterMove ? activationMilliseconds ?? undefined : undefined);
   const teamIdentityNotBeforeMilliseconds = teamCutoverDetected
     ? teamConfirmedAtMilliseconds ?? undefined
     : undefined;
@@ -1022,9 +1048,13 @@ function getRelevantAssetGames(
     );
   }
 
-  if (continuityCameFromRosterMove && activationMilliseconds === null) {
+  if (
+    continuityCameFromRosterMove &&
+    assignmentNotBeforeMilliseconds === undefined
+  ) {
     throw new Error(
-      `Roster-move activation time is unavailable for ${pick.asset.assetKey}. Scoring was left unchanged and will retry.`,
+      `The original roster-move activation time is unavailable for ` +
+      `${pick.asset.assetKey}. Scoring was left unchanged and will retry.`,
     );
   }
   const currentScheduleByGameId = new Map(
@@ -1033,17 +1063,18 @@ function getRelevantAssetGames(
   const confirmedCurrentTeamAppearanceGameIds = new Set(
     [...(rawConfirmedAppearanceGameIds ?? [])].filter((gameId) => {
       const game = currentScheduleByGameId.get(gameId);
-      const startMilliseconds = game ? gameStartMilliseconds(game) : null;
 
-      if (
-        activationMilliseconds !== null &&
-        startMilliseconds !== null &&
-        startMilliseconds >= activationMilliseconds
-      ) {
+      if (!game) {
+        return false;
+      }
+
+      if (assignmentNotBeforeMilliseconds === undefined) {
         return true;
       }
 
-      return !continuityCameFromRosterMove && frozenTargetGameIdSet.has(gameId);
+      const startMilliseconds = gameStartMilliseconds(game);
+      return startMilliseconds !== null &&
+        startMilliseconds >= assignmentNotBeforeMilliseconds;
     }),
   );
 
@@ -1065,6 +1096,7 @@ function getRelevantAssetGames(
       confirmedCurrentTeamAppearanceGameIds,
     assignmentNotBeforeMilliseconds,
     teamIdentityNotBeforeMilliseconds,
+    scheduleDecisionAtMilliseconds,
   });
 }
 
@@ -1339,49 +1371,6 @@ export async function calculateCycleScoring(
       );
     }
   }
-  if (
-    !input.replayGamesByAssetKey &&
-    input.currentTeamIdentityHash &&
-    input.currentTeamAbbreviationByPlayerId
-  ) {
-    const identityGeneratedAtMilliseconds = Date.parse(
-      input.currentTeamIdentityGeneratedAt ?? '',
-    );
-    const startedGames = Object.values(schedulesByTeam)
-      .flat()
-      .filter((game) => getGameRuntimeState(game) !== 'scheduled');
-    const startedGameWithoutExactStart = startedGames.find(
-      (game) => gameStartMilliseconds(game) === null,
-    );
-
-    if (startedGameWithoutExactStart) {
-      throw new Error(
-        `NHL game ${startedGameWithoutExactStart.id} is live or final, but ` +
-        'its exact startTimeUTC is unavailable. Scoring cannot prove the ' +
-        'player-team identity boundary and was left unchanged.',
-      );
-    }
-
-    const latestStartedGameBoundary = startedGames
-      .map(gameStartMilliseconds)
-      .filter((value): value is number => value !== null)
-      .reduce(
-        (latest, value) => Math.max(latest, value),
-        Number.NEGATIVE_INFINITY,
-      );
-
-    if (
-      Number.isFinite(latestStartedGameBoundary) &&
-      (
-        !Number.isFinite(identityGeneratedAtMilliseconds) ||
-        identityGeneratedAtMilliseconds < latestStartedGameBoundary
-      )
-    ) {
-      throw new NhlPlayerTeamIdentityBoundaryRefreshRequiredError(
-        latestStartedGameBoundary,
-      );
-    }
-  }
   const tradedSkatersNeedingAppearanceEvidence = input.replayGamesByAssetKey
     ? []
     : getUniqueSkaterAssets(input.picks).filter((asset) => {
@@ -1497,6 +1486,54 @@ export async function calculateCycleScoring(
       ),
     );
   }
+  const scheduleDecisionAtMilliseconds = Date.now();
+
+  if (
+    !input.replayGamesByAssetKey &&
+    input.currentTeamIdentityHash &&
+    input.currentTeamAbbreviationByPlayerId
+  ) {
+    const identityGeneratedAtMilliseconds = Date.parse(
+      input.currentTeamIdentityGeneratedAt ?? '',
+    );
+    const startedGames = Object.values(schedulesByTeam)
+      .flat()
+      .filter((game) => hasNhlGameReachedStartSafetyBoundary({
+        source: game,
+        observedAtMilliseconds: scheduleDecisionAtMilliseconds,
+      }));
+    const startedGameWithoutExactStart = startedGames.find(
+      (game) => gameStartMilliseconds(game) === null,
+    );
+
+    if (startedGameWithoutExactStart) {
+      throw new Error(
+        `NHL game ${startedGameWithoutExactStart.id} is live or final, but ` +
+        'its exact startTimeUTC is unavailable. Scoring cannot prove the ' +
+        'player-team identity boundary and was left unchanged.',
+      );
+    }
+
+    const latestStartedGameBoundary = startedGames
+      .map(gameStartMilliseconds)
+      .filter((value): value is number => value !== null)
+      .reduce(
+        (latest, value) => Math.max(latest, value),
+        Number.NEGATIVE_INFINITY,
+      );
+
+    if (
+      Number.isFinite(latestStartedGameBoundary) &&
+      (
+        !Number.isFinite(identityGeneratedAtMilliseconds) ||
+        identityGeneratedAtMilliseconds < latestStartedGameBoundary
+      )
+    ) {
+      throw new NhlPlayerTeamIdentityBoundaryRefreshRequiredError(
+        latestStartedGameBoundary,
+      );
+    }
+  }
   const gamesByWindowId = new Map<string, NhlTeamSeasonGame[]>();
   const scheduleTeamByWindowId = new Map<string, string>();
   const sourceTeamByWindowGameId = new Map<string, Record<string, string>>();
@@ -1576,6 +1613,7 @@ export async function calculateCycleScoring(
       sourceNhlBlockNumber,
       input.requiredGamesPerCycle,
       previous,
+      scheduleDecisionAtMilliseconds,
       input.replayGamesByAssetKey,
       input.currentTeamAbbreviationByPlayerId,
       input.currentTeamConfirmedAtByPlayerId,

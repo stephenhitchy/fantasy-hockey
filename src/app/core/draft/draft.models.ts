@@ -435,6 +435,7 @@ export interface PlayerWindowContinuity {
   ownerId: string;
   rosterSlotId: string;
   assetKey: string;
+  assignmentNotBeforeMilliseconds?: number;
   priorAssignedGameIds: number[];
   lastScheduleTeamAbbreviation?: string;
 }
