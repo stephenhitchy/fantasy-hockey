@@ -396,8 +396,14 @@ test('League Leaders uses bounded history, one current listener, lazy projection
   assert.match(component, /return 'Goalie Units'/);
   assert.match(styles, /@media \(max-width: 390px\)/);
   assert.doesNotMatch(styles, /\.leader-owner[^}]*display:\s*none/);
-  assert.match(quickNavigation, /\['\/leagues', leagueId, 'leaders'\][\s\S]*?League Leaders/);
-  assert.match(dashboard, /class="leaders-shortcut[\s\S]*?\['\/leagues', league\.leagueId, 'leaders'\]/);
+  assert.match(
+    quickNavigation,
+    /\['\/leagues', leagueId, 'leaders'\][\s\S]*?icon-leaders[\s\S]*?League Leaders/,
+  );
+  assert.match(
+    dashboard,
+    /class="leaders-shortcut[\s\S]*?\['\/leagues', league\.leagueId, 'leaders'\][\s\S]*?icon-leaders/,
+  );
   assert.match(
     designSystemTest,
     /src\/app\/features\/leaders\/point-leaders\/point-leaders\.html/,
