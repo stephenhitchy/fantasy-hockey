@@ -3720,7 +3720,9 @@ function wasPendingMoveQueuedBeforeCycleSnapshot(
  * A legacy immediate-move repair is allowed only when persisted evidence
  * contains no score or runtime evidence. Exact provider start times are
  * checked separately against the original move boundary; saved `scheduled`
- * labels alone are never treated as proof that a game had not started.
+ * labels alone are never treated as proof that a game had not started. A
+ * scheduled-only state map is normal initialized-window evidence, so it must
+ * not prevent repair when every stronger untouched-window guard also passes.
  */
 function legacyImmediateMoveWindowIsProvablyUntouched(
   window: FantasyAssetCycleWindow,
@@ -3736,7 +3738,7 @@ function legacyImmediateMoveWindowIsProvablyUntouched(
     window.appearanceGameIds.length === 0 &&
     (window.incompleteFinalGameIds?.length ?? 0) === 0 &&
     Object.keys(window.gameScores).length === 0 &&
-    Object.keys(window.gameStates).length === 0 &&
+    Object.values(window.gameStates).every((state) => state === 'scheduled') &&
     Object.keys(window.gameInputCompleteness ?? {}).length === 0
   );
 }

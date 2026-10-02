@@ -1449,8 +1449,24 @@ test('legacy immediate roster-move reconciliation repairs only a provably untouc
       nhlTeamAbbreviation: 'CBJ',
     },
   };
-  const outgoingTargetGameIds = [1, 2, 3, 4, 5, 6];
-  const incomingTargetGameIds = [101, 102, 103, 104, 105, 106];
+  // Mirrors the production failure shape: Fantilli's pick-level IDs retained
+  // Detroit's schedule while the per-team map already held Columbus's IDs.
+  const outgoingTargetGameIds = [
+    2026020017,
+    2026020035,
+    2026020046,
+    2026020066,
+    2026020075,
+    2026020090,
+  ];
+  const incomingTargetGameIds = [
+    2026020011,
+    2026020027,
+    2026020068,
+    2026020079,
+    2026020091,
+    2026020129,
+  ];
   const sourceNhlTargetGameIdsByTeam = {
     DET: outgoingTargetGameIds,
     CBJ: incomingTargetGameIds,
@@ -1578,7 +1594,9 @@ test('legacy immediate roster-move reconciliation repairs only a provably untouc
         liveGameIds: [],
         appearanceGameIds: [],
         gameScores: {},
-        gameStates: {},
+        gameStates: Object.fromEntries(
+          outgoingTargetGameIds.map((gameId) => [String(gameId), 'scheduled']),
+        ),
         gameInputCompleteness: {},
         incompleteFinalGameIds: [],
         scheduledGames: 6,
