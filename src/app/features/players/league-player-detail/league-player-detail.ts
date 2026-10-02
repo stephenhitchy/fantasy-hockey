@@ -39,6 +39,10 @@ import {
 } from '../../../core/player/player-note.service';
 import { type League } from '../../../core/league/league.service';
 import { type SharedProjectionSnapshotMetadata } from '../../../core/projection/projection-snapshot.service';
+import {
+  buildPlayerIntelRecentPaceCards,
+  formatPlayerIntelSeasonLabel,
+} from './player-intel-summary.util';
 
 type PlayerIntelSection = 'overview' | 'stats' | 'projection' | 'schedule';
 
@@ -112,19 +116,16 @@ export class LeaguePlayerDetail {
     this.asset()?.seasonStatBreakdown ?? [],
   );
 
-  readonly recentPace = computed(() => {
-    const asset = this.asset();
-    if (!asset) {
-      return [];
-    }
+  readonly largestStatContribution = computed(() =>
+    this.statBreakdown().reduce(
+      (largest, item) => Math.max(largest, Math.abs(item.fantasyPoints)),
+      0,
+    ),
+  );
 
-    return [
-      { label: 'Last 3', value: finiteNumber(asset.recentThreeGameFantasyPointsPerGame) },
-      { label: 'Last 5', value: finiteNumber(asset.recentFiveGameFantasyPointsPerGame) },
-      { label: 'Last 10', value: finiteNumber(asset.recentTenGameFantasyPointsPerGame) },
-      { label: 'Last 20', value: finiteNumber(asset.recentTwentyGameFantasyPointsPerGame) },
-    ];
-  });
+  readonly recentPace = computed(() =>
+    buildPlayerIntelRecentPaceCards(this.asset() ?? {}),
+  );
 
   readonly scheduleOpponents = computed(() =>
     (this.asset()?.projectionOpponentAbbreviations ?? [])
@@ -428,6 +429,63 @@ export class LeaguePlayerDetail {
     }
 
     return `${row.projectionFloor.toFixed(1)}–${row.projectionCeiling.toFixed(1)}`;
+  }
+
+  getCurrentMatchupProgressLabel(): string {
+    const window = this.currentRosterWindow();
+    if (!window) {
+      return this.row()?.ownership?.area === 'active'
+        ? 'The current six-game window is being prepared.'
+        : 'No active six-game window.';
+    }
+
+    const appearances = Math.max(0, Math.floor(window.actualGamesPlayed));
+    const counted = Math.max(0, Math.floor(window.gamesPlayed));
+    const scheduled = Math.max(0, Math.floor(window.scheduledGames));
+    const live = window.liveGameIds.length > 0 ? 'Live · ' : '';
+    const appearanceLabel = appearances === 1 ? 'appearance' : 'appearances';
+    return `${live}${appearances} ${appearanceLabel} · ${counted} of ${scheduled} team games counted`;
+  }
+
+  getSeasonTotalContext(): string {
+    const row = this.row();
+    if (!row || row.seasonFantasyPoints === null) {
+      return 'Current-season scoring snapshot is updating.';
+    }
+
+    const asOf = this.snapshotMetadata()?.projectionAsOfDate ||
+      this.snapshotMetadata()?.generatedAt;
+    return asOf
+      ? `Current-season total through ${this.formatDate(asOf)}`
+      : 'Current-season fantasy production';
+  }
+
+  getProjectionHistoryLabel(): string {
+    const asset = this.asset();
+    if (!asset) {
+      return 'Projection history unavailable';
+    }
+
+    const season = formatPlayerIntelSeasonLabel(asset.projectionDataSeason);
+    const appearances = finiteNumber(asset.projectionGamesPlayed);
+    const sample = appearances === null
+      ? 'appearance sample unavailable'
+      : `${appearances.toFixed(0)} ${appearances === 1 ? 'appearance' : 'appearances'}`;
+
+    return season ? `${season} projection sample · ${sample}` : `Projection sample · ${sample}`;
+  }
+
+  getBreakdownContributionPercent(points: number): number {
+    const maximum = this.largestStatContribution();
+    if (maximum <= 0) {
+      return 0;
+    }
+
+    return Math.max(5, Math.min(100, (Math.abs(points) / maximum) * 100));
+  }
+
+  getBreakdownContributionClass(points: number): string {
+    return points < 0 ? 'negative-contribution' : 'positive-contribution';
   }
 
   getAvailabilityLabel(): string {

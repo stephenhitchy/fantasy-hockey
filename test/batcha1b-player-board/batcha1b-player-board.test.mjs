@@ -10,6 +10,10 @@ import {
   buildLeaguePlayerReservedAssetKeys,
   filterLeaguePlayerBoardRows,
 } from '../../src/app/core/player/league-player-board.util.ts';
+import {
+  buildPlayerIntelRecentPaceCards,
+  formatPlayerIntelSeasonLabel,
+} from '../../src/app/features/players/league-player-detail/player-intel-summary.util.ts';
 
 const ROOT = new URL('../../', import.meta.url);
 
@@ -116,6 +120,39 @@ test('pending incoming assets become private reserved markers without destinatio
   assert.equal(reserved.has('skater-9'), true);
   assert.equal(row.status, 'reserved');
   assert.equal(row.ownership, null);
+});
+
+test('Player Intel never presents one appearance as four recent-form sample sizes', () => {
+  const oneGame = buildPlayerIntelRecentPaceCards({
+    recentFormSampleSize: 1,
+    recentThreeGameFantasyPointsPerGame: 26,
+    recentFiveGameFantasyPointsPerGame: 26,
+    recentTenGameFantasyPointsPerGame: 26,
+    recentTwentyGameFantasyPointsPerGame: 26,
+  });
+
+  assert.deepEqual(oneGame, [{
+    label: 'Last game',
+    appearances: 1,
+    value: 26,
+  }]);
+  assert.deepEqual(buildPlayerIntelRecentPaceCards({
+    recentFormSampleSize: 0,
+    recentThreeGameFantasyPointsPerGame: 9.1,
+  }), []);
+
+  const nineteenGames = buildPlayerIntelRecentPaceCards({
+    recentFormSampleSize: 19,
+    recentThreeGameFantasyPointsPerGame: 10.2,
+    recentFiveGameFantasyPointsPerGame: 8.7,
+    recentTenGameFantasyPointsPerGame: 9.7,
+    recentTwentyGameFantasyPointsPerGame: 9.1,
+  });
+  assert.deepEqual(
+    nineteenGames.map((card) => card.label),
+    ['Last 3', 'Last 5', 'Last 10', 'Last 19'],
+  );
+  assert.equal(formatPlayerIntelSeasonLabel('20252026'), '2025–26');
 });
 
 test('board rows combine roster, waiver, free-agent, and private watched state', () => {
@@ -258,10 +295,11 @@ test('the unified page reuses bounded A1B board sources and progressive mobile r
 });
 
 test('Player Intel keeps real Projection V11 fields and returns to the unified Add / Drop surface', async () => {
-  const [component, template, styles] = await Promise.all([
+  const [component, template, styles, summaryUtil] = await Promise.all([
     read('src/app/features/players/league-player-detail/league-player-detail.ts'),
     read('src/app/features/players/league-player-detail/league-player-detail.html'),
     read('src/app/features/players/league-player-detail/league-player-detail.css'),
+    read('src/app/features/players/league-player-detail/player-intel-summary.util.ts'),
   ]);
 
   assert.match(component, /loadLeaguePlayerBoardBaseData/);
@@ -269,11 +307,19 @@ test('Player Intel keeps real Projection V11 fields and returns to the unified A
   assert.match(component, /performanceVsProjectionPercent/);
   assert.match(component, /projectionOpponentAbbreviations/);
   assert.match(component, /currentTeamCycleGames/);
-  assert.match(component, /recentTenGameFantasyPointsPerGame/);
+  assert.match(summaryUtil, /recentTenGameFantasyPointsPerGame/);
   assert.match(component, /setPlayerWatchlistEntry/);
   assert.match(component, /activeSection = signal<PlayerIntelSection>\('overview'\)/);
+  assert.match(component, /buildPlayerIntelRecentPaceCards/);
   assert.doesNotMatch(component, /mock-player-data|getMockPlayerDetail/);
-  assert.match(template, /Overall rank/);
+  assert.match(template, /currentRosterWindow\(\)\?\.fantasyPoints/);
+  assert.match(template, /Current matchup/);
+  assert.match(template, /Season total/);
+  assert.match(template, /View scoring breakdown/);
+  assert.match(template, /player-intel-breakdown-bars/);
+  assert.match(template, /Projection sample FP\/appearance/);
+  assert.doesNotMatch(template, /\{\{ currentRow\.seasonGamesPlayed \?\? '—' \}\} appearances/);
+  assert.match(template, /League-wide ranks/);
   assert.match(template, /role="tablist"/);
   assert.match(template, />Overview<\/button>/);
   assert.match(template, />Stats<\/button>/);
@@ -285,6 +331,7 @@ test('Player Intel keeps real Projection V11 fields and returns to the unified A
   assert.match(template, />\s*Back\s*<\/a>/);
   assert.match(styles, /player-intel-watch[\s\S]*?min-height:\s*44px/);
   assert.match(styles, /player-intel-tabs[\s\S]*?grid-template-columns/);
+  assert.match(styles, /player-intel-breakdown-track/);
   assert.doesNotMatch(styles, /position:\s*(?:fixed|sticky)|backdrop-filter/i);
 });
 

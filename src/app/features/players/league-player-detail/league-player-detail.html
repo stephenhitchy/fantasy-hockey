@@ -140,25 +140,40 @@
       </section>
     }
 
-    <section class="player-intel-rank-strip" aria-label="Current fantasy ranks">
-      <div>
-        <span>Season fantasy points</span>
+    <section class="player-intel-score-strip" aria-label="Fantasy scoring summary">
+      <article class="player-intel-score-card player-intel-score-card-current">
+        <span>Current matchup</span>
+        <strong>{{ formatPoints(currentRosterWindow()?.fantasyPoints) }}</strong>
+        <small>Fantasy points</small>
+        <p>{{ getCurrentMatchupProgressLabel() }}</p>
+        @if (currentRosterWindow(); as currentWindow) {
+          <a
+            [routerLink]="['/leagues', leagueId, 'cycles', currentWindow.cycleNumber, 'assets', assetKey]"
+            [queryParams]="{ returnTo: '/leagues/' + leagueId + '/players/' + assetKey }"
+          >View scoring breakdown</a>
+        }
+      </article>
+
+      <article class="player-intel-score-card player-intel-score-card-season">
+        <span>Season total</span>
         <strong>{{ formatPoints(currentRow.seasonFantasyPoints) }}</strong>
-        <small>{{ formatPoints(currentRow.seasonFantasyPointsPerGame, 2) }} FP/game</small>
-      </div>
-      <div>
-        <span>Overall rank</span>
+        <small>Fantasy points</small>
+        <p>{{ getSeasonTotalContext() }}</p>
+      </article>
+
+      <article class="player-intel-score-card">
+        <span>League-wide ranks</span>
         <strong>{{ formatRank(currentRow.overallRank, currentRow.overallRankCount) }}</strong>
-      </div>
-      <div>
-        <span>{{ currentRow.position }} rank</span>
-        <strong>{{ formatRank(currentRow.positionRank, currentRow.positionRankCount) }}</strong>
-      </div>
-      <div>
+        <small>
+          {{ currentRow.position }} {{ formatRank(currentRow.positionRank, currentRow.positionRankCount) }}
+        </small>
+      </article>
+
+      <article class="player-intel-score-card">
         <span>Next-six projection</span>
         <strong>{{ formatPoints(currentRow.nextSixProjection) }}</strong>
-        <small>{{ getProjectionRange() }} range</small>
-      </div>
+        <small>{{ getProjectionRange() }} likely range</small>
+      </article>
     </section>
 
     <nav class="player-intel-tabs" role="tablist" aria-label="Player information">
@@ -197,12 +212,12 @@
         @case ('overview') {
           <div class="player-intel-card-heading">
             <h2>At a glance</h2>
-            <span>{{ currentRow.seasonGamesPlayed ?? '—' }} appearances</span>
+            <span>{{ getProjectionHistoryLabel() }}</span>
           </div>
 
           <div class="player-intel-facts">
             <div>
-              <span>Current pace</span>
+              <span>Vs season projection</span>
               <strong>{{ getPerformanceLabel() }}</strong>
             </div>
             <div>
@@ -219,7 +234,7 @@
                 <strong>{{ getAgeLabel() }}</strong>
               </div>
               <div>
-                <span>Recent / season TOI</span>
+                <span>Projection sample TOI</span>
                 <strong>{{ getToiLabel() }}</strong>
               </div>
             }
@@ -229,12 +244,12 @@
             </div>
           </div>
 
-          <div class="player-intel-pace" aria-label="Recent fantasy point pace">
-            @for (pace of recentPace(); track pace.label) {
+          <div class="player-intel-pace" aria-label="Projection V11 recent form">
+            @for (pace of recentPace(); track pace.appearances) {
               <div>
                 <span>{{ pace.label }}</span>
                 <strong>{{ formatPoints(pace.value, 2) }}</strong>
-                <small>FP/game</small>
+                <small>FP/appearance</small>
               </div>
             }
           </div>
@@ -246,33 +261,36 @@
           </div>
 
           @if (statBreakdown().length > 0) {
-            <div class="player-intel-stat-list" aria-label="Fantasy point breakdown">
+            <div class="player-intel-breakdown-bars" aria-label="Fantasy point breakdown">
               @for (item of statBreakdown(); track item.key) {
-                <div>
+                <div [class]="'player-intel-breakdown-row ' + getBreakdownContributionClass(item.fantasyPoints)">
                   <span>
                     <strong>{{ item.label }}</strong>
                     <small>{{ getBreakdownStatLabel(item) }}</small>
                   </span>
+                  <div class="player-intel-breakdown-track" aria-hidden="true">
+                    <i [style.width.%]="getBreakdownContributionPercent(item.fantasyPoints)"></i>
+                  </div>
                   <strong>{{ getBreakdownPointsLabel(item) }}</strong>
                 </div>
               }
             </div>
           } @else {
-            <p class="player-intel-empty">Stat detail unavailable.</p>
+            <p class="player-intel-empty">Current-season category detail is still updating.</p>
           }
 
           <div class="player-intel-facts player-intel-facts-two">
             <div>
-              <span>Season FP/game</span>
+              <span>Projection sample FP/appearance</span>
               <strong>{{ formatPoints(currentRow.seasonFantasyPointsPerGame, 2) }}</strong>
             </div>
             <div>
-              <span>Games / appearances</span>
-              <strong>{{ currentRow.seasonGamesPlayed ?? '—' }}</strong>
+              <span>Projection history</span>
+              <strong>{{ getProjectionHistoryLabel() }}</strong>
             </div>
             @if (currentRow.asset.assetType === 'skater') {
               <div>
-                <span>Recent / season TOI</span>
+                <span>Projection sample TOI</span>
                 <strong>{{ getToiLabel() }}</strong>
               </div>
             }
