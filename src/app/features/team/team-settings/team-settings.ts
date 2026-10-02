@@ -2864,7 +2864,21 @@ export class TeamSettings implements OnDestroy {
     );
   }
 
-  handleRosterCardSurfaceClick(event: MouseEvent, asset: unknown): void {
+  openRosterAssetIntel(asset: unknown): void {
+    const assetKey = this.getRosterAssetKey(asset);
+
+    if (!assetKey) {
+      return;
+    }
+
+    void this.router.navigate(['/leagues', this.leagueId, 'players', assetKey]);
+  }
+
+  handleRosterCardSurfaceClick(
+    event: MouseEvent,
+    asset: unknown,
+    detailContext: 'matchup' | 'player-intel' = 'matchup',
+  ): void {
     const target = event.target;
 
     if (
@@ -2874,16 +2888,30 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    if (detailContext === 'player-intel') {
+      this.openRosterAssetIntel(asset);
+      return;
+    }
+
     this.openRosterAssetDetail(asset);
   }
 
-  handleRosterIdentityKeydown(event: KeyboardEvent, asset: unknown): void {
+  handleRosterIdentityKeydown(
+    event: KeyboardEvent,
+    asset: unknown,
+    detailContext: 'matchup' | 'player-intel' = 'matchup',
+  ): void {
     if (event.key !== 'Enter' && event.key !== ' ') {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
+    if (detailContext === 'player-intel') {
+      this.openRosterAssetIntel(asset);
+      return;
+    }
+
     this.openRosterAssetDetail(asset);
   }
 

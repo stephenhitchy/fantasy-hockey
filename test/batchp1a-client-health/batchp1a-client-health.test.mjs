@@ -27,7 +27,7 @@ async function sha256(relativePath) {
   return createHash('sha256').update(await read(relativePath)).digest('hex');
 }
 
-test('mobile Game Center rows navigate directly to the full Game Film route', async () => {
+test('mobile Game Center rows open Game Film for active players and Player Intel for bench players', async () => {
   const [source, template, styles] = await Promise.all([
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.ts'),
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html'),

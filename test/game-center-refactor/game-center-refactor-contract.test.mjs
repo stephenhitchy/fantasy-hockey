@@ -82,6 +82,29 @@ describe('Batch 6A Game Center component boundaries', () => {
     assert.match(teamPanel, /Does not score while on the bench/);
   });
 
+  test('bench cards open season-long Player Intel because they have no active scoring window', async () => {
+    const [route, teamPanel, mobile] = await Promise.all([
+      read('src/app/features/cycles/cycle-one/cycle-one.ts'),
+      read(
+        'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',
+      ),
+      read(
+        'src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.ts',
+      ),
+    ]);
+
+    assert.match(teamPanel, /presenter\.openBenchAssetDetail\(slot\.asset\)/);
+    assert.match(mobile, /openBenchDetail\([\s\S]*?openBenchAssetDetail\(asset\)/);
+    assert.match(
+      route,
+      /openBenchAssetDetail\(asset: RosterAsset\): void \{[\s\S]*?\['\/leagues', this\.leagueId, 'players', assetKey\]/,
+    );
+    assert.doesNotMatch(
+      route.match(/openBenchAssetDetail\(asset: RosterAsset\): void \{[\s\S]*?\n  \}/)?.[0] ?? '',
+      /'cycles'|returnTo/,
+    );
+  });
+
   test('six-game markers use a full-width three-column two-row grid inside every active player card', async () => {
     const teamPanel = await read(
       'src/app/features/cycles/cycle-one/components/cycle-matchup-team-panel/cycle-matchup-team-panel.html',

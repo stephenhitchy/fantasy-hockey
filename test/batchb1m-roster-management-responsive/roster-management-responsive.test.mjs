@@ -116,7 +116,7 @@ test('roster cards separate details navigation from Manage or Add actions with v
     (
       template.match(/\(click\)="\$event\.stopPropagation\(\); openRosterAssetDetail\(asset\)"/g) ??
       []
-    ).length >= 5,
+    ).length >= 4,
   );
   assert.match(template, /Manage \/ Move/);
   assert.doesNotMatch(template, /View Stats/);
@@ -125,6 +125,29 @@ test('roster cards separate details navigation from Manage or Add actions with v
   assert.match(source, /target\.closest\('button, a, input, select, textarea/);
   assert.match(freeAgentTemplate, /row\.status === 'free-agent' \|\| row\.status === 'waivers'/);
   assert.match(freeAgentTemplate, /startBoardTransaction\(row\)/);
+});
+
+test('bench roster cards open season-long Player Intel instead of an unavailable scoring window', async () => {
+  const [template, source] = await Promise.all([
+    read('src/app/features/team/team-settings/team-settings.html'),
+    read('src/app/features/team/team-settings/team-settings.ts'),
+  ]);
+
+  const benchSection = template.slice(
+    template.indexOf('class="roster-section bench-roster-section'),
+    template.indexOf('class="roster-section ir-roster-section'),
+  );
+
+  assert.match(
+    benchSection,
+    /handleRosterCardSurfaceClick\(\$event, slot\.asset, 'player-intel'\)/,
+  );
+  assert.match(benchSection, /openRosterAssetIntel\(asset\)/);
+  assert.match(benchSection, /handleRosterIdentityKeydown\(\$event, asset, 'player-intel'\)/);
+  assert.match(
+    source,
+    /openRosterAssetIntel\(asset: unknown\): void \{[\s\S]*?\['\/leagues', this\.leagueId, 'players', assetKey\]/,
+  );
 });
 
 test('all roster and add/drop identity surfaces use the compact failure-safe portrait component', async () => {

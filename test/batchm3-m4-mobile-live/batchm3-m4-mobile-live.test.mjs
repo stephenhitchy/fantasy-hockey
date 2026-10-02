@@ -383,7 +383,7 @@ test('Draft Room has focused phone views, stale-state protection, queue reasons,
   assert.ok(Buffer.byteLength(styles) < 48_000, 'Draft Room component CSS exceeds 48 kB raw.');
 });
 
-test('Game Center phone view uses perspective tabs, grouped accordions, compact six-game rows, and direct Game Film navigation', async () => {
+test('Game Center phone view uses perspective tabs, grouped accordions, compact six-game rows, and full detail navigation', async () => {
   const [template, source, styles] = await Promise.all([
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.html'),
     read('src/app/features/cycles/cycle-one/components/cycle-mobile-head-to-head/cycle-mobile-head-to-head.ts'),

@@ -2835,14 +2835,7 @@ export class CycleOne implements OnDestroy {
       return;
     }
 
-    void this.router.navigate(
-      ['/leagues', this.leagueId, 'cycles', this.cycleNumber, 'assets', assetKey],
-      {
-        queryParams: {
-          returnTo: this.router.url,
-        },
-      },
-    );
+    void this.router.navigate(['/leagues', this.leagueId, 'players', assetKey]);
   }
 
   getDisplayedMatchups(): FantasyMatchup[] {

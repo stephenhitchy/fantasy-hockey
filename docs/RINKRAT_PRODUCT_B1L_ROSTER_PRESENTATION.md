@@ -18,6 +18,9 @@ or server authority.
 - A legitimate zero remains different from unavailable evidence. Unavailable
   values render as `—` and sort after zero.
 - Empty slots follow populated players without changing their stable slot IDs.
+- Bench identities on My Team and Matchup open season-long Player Intel. They
+  no longer open matchup Game Film, which correctly has no active six-game
+  scoring window for a benched player or goalie unit.
 - Add/Drop and promotion actions use one contrast-safe, theme-independent blue
   treatment, with explicit hover, keyboard focus, disabled, and mobile states.
 - The IR activation target is a labelled radio group. Long player, slot,

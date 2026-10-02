@@ -725,7 +725,7 @@
             [class.roster-player-card--interactive]="!!slot.asset"
             [class.injured-player-card]="slot.asset ? isRosterAssetInjured(slot.asset) : false"
             [class.suspended-player-card]="slot.asset ? isRosterAssetSuspended(slot.asset) : false"
-            (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset)"
+            (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset, 'player-intel')"
           >
             @if (slot.asset; as asset) {
               @if (hasRosterAssetAlert(asset)) {
@@ -757,8 +757,8 @@
                 role="link"
                 tabindex="0"
                 [attr.aria-label]="'View details for ' + getRosterAssetName(asset)"
-                (click)="$event.stopPropagation(); openRosterAssetDetail(asset)"
-                (keydown)="handleRosterIdentityKeydown($event, asset)"
+                (click)="$event.stopPropagation(); openRosterAssetIntel(asset)"
+                (keydown)="handleRosterIdentityKeydown($event, asset, 'player-intel')"
               >
                 <strong>{{ getRosterAssetName(asset) }}</strong>
                 <span
