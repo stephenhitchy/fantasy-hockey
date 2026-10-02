@@ -165,6 +165,56 @@ test('season leaders use completed immutable windows while current leaders remai
   );
 });
 
+test('scoring leaders default to points per appearance with total points available separately', () => {
+  const oneGame = windowFor({
+    asset: skater('skater-26', 'One Game Star', 'C'),
+    ownerId: 'owner-a',
+    status: 'active',
+    points: 26,
+    games: 1,
+    appearances: 1,
+  });
+  const sixGames = windowFor({
+    asset: skater('skater-60', 'Six Game Star', 'C'),
+    ownerId: 'owner-b',
+    status: 'active',
+    points: 60,
+    games: 6,
+    appearances: 6,
+  });
+  const twoAppearances = windowFor({
+    asset: skater('skater-24', 'Two Appearance Wing', 'RW'),
+    ownerId: 'owner-c',
+    status: 'active',
+    points: 24,
+    games: 6,
+    appearances: 2,
+  });
+  const goalieUnit = windowFor({
+    asset: goalie('goalie-unit-rate'),
+    ownerId: 'owner-d',
+    status: 'active',
+    points: 30,
+    games: 6,
+    appearances: 1,
+  });
+  const rows = buildScoringLeaderRows(
+    [oneGame, sixGames, twoAppearances, goalieUnit],
+    { completedOnly: false },
+  );
+
+  assert.equal(rows.find((row) => row.assetKey === 'skater-24')?.pointsPerGame, 12);
+  assert.equal(rows.find((row) => row.assetKey === 'goalie-unit-rate')?.pointsPerGame, 5);
+  assert.deepEqual(
+    filterAndRankLeaderRows(rows, 'ALL', 'points-per-game').map((row) => row.assetKey),
+    ['skater-26', 'skater-24', 'skater-60', 'goalie-unit-rate'],
+  );
+  assert.deepEqual(
+    filterAndRankLeaderRows(rows, 'ALL', 'total-points').map((row) => row.assetKey),
+    ['skater-60', 'goalie-unit-rate', 'skater-26', 'skater-24'],
+  );
+});
+
 test('historical scoring stays attributed to every fantasy team that earned it', () => {
   const asset = skater('skater-9', 'Moved Player', 'RW');
   const rows = buildScoringLeaderRows([
@@ -391,16 +441,22 @@ test('League Leaders uses bounded history, one current listener, lazy projection
   assert.match(template, /Current Matchup/);
   assert.match(template, /Season/);
   assert.match(template, /Projected Next 6/);
+  assert.match(component, /selectedScoringMetric = signal<PointLeaderSortMetric>\('points-per-game'\)/);
+  assert.match(component, /selectedScope\(\) === 'projected'[\s\S]*?'total-points'/);
+  assert.match(template, />Points \/ game<\/button>/);
+  assert.match(template, />Total points<\/button>/);
+  assert.match(template, /getPrimaryValueLabel\(row\)/);
   assert.match(template, /Scored for/);
   assert.match(template, /Open Player Intel/);
   assert.match(component, /return 'Goalie Units'/);
   assert.match(styles, /@media \(max-width: 390px\)/);
   assert.doesNotMatch(styles, /\.leader-owner[^}]*display:\s*none/);
-  assert.match(quickNavigation, /\['\/leagues', leagueId, 'leaders'\][\s\S]*?League Leaders/);
-  assert.match(dashboard, /class="leaders-shortcut[\s\S]*?\['\/leagues', league\.leagueId, 'leaders'\]/);
+  assert.match(quickNavigation, /\['\/leagues', leagueId, 'leaders'\][\s\S]*?icon-leaders[\s\S]*?League Leaders/);
+  assert.match(dashboard, /class="leaders-shortcut[\s\S]*?\['\/leagues', league\.leagueId, 'leaders'\][\s\S]*?icon-leaders/);
   assert.match(
     designSystemTest,
     /src\/app\/features\/leaders\/point-leaders\/point-leaders\.html/,
   );
   assert.match(productDoc, /deliberately reviewed adopter[\s\S]*design-system migration allowlist/);
+  assert.match(productDoc, /points per appearance[\s\S]*total-points option/);
 });

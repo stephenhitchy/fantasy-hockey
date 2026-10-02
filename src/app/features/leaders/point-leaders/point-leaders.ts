@@ -42,6 +42,7 @@ import {
   PointLeaderPositionFilter,
   PointLeaderRow,
   PointLeaderScope,
+  PointLeaderSortMetric,
   resolveLeaderCycleCompletion,
   selectInitialLeaderCycleNumber,
 } from './point-leaders.util';
@@ -94,6 +95,7 @@ export class PointLeaders implements OnDestroy {
   readonly projectionError = signal('');
   readonly selectedScope = signal<PointLeaderScope>('current');
   readonly selectedPosition = signal<PointLeaderPositionFilter>('ALL');
+  readonly selectedScoringMetric = signal<PointLeaderSortMetric>('points-per-game');
   readonly visibleLimit = signal(LEADER_PAGE_SIZE);
 
   private stopCurrentWindowListener: (() => void) | null = null;
@@ -146,7 +148,13 @@ export class PointLeaders implements OnDestroy {
   });
 
   readonly rankedRows = computed(() =>
-    filterAndRankLeaderRows(this.selectedRows(), this.selectedPosition()),
+    filterAndRankLeaderRows(
+      this.selectedRows(),
+      this.selectedPosition(),
+      this.selectedScope() === 'projected'
+        ? 'total-points'
+        : this.selectedScoringMetric(),
+    ),
   );
 
   readonly visibleRows = computed(() => this.rankedRows().slice(0, this.visibleLimit()));
@@ -264,6 +272,11 @@ export class PointLeaders implements OnDestroy {
     this.visibleLimit.set(LEADER_PAGE_SIZE);
   }
 
+  setScoringMetric(metric: PointLeaderSortMetric): void {
+    this.selectedScoringMetric.set(metric);
+    this.visibleLimit.set(LEADER_PAGE_SIZE);
+  }
+
   showMore(): void {
     this.visibleLimit.update((value) => value + LEADER_PAGE_SIZE);
   }
@@ -331,6 +344,47 @@ export class PointLeaders implements OnDestroy {
 
   getValueLabel(value: number | null): string {
     return value === null ? '—' : value.toFixed(1);
+  }
+
+  getPrimaryValue(row: PointLeaderRow): number | null {
+    return this.selectedScope() !== 'projected' &&
+      this.selectedScoringMetric() === 'points-per-game'
+      ? row.pointsPerGame
+      : row.value;
+  }
+
+  getPrimaryValueLabel(row: PointLeaderRow): string {
+    const value = this.getPrimaryValue(row);
+    return value === null
+      ? '—'
+      : value.toFixed(
+          this.selectedScope() !== 'projected' &&
+            this.selectedScoringMetric() === 'points-per-game'
+            ? 2
+            : 1,
+        );
+  }
+
+  getPrimaryValueCaption(): string {
+    if (this.selectedScope() === 'projected') {
+      return 'Projected pts';
+    }
+
+    return this.selectedScoringMetric() === 'points-per-game'
+      ? 'FP / game'
+      : 'Total FP';
+  }
+
+  getSecondaryMetricLabel(): string {
+    return this.selectedScoringMetric() === 'points-per-game'
+      ? 'Total points'
+      : 'Pts / game';
+  }
+
+  getSecondaryMetricValue(row: PointLeaderRow): string {
+    return this.selectedScoringMetric() === 'points-per-game'
+      ? this.getValueLabel(row.value)
+      : this.getPointsPerGameLabel(row);
   }
 
   getPointsPerGameLabel(row: PointLeaderRow): string {

@@ -43,6 +43,11 @@ asset's newest owner.
 Historical cycle documents and team-window collections are bounded one-time
 reads. The page does not create one listener per completed cycle.
 
+Current Matchup and Season default to points per appearance so unequal player
+game counts do not make the primary ranking misleading. Skaters use actual
+appearances; team-goalie units use counted NHL team games. Managers can switch
+to the total-points option without changing any saved score or window.
+
 ### Projected Next 6
 
 Loads only after the manager selects the projection view. It accepts a ready,
@@ -95,8 +100,9 @@ npm run test:batchb1w:run
 ```
 
 It verifies completed-window season isolation, provisional current scoring,
-multi-owner attribution, exact-position ranks, missing projection handling,
-goalie-unit semantics, rejection of emergency/incomplete projection seals,
+per-appearance and total-points ordering, multi-owner attribution,
+exact-position ranks, missing projection handling, goalie-unit semantics,
+rejection of emergency/incomplete projection seals,
 overlapping-cycle listener handoff, bounded history, the single current
 listener, lazy projection loading, and navigation entry points.
 

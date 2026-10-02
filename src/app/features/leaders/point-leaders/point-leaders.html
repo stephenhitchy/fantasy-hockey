@@ -78,6 +78,26 @@
 
       <p class="scope-description">{{ getScopeDescription() }}</p>
 
+      <div
+        class="leader-metric-toggle"
+        role="group"
+        aria-label="Rank scoring leaders by"
+        [hidden]="selectedScope() === 'projected'"
+      >
+        <button
+          type="button"
+          [class.active]="selectedScoringMetric() === 'points-per-game'"
+          [attr.aria-pressed]="selectedScoringMetric() === 'points-per-game'"
+          (click)="setScoringMetric('points-per-game')"
+        >Points / game</button>
+        <button
+          type="button"
+          [class.active]="selectedScoringMetric() === 'total-points'"
+          [attr.aria-pressed]="selectedScoringMetric() === 'total-points'"
+          (click)="setScoringMetric('total-points')"
+        >Total points</button>
+      </div>
+
       <div class="position-filters" role="group" aria-label="Filter leaders by position">
         @for (position of ['ALL', 'LW', 'C', 'RW', 'D', 'G']; track position) {
           <button
@@ -121,8 +141,8 @@
                 <strong>{{ getAssetName(row.asset) }}</strong>
                 <span>{{ getAssetTeamLabel(row.asset) }} · {{ row.position }}</span>
               </div>
-              <b>{{ getValueLabel(row.value) }}</b>
-              <small>{{ selectedScope() === 'projected' ? 'projected points' : 'fantasy points' }}</small>
+              <b>{{ getPrimaryValueLabel(row) }}</b>
+              <small>{{ getPrimaryValueCaption() }}</small>
             </a>
           }
         </section>
@@ -164,8 +184,8 @@
                 </a>
 
                 <div class="leader-primary-value">
-                  <strong>{{ getValueLabel(row.value) }}</strong>
-                  <span>{{ selectedScope() === 'projected' ? 'Projected pts' : 'Fantasy pts' }}</span>
+                  <strong>{{ getPrimaryValueLabel(row) }}</strong>
+                  <span>{{ getPrimaryValueCaption() }}</span>
                 </div>
 
                 @if (selectedScope() === 'projected') {
@@ -191,8 +211,8 @@
 
                   <div class="leader-secondary-metrics">
                     <span>
-                      <small>Pts / game</small>
-                      <strong>{{ getPointsPerGameLabel(row) }}</strong>
+                      <small>{{ getSecondaryMetricLabel() }}</small>
+                      <strong>{{ getSecondaryMetricValue(row) }}</strong>
                     </span>
                     <span>
                       <small>{{ row.asset.assetType === 'team-goalie-unit' ? 'Team games' : 'Appearances / games' }}</small>

@@ -12,6 +12,7 @@ import type {
 
 export type PointLeaderScope = 'current' | 'season' | 'projected';
 export type PointLeaderPositionFilter = 'ALL' | 'LW' | 'C' | 'RW' | 'D' | 'G';
+export type PointLeaderSortMetric = 'points-per-game' | 'total-points';
 
 export interface PointLeaderOwnerContribution {
   ownerId: string;
@@ -322,6 +323,10 @@ export function buildScoringLeaderRows(
     .map((row) => {
       const value = row.hasValue ? row.value : null;
       const gamesPlayed = row.hasGamesPlayed ? row.gamesPlayed : null;
+      const appearances = row.hasAppearances ? row.appearances : null;
+      const rateGames = row.asset.assetType === 'team-goalie-unit'
+        ? gamesPlayed
+        : appearances;
 
       return {
         rank: null,
@@ -330,10 +335,10 @@ export function buildScoringLeaderRows(
         position: row.asset.position,
         value,
         gamesPlayed,
-        appearances: row.hasAppearances ? row.appearances : null,
+        appearances,
         pointsPerGame:
-          value !== null && gamesPlayed !== null && gamesPlayed > 0
-            ? value / gamesPlayed
+          value !== null && rateGames !== null && rateGames > 0
+            ? value / rateGames
             : null,
         ownerContributions: [...row.ownerContributions.values()].sort((first, second) =>
           (second.totalPoints ?? Number.NEGATIVE_INFINITY) -
@@ -380,21 +385,37 @@ export function buildProjectedLeaderRows(
 export function filterAndRankLeaderRows(
   rows: readonly PointLeaderRow[],
   position: PointLeaderPositionFilter,
+  metric: PointLeaderSortMetric = 'total-points',
 ): PointLeaderRow[] {
   const filtered = position === 'ALL'
     ? [...rows]
     : rows.filter((row) => row.position === position);
 
+  const getSortValue = (row: PointLeaderRow): number | null =>
+    metric === 'points-per-game' ? row.pointsPerGame : row.value;
+
   filtered.sort((first, second) => {
-    if (first.value === null && second.value !== null) {
+    const firstValue = getSortValue(first);
+    const secondValue = getSortValue(second);
+
+    if (firstValue === null && secondValue !== null) {
       return 1;
     }
 
-    if (second.value === null && first.value !== null) {
+    if (secondValue === null && firstValue !== null) {
       return -1;
     }
 
-    if (first.value !== null && second.value !== null && first.value !== second.value) {
+    if (firstValue !== null && secondValue !== null && firstValue !== secondValue) {
+      return secondValue - firstValue;
+    }
+
+    if (
+      metric === 'points-per-game' &&
+      first.value !== null &&
+      second.value !== null &&
+      first.value !== second.value
+    ) {
       return second.value - first.value;
     }
 
@@ -406,12 +427,14 @@ export function filterAndRankLeaderRows(
   let previousRank = 0;
 
   return filtered.map((row, index) => {
-    if (row.value === null) {
+    const value = getSortValue(row);
+
+    if (value === null) {
       return { ...row, rank: null };
     }
 
-    const rank = index > 0 && row.value === previousValue ? previousRank : index + 1;
-    previousValue = row.value;
+    const rank = index > 0 && value === previousValue ? previousRank : index + 1;
+    previousValue = value;
     previousRank = rank;
     return { ...row, rank };
   });

@@ -160,6 +160,7 @@
 }
 
 .scope-tabs button:focus-visible,
+.leader-metric-toggle button:focus-visible,
 .position-filters button:focus-visible,
 .podium-card:focus-visible,
 .leader-player:focus-visible {
@@ -172,6 +173,37 @@
   color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+.leader-metric-toggle {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  margin-top: 14px;
+  border: 1px solid var(--border-strong);
+  padding: 4px;
+  background: var(--surface-1);
+}
+
+.leader-metric-toggle[hidden] {
+  display: none;
+}
+
+.leader-metric-toggle button {
+  min-height: 44px;
+  border: 0;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.leader-metric-toggle button.active {
+  background: color-mix(in srgb, var(--user-team-primary) 22%, var(--surface-2));
+  color: var(--text-primary);
 }
 
 .position-filters {
