@@ -247,6 +247,7 @@ test('a complete window remains immutable after a later NHL trade', () => {
 test('live scoring uses the current-team game and stable player id, not the stale team game', async (t) => {
   const tor = schedule('TOR', 1, ['LIVE', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
   const cbj = schedule('CBJ', 101, ['LIVE', 'FUT', 'FUT', 'FUT', 'FUT', 'FUT']);
+  t.mock.method(Date, 'now', () => Date.parse('2026-10-01T23:30:00Z'));
 
   t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async (team) =>
     team === 'CBJ' ? cbj : tor

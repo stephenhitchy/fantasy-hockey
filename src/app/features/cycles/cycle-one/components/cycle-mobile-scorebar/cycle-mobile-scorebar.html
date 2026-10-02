@@ -13,8 +13,14 @@
             }}
           </strong>
           @if (presenter.hasTeamCycleProjection(mobileMatchup.teamAOwnerId)) {
-            <small>
-              Proj. {{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}
+            <small
+              class="live-projection-value"
+              [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamAOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId))"
+              [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamAOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId))"
+              [attr.title]="presenter.getLiveProjectionLabel(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamAOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId))"
+            >
+              Proj. <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamAOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}</i>
+              {{ presenter.getProjectionDisplay(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamAOwnerId)) }}
             </small>
           }
         </article>
@@ -35,8 +41,14 @@
             }}
           </strong>
           @if (presenter.hasTeamCycleProjection(mobileMatchup.teamBOwnerId)) {
-            <small>
-              Proj. {{ presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}
+            <small
+              class="live-projection-value"
+              [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamBOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId))"
+              [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamBOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId))"
+              [attr.title]="presenter.getLiveProjectionLabel(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamBOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId))"
+            >
+              Proj. <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamBOwnerId), presenter.getProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}</i>
+              {{ presenter.getProjectionDisplay(presenter.getLiveProjectedCycleForTeam(mobileMatchup.teamBOwnerId)) }}
             </small>
           }
         </article>

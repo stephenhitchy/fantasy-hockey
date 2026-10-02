@@ -59,13 +59,21 @@
                             <span>Current</span>
                           </div>
 
-                          <div>
-                            <strong>
+                          <div
+                            class="live-projection-cell"
+                            [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getLiveProjectedCycleForTeam(ownerId), presenter.getProjectedCycleForTeam(ownerId))"
+                            [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getLiveProjectedCycleForTeam(ownerId), presenter.getProjectedCycleForTeam(ownerId))"
+                            [attr.title]="presenter.getLiveProjectionLabel(presenter.getLiveProjectedCycleForTeam(ownerId), presenter.getProjectedCycleForTeam(ownerId))"
+                          >
+                            <strong class="live-projection-value">
                               {{
-                                presenter.getProjectionDisplay(presenter.getProjectedCycleForTeam(ownerId))
+                                presenter.getProjectionDisplay(presenter.getLiveProjectedCycleForTeam(ownerId))
                               }}
                             </strong>
-                            <span>Projected</span>
+                            <span>
+                              Live proj
+                              <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getLiveProjectedCycleForTeam(ownerId), presenter.getProjectedCycleForTeam(ownerId)) }}</i>
+                            </span>
                           </div>
                         </div>
 
@@ -179,13 +187,18 @@
                                         }
                                       </div>
 
-                                      <div>
-                                        <strong>
+                                      <div
+                                        class="live-projection-cell"
+                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                      >
+                                        <strong class="live-projection-value">
                                           {{
-                                            presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                                            presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
                                           }}
                                         </strong>
-                                        <span>Proj</span>
+                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
                                       </div>
                                       <div class="roster-rank-metric">
                                         <strong>
@@ -239,15 +252,20 @@
                                   <small>Cur</small>
                                 </div>
 
-                                <div>
-                                  <strong>
+                                <div
+                                  class="live-projection-cell"
+                                  [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                  [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                  [attr.title]="presenter.getLiveProjectionLabel(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                >
+                                  <strong class="live-projection-value">
                                     {{
                                       presenter.getProjectionDisplay(
-                                        presenter.getPositionProjectedTotal(ownerId, position)
+                                        presenter.getPositionLiveProjectedTotal(ownerId, position)
                                       )
                                     }}
                                   </strong>
-                                  <small>Proj</small>
+                                  <small>Live proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position)) }}</i></small>
                                 </div>
 
                                 <em>
@@ -342,13 +360,18 @@
                                         }
                                       </div>
 
-                                      <div>
-                                        <strong>
+                                      <div
+                                        class="live-projection-cell"
+                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                      >
+                                        <strong class="live-projection-value">
                                           {{
-                                            presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                                            presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
                                           }}
                                         </strong>
-                                        <span>Proj</span>
+                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
                                       </div>
                                       <div class="roster-rank-metric">
                                         <strong>
@@ -402,15 +425,20 @@
                                   <small>Cur</small>
                                 </div>
 
-                                <div>
-                                  <strong>
+                                <div
+                                  class="live-projection-cell"
+                                  [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                  [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                  [attr.title]="presenter.getLiveProjectionLabel(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                >
+                                  <strong class="live-projection-value">
                                     {{
                                       presenter.getProjectionDisplay(
-                                        presenter.getPositionProjectedTotal(ownerId, position)
+                                        presenter.getPositionLiveProjectedTotal(ownerId, position)
                                       )
                                     }}
                                   </strong>
-                                  <small>Proj</small>
+                                  <small>Live proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position)) }}</i></small>
                                 </div>
 
                                 <em>
@@ -503,13 +531,18 @@
                                         }
                                       </div>
 
-                                      <div>
-                                        <strong>
+                                      <div
+                                        class="live-projection-cell"
+                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                      >
+                                        <strong class="live-projection-value">
                                           {{
-                                            presenter.getProjectionDisplay(presenter.getBestCycleProjection(pick.asset))
+                                            presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
                                           }}
                                         </strong>
-                                        <span>Proj</span>
+                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
                                       </div>
                                       <div class="roster-rank-metric">
                                         <strong>
@@ -563,15 +596,20 @@
                                   <small>Cur</small>
                                 </div>
 
-                                <div>
-                                  <strong>
+                                <div
+                                  class="live-projection-cell"
+                                  [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                  [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                  [attr.title]="presenter.getLiveProjectionLabel(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position))"
+                                >
+                                  <strong class="live-projection-value">
                                     {{
                                       presenter.getProjectionDisplay(
-                                        presenter.getPositionProjectedTotal(ownerId, position)
+                                        presenter.getPositionLiveProjectedTotal(ownerId, position)
                                       )
                                     }}
                                   </strong>
-                                  <small>Proj</small>
+                                  <small>Live proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPositionLiveProjectedTotal(ownerId, position), presenter.getPositionProjectedTotal(ownerId, position)) }}</i></small>
                                 </div>
 
                                 <em>

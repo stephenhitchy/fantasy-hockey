@@ -399,6 +399,26 @@
   text-transform: uppercase;
 }
 
+.g :is(.live-projection-up, .live-projection-up *) {
+  color: var(--rr-success);
+}
+
+.g :is(.live-projection-down, .live-projection-down *) {
+  color: var(--rr-danger);
+}
+
+.g .live-projection-direction {
+  color: currentColor;
+  font-size: 1.2em;
+  font-style: normal;
+  font-weight: 1000;
+  line-height: 0;
+}
+
+.g .live-projection-direction:empty {
+  display: none;
+}
+
 /* Dark fantasy roster board */
 
 .g .fantasy-roster-board {

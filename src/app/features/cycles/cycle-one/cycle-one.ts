@@ -13,6 +13,10 @@ import { saveProjectionAccuracyForCycle } from '../../../core/projection/project
 
 import { getFrozenCycleProjection } from '../../../core/projection/cycle-projection.util';
 import {
+  calculateLiveMatchupProjection,
+  getLiveMatchupProjectionTrend,
+} from '../../../core/projection/live-matchup-projection.util';
+import {
   getRosterDisplayMetric,
   getRosterDisplayMetricLabel,
   getRosterDisplayPhase as resolveRosterDisplayPhase,
@@ -1886,7 +1890,7 @@ export class CycleOne implements OnDestroy {
       teamName: this.getTeamName(ownerId),
       record: this.getTeamRecord(ownerId) || '0-0-0',
       currentScore: this.getMatchupTeamCurrentScore(matchup, ownerId),
-      projectedScore: this.getProjectedCycleForTeam(ownerId),
+      projectedScore: this.getLiveProjectedCycleForTeam(ownerId),
       gamesPlayed,
       gamesTotal,
       resultLabel: this.getTeamResultLabel(matchup, ownerId) || null,
@@ -1914,7 +1918,7 @@ export class CycleOne implements OnDestroy {
       teamLabel: this.getAssetTeamLabel(pick.asset),
       position: pick.asset.position,
       currentPoints: this.getAssetCurrentCycleScore(pick.asset),
-      projectedPoints: this.getBestCycleProjection(pick.asset),
+      projectedPoints: this.getAssetLiveProjection(pick.asset),
       availabilityLabel: availability
         ? [availability.shortLabel, availability.returnDateLabel].filter(Boolean).join(' · ')
         : null,
@@ -3199,6 +3203,27 @@ export class CycleOne implements OnDestroy {
     return Number(projectionTotal.toFixed(1));
   }
 
+  getLiveProjectedCycleForTeam(ownerId: string | null): number | null {
+    const picks = this.getTeamPicks(ownerId);
+
+    if (picks.length === 0) {
+      return null;
+    }
+
+    const projections = picks.map((pick) => this.getAssetLiveProjection(pick.asset));
+    if (
+      !projections.every(
+        (projection): projection is number => typeof projection === 'number',
+      )
+    ) {
+      return null;
+    }
+
+    return Number(
+      projections.reduce((total, projection) => total + projection, 0).toFixed(1),
+    );
+  }
+
   hasTeamCycleProjection(ownerId: string | null): boolean {
     return typeof this.getProjectedCycleForTeam(ownerId) === 'number';
   }
@@ -3252,16 +3277,16 @@ export class CycleOne implements OnDestroy {
       return `${this.getTeamName(matchup.teamAOwnerId)} has a bye.`;
     }
 
-    const teamAProjection = this.getProjectedCycleForTeam(matchup.teamAOwnerId);
+    const teamAProjection = this.getLiveProjectedCycleForTeam(matchup.teamAOwnerId);
 
-    const teamBProjection = this.getProjectedCycleForTeam(matchup.teamBOwnerId);
+    const teamBProjection = this.getLiveProjectedCycleForTeam(matchup.teamBOwnerId);
 
     if (typeof teamAProjection !== 'number' || typeof teamBProjection !== 'number') {
       return 'Projection unavailable';
     }
 
     if (teamAProjection === teamBProjection) {
-      return 'Projected tie';
+      return 'Live projection: tie';
     }
 
     const winnerOwnerId =
@@ -3269,7 +3294,7 @@ export class CycleOne implements OnDestroy {
 
     const difference = Math.abs(teamAProjection - teamBProjection);
 
-    return `${this.getTeamName(winnerOwnerId)} by ${difference.toFixed(1)}`;
+    return `Live projection: ${this.getTeamName(winnerOwnerId)} by ${difference.toFixed(1)}`;
   }
 
   isMyMatchup(matchup: FantasyMatchup): boolean {
@@ -3302,6 +3327,59 @@ export class CycleOne implements OnDestroy {
 
   isNegativeDelta(value: number | null | undefined): boolean {
     return typeof value === 'number' && value < 0;
+  }
+
+  isLiveProjectionUp(
+    liveProjection: number | null | undefined,
+    frozenProjection: number | null | undefined,
+  ): boolean {
+    return getLiveMatchupProjectionTrend(liveProjection, frozenProjection) === 'up';
+  }
+
+  isLiveProjectionDown(
+    liveProjection: number | null | undefined,
+    frozenProjection: number | null | undefined,
+  ): boolean {
+    return getLiveMatchupProjectionTrend(liveProjection, frozenProjection) === 'down';
+  }
+
+  getLiveProjectionDirectionSymbol(
+    liveProjection: number | null | undefined,
+    frozenProjection: number | null | undefined,
+  ): string {
+    const trend = getLiveMatchupProjectionTrend(liveProjection, frozenProjection);
+
+    if (trend === 'up') {
+      return '↑';
+    }
+
+    if (trend === 'down') {
+      return '↓';
+    }
+
+    return '';
+  }
+
+  getLiveProjectionLabel(
+    liveProjection: number | null | undefined,
+    frozenProjection: number | null | undefined,
+  ): string {
+    const trend = getLiveMatchupProjectionTrend(liveProjection, frozenProjection);
+
+    if (
+      trend === 'unavailable' ||
+      typeof liveProjection !== 'number' ||
+      typeof frozenProjection !== 'number'
+    ) {
+      return 'Adjusted projection unavailable.';
+    }
+
+    const delta = Number((liveProjection - frozenProjection).toFixed(1));
+    if (trend === 'even') {
+      return `Adjusted projection ${liveProjection.toFixed(1)}, unchanged after finalized NHL games.`;
+    }
+
+    return `Adjusted projection ${liveProjection.toFixed(1)}, ${Math.abs(delta).toFixed(1)} points ${trend} from the matchup-start projection of ${frozenProjection.toFixed(1)}, based only on finalized NHL games.`;
   }
 
   isMeaningfulPositiveProjectionDelta(
@@ -3554,6 +3632,13 @@ export class CycleOne implements OnDestroy {
     return getFrozenCycleProjection(asset);
   }
 
+  getAssetLiveProjection(asset: DraftableAsset): number | null {
+    return calculateLiveMatchupProjection(
+      this.getBestCycleProjection(asset),
+      this.getAssetScoreSummary(asset),
+    );
+  }
+
   getAssetScoreSummary(asset: DraftableAsset): CycleAssetScoreSummary | null {
     return this.cycleScoring()?.assetScores[asset.assetKey] ?? null;
   }
@@ -3684,6 +3769,27 @@ export class CycleOne implements OnDestroy {
     );
 
     return Number(projectionTotal.toFixed(1));
+  }
+
+  getPositionLiveProjectedTotal(ownerId: string | null, position: DraftPosition): number | null {
+    const picks = this.getTeamPicksByPosition(ownerId, position);
+
+    if (picks.length === 0) {
+      return null;
+    }
+
+    const projections = picks.map((pick) => this.getAssetLiveProjection(pick.asset));
+    if (
+      !projections.every(
+        (projection): projection is number => typeof projection === 'number',
+      )
+    ) {
+      return null;
+    }
+
+    return Number(
+      projections.reduce((total, projection) => total + projection, 0).toFixed(1),
+    );
   }
 
   getPositionGamesPlayed(ownerId: string | null, position: DraftPosition): number {
