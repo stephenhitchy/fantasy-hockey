@@ -211,7 +211,6 @@ export function isFavoriteTeamGame(
 export function selectDashboardNhlGames(
   games: readonly NhlScoreGame[],
   favoriteTeamAbbreviation: string | null | undefined,
-  limit: number = 6,
 ): NhlScoreGame[] {
   const favorite = normalizeTeamAbbreviation(favoriteTeamAbbreviation);
 
@@ -238,8 +237,7 @@ export function selectDashboardNhlGames(
       }
 
       return first.id - second.id;
-    })
-    .slice(0, Math.max(0, limit));
+    });
 }
 
 export function formatNhlScoreboardHeading(

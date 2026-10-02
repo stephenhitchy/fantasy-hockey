@@ -280,6 +280,25 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     );
   });
 
+  await suite.test('keeps every game reachable on a full eight-game slate', () => {
+    const games = Array.from({ length: 8 }, (_value, index) => makeGame({
+      id: 2026020009 + index,
+      gameDate: '2026-10-01',
+      startTimeUTC: new Date(Date.UTC(2026, 9, 1, 23 + index)).toISOString(),
+      awayTeam: { abbrev: index === 7 ? 'FLA' : `A${index}` },
+      homeTeam: { abbrev: index === 7 ? 'SJS' : `H${index}` },
+    }));
+
+    const selected = selectDashboardNhlGames(games, 'VGK');
+
+    assert.equal(selected.length, games.length);
+    assert.deepEqual(
+      selected.map((game) => game.id).sort((first, second) => first - second),
+      games.map((game) => game.id),
+    );
+    assert.equal(selected.at(-1)?.homeTeam.abbrev, 'SJS');
+  });
+
   await suite.test('formats live, intermission, final overtime, and scheduled game states', () => {
     assert.equal(
       formatNhlGameStatus(makeGame({
@@ -422,11 +441,13 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(component, /this\.loadScores\(true, this\.requestedDate\(\)\)/);
   });
 
-  await suite.test('keeps live and favorite-team games prominent without showing every game card', () => {
+  await suite.test('keeps live and favorite-team games prominent while making the full slate reachable', () => {
     assert.match(template, /Around the NHL/);
     assert.match(template, /visibleGames\(\)/);
-    assert.match(template, /favorite-team games first/);
+    assert.match(template, /Game \{\{ activeGameNumber\(\) \}\} of \{\{ visibleGames\(\)\.length \}\}/);
+    assert.doesNotMatch(template, /Showing \{\{ visibleGames\(\)\.length \}\} of/);
     assert.match(component, /selectDashboardNhlGames/);
+    assert.doesNotMatch(component, /visibleGames\(\)\.slice/);
   });
 
   await suite.test('shows compact per-team roster badges without loading fantasy data in the panel', () => {
