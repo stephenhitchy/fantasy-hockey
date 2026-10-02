@@ -24,6 +24,18 @@ Current injury or suspension status does not by itself turn a game red. A red
 missed-game marker still requires the server-owned final and appearance
 evidence, so a day-to-day designation cannot rewrite game history.
 
+## Dashboard matchup glance
+
+Each Dashboard matchup card splits starter-game usage into separate manager
+and opponent bars. A live badge and compact player-name chips identify the
+starters whose saved window contains a live NHL game, making leagues with
+current action easier to spot. The summary reuses the two bounded team-window
+reads already required by the Dashboard; it adds no listener, NHL request, or
+competitive write. Cached summaries from the older combined-bar shape are
+invalidated instead of being interpreted as current live evidence, and live
+names are omitted from the session cache rather than presented as current
+after a later Dashboard visit.
+
 ## Final-transition correction
 
 The direct scorer already loads a short-lived game boxscore for every live

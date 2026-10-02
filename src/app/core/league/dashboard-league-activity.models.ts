@@ -10,6 +10,18 @@ export type DashboardLeagueActivityStage =
 
 export type DashboardLeagueActivityTone = 'neutral' | 'info' | 'warning' | 'success';
 
+export interface DashboardTeamMatchupProgress {
+  gamesPlayed: number;
+  totalGames: number;
+  gamesRemaining: number;
+  progressPercent: number;
+  liveStarterCount: number;
+  liveStarterNames: string[];
+  liveStarterPreviewNames: string[];
+  additionalLiveStarterCount: number;
+  additionalLiveStarterNames: string;
+}
+
 export interface DashboardLeagueMatchupSummary {
   cycleNumber: number;
   opponentTeamName: string;
@@ -20,6 +32,8 @@ export interface DashboardLeagueMatchupSummary {
   totalGames: number;
   gamesRemaining: number;
   progressPercent: number;
+  myProgress: DashboardTeamMatchupProgress;
+  opponentProgress: DashboardTeamMatchupProgress;
 }
 
 

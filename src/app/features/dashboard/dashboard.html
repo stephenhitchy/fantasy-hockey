@@ -256,17 +256,65 @@
                         <div class="dashboard-matchup-progress">
                           <div class="dashboard-matchup-progress-copy">
                             <span>Matchup progress</span>
-                            <strong>{{ matchup.gamesPlayed }} / {{ matchup.totalGames }}</strong>
                           </div>
+
                           <div
-                            class="rr-progress dashboard-matchup-progress-track"
-                            role="progressbar"
-                            [attr.aria-label]="matchup.gamesPlayed + ' of ' + matchup.totalGames + ' starter games counted'"
-                            aria-valuemin="0"
-                            [attr.aria-valuemax]="matchup.totalGames"
-                            [attr.aria-valuenow]="matchup.gamesPlayed"
+                            class="dashboard-matchup-progress-sides"
+                            [class.dashboard-matchup-progress-sides--single]="matchup.scoreStatusLabel === 'Bye'"
                           >
-                            <span [style.width.%]="matchup.progressPercent"></span>
+                            @for (progress of [matchup.myProgress, matchup.opponentProgress]; track $index) {
+                              @if ($index === 0 || matchup.scoreStatusLabel !== 'Bye') {
+                                <div
+                                  class="dashboard-team-progress"
+                                  [class.dashboard-team-progress--mine]="$index === 0"
+                                  [class.dashboard-team-progress--opponent]="$index === 1"
+                                >
+                                  <div class="dashboard-team-progress-heading">
+                                    <span>{{ $index === 0 ? 'You' : matchup.opponentTeamName }}</span>
+                                    <div>
+                                      @if (progress.liveStarterCount > 0) {
+                                        <span class="dashboard-live-count">
+                                          <span aria-hidden="true"></span>
+                                          {{ progress.liveStarterCount }} live
+                                        </span>
+                                      }
+                                      <strong>{{ progress.gamesPlayed }} / {{ progress.totalGames }}</strong>
+                                    </div>
+                                  </div>
+                                  @if (progress.totalGames > 0) {
+                                    <div
+                                      class="rr-progress dashboard-matchup-progress-track"
+                                      role="progressbar"
+                                      [attr.aria-label]="($index === 0 ? 'Your team' : matchup.opponentTeamName) + ' has used ' + progress.gamesPlayed + ' of ' + progress.totalGames + ' starter games; ' + progress.liveStarterCount + ' starters are live'"
+                                      aria-valuemin="0"
+                                      [attr.aria-valuemax]="progress.totalGames"
+                                      [attr.aria-valuenow]="progress.gamesPlayed"
+                                    >
+                                      <span [style.width.%]="progress.progressPercent"></span>
+                                    </div>
+                                  }
+                                  @if (progress.liveStarterCount > 0) {
+                                    <div
+                                      class="dashboard-live-starters"
+                                      [attr.aria-label]="($index === 0 ? 'Your' : matchup.opponentTeamName) + ' starters playing now'"
+                                    >
+                                      @for (name of progress.liveStarterPreviewNames; track $index) {
+                                        <span class="dashboard-live-starter">
+                                          <span aria-hidden="true"></span>
+                                          {{ name }}
+                                        </span>
+                                      }
+                                      @if (progress.additionalLiveStarterCount > 0) {
+                                        <span
+                                          class="dashboard-live-starter dashboard-live-starter--more"
+                                          [attr.aria-label]="progress.additionalLiveStarterNames + ' are also playing now'"
+                                        >+{{ progress.additionalLiveStarterCount }}</span>
+                                      }
+                                    </div>
+                                  }
+                                </div>
+                              }
+                            }
                           </div>
                         </div>
                       }

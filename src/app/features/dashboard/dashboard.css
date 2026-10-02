@@ -904,7 +904,7 @@
 
 .dashboard-matchup-progress {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dashboard-matchup-progress-copy {
@@ -921,6 +921,76 @@
   font-variant-numeric: tabular-nums;
 }
 
+.dashboard-matchup-progress-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-matchup-progress-sides--single {
+  grid-template-columns: 1fr;
+}
+
+.dashboard-team-progress {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-1) 82%, transparent);
+}
+
+.dashboard-team-progress-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.dashboard-team-progress-heading > span {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dashboard-team-progress-heading > div {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-team-progress-heading strong {
+  color: var(--text-primary);
+  font-family: var(--rr-font-numeric);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-live-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: color-mix(in srgb, var(--rr-color-info) 64%, var(--text-primary));
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.dashboard-live-count > span,
+.dashboard-live-starter > span:first-child {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--rr-color-info);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rr-color-info) 18%, transparent);
+}
+
 .dashboard-matchup-progress-track {
   height: 10px;
   overflow: hidden;
@@ -934,6 +1004,44 @@
   height: 100%;
   background: linear-gradient(90deg, var(--user-team-primary), var(--user-team-accent));
   transition: width var(--rr-duration-normal) ease;
+}
+
+.dashboard-team-progress--opponent .dashboard-matchup-progress-track > span {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--rr-color-info) 74%, var(--text-muted)),
+    var(--user-team-tertiary)
+  );
+}
+
+.dashboard-live-starters {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.dashboard-live-starter {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 52%, var(--border-strong));
+  background: color-mix(in srgb, var(--rr-color-info) 10%, var(--surface-2));
+  color: var(--text-primary);
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.dashboard-live-starter--more {
+  color: var(--text-secondary);
+}
+
+.dashboard-live-starter--more > span:first-child {
+  display: none;
 }
 
 .league-attention-list {
@@ -1021,6 +1129,17 @@
 
   .dashboard-matchup-score > strong {
     font-size: var(--rr-mobile-text-score);
+  }
+
+  .dashboard-matchup-progress-sides {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-team-progress-heading > span,
+  .dashboard-team-progress-heading strong,
+  .dashboard-live-count,
+  .dashboard-live-starter {
+    font-size: var(--rr-mobile-text-micro);
   }
 
   .league-attention-chip {

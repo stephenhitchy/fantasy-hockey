@@ -1,4 +1,4 @@
-import type { FantasyDraft } from '../draft/draft.models';
+import type { DraftableAsset, FantasyDraft } from '../draft/draft.models';
 import type { FantasyWaiverClaim } from '../draft/draft.service';
 import type {
   FantasyCycle,
@@ -13,6 +13,7 @@ import type {
   DashboardNhlRosterLocation,
   DashboardNhlTeamRosterCount,
   DashboardRecentWaiverOutcome,
+  DashboardTeamMatchupProgress,
 } from './dashboard-league-activity.models';
 
 export interface DashboardLeagueActivityInput {
@@ -204,7 +205,7 @@ function getRosterAssetTeamAbbreviation(asset: RosterAsset): string {
   ).trim().toUpperCase();
 }
 
-function getRosterAssetName(asset: RosterAsset): string {
+function getRosterAssetName(asset: RosterAsset | DraftableAsset): string {
   if (asset.assetType === 'team-goalie-unit') {
     const teamName = asset.teamName?.trim() || asset.teamAbbreviation.trim().toUpperCase();
     return `${teamName} Goalie Unit`;
@@ -375,10 +376,37 @@ function countBoundarySlots(windows: FantasyTeamCycleWindows | null): number {
 function summarizeWindows(
   first: FantasyTeamCycleWindows | null,
   second: FantasyTeamCycleWindows | null,
-): { gamesPlayed: number; totalGames: number; gamesRemaining: number; progressPercent: number } {
-  const windows = [first, second]
-    .filter((entry): entry is FantasyTeamCycleWindows => Boolean(entry))
-    .flatMap((entry) => entry.windows);
+): {
+  gamesPlayed: number;
+  totalGames: number;
+  gamesRemaining: number;
+  progressPercent: number;
+  myProgress: DashboardTeamMatchupProgress;
+  opponentProgress: DashboardTeamMatchupProgress;
+} {
+  const myProgress = summarizeTeamWindows(first);
+  const opponentProgress = summarizeTeamWindows(second);
+  const gamesPlayed = myProgress.gamesPlayed + opponentProgress.gamesPlayed;
+  const gamesRemaining = myProgress.gamesRemaining + opponentProgress.gamesRemaining;
+  const totalGames = myProgress.totalGames + opponentProgress.totalGames;
+  const progressPercent = totalGames > 0
+    ? Number(Math.min(100, Math.max(0, (gamesPlayed / totalGames) * 100)).toFixed(1))
+    : 0;
+
+  return {
+    gamesPlayed,
+    totalGames,
+    gamesRemaining,
+    progressPercent,
+    myProgress,
+    opponentProgress,
+  };
+}
+
+function summarizeTeamWindows(
+  teamWindows: FantasyTeamCycleWindows | null,
+): DashboardTeamMatchupProgress {
+  const windows = teamWindows?.windows ?? [];
 
   const gamesPlayed = windows.reduce((sum, window) => sum + Math.max(0, window.gamesPlayed), 0);
   const gamesRemaining = windows.reduce((sum, window) => sum + Math.max(0, window.gamesLeft), 0);
@@ -386,8 +414,23 @@ function summarizeWindows(
   const progressPercent = totalGames > 0
     ? Number(Math.min(100, Math.max(0, (gamesPlayed / totalGames) * 100)).toFixed(1))
     : 0;
+  const liveStarterNames = windows
+    .filter((window) => Array.isArray(window.liveGameIds) && window.liveGameIds.length > 0)
+    .map((window) => getRosterAssetName(window.asset));
+  const liveStarterPreviewNames = liveStarterNames.slice(0, 3);
+  const additionalLiveStarterNames = liveStarterNames.slice(3);
 
-  return { gamesPlayed, totalGames, gamesRemaining, progressPercent };
+  return {
+    gamesPlayed,
+    totalGames,
+    gamesRemaining,
+    progressPercent,
+    liveStarterCount: liveStarterNames.length,
+    liveStarterNames,
+    liveStarterPreviewNames,
+    additionalLiveStarterCount: additionalLiveStarterNames.length,
+    additionalLiveStarterNames: additionalLiveStarterNames.join(', '),
+  };
 }
 
 function matchupScoreStatus(myScore: number, opponentScore: number, complete: boolean): string {

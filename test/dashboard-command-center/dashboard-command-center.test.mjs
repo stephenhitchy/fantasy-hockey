@@ -155,7 +155,126 @@ test('Batch 8A dashboard command center behavior', async (suite) => {
     assert.equal(activity.matchup.gamesPlayed, 61);
     assert.equal(activity.matchup.gamesRemaining, 107);
     assert.equal(activity.matchup.totalGames, 168);
+    assert.deepEqual(activity.matchup.myProgress, {
+      gamesPlayed: 32,
+      gamesRemaining: 52,
+      totalGames: 84,
+      progressPercent: 38.1,
+      liveStarterCount: 0,
+      liveStarterNames: [],
+      liveStarterPreviewNames: [],
+      additionalLiveStarterCount: 0,
+      additionalLiveStarterNames: '',
+    });
+    assert.deepEqual(activity.matchup.opponentProgress, {
+      gamesPlayed: 29,
+      gamesRemaining: 55,
+      totalGames: 84,
+      progressPercent: 34.5,
+      liveStarterCount: 0,
+      liveStarterNames: [],
+      liveStarterPreviewNames: [],
+      additionalLiveStarterCount: 0,
+      additionalLiveStarterNames: '',
+    });
     assert.deepEqual(activity.primaryActionRoute, ['/leagues', 'league-1', 'cycles', 3]);
+  });
+
+  await suite.test('splits matchup usage by team and names starters playing now', () => {
+    const activity = buildDashboardLeagueActivity(
+      makeBaseInput({
+        draft: makeDraft('complete'),
+        matchup: {
+          id: 'matchup-live',
+          cycleNumber: 5,
+          teamAOwnerId: 'owner-a',
+          teamBOwnerId: 'owner-b',
+          teamAScore: 42,
+          teamBScore: 38,
+          status: 'active',
+        },
+        myWindows: {
+          ownerId: 'owner-a',
+          windows: [
+            {
+              gamesPlayed: 3,
+              gamesLeft: 3,
+              liveGameIds: [2026020101],
+              asset: {
+                assetType: 'skater',
+                assetKey: 'skater-2',
+                position: 'C',
+                player: { id: 2, fullName: 'Will Smith', nhlTeamAbbreviation: 'SJS' },
+              },
+            },
+            {
+              gamesPlayed: 2,
+              gamesLeft: 4,
+              liveGameIds: [],
+              asset: {
+                assetType: 'skater',
+                assetKey: 'skater-3',
+                position: 'D',
+                player: { id: 3, fullName: 'Jake Walman', nhlTeamAbbreviation: 'SJS' },
+              },
+            },
+            ...Array.from({ length: 3 }, (_, index) => ({
+              gamesPlayed: 0,
+              gamesLeft: 6,
+              liveGameIds: [2026020110 + index],
+              asset: {
+                assetType: 'skater',
+                assetKey: `skater-live-${index}`,
+                position: 'LW',
+                player: {
+                  id: 10 + index,
+                  fullName: `Live Player ${index + 1}`,
+                  nhlTeamAbbreviation: 'SJS',
+                },
+              },
+            })),
+          ],
+        },
+        opponentWindows: {
+          ownerId: 'owner-b',
+          windows: [{
+            gamesPlayed: 4,
+            gamesLeft: 2,
+            liveGameIds: [2026020102],
+            asset: {
+              assetType: 'team-goalie-unit',
+              assetKey: 'goalie-unit-FLA',
+              position: 'G',
+              teamName: 'Florida Panthers',
+              teamAbbreviation: 'FLA',
+            },
+          }],
+        },
+      }),
+    );
+
+    assert.deepEqual(activity.matchup.myProgress, {
+      gamesPlayed: 5,
+      gamesRemaining: 25,
+      totalGames: 30,
+      progressPercent: 16.7,
+      liveStarterCount: 4,
+      liveStarterNames: ['Will Smith', 'Live Player 1', 'Live Player 2', 'Live Player 3'],
+      liveStarterPreviewNames: ['Will Smith', 'Live Player 1', 'Live Player 2'],
+      additionalLiveStarterCount: 1,
+      additionalLiveStarterNames: 'Live Player 3',
+    });
+    assert.deepEqual(activity.matchup.opponentProgress, {
+      gamesPlayed: 4,
+      gamesRemaining: 2,
+      totalGames: 6,
+      progressPercent: 66.7,
+      liveStarterCount: 1,
+      liveStarterNames: ['Florida Panthers Goalie Unit'],
+      liveStarterPreviewNames: ['Florida Panthers Goalie Unit'],
+      additionalLiveStarterCount: 0,
+      additionalLiveStarterNames: '',
+    });
   });
 
   await suite.test('surfaces only compact roster attention counts', () => {
@@ -356,7 +475,9 @@ test('Batch 8A source contracts', async (suite) => {
   });
 
   await suite.test('passes aggregated roster presence to the NHL scoreboard and invalidates old cache data', () => {
-    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 9/);
+    assert.match(dashboard, /DASHBOARD_CACHE_VERSION = 10/);
+    assert.match(dashboard, /omitCachedLiveMatchupActivity/);
+    assert.match(dashboard, /leagueSummaries: omitCachedLiveMatchupActivity/);
     assert.match(dashboard, /combineDashboardNhlTeamRosterCounts/);
     assert.match(template, /\[rosteredTeamCounts\]="nhlTeamRosterCounts\(\)"/);
   });
@@ -391,8 +512,14 @@ test('Batch 8A source contracts', async (suite) => {
   });
 
   await suite.test('exposes semantic matchup progress and compact attention chips', () => {
-    assert.match(template, /role="progressbar"/);
-    assert.match(template, /starter games counted/);
+    assert.equal(template.match(/role="progressbar"/g)?.length, 1);
+    assert.match(template, /Matchup progress/);
+    assert.match(template, /\[matchup\.myProgress, matchup\.opponentProgress\]/);
+    assert.match(template, /progress\.gamesPlayed/);
+    assert.match(template, /progress\.liveStarterPreviewNames/);
+    assert.match(template, /matchup\.scoreStatusLabel !== 'Bye'/);
+    assert.match(template, /progress\.liveStarterCount > 0/);
+    assert.match(template, /starters are live/);
     assert.match(template, /starter.*unavailable/s);
     assert.match(template, /scheduled move/);
   });

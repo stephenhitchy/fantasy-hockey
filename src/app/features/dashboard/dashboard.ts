@@ -21,12 +21,44 @@ interface DashboardCache {
   cachedAt: number;
 }
 
-const DASHBOARD_CACHE_VERSION = 9;
+const DASHBOARD_CACHE_VERSION = 10;
 const DASHBOARD_CACHE_PREFIX = `fantasy-hockey-dashboard-v${DASHBOARD_CACHE_VERSION}`;
 
 
 function getDashboardCacheKey(userId: string): string {
   return `${DASHBOARD_CACHE_PREFIX}:${userId}`;
+}
+
+function omitCachedLiveMatchupActivity(leagueSummaries: readonly LeagueSummary[]): LeagueSummary[] {
+  return leagueSummaries.map((league) => {
+    const activity = league.dashboardActivity;
+    const matchup = activity?.matchup;
+
+    if (!activity || !matchup) {
+      return league;
+    }
+
+    const withoutLiveActivity = (progress: typeof matchup.myProgress) => ({
+      ...progress,
+      liveStarterCount: 0,
+      liveStarterNames: [],
+      liveStarterPreviewNames: [],
+      additionalLiveStarterCount: 0,
+      additionalLiveStarterNames: '',
+    });
+
+    return {
+      ...league,
+      dashboardActivity: {
+        ...activity,
+        matchup: {
+          ...matchup,
+          myProgress: withoutLiveActivity(matchup.myProgress),
+          opponentProgress: withoutLiveActivity(matchup.opponentProgress),
+        },
+      },
+    };
+  });
 }
 
 function readDashboardCache(userId: string): DashboardCache | null {
@@ -45,7 +77,7 @@ function readDashboardCache(userId: string): DashboardCache | null {
     return {
       userId,
       profile: parsed.profile ?? null,
-      leagueSummaries: parsed.leagueSummaries,
+      leagueSummaries: omitCachedLiveMatchupActivity(parsed.leagueSummaries),
       cachedAt: typeof parsed.cachedAt === 'number' ? parsed.cachedAt : 0,
     };
   } catch {
@@ -267,7 +299,7 @@ export class Dashboard {
     writeDashboardCache({
       userId: this.userId,
       profile: cacheProfile,
-      leagueSummaries: this.leagueSummaries(),
+      leagueSummaries: omitCachedLiveMatchupActivity(this.leagueSummaries()),
       cachedAt: Date.now(),
     });
   }
