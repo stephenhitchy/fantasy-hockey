@@ -31,6 +31,7 @@ import {
   ProjectionCycleGameMarker,
   ProjectionStatBreakdownItem
 } from './draft.models';
+import { calculateCurrentTeamCycleFantasyPoints } from './current-team-cycle-performance.util';
 
 import {
   PlayerAvailabilityDatabaseRecord,
@@ -5071,6 +5072,17 @@ export async function loadDraftPlayerPool(
             currentGames.map((game) => game.gameId)
           )
         });
+      const currentTeamCycleFantasyPoints =
+        calculateCurrentTeamCycleFantasyPoints(
+          currentGames.map((game) => ({
+            gameId: game.gameId,
+            fantasyPoints: calculateSkaterGameFantasyPoints(
+              skater.position,
+              game
+            )
+          })),
+          currentCycleDecision.currentTeamCycleGames
+        );
 
       return {
         assetType: 'skater',
@@ -5107,6 +5119,7 @@ export async function loadDraftPlayerPool(
           currentCycleDecision.currentTeamCycleNumber,
         currentTeamCycleGames:
           currentCycleDecision.currentTeamCycleGames,
+        currentTeamCycleFantasyPoints,
         draftProjectedSeasonPoints:
           projection.draftProjectedSeasonPoints,
         draftProjectedCyclePoints:
@@ -5385,6 +5398,14 @@ export async function loadDraftPlayerPool(
             options.requiredGamesPerCycle,
           goalieUnit: true
         });
+      const currentTeamCycleFantasyPoints =
+        calculateCurrentTeamCycleFantasyPoints(
+          currentGames.map((game) => ({
+            gameId: game.gameId,
+            fantasyPoints: calculateGoalieGameFantasyPoints(game)
+          })),
+          currentCycleDecision.currentTeamCycleGames
+        );
 
       return {
         assetType: 'team-goalie-unit',
@@ -5426,6 +5447,7 @@ export async function loadDraftPlayerPool(
           currentCycleDecision.currentTeamCycleNumber,
         currentTeamCycleGames:
           currentCycleDecision.currentTeamCycleGames,
+        currentTeamCycleFantasyPoints,
         draftProjectedSeasonPoints:
           projection.draftProjectedSeasonPoints,
         draftProjectedCyclePoints:

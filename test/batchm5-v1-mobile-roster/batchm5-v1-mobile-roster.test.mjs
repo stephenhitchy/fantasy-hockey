@@ -407,7 +407,7 @@ test('M5-V1 foundations still preserve scoring, Projection V11, Firestore rules,
   );
   assert.equal(
     await sha256('src/app/core/draft/draft-player-pool.service.ts'),
-    'ab6ee7c4ea5e92966b80f928897b3c2b01b1fcc8bafe7738e67a2651cd048300',
+    'e9f4879f4038e10e03096da2ba908b6010a0c59f0a37654e0ba005d460333e03',
   );
   assert.equal(await sha256('firestore.rules'), PROTECTED_SOURCE_HASHES.firestoreRules);
   assert.equal(

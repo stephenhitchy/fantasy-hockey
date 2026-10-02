@@ -376,6 +376,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
         // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
         'src/shared/core/draft/draft-player-pool.service.ts',
+        // Bench visibility adds an isolated, non-counting current-block total.
+        'src/shared/core/draft/current-team-cycle-performance.util.ts',
         // FF1.42 freezes the first unfinished all-club six-game source block
         // and propagates its exact provider IDs through later windows.
         'src/shared/core/draft/anchored-season-capacity.util.ts',

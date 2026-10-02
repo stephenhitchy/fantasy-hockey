@@ -2529,6 +2529,11 @@
   line-height: 1.25;
 }
 
+.g .matchup-bench-card .bench-window-game-markers {
+  width: min(100%, 154px);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .g .matchup-logo-fallback {
   display: grid;
   place-items: center;

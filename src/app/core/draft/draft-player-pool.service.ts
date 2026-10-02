@@ -25,6 +25,7 @@ import {
   ProjectionCycleGameMarker,
   ProjectionStatBreakdownItem
 } from './draft.models';
+import { calculateCurrentTeamCycleFantasyPoints } from './current-team-cycle-performance.util';
 
 import {
   PlayerAvailabilityDatabaseRecord,
@@ -59,6 +60,8 @@ export interface DraftPlayerPoolProjectionOptions {
   forceRefresh?: boolean;
   targetCycleNumber?: number;
   requiredGamesPerCycle?: number;
+  /** Load current NHL-team blocks without changing the requested projection target. */
+  includeCurrentTeamCycle?: boolean;
   availabilityByPlayerId?: ReadonlyMap<
     number,
     PlayerAvailabilityDatabaseRecord
@@ -344,6 +347,7 @@ function normalizeProjectionOptions(
       targetCycleNumber: undefined,
       requiredGamesPerCycle:
         defaultScoringRules.requiredGamesPerCycle,
+      includeCurrentTeamCycle: false,
       availabilityByPlayerId: undefined,
       currentSeasonOverride: undefined,
       previousSeasonOverride: undefined,
@@ -369,6 +373,7 @@ function normalizeProjectionOptions(
       typeof input.requiredGamesPerCycle === 'number'
         ? Math.max(1, Math.floor(input.requiredGamesPerCycle))
         : defaultScoringRules.requiredGamesPerCycle,
+    includeCurrentTeamCycle: input.includeCurrentTeamCycle === true,
     availabilityByPlayerId: input.availabilityByPlayerId,
     currentSeasonOverride: normalizeSeasonOverride(input.currentSeasonOverride),
     previousSeasonOverride: normalizeSeasonOverride(input.previousSeasonOverride),
@@ -4432,6 +4437,7 @@ export async function loadDraftPlayerPool(
   const options = normalizeProjectionOptions(input);
   const hasProjectionContext = Boolean(
     options.targetCycleNumber ||
+    options.includeCurrentTeamCycle ||
     options.availabilityByPlayerId ||
     options.currentSeasonOverride ||
     options.previousSeasonOverride ||
@@ -4574,6 +4580,11 @@ export async function loadDraftPlayerPool(
 
   const shouldLoadSchedules = Boolean(
     options.targetCycleNumber ||
+    options.availabilityByPlayerId ||
+    options.includeCurrentTeamCycle
+  );
+  const shouldLoadPreviousSchedules = Boolean(
+    options.targetCycleNumber ||
     options.availabilityByPlayerId
   );
 
@@ -4584,7 +4595,7 @@ export async function loadDraftPlayerPool(
   // Previous-season team strength remains useful early in a new season,
   // even when current player game logs already exist. Current results take
   // progressively more weight as the sample grows.
-  const previousTeamSchedules = shouldLoadSchedules
+  const previousTeamSchedules = shouldLoadPreviousSchedules
     ? await loadTeamProjectionSchedules(previousSeason)
     : new Map<string, NhlTeamSeasonGame[]>();
 
@@ -4709,6 +4720,17 @@ export async function loadDraftPlayerPool(
             currentGames.map((game) => game.gameId)
           )
         });
+      const currentTeamCycleFantasyPoints =
+        calculateCurrentTeamCycleFantasyPoints(
+          currentGames.map((game) => ({
+            gameId: game.gameId,
+            fantasyPoints: calculateSkaterGameFantasyPoints(
+              skater.position,
+              game
+            )
+          })),
+          currentCycleDecision.currentTeamCycleGames
+        );
 
       return {
         assetType: 'skater',
@@ -4745,6 +4767,7 @@ export async function loadDraftPlayerPool(
           currentCycleDecision.currentTeamCycleNumber,
         currentTeamCycleGames:
           currentCycleDecision.currentTeamCycleGames,
+        currentTeamCycleFantasyPoints,
         draftProjectedSeasonPoints:
           projection.draftProjectedSeasonPoints,
         draftProjectedCyclePoints:
@@ -4991,6 +5014,14 @@ export async function loadDraftPlayerPool(
             options.requiredGamesPerCycle,
           goalieUnit: true
         });
+      const currentTeamCycleFantasyPoints =
+        calculateCurrentTeamCycleFantasyPoints(
+          currentGames.map((game) => ({
+            gameId: game.gameId,
+            fantasyPoints: calculateGoalieGameFantasyPoints(game)
+          })),
+          currentCycleDecision.currentTeamCycleGames
+        );
 
       return {
         assetType: 'team-goalie-unit',
@@ -5032,6 +5063,7 @@ export async function loadDraftPlayerPool(
           currentCycleDecision.currentTeamCycleNumber,
         currentTeamCycleGames:
           currentCycleDecision.currentTeamCycleGames,
+        currentTeamCycleFantasyPoints,
         draftProjectedSeasonPoints:
           projection.draftProjectedSeasonPoints,
         draftProjectedCyclePoints:

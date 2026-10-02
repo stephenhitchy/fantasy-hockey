@@ -32,6 +32,10 @@ import {
 } from '../../../core/cycle/cycle.service';
 
 import { DraftableAsset, DraftPick, DraftPosition } from '../../../core/draft/draft.models';
+import {
+  buildProjectionProgressMarkers,
+  type LeaguePlayerProgressMarker,
+} from '../../../core/player/league-player-window-progress.util';
 
 import {
   activateIrRosterAsset,
@@ -2919,6 +2923,34 @@ export class TeamSettings implements OnDestroy {
     return this.getRosterAssetProjection(asset)?.projectedCyclePoints ?? null;
   }
 
+  getBenchCurrentBlockScore(asset: unknown): number | null {
+    return this.getRosterDisplayAsset(asset)?.currentTeamCycleFantasyPoints ?? null;
+  }
+
+  getBenchCurrentBlockMarkers(asset: unknown): LeaguePlayerProgressMarker[] {
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+
+    return buildProjectionProgressMarkers(
+      this.getRosterDisplayAsset(asset)?.currentTeamCycleGames,
+      requiredGames,
+    );
+  }
+
+  getBenchCurrentBlockLabel(asset: unknown): string {
+    const projectionAsset = this.getRosterDisplayAsset(asset);
+    const blockNumber = projectionAsset?.currentTeamCycleNumber;
+    const markers = this.getBenchCurrentBlockMarkers(asset);
+    const appearances = markers.filter((marker) => marker.status === 'played').length;
+    const completed = markers.filter(
+      (marker) => marker.status === 'played' || marker.status === 'missed',
+    ).length;
+    const blockLabel = blockNumber ? `NHL block ${blockNumber}` : 'Current NHL block';
+
+    return `${blockLabel}: ${appearances} appearances, ${completed} of ${markers.length} team games complete. Bench points do not count toward the matchup.`;
+  }
+
   getRosterAssetScoreSummary(asset: unknown): CycleAssetScoreSummary | null {
     const projectionAsset = this.getRosterAssetProjection(asset);
 
@@ -3322,7 +3354,13 @@ export class TeamSettings implements OnDestroy {
 
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
     try {
-      this.playerPool.set(await loadDraftPlayerPool(true));
+      this.playerPool.set(await loadDraftPlayerPool({
+        forceRefresh: true,
+        includeCurrentTeamCycle: true,
+        requiredGamesPerCycle:
+          this.league()?.scoringRules?.requiredGamesPerCycle ??
+          defaultScoringRules.requiredGamesPerCycle,
+      }));
     } catch (error: unknown) {
       console.warn('Unable to load player pool projection fallback.', error);
     }

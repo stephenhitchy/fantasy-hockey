@@ -142,9 +142,9 @@
 
     <section class="player-intel-score-strip" aria-label="Fantasy scoring summary">
       <article class="player-intel-score-card player-intel-score-card-current">
-        <span>Current matchup</span>
-        <strong>{{ formatPoints(currentRosterWindow()?.fantasyPoints) }}</strong>
-        <small>Fantasy points</small>
+        <span>{{ currentDisplayHeading() }}</span>
+        <strong>{{ formatPoints(currentDisplayFantasyPoints()) }}</strong>
+        <small>{{ currentDisplayUnit() }}</small>
         <p>{{ getCurrentMatchupProgressLabel() }}</p>
         @if (currentRosterWindow(); as currentWindow) {
           <a

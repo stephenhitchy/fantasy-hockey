@@ -312,8 +312,9 @@ test('Player Intel keeps real Projection V11 fields and returns to the unified A
   assert.match(component, /activeSection = signal<PlayerIntelSection>\('overview'\)/);
   assert.match(component, /buildPlayerIntelRecentPaceCards/);
   assert.doesNotMatch(component, /mock-player-data|getMockPlayerDetail/);
-  assert.match(template, /currentRosterWindow\(\)\?\.fantasyPoints/);
-  assert.match(template, /Current matchup/);
+  assert.match(component, /currentRosterWindow\(\)\?\.fantasyPoints|return window\.fantasyPoints/);
+  assert.match(component, /currentDisplayHeading/);
+  assert.match(template, /currentDisplayFantasyPoints/);
   assert.match(template, /Season total/);
   assert.match(template, /View scoring breakdown/);
   assert.match(template, /player-intel-breakdown-bars/);

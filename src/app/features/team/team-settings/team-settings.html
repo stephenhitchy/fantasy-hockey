@@ -709,11 +709,10 @@
 
       <p class="bench-cycle-guidance rr-guidance-new-only">
         @if (isOwnTeam()) {
-          Bench players and goalie units are owned but do not score. Starting a bench player schedules
-          a fair lineup swap; already-played NHL games are never backfilled.
+          Bench scores and circles do not count. Starting one schedules a fair lineup swap; played
+          NHL games are never backfilled.
         } @else {
-          Bench players and goalie units are owned by this manager but do not score until they enter
-          an active lineup slot.
+          Bench scores and circles do not count until the asset enters the active lineup.
         }
       </p>
 
@@ -775,8 +774,8 @@
 
               <div class="fantasy-player-score-stack">
                 <div>
-                  <strong>—</strong>
-                  <span>Bench</span>
+                  <strong>{{ getDisplayNumber(getBenchCurrentBlockScore(asset)) }}</strong>
+                  <span>Bench pts</span>
                 </div>
 
                 <div>
@@ -788,6 +787,22 @@
                   <strong>{{ getDisplayNumber(getRosterAssetDisplayMetric(asset)) }}</strong>
                   <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
                 </div>
+              </div>
+
+              <div
+                class="bench-game-markers"
+                [attr.aria-label]="getBenchCurrentBlockLabel(asset)"
+              >
+                @for (marker of getBenchCurrentBlockMarkers(asset); track marker.index) {
+                  <span
+                    class="bench-game-marker"
+                    [class.bench-game-marker--played]="marker.status === 'played'"
+                    [class.bench-game-marker--missed]="marker.status === 'missed'"
+                    [class.bench-game-marker--upcoming]="marker.status === 'upcoming'"
+                    [class.bench-game-marker--unavailable]="marker.status === 'unavailable'"
+                    [title]="marker.title"
+                  >{{ marker.index }}</span>
+                }
               </div>
 
               @if (isOwnTeam()) {

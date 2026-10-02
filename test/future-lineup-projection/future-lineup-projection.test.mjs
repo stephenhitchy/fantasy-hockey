@@ -414,7 +414,10 @@ test('Game Center refreshes future previews from roster, window, and projection 
   assert.match(source, /buildEffectiveCycleLineupPicks\(\{/);
   assert.match(source, /rostersByOwner: this\.teamRostersByOwner\(\)/);
   assert.match(source, /this\.refreshEffectivePicks\(\);\s*\n\s*}\,\s*\n\s*\);/);
-  assert.match(source, /this\.playerPool\.set\(await loadDraftPlayerPool\(true\)\);\s*\n\s*this\.refreshEffectivePicks\(\);/);
+  assert.match(
+    source,
+    /this\.playerPool\.set\(await loadDraftPlayerPool\(\{[\s\S]*?forceRefresh: true,[\s\S]*?includeCurrentTeamCycle: true,[\s\S]*?\}\)\);\s*\n\s*this\.refreshEffectivePicks\(\);/,
+  );
   assert.match(source, /getCycleProjectionPreviewSignature/);
   assert.match(source, /slotWindow\.assetKey !== pick\.asset\.assetKey/);
   assert.match(source, /private isQueuedIncomingPreview\(pick: DraftPick\): boolean/);

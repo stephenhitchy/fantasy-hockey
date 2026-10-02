@@ -2592,6 +2592,51 @@
   flex-wrap: wrap;
 }
 
+.bench-game-markers {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, 24px);
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.bench-game-marker {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.bench-game-marker--played {
+  border-color: color-mix(in srgb, var(--rr-success) 74%, var(--rr-ice-white));
+  color: var(--rr-scoreboard);
+  background: var(--rr-success);
+}
+
+.bench-game-marker--missed {
+  border-color: color-mix(in srgb, var(--rr-danger) 72%, var(--rr-ice-white));
+  color: var(--rr-ice-white);
+  background: var(--rr-danger);
+}
+
+.bench-game-marker--upcoming {
+  border-color: color-mix(in srgb, var(--rr-warning) 70%, var(--rr-ice-white));
+  color: color-mix(in srgb, var(--rr-warning) 18%, var(--rr-scoreboard));
+  background: var(--rr-warning);
+}
+
+.bench-game-marker--unavailable {
+  border-style: dashed;
+}
+
 .bench-player-card.empty-slot-card {
   display: flex;
   align-items: center;

@@ -92,6 +92,9 @@ export interface DraftProjection {
   currentTeamCycleNumber?: number | null;
   currentTeamCycleGames?: ProjectionCycleGameMarker[] | null;
 
+  /** Non-counting fantasy production in the NHL team's current six-game block. */
+  currentTeamCycleFantasyPoints?: number | null;
+
 
   /**
    * Exact manager-facing projection frozen when a fantasy cycle begins.

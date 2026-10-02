@@ -149,6 +149,30 @@ export class LeaguePlayerDetail {
     );
   });
 
+  readonly currentDisplayFantasyPoints = computed(() => {
+    const window = this.currentRosterWindow();
+
+    if (window) {
+      return window.fantasyPoints;
+    }
+
+    return this.row()?.ownership?.area === 'bench'
+      ? this.asset()?.currentTeamCycleFantasyPoints ?? null
+      : null;
+  });
+
+  readonly currentDisplayHeading = computed(() =>
+    this.row()?.ownership?.area === 'bench' && !this.currentRosterWindow()
+      ? 'Bench block'
+      : 'Current matchup',
+  );
+
+  readonly currentDisplayUnit = computed(() =>
+    this.row()?.ownership?.area === 'bench' && !this.currentRosterWindow()
+      ? 'Non-counting fantasy points'
+      : 'Fantasy points',
+  );
+
   readonly opportunityLens = computed(() => {
     const asset = this.asset();
     return asset ? buildPlayerOpportunityLens(asset) : null;
@@ -434,6 +458,17 @@ export class LeaguePlayerDetail {
   getCurrentMatchupProgressLabel(): string {
     const window = this.currentRosterWindow();
     if (!window) {
+      if (this.row()?.ownership?.area === 'bench') {
+        const markers = this.currentTeamCycleGames();
+        const appearances = markers.filter((marker) => marker.status === 'played').length;
+        const completed = markers.filter(
+          (marker) => marker.status === 'played' || marker.status === 'missed',
+        ).length;
+        const appearanceLabel = appearances === 1 ? 'appearance' : 'appearances';
+
+        return `Does not count · ${appearances} ${appearanceLabel} · ${completed} of ${markers.length} team games complete`;
+      }
+
       return this.row()?.ownership?.area === 'active'
         ? 'The current six-game window is being prepared.'
         : 'No active six-game window.';

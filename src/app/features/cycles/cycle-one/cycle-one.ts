@@ -7,6 +7,7 @@ import {
 
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
+import { buildProjectionProgressMarkers } from '../../../core/player/league-player-window-progress.util';
 
 import { saveProjectionAccuracyForCycle } from '../../../core/projection/projection-accuracy.service';
 
@@ -2777,6 +2778,43 @@ export class CycleOne implements OnDestroy {
     );
   }
 
+  getBenchAssetCurrentBlockScore(asset: RosterAsset): number | null {
+    return this.getBenchProjectionAsset(asset)?.currentTeamCycleFantasyPoints ?? null;
+  }
+
+  getBenchAssetGameMarkers(asset: RosterAsset): CycleWindowGameMarker[] {
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+
+    return buildProjectionProgressMarkers(
+      this.getBenchProjectionAsset(asset)?.currentTeamCycleGames,
+      requiredGames,
+    ).map((marker) => ({
+      index: marker.index,
+      gameId: marker.gameId,
+      gameDate: marker.gameDate,
+      gameLabel: marker.displayLabel,
+      status: marker.status,
+      statusLabel: marker.statusLabel,
+      title: marker.title,
+    }));
+  }
+
+  getBenchAssetBlockStatusLabel(asset: RosterAsset): string {
+    const projectionAsset = this.getBenchProjectionAsset(asset);
+    const markers = this.getBenchAssetGameMarkers(asset);
+    const appearances = markers.filter((marker) => marker.status === 'played').length;
+    const completed = markers.filter(
+      (marker) => marker.status === 'played' || marker.status === 'missed',
+    ).length;
+    const blockLabel = projectionAsset?.currentTeamCycleNumber
+      ? `NHL block ${projectionAsset.currentTeamCycleNumber}`
+      : 'Current NHL block';
+
+    return `${blockLabel}: ${appearances} appearances, ${completed} of ${markers.length} team games complete. Bench points do not count toward the matchup.`;
+  }
+
   isBenchAssetInjured(asset: RosterAsset): boolean {
     if (asset.assetType !== 'skater') {
       return false;
@@ -2826,6 +2864,14 @@ export class CycleOne implements OnDestroy {
 
     const playerId = asset.player?.id;
     return playerId !== undefined && playerId !== null ? `skater-${playerId}` : null;
+  }
+
+  private getBenchProjectionAsset(asset: RosterAsset): DraftableAsset | null {
+    const assetKey = this.getBenchAssetKey(asset);
+
+    return assetKey
+      ? (this.playerPool().find((availableAsset) => availableAsset.assetKey === assetKey) ?? null)
+      : null;
   }
 
   openBenchAssetDetail(asset: RosterAsset): void {
@@ -3783,7 +3829,13 @@ export class CycleOne implements OnDestroy {
 
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
     try {
-      this.playerPool.set(await loadDraftPlayerPool(true));
+      this.playerPool.set(await loadDraftPlayerPool({
+        forceRefresh: true,
+        includeCurrentTeamCycle: true,
+        requiredGamesPerCycle:
+          this.league()?.scoringRules?.requiredGamesPerCycle ??
+          defaultScoringRules.requiredGamesPerCycle,
+      }));
       this.refreshEffectivePicks();
     } catch (error: unknown) {
       console.warn('Unable to load player pool projection fallback.', error);

@@ -596,7 +596,7 @@
                         </header>
 
                         <p class="matchup-bench-note">
-                          Bench players and goalie units stay on the team but do not add points until they are moved into an active roster spot.
+                          Scores and circles show each bench asset's current NHL-team block for comparison. These points do not count toward the matchup.
                         </p>
 
                         <div class="matchup-bench-grid">
@@ -648,13 +648,31 @@
 
                                 <div class="fantasy-player-score-stack">
                                   <div>
-                                    <strong>—</strong>
-                                    <span>Bench</span>
+                                    <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetCurrentBlockScore(asset)) }}</strong>
+                                    <span>Bench pts</span>
                                   </div>
                                   <div>
                                     <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong>
                                     <span>Proj</span>
                                   </div>
+                                </div>
+
+                                <div
+                                  class="window-game-markers bench-window-game-markers"
+                                  [attr.aria-label]="presenter.getBenchAssetBlockStatusLabel(asset)"
+                                >
+                                  @for (marker of presenter.getBenchAssetGameMarkers(asset); track marker.index) {
+                                    <span
+                                      class="window-game-marker"
+                                      [class.marker-played]="marker.status === 'played'"
+                                      [class.marker-missed]="marker.status === 'missed'"
+                                      [class.marker-upcoming]="marker.status === 'upcoming'"
+                                      [class.marker-unavailable]="marker.status === 'unavailable'"
+                                      [title]="marker.title"
+                                    >
+                                      {{ marker.index }}
+                                    </span>
+                                  }
                                 </div>
                               } @else {
                                 <div class="matchup-bench-empty-copy">

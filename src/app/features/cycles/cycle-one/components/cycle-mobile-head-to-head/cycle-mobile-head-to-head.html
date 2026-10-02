@@ -542,8 +542,13 @@
                     </span>
                   </span>
                   <span class="mobile-live-player-numbers">
-                    <span>Bench <strong>—</strong></span>
+                    <span>Bench pts <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetCurrentBlockScore(asset)) }}</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-window-markers" [attr.aria-label]="presenter.getBenchAssetBlockStatusLabel(asset)">
+                    @for (marker of presenter.getBenchAssetGameMarkers(asset); track marker.index) {
+                      <i [class]="getMarkerClass(marker)" [attr.title]="marker.title">{{ marker.index }}</i>
+                    }
                   </span>
                   @if (getBenchCompactStatus(asset); as status) {
                     <span
@@ -587,8 +592,13 @@
                     </span>
                   </span>
                   <span class="mobile-live-player-numbers">
-                    <span>Bench <strong>—</strong></span>
+                    <span>Bench pts <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetCurrentBlockScore(asset)) }}</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-window-markers" [attr.aria-label]="presenter.getBenchAssetBlockStatusLabel(asset)">
+                    @for (marker of presenter.getBenchAssetGameMarkers(asset); track marker.index) {
+                      <i [class]="getMarkerClass(marker)" [attr.title]="marker.title">{{ marker.index }}</i>
+                    }
                   </span>
                   @if (getBenchCompactStatus(asset); as status) {
                     <span
@@ -628,8 +638,13 @@
                     </span>
                   </span>
                   <span class="mobile-live-player-numbers">
-                    <span>Scoring <strong>Off</strong></span>
+                    <span>Bench pts <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetCurrentBlockScore(asset)) }}</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-window-markers" [attr.aria-label]="presenter.getBenchAssetBlockStatusLabel(asset)">
+                    @for (marker of presenter.getBenchAssetGameMarkers(asset); track marker.index) {
+                      <i [class]="getMarkerClass(marker)" [attr.title]="marker.title">{{ marker.index }}</i>
+                    }
                   </span>
                   @if (getBenchCompactStatus(asset); as status) {
                     <span
@@ -667,8 +682,13 @@
                     </span>
                   </span>
                   <span class="mobile-live-player-numbers">
-                    <span>Scoring <strong>Off</strong></span>
+                    <span>Bench pts <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetCurrentBlockScore(asset)) }}</strong></span>
                     <span>Projection <strong>{{ presenter.getProjectionDisplay(presenter.getBenchAssetProjection(asset)) }}</strong></span>
+                  </span>
+                  <span class="mobile-window-markers" [attr.aria-label]="presenter.getBenchAssetBlockStatusLabel(asset)">
+                    @for (marker of presenter.getBenchAssetGameMarkers(asset); track marker.index) {
+                      <i [class]="getMarkerClass(marker)" [attr.title]="marker.title">{{ marker.index }}</i>
+                    }
                   </span>
                   @if (getBenchCompactStatus(asset); as status) {
                     <span
