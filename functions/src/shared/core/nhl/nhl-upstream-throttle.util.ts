@@ -5,6 +5,29 @@ export interface NhlUpstreamThrottleGateOptions {
 }
 
 const DEFAULT_REQUEST_SPACING_MILLISECONDS = 750;
+export const NHL_RATE_LIMIT_RETRY_JITTER_MAX_MILLISECONDS = 750;
+
+/**
+ * Adds a small bounded offset to a provider-directed 429 cooldown. Separate
+ * Cloud Run instances do not share the in-memory throttle gate, so the offset
+ * keeps them from deterministically retrying the same request together.
+ */
+export function addNhlRateLimitRetryJitter(
+  retryDelayMilliseconds: number,
+  random: () => number = Math.random,
+): number {
+  const safeRetryDelayMilliseconds = Number.isFinite(retryDelayMilliseconds)
+    ? Math.max(0, Math.floor(retryDelayMilliseconds))
+    : 0;
+  const randomValue = random();
+  const safeRandomValue = Number.isFinite(randomValue)
+    ? Math.min(1, Math.max(0, randomValue))
+    : 0;
+
+  return safeRetryDelayMilliseconds + Math.floor(
+    safeRandomValue * NHL_RATE_LIMIT_RETRY_JITTER_MAX_MILLISECONDS,
+  );
+}
 
 function waitForThrottle(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {

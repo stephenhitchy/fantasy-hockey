@@ -28,6 +28,30 @@ This is an in-process recovery control. It does not promote the Firestore
 Shadow cache, make stale data authoritative, add a second retry owner, or claim
 distributed NHL quota coordination across Cloud Run instances.
 
+## Production follow-up
+
+The first D1L-F deployment substantially reduced the broad retry burst, and
+later sweeps returned every observed league to success. Read-only Production
+logs still recorded two later schedule-load failures, at
+`2026-10-05T22:49:01Z` and `2026-10-05T22:59:53Z`. Both exhausted the original
+three attempts for Winnipeg and Washington before a later sweep recovered.
+That residual pattern is consistent with independent Cloud Run instances
+sharing the NHL provider limit but not the process-local gate.
+
+The follow-up keeps the gate and adds two narrow recovery controls:
+
+- HTTP 429 cooldowns receive at most 750 milliseconds of random jitter so
+  independent instances do not deterministically retry together;
+- critical NHL team-schedule reads receive five attempts instead of three,
+  extending their bounded recovery window without changing ordinary NHL
+  request retries; and
+- scheduled-sweep failures log the exact league ID so any remaining failure is
+  immediately attributable.
+
+The legacy scorer remains at two parallel leagues and the queue worker remains
+at four concurrent dispatches. Adding workers while the provider is returning
+429 would increase pressure and is intentionally excluded.
+
 ## Protected contracts
 
 Production Scoring V4 values, Projection V11 formulas and hashes, six-game
@@ -56,12 +80,16 @@ is required.
 - A later 429 extends the shared cooldown.
 - The request path gates every attempt and activates shared recovery only for
   HTTP 429.
+- A critical schedule exhausts exactly five attempts, then still fails closed.
+- Cross-instance 429 jitter remains between zero and 750 milliseconds.
+- Scheduled-sweep errors identify the affected league.
 - Production league schedules return to `lastOutcome: success` with
   `consecutiveFailureCount: 0` without moving completed games or manufacturing
   zeroes.
 
 ## Rollback
 
-Revert the D1L-F source commit, rebuild, and deploy the same five Function
-selectors. Existing scoring snapshots and identity evidence remain valid; no
-data migration or cleanup is required.
+Revert the D1L-F follow-up source commit, rebuild, and deploy the same five
+Function selectors. Existing scoring snapshots and identity evidence remain
+valid; no data migration or cleanup is required. The original three-attempt
+process-local gate is the immediate rollback behavior.

@@ -8635,11 +8635,14 @@ export const runScheduledLeagueAutomation = onSchedule(
       { merge: true },
     );
 
-    for (const result of results) {
+    results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        console.error('A scheduled league automation run failed.', result.reason);
+        console.error('A scheduled league automation run failed.', {
+          leagueId: leagueIds[index],
+          error: result.reason,
+        });
       }
-    }
+    });
   },
 );
 

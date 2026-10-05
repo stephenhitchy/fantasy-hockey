@@ -425,6 +425,7 @@ test('scoring refreshes identity evidence when cached FUT state is past puck dro
 });
 
 test('scoring fingerprints only identity evidence for skaters in the current picks', async (t) => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-09-30T00:00:00Z'));
   t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async (team) =>
     schedule(team, team === 'TOR' ? 201 : 301, 6)
   );

@@ -1,6 +1,9 @@
 import { isDraftNhlTeamRosterComplete } from '../player/draft-availability-source-completeness.util';
 import { queueNhlSharedCacheObservation } from './nhl-shared-cache.service';
-import { NhlUpstreamThrottleGate } from './nhl-upstream-throttle.util';
+import {
+  addNhlRateLimitRetryJitter,
+  NhlUpstreamThrottleGate,
+} from './nhl-upstream-throttle.util';
 
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 
@@ -13,6 +16,8 @@ const apiResponseCache = new Map<string, CachedApiResponse>();
 const apiRequestInFlight = new Map<string, Promise<unknown>>();
 const nhlUpstreamThrottleGate = new NhlUpstreamThrottleGate();
 const MAX_API_RESPONSE_CACHE_ENTRIES = 2500;
+const DEFAULT_API_REQUEST_MAX_ATTEMPTS = 3;
+const NHL_SCHEDULE_REQUEST_MAX_ATTEMPTS = 5;
 
 const NHL_SCHEDULE_CACHE_MILLISECONDS = 10 * 60 * 1000;
 const NHL_GAME_DATA_CACHE_MILLISECONDS = 2 * 60 * 1000;
@@ -74,7 +79,7 @@ function getRetryDelayMilliseconds(
 async function requestApiJsonWithRetry<T>(
   url: string,
   errorLabel: string,
-  maxAttempts: number = 3
+  maxAttempts: number = DEFAULT_API_REQUEST_MAX_ATTEMPTS,
 ): Promise<T> {
   let lastError: unknown = null;
 
@@ -118,10 +123,13 @@ async function requestApiJsonWithRetry<T>(
     );
 
     lastError = error;
-    const retryDelayMilliseconds = getRetryDelayMilliseconds(
+    const baseRetryDelayMilliseconds = getRetryDelayMilliseconds(
       response,
       attemptNumber,
     );
+    const retryDelayMilliseconds = response.status === 429
+      ? addNhlRateLimitRetryJitter(baseRetryDelayMilliseconds)
+      : baseRetryDelayMilliseconds;
 
     if (response.status === 429) {
       nhlUpstreamThrottleGate.observeRateLimit(retryDelayMilliseconds);
@@ -148,7 +156,8 @@ async function getCachedApiJson<T>(
   url: string,
   cacheMilliseconds: number,
   errorLabel: string,
-  forceRefresh: boolean = false
+  forceRefresh: boolean = false,
+  requestMaxAttempts: number = DEFAULT_API_REQUEST_MAX_ATTEMPTS,
 ): Promise<T> {
   if (forceRefresh) {
     apiResponseCache.delete(url);
@@ -171,7 +180,8 @@ async function getCachedApiJson<T>(
 
   const request = requestApiJsonWithRetry<T>(
     url,
-    errorLabel
+    errorLabel,
+    requestMaxAttempts,
   )
     .then((value) => {
       apiResponseCache.set(url, {
@@ -459,7 +469,9 @@ export async function getRegularSeasonTeamGames(
   const data = await getCachedApiJson<NhlTeamSeasonScheduleResponse>(
     url,
     NHL_SCHEDULE_CACHE_MILLISECONDS,
-    'NHL schedule request failed'
+    'NHL schedule request failed',
+    false,
+    NHL_SCHEDULE_REQUEST_MAX_ATTEMPTS,
   );
 
   const games = Array.isArray(data.games) ? data.games : [];
@@ -495,7 +507,9 @@ export async function getNhlTeamSeasonSchedule(
       NHL_SCHEDULE_CACHE_MILLISECONDS,
       NHL_NEAR_LIVE_SCHEDULE_CACHE_MILLISECONDS,
     ),
-    'NHL season schedule request failed'
+    'NHL season schedule request failed',
+    false,
+    NHL_SCHEDULE_REQUEST_MAX_ATTEMPTS,
   );
 
   const games = Array.isArray(data.games) ? data.games : [];
