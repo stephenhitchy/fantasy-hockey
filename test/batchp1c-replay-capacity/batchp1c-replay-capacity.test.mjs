@@ -146,6 +146,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     // D1D adds an exact-internal-Canary-only NHL freshness profile without changing replay.
     'src/shared/core/cycle/cycle-scoring.service.ts',
     'src/shared/core/nhl/nhl-api.service.ts',
+    // D1L-F adds isolated adaptive pacing after the NHL upstream returns 429.
+    'src/shared/core/nhl/nhl-upstream-throttle.util.ts',
     // D1L-D adds the isolated live-to-final runtime-state resolver.
     'src/shared/core/nhl/nhl-game-runtime-state.util.ts',
     'src/shared/core/live-scoring/live-scoring-cadence.util.ts',

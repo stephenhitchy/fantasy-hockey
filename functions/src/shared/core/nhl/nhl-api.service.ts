@@ -1,5 +1,6 @@
 import { isDraftNhlTeamRosterComplete } from '../player/draft-availability-source-completeness.util';
 import { queueNhlSharedCacheObservation } from './nhl-shared-cache.service';
+import { NhlUpstreamThrottleGate } from './nhl-upstream-throttle.util';
 
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 
@@ -10,6 +11,7 @@ interface CachedApiResponse {
 
 const apiResponseCache = new Map<string, CachedApiResponse>();
 const apiRequestInFlight = new Map<string, Promise<unknown>>();
+const nhlUpstreamThrottleGate = new NhlUpstreamThrottleGate();
 const MAX_API_RESPONSE_CACHE_ENTRIES = 2500;
 
 const NHL_SCHEDULE_CACHE_MILLISECONDS = 10 * 60 * 1000;
@@ -84,6 +86,7 @@ async function requestApiJsonWithRetry<T>(
     let response: Response | null = null;
 
     try {
+      await nhlUpstreamThrottleGate.waitForPermit();
       response = await fetch(url);
     } catch (error: unknown) {
       lastError = error;
@@ -115,6 +118,14 @@ async function requestApiJsonWithRetry<T>(
     );
 
     lastError = error;
+    const retryDelayMilliseconds = getRetryDelayMilliseconds(
+      response,
+      attemptNumber,
+    );
+
+    if (response.status === 429) {
+      nhlUpstreamThrottleGate.observeRateLimit(retryDelayMilliseconds);
+    }
 
     if (
       !RETRYABLE_HTTP_STATUSES.has(response.status) ||
@@ -123,9 +134,9 @@ async function requestApiJsonWithRetry<T>(
       throw error;
     }
 
-    await waitForApiRetry(
-      getRetryDelayMilliseconds(response, attemptNumber)
-    );
+    if (response.status !== 429) {
+      await waitForApiRetry(retryDelayMilliseconds);
+    }
   }
 
   throw lastError instanceof Error

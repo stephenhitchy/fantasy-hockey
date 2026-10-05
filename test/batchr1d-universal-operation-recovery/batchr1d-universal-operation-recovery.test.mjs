@@ -363,6 +363,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     // D1D intentionally changes only the measured near-live scoring path.
     'shared/core/cycle/cycle-scoring.service.ts',
     'shared/core/nhl/nhl-api.service.ts',
+    // D1L-F adds isolated adaptive pacing after the NHL upstream returns 429.
+    'shared/core/nhl/nhl-upstream-throttle.util.ts',
     // D1L-D adds the isolated live-to-final runtime-state resolver.
     'shared/core/nhl/nhl-game-runtime-state.util.ts',
     'shared/core/live-scoring/live-scoring-cadence.util.ts',
