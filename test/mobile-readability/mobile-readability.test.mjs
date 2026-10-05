@@ -140,13 +140,16 @@ test('Batch M1 navigation source contracts', async (suite) => {
     assert.doesNotMatch(navbar, /draftStatus|latestCycle|league-wide cycle/i);
   });
 
-  await suite.test('renders durable mobile destinations and keeps Support and Account in More', () => {
-    assert.match(template, /routerLink="\/dashboard"[\s\S]*?<span>Dashboard<\/span>/);
-    assert.match(template, /routerLink="\/leagues\/create"[\s\S]*?<span>Create<\/span>/);
-    assert.match(template, /routerLink="\/leagues\/join"[\s\S]*?<span>Join<\/span>/);
-    assert.match(template, /routerLink="\/scoring"[\s\S]*?<span>Scoring<\/span>/);
+  await suite.test('keeps signed-in destinations in the top-right menu instead of a bottom bar', () => {
+    assert.match(template, /@if \(!authenticated\(\)\) \{[\s\S]*?class="mobile-bottom-nav mobile-bottom-nav--signed-out"/);
+    assert.match(template, /routerLink="\/dashboard"[\s\S]*?<strong>Dashboard<\/strong>/);
+    assert.match(template, /routerLink="\/leagues\/create"[\s\S]*?<strong>Create League<\/strong>/);
+    assert.match(template, /routerLink="\/leagues\/join"[\s\S]*?<strong>Join League<\/strong>/);
+    assert.match(template, /routerLink="\/scoring"[\s\S]*?<strong>Scoring Guide<\/strong>/);
     assert.match(template, /<strong>Support<\/strong>/);
     assert.match(template, /<strong>Account<\/strong>/);
+    const bottomNavigation = template.match(/<nav class="mobile-bottom-nav[\s\S]*?<\/nav>/)?.[0] ?? '';
+    assert.doesNotMatch(bottomNavigation, /\/dashboard|\/leagues\/(?:create|join)|\/scoring"/);
     assert.doesNotMatch(template, /mobileLeaguePrimary/);
     assert.doesNotMatch(template, /<strong>League HQ<\/strong>/);
   });

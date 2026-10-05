@@ -10,67 +10,10 @@
         <div class="hero-copy rr-card rr-card--padded">
           <div class="dashboard-welcome-row">
             <div>
-              <span class="eyebrow">Arena Lobby</span>
-              <h1>Welcome back, {{ displayName() }}</h1>
+              <h1>Hi, {{ displayName() }}</h1>
             </div>
-          </div>
-
-
-          <div class="quick-actions" aria-label="League actions">
-            <a class="primary-action rr-button rr-button--primary" routerLink="/leagues/create">
-              <span class="pixel-icon icon-create icon-sm" aria-hidden="true"></span>
-              Create League
-            </a>
-
-            <a class="secondary-action rr-button rr-button--secondary" routerLink="/leagues/join">
-              <span class="pixel-icon icon-join icon-sm" aria-hidden="true"></span>
-              Join League
-            </a>
           </div>
         </div>
-
-        <a
-          class="dashboard-mascot-card rr-card rr-card--padded rr-card--interactive"
-          routerLink="/account/settings"
-          [style.--ref-team-primary]="favoriteTeam().primaryColor"
-          [style.--ref-team-secondary]="favoriteTeam().secondaryColor"
-          [style.--ref-team-tertiary]="favoriteTeam().tertiaryColor"
-          aria-label="Open your profile to change your favorite team"
-          title="Open profile and change favorite team"
-        >
-          <span class="eyebrow">Favorite Team Crew</span>
-          <strong>{{ favoriteTeam().name }}</strong>
-          <div class="favorite-team-logo-panel" aria-hidden="true">
-            <img
-              class="favorite-team-logo-display"
-              [src]="favoriteTeam().logoUrl"
-              [alt]="''"
-              width="160"
-              height="160"
-              decoding="async"
-            />
-          </div>
-          <div class="mini-scoreboard">
-            <div>
-              <span>Leagues</span><strong>{{ leagueSummaries().length }}</strong>
-            </div>
-            <div>
-              <span>Club</span><strong>{{ favoriteTeam().abbreviation }}</strong>
-            </div>
-          </div>
-          <div class="mascot-rink">
-            <div class="mini-ref favorite-team-ref" aria-hidden="true">
-              <img
-                class="mini-ref-team-logo"
-                [src]="favoriteTeam().logoUrl"
-                [alt]="''"
-                width="30"
-                height="30"
-                decoding="async"
-              />
-            </div>
-          </div>
-        </a>
       </header>
 
       @if (profile() && !trainingCampComplete()) {
@@ -95,54 +38,10 @@
         </section>
       }
 
-      <app-nhl-scoreboard
-        [favoriteTeamAbbreviation]="favoriteTeam().abbreviation"
-        [rosteredTeamCounts]="nhlTeamRosterCounts()"
-      />
-
-      @if (managerBriefing().length > 0) {
-        <section class="manager-briefing rr-card rr-card--padded" aria-labelledby="manager-briefing-title">
-          <header class="manager-briefing-header">
-            <div>
-              <span class="eyebrow">Coach's Briefing</span>
-              <h2 id="manager-briefing-title">Your next decisions</h2>
-            </div>
-            <span class="manager-briefing-count rr-badge">{{ managerBriefing().length }}</span>
-          </header>
-
-          <ol class="manager-briefing-list">
-            @for (item of managerBriefing(); track item.id) {
-              <li class="manager-briefing-item" [attr.data-tone]="item.tone">
-                <img
-                  class="manager-briefing-logo"
-                  [src]="getBriefingLeagueLogoPath(item)"
-                  alt=""
-                  decoding="async"
-                />
-
-                <div class="manager-briefing-copy">
-                  <span>{{ item.leagueName }}</span>
-                  <strong>{{ item.headline }}</strong>
-                  @if (item.detail) {
-                    <small>{{ item.detail }}</small>
-                  }
-                </div>
-
-                <a class="manager-briefing-action" [routerLink]="item.actionRoute">
-                  {{ item.actionLabel }}
-                  <span aria-hidden="true">→</span>
-                </a>
-              </li>
-            }
-          </ol>
-        </section>
-      }
-
       <section class="leagues-section">
         <div class="section-heading rr-section-heading">
           <div>
-            <span class="eyebrow">Your Competition</span>
-            <h2>My Leagues</h2>
+            <h2>Matchups</h2>
           </div>
 
           <div class="league-status">
@@ -156,8 +55,47 @@
           </div>
         </div>
 
+        @if (orderedLeagueSummaries().length > 0) {
+          <nav
+            class="league-carousel-navigation"
+            [class.league-carousel-navigation--single]="orderedLeagueSummaries().length === 1"
+            aria-label="Browse league matchups"
+          >
+            <button
+              type="button"
+              class="league-carousel-button"
+              aria-label="Previous league matchup"
+              aria-controls="dashboard-league-rail"
+              [disabled]="!canOpenPreviousLeague()"
+              (click)="openPreviousLeague()"
+            >
+              <span aria-hidden="true">←</span>
+            </button>
+
+            <span
+              id="dashboard-league-position"
+              class="league-carousel-position"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              League {{ activeLeagueNumber() }} of {{ orderedLeagueSummaries().length }}
+            </span>
+
+            <button
+              type="button"
+              class="league-carousel-button league-carousel-button--next"
+              aria-label="Next league matchup"
+              aria-controls="dashboard-league-rail"
+              [disabled]="!canOpenNextLeague()"
+              (click)="openNextLeague()"
+            >
+              <span aria-hidden="true">→</span>
+            </button>
+          </nav>
+        }
+
         @if (leaguesLoading() && leagueSummaries().length === 0) {
-          <div class="league-grid dashboard-skeletons" aria-label="Loading leagues">
+          <div class="league-grid league-carousel dashboard-skeletons" aria-label="Loading leagues">
             <article class="league-card skeleton-card rr-card rr-card--padded" aria-hidden="true">
               <div class="skeleton-line skeleton-title"></div>
               <div class="skeleton-line skeleton-copy"></div>
@@ -176,17 +114,30 @@
           <article class="empty-state rr-state rr-card rr-card--padded">
             <span class="empty-icon pixel-icon icon-arena icon-xl" aria-hidden="true"></span>
             <h3>Your locker room is empty</h3>
-
-            <div class="empty-actions">
-              <a class="rr-button rr-button--primary" routerLink="/leagues/create">Create League</a>
-              <a class="rr-button rr-button--secondary" routerLink="/leagues/join">Join League</a>
-            </div>
+            <p>Create or join from the top-right menu.</p>
           </article>
         } @else {
-          <div class="league-grid">
-            @for (league of leagueSummaries(); track league.leagueId) {
+          <div
+            #leagueRail
+            id="dashboard-league-rail"
+            class="league-grid league-carousel"
+            role="region"
+            tabindex="0"
+            aria-label="Your leagues. Swipe or use the Left and Right Arrow keys to browse."
+            aria-describedby="dashboard-league-position"
+            (keydown)="handleLeagueRailKeydown($event)"
+            (scroll)="handleLeagueRailScroll()"
+          >
+            @for (league of orderedLeagueSummaries(); track league.leagueId; let leagueIndex = $index) {
               <article
                 class="league-card rr-card rr-card--padded"
+                [attr.aria-label]="league.leagueName + ', league ' + (leagueIndex + 1) + ' of ' + orderedLeagueSummaries().length"
+                [attr.aria-posinset]="leagueIndex + 1"
+                [attr.aria-setsize]="orderedLeagueSummaries().length"
+                (pointerdown)="beginLeagueCardPointer(league.leagueId, $event)"
+                (pointermove)="trackLeagueCardPointer(league.leagueId, $event)"
+                (pointerup)="finishLeagueCardPointer($event)"
+                (pointercancel)="finishLeagueCardPointer($event)"
                 (click)="openLeagueHqFromCard($event, league.leagueId)"
               >
                 <div class="league-card-top">
@@ -222,42 +173,39 @@
                   </div>
                 </div>
 
-                <div class="league-summary-row">
-                  <div>
-                    <span>Teams</span>
-                    <strong>{{ league.teamCount }} / {{ league.maxTeams }}</strong>
-                  </div>
-
-                  <div>
-                    <span>Record</span>
-                    <strong>{{ getRecordLabel(league) }}</strong>
-                  </div>
-                </div>
-
                 @if (league.dashboardActivity; as activity) {
-                  <section class="league-command" [attr.aria-label]="activity.statusLabel">
-                    <div class="league-command-copy">
-                      <span>Next Up</span>
-                      <strong>{{ activity.headline }}</strong>
-                      <p>{{ activity.detail }}</p>
-                    </div>
-
+                  <section
+                    class="league-command"
+                    [class.league-command--matchup]="activity.matchup"
+                    [attr.aria-label]="activity.statusLabel"
+                  >
                     @if (activity.matchup; as matchup) {
-                      <div class="dashboard-matchup-score" aria-label="Current matchup score">
-                        <span>{{ matchup.scoreStatusLabel }}</span>
-                        <strong>
-                          {{ formatScore(matchup.myScore) }}
-                          <small aria-hidden="true">–</small>
-                          {{ formatScore(matchup.opponentScore) }}
-                        </strong>
+                      <div
+                        class="dashboard-matchup-score"
+                        [attr.aria-label]="league.myTeamName + ' ' + formatScore(matchup.myScore) + ', ' + matchup.opponentTeamName + ' ' + formatScore(matchup.opponentScore) + '. ' + matchup.scoreStatusLabel"
+                      >
+                        <div class="dashboard-matchup-team dashboard-matchup-team--mine">
+                          <span>You</span>
+                          <strong>{{ formatScore(matchup.myScore) }}</strong>
+                          <small>{{ league.myTeamName }}</small>
+                        </div>
+
+                        <div class="dashboard-matchup-state">
+                          <span>vs</span>
+                          <strong>{{ matchup.scoreStatusLabel }}</strong>
+                        </div>
+
+                        <div class="dashboard-matchup-team dashboard-matchup-team--opponent">
+                          <span>Opponent</span>
+                          <strong>{{ formatScore(matchup.opponentScore) }}</strong>
+                          <small>{{ matchup.opponentTeamName }}</small>
+                        </div>
                       </div>
 
-                      @if (matchup.totalGames > 0) {
-                        <div class="dashboard-matchup-progress">
-                          <div class="dashboard-matchup-progress-copy">
-                            <span>Matchup progress</span>
-                          </div>
+                      <p class="dashboard-matchup-detail">{{ activity.detail }}</p>
 
+                      @if (matchup.totalGames > 0) {
+                        <div class="dashboard-matchup-progress" aria-label="Matchup progress">
                           <div
                             class="dashboard-matchup-progress-sides"
                             [class.dashboard-matchup-progress-sides--single]="matchup.scoreStatusLabel === 'Bye'"
@@ -318,6 +266,12 @@
                           </div>
                         </div>
                       }
+                    } @else {
+                      <div class="league-command-copy">
+                        <span>Next Up</span>
+                        <strong>{{ activity.headline }}</strong>
+                        <p>{{ activity.detail }}</p>
+                      </div>
                     }
 
                     @if (activity.injuredStarterCount > 0 || activity.queuedMoveCount > 0) {
@@ -336,6 +290,18 @@
                     }
                   </section>
                 }
+
+                <div class="league-summary-row">
+                  <div>
+                    <span>Record</span>
+                    <strong>{{ getRecordLabel(league) }}</strong>
+                  </div>
+
+                  <div>
+                    <span>Teams</span>
+                    <strong>{{ league.teamCount }} / {{ league.maxTeams }}</strong>
+                  </div>
+                </div>
 
                 <div class="league-actions">
                   @if (league.dashboardActivity; as activity) {
@@ -381,6 +347,91 @@
           </div>
         }
       </section>
+
+      @if (managerBriefing().length > 0) {
+        <section class="manager-briefing rr-card rr-card--padded" aria-labelledby="manager-briefing-title">
+          <header class="manager-briefing-header">
+            <div>
+              <span class="eyebrow">Coach's Briefing</span>
+              <h2 id="manager-briefing-title">Your next decisions</h2>
+            </div>
+            <span class="manager-briefing-count rr-badge">{{ managerBriefing().length }}</span>
+          </header>
+
+          <ol class="manager-briefing-list">
+            @for (item of managerBriefing(); track item.id) {
+              <li class="manager-briefing-item" [attr.data-tone]="item.tone">
+                <img
+                  class="manager-briefing-logo"
+                  [src]="getBriefingLeagueLogoPath(item)"
+                  alt=""
+                  decoding="async"
+                />
+
+                <div class="manager-briefing-copy">
+                  <span>{{ item.leagueName }}</span>
+                  <strong>{{ item.headline }}</strong>
+                  @if (item.detail) {
+                    <small>{{ item.detail }}</small>
+                  }
+                </div>
+
+                <a class="manager-briefing-action" [routerLink]="item.actionRoute">
+                  {{ item.actionLabel }}
+                  <span aria-hidden="true">→</span>
+                </a>
+              </li>
+            }
+          </ol>
+        </section>
+      }
+
+      <app-nhl-scoreboard
+        [favoriteTeamAbbreviation]="favoriteTeam().abbreviation"
+        [rosteredTeamCounts]="nhlTeamRosterCounts()"
+      />
+
+      <a
+        class="dashboard-mascot-card rr-card rr-card--padded rr-card--interactive"
+        routerLink="/account/settings"
+        [style.--ref-team-primary]="favoriteTeam().primaryColor"
+        [style.--ref-team-secondary]="favoriteTeam().secondaryColor"
+        [style.--ref-team-tertiary]="favoriteTeam().tertiaryColor"
+        aria-label="Open your profile to change your favorite team"
+        title="Open profile and change favorite team"
+      >
+        <strong>{{ favoriteTeam().name }}</strong>
+        <div class="favorite-team-logo-panel" aria-hidden="true">
+          <img
+            class="favorite-team-logo-display"
+            [src]="favoriteTeam().logoUrl"
+            [alt]="''"
+            width="160"
+            height="160"
+            decoding="async"
+          />
+        </div>
+        <div class="mini-scoreboard">
+          <div>
+            <span>Leagues</span><strong>{{ leagueSummaries().length }}</strong>
+          </div>
+          <div>
+            <span>Club</span><strong>{{ favoriteTeam().abbreviation }}</strong>
+          </div>
+        </div>
+        <div class="mascot-rink">
+          <div class="mini-ref favorite-team-ref" aria-hidden="true">
+            <img
+              class="mini-ref-team-logo"
+              [src]="favoriteTeam().logoUrl"
+              [alt]="''"
+              width="30"
+              height="30"
+              decoding="async"
+            />
+          </div>
+        </div>
+      </a>
     </section>
 
 

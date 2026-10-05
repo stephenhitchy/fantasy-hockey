@@ -513,7 +513,7 @@ test('Batch 8A source contracts', async (suite) => {
 
   await suite.test('exposes semantic matchup progress and compact attention chips', () => {
     assert.equal(template.match(/role="progressbar"/g)?.length, 1);
-    assert.match(template, /Matchup progress/);
+    assert.match(template, /class="dashboard-matchup-progress" aria-label="Matchup progress"/);
     assert.match(template, /\[matchup\.myProgress, matchup\.opponentProgress\]/);
     assert.match(template, /progress\.gamesPlayed/);
     assert.match(template, /progress\.liveStarterPreviewNames/);

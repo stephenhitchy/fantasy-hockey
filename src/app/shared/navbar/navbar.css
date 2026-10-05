@@ -184,7 +184,7 @@
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     min-height: calc(70px + env(safe-area-inset-bottom));
     padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
     border-top: 2px solid var(--user-team-secondary);
@@ -224,14 +224,14 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    padding: 18px 10px calc(82px + env(safe-area-inset-bottom));
+    padding: 18px 10px max(18px, env(safe-area-inset-bottom));
     background: var(--rr-nav-backdrop);
     backdrop-filter: blur(6px);
   }
 
   .mobile-menu-panel {
     width: min(100%, 560px);
-    max-height: min(72dvh, 720px);
+    max-height: min(86dvh, 760px);
     padding: 12px;
     overflow-y: auto;
     border: 1px solid var(--rr-nav-border-strong);

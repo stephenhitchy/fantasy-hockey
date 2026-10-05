@@ -70,10 +70,10 @@ forbidMatch(
   'Global navigation still opens league, Draft, or matchup listeners.',
 );
 for (const [label, expression] of [
-  ['Dashboard', /routerLink="\/dashboard"[\s\S]*?<span>Dashboard<\/span>/],
-  ['Create', /routerLink="\/leagues\/create"[\s\S]*?<span>Create<\/span>/],
-  ['Join', /routerLink="\/leagues\/join"[\s\S]*?<span>Join<\/span>/],
-  ['Scoring', /routerLink="\/scoring"[\s\S]*?<span>Scoring<\/span>/],
+  ['Dashboard', /routerLink="\/dashboard"[\s\S]*?<strong>Dashboard<\/strong>/],
+  ['Create', /routerLink="\/leagues\/create"[\s\S]*?<strong>Create League<\/strong>/],
+  ['Join', /routerLink="\/leagues\/join"[\s\S]*?<strong>Join League<\/strong>/],
+  ['Scoring', /routerLink="\/scoring"[\s\S]*?<strong>Scoring Guide<\/strong>/],
 ]) {
   requireMatch(
     navbarTemplate,
@@ -81,6 +81,19 @@ for (const [label, expression] of [
     `Mobile ${label} destination is missing from the durable global navigation.`,
   );
 }
+const signedOutBottomNavigation = navbarTemplate.match(
+  /@if \(!authenticated\(\)\) \{[\s\S]*?<nav class="mobile-bottom-nav[\s\S]*?<\/nav>[\s\S]*?\}/,
+)?.[0] ?? '';
+requireMatch(
+  signedOutBottomNavigation,
+  /mobile-bottom-nav--signed-out/,
+  'Signed-out public mobile navigation is missing.',
+);
+forbidMatch(
+  signedOutBottomNavigation,
+  /\/dashboard|\/leagues\/(?:create|join)|\/scoring"/,
+  'Signed-in destinations were restored to the persistent mobile bottom navigation.',
+);
 requireMatch(
   navbarTemplate,
   /<strong>Support<\/strong>/,

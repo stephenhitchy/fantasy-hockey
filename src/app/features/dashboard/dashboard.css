@@ -63,9 +63,7 @@
 }
 
 .dashboard-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 320px);
-  gap: 20px;
+  display: block;
 }
 
 .hero-copy,
@@ -79,11 +77,13 @@
 }
 
 .hero-copy {
-  padding: 30px;
+  padding: 20px 24px;
   border-top: 4px solid var(--user-team-primary);
 }
 .dashboard-mascot-card {
   display: grid;
+  width: min(100%, 360px);
+  margin: 22px 0 0 auto;
   border-top: 4px solid var(--user-team-secondary);
   gap: 16px;
   padding: 24px;
@@ -201,7 +201,7 @@
 }
 
 .leagues-section {
-  margin-top: 30px;
+  margin-top: 18px;
 }
 .section-heading {
   display: flex;
@@ -229,12 +229,92 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 16px;
 }
+
+.league-carousel-navigation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.league-carousel-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--rr-mobile-text-micro);
+  font-weight: 950;
+}
+
+.league-carousel-button--next {
+  justify-self: end;
+}
+
+.league-carousel-button:hover:not(:disabled),
+.league-carousel-button:focus-visible {
+  border-color: var(--user-team-accent);
+  background: color-mix(in srgb, var(--user-team-accent) 12%, var(--surface-2));
+  outline: none;
+}
+
+.league-carousel-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.league-carousel-position {
+  color: var(--text-secondary);
+  font-family: var(--rr-font-numeric);
+  font-size: var(--rr-mobile-text-micro);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.league-carousel-navigation--single {
+  grid-template-columns: 1fr;
+}
+
+.league-carousel-navigation--single .league-carousel-button {
+  display: none;
+}
+
+.league-carousel {
+  grid-template-columns: none;
+  grid-auto-columns: 100%;
+  grid-auto-flow: column;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x mandatory;
+  scroll-snap-type: inline mandatory;
+  scrollbar-width: thin;
+  touch-action: auto;
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+}
+
+.league-carousel:focus-visible {
+  outline: 3px solid var(--user-team-accent);
+  outline-offset: 3px;
+}
 .league-card {
   display: flex;
   min-width: 0;
   flex-direction: column;
   padding: 18px;
   cursor: pointer;
+  scroll-snap-align: start;
   transition:
     border-color var(--rr-duration-fast) ease,
     box-shadow var(--rr-duration-fast) ease;
@@ -468,16 +548,13 @@
 }
 
 @media (max-width: 980px) {
-  .dashboard-header {
-    grid-template-columns: 1fr;
-  }
   .dashboard-mascot-card {
     max-width: 360px;
   }
 }
 @media (max-width: 720px) {
   .pixel-dashboard-page {
-    padding: 24px 16px 92px;
+    padding: 18px 12px 32px;
   }
   .dashboard {
   }
@@ -488,7 +565,7 @@
     padding: 20px;
   }
   .hero-copy h1 {
-    font-size: 34px;
+    font-size: 30px;
   }
   .league-grid {
     grid-template-columns: 1fr;
@@ -504,6 +581,10 @@
 @media (prefers-reduced-motion: reduce) {
   .mini-ref {
     animation: none !important;
+  }
+
+  .league-carousel {
+    scroll-behavior: auto;
   }
 }
 
@@ -848,6 +929,17 @@
   background: color-mix(in srgb, var(--surface-2) 88%, var(--user-team-primary) 12%);
 }
 
+.league-command--matchup {
+  border-color: color-mix(in srgb, var(--user-team-accent) 50%, var(--border-strong));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--user-team-primary) 16%, transparent),
+      transparent 58%
+    ),
+    var(--surface-2);
+}
+
 .league-command-copy > span,
 .dashboard-matchup-progress-copy span {
   display: block;
@@ -874,32 +966,72 @@
 }
 
 .dashboard-matchup-score {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-soft);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
 }
 
-.dashboard-matchup-score > span {
+.dashboard-matchup-team {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.dashboard-matchup-team--opponent {
+  text-align: right;
+}
+
+.dashboard-matchup-team > span,
+.dashboard-matchup-state > span {
   color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.dashboard-matchup-score > strong {
+.dashboard-matchup-team > strong {
   color: var(--text-primary);
   font-family: var(--rr-font-numeric);
-  font-size: 22px;
+  font-size: clamp(32px, 5vw, 48px);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 0.95;
 }
 
-.dashboard-matchup-score small {
+.dashboard-matchup-team > small {
+  overflow: hidden;
   color: var(--text-muted);
-  font-size: 0.7em;
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-matchup-state {
+  display: grid;
+  min-width: 70px;
+  justify-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.dashboard-matchup-state > strong {
+  color: var(--user-team-accent);
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.dashboard-matchup-detail {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .dashboard-matchup-progress {
@@ -1113,7 +1245,8 @@
   .league-activity-badge,
   .league-command-copy > span,
   .dashboard-matchup-progress-copy span,
-  .dashboard-matchup-score > span,
+  .dashboard-matchup-team > span,
+  .dashboard-matchup-state > span,
   .dashboard-matchup-progress-copy strong,
   .league-attention-chip {
     font-size: var(--rr-mobile-text-micro);
@@ -1127,8 +1260,23 @@
     font-size: var(--rr-mobile-text-body);
   }
 
-  .dashboard-matchup-score > strong {
+  .dashboard-matchup-score {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .dashboard-matchup-team > strong {
     font-size: var(--rr-mobile-text-score);
+  }
+
+  .dashboard-matchup-state {
+    min-width: 54px;
+  }
+
+  .dashboard-matchup-team > small,
+  .dashboard-matchup-state > strong,
+  .dashboard-matchup-detail {
+    font-size: var(--rr-mobile-text-micro);
   }
 
   .dashboard-matchup-progress-sides {
@@ -1150,6 +1298,8 @@
 
 @media (max-width: 640px) {
   .dashboard-mascot-card {
+    width: 100%;
+    max-width: none;
     gap: 10px;
   }
 

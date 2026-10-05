@@ -1,4 +1,11 @@
-import { Component, computed, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  computed,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { getMyLeagueSummaries, LeagueSummary } from '../../core/league/league.service';
 import {
@@ -13,6 +20,10 @@ import { getLeagueLogoAssetPath } from '../../shared/league-logo/league-logo.dat
 import { getPixelTeamTheme } from '../../shared/pixel-theme/pixel-theme.data';
 import { NhlScoreboard } from './nhl-scoreboard/nhl-scoreboard';
 import { combineDashboardNhlTeamRosterCounts } from './nhl-scoreboard/nhl-scoreboard.util';
+import {
+  clampDashboardLeagueRailIndex,
+  getDashboardLeagueRailIndex,
+} from './dashboard-league-carousel.util';
 
 interface DashboardCache {
   userId: string;
@@ -103,16 +114,28 @@ function writeDashboardCache(cache: DashboardCache): void {
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css',
 })
-export class Dashboard {
+export class Dashboard implements OnDestroy {
   readonly leagueSummaries = signal<LeagueSummary[]>([]);
   readonly profile = signal<UserProfile | null>(null);
   readonly loading = signal(true);
   readonly leaguesLoading = signal(false);
   readonly errorMessage = signal('');
+  readonly activeLeagueIndex = signal(0);
+  readonly leagueRail = viewChild<ElementRef<HTMLDivElement>>('leagueRail');
 
   private userId = '';
   private userEmail = '';
   private loadGeneration = 0;
+  private leagueRailPositionFrame: number | null = null;
+  private leagueCardPointer: {
+    leagueId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startScrollLeft: number;
+    moved: boolean;
+  } | null = null;
+  private lastLeagueCardDragAt = 0;
 
   readonly favoriteTeam = computed(() => {
     const storedTheme = loadStoredUserTheme();
@@ -133,6 +156,25 @@ export class Dashboard {
     this.leagueSummaries(),
     { maximumItems: 3 },
   ));
+
+  readonly orderedLeagueSummaries = computed(() => [...this.leagueSummaries()].sort(
+    (first, second) =>
+      Number(Boolean(second.dashboardActivity?.matchup)) -
+      Number(Boolean(first.dashboardActivity?.matchup)),
+  ));
+
+  readonly activeLeagueNumber = computed(() => {
+    const count = this.orderedLeagueSummaries().length;
+
+    return count === 0
+      ? 0
+      : clampDashboardLeagueRailIndex(this.activeLeagueIndex(), count) + 1;
+  });
+
+  readonly canOpenPreviousLeague = computed(() => this.activeLeagueIndex() > 0);
+  readonly canOpenNextLeague = computed(() =>
+    this.activeLeagueIndex() < this.orderedLeagueSummaries().length - 1,
+  );
 
   readonly nhlTeamRosterCounts = computed(() =>
     combineDashboardNhlTeamRosterCounts(
@@ -166,6 +208,15 @@ export class Dashboard {
 
   constructor(private router: Router) {
     void this.loadDashboard();
+  }
+
+  ngOnDestroy(): void {
+    this.loadGeneration += 1;
+
+    if (this.leagueRailPositionFrame !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.leagueRailPositionFrame);
+      this.leagueRailPositionFrame = null;
+    }
   }
 
   async loadDashboard(): Promise<void> {
@@ -209,6 +260,7 @@ export class Dashboard {
 
       this.profile.set(cachedProfile);
       this.leagueSummaries.set(cached.leagueSummaries);
+      this.resetLeagueRailPosition();
 
       if (cachedProfile) {
         applyUserTheme(cachedProfile);
@@ -249,6 +301,7 @@ export class Dashboard {
         }
 
         this.leagueSummaries.set(leagueSummaries);
+        this.resetLeagueRailPosition();
         this.saveCache();
       })
       .catch((error: unknown) => {
@@ -322,8 +375,105 @@ export class Dashboard {
     return league ? this.getLeagueLogoPath(league) : '/assets/branding/rinkrat-colored-mascot-512.png';
   }
 
+  openPreviousLeague(): void {
+    if (this.canOpenPreviousLeague()) {
+      this.scrollToLeague(this.activeLeagueIndex() - 1);
+    }
+  }
+
+  openNextLeague(): void {
+    if (this.canOpenNextLeague()) {
+      this.scrollToLeague(this.activeLeagueIndex() + 1);
+    }
+  }
+
+  handleLeagueRailKeydown(event: KeyboardEvent): void {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && this.canOpenPreviousLeague()) {
+      event.preventDefault();
+      this.openPreviousLeague();
+    } else if (event.key === 'ArrowRight' && this.canOpenNextLeague()) {
+      event.preventDefault();
+      this.openNextLeague();
+    }
+  }
+
+  handleLeagueRailScroll(): void {
+    const rail = this.leagueRail()?.nativeElement;
+    const pointer = this.leagueCardPointer;
+
+    if (rail && pointer && Math.abs(rail.scrollLeft - pointer.startScrollLeft) > 2) {
+      pointer.moved = true;
+      this.lastLeagueCardDragAt = Date.now();
+    }
+
+    this.scheduleLeagueRailPositionUpdate();
+  }
+
+  beginLeagueCardPointer(leagueId: string, event: PointerEvent): void {
+    if (!event.isPrimary) {
+      return;
+    }
+
+    this.leagueCardPointer = {
+      leagueId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScrollLeft: this.leagueRail()?.nativeElement.scrollLeft ?? 0,
+      moved: false,
+    };
+  }
+
+  trackLeagueCardPointer(leagueId: string, event: PointerEvent): void {
+    const pointer = this.leagueCardPointer;
+
+    if (
+      !pointer ||
+      pointer.leagueId !== leagueId ||
+      pointer.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    if (
+      Math.abs(event.clientX - pointer.startX) > 10 ||
+      Math.abs(event.clientY - pointer.startY) > 10
+    ) {
+      pointer.moved = true;
+    }
+  }
+
+  finishLeagueCardPointer(event: PointerEvent): void {
+    const pointer = this.leagueCardPointer;
+
+    if (!pointer || pointer.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const rail = this.leagueRail()?.nativeElement;
+    const railMoved = rail
+      ? Math.abs(rail.scrollLeft - pointer.startScrollLeft) > 2
+      : false;
+
+    if (pointer.moved || railMoved) {
+      this.lastLeagueCardDragAt = Date.now();
+    }
+
+    this.leagueCardPointer = null;
+  }
+
   openLeagueHqFromCard(event: MouseEvent, leagueId: string): void {
     const target = event.target;
+
+    if (event.detail !== 0 && Date.now() - this.lastLeagueCardDragAt < 700) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
 
     if (
       event.defaultPrevented ||
@@ -334,5 +484,86 @@ export class Dashboard {
     }
 
     void this.router.navigate(['/leagues', leagueId]);
+  }
+
+  private scrollToLeague(index: number): void {
+    const rail = this.leagueRail()?.nativeElement;
+
+    if (!rail) {
+      return;
+    }
+
+    const cards = this.getLeagueCards(rail);
+    const targetIndex = clampDashboardLeagueRailIndex(index, cards.length);
+    const targetCard = cards[targetIndex];
+
+    if (!targetCard) {
+      return;
+    }
+
+    const targetLeft = this.getLeagueCardOffset(rail, targetCard);
+    const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
+    const reducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    rail.scrollTo({
+      left: Math.min(maxScrollLeft, Math.max(0, targetLeft)),
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    });
+    this.activeLeagueIndex.set(targetIndex);
+  }
+
+  private resetLeagueRailPosition(): void {
+    this.activeLeagueIndex.set(0);
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.leagueRailPositionFrame !== null) {
+      window.cancelAnimationFrame(this.leagueRailPositionFrame);
+    }
+
+    this.leagueRailPositionFrame = window.requestAnimationFrame(() => {
+      this.leagueRailPositionFrame = null;
+      const rail = this.leagueRail()?.nativeElement;
+
+      if (rail) {
+        rail.scrollLeft = 0;
+      }
+    });
+  }
+
+  private scheduleLeagueRailPositionUpdate(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.leagueRailPositionFrame !== null) {
+      window.cancelAnimationFrame(this.leagueRailPositionFrame);
+    }
+
+    this.leagueRailPositionFrame = window.requestAnimationFrame(() => {
+      this.leagueRailPositionFrame = null;
+      const rail = this.leagueRail()?.nativeElement;
+
+      if (!rail) {
+        this.activeLeagueIndex.set(0);
+        return;
+      }
+
+      const offsets = this.getLeagueCards(rail).map((card) =>
+        this.getLeagueCardOffset(rail, card),
+      );
+      this.activeLeagueIndex.set(getDashboardLeagueRailIndex(rail.scrollLeft, offsets));
+    });
+  }
+
+  private getLeagueCards(rail: HTMLDivElement): HTMLElement[] {
+    return Array.from(rail.querySelectorAll<HTMLElement>('.league-card'));
+  }
+
+  private getLeagueCardOffset(rail: HTMLDivElement, card: HTMLElement): number {
+    return rail.scrollLeft + card.getBoundingClientRect().left - rail.getBoundingClientRect().left;
   }
 }

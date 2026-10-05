@@ -183,7 +183,8 @@ test('global connection safety and performance telemetry are active without bloc
   assert.match(layoutTemplate, /clientHealth\.connectionNotice\(\)/);
   assert.match(layoutTemplate, /Scores may be stale|notice\.detail/);
   assert.match(layoutTemplate, /global-team-ribbon-paused/);
-  assert.match(layoutStyles, /bottom:\s*calc\(86px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(layoutStyles, /--rr-mobile-nav-height:\s*0px/);
+  assert.match(layoutStyles, /bottom:\s*calc\(16px \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(layoutStyles, /animation-play-state:\s*paused/);
   assert.match(appSource, /performanceMonitor\.start\(router\)/);
   assert.match(performanceSource, /largest-contentful-paint/);
