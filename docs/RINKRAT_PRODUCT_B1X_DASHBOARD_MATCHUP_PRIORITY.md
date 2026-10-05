@@ -16,6 +16,9 @@ This is a Hosting-only presentation change.
 - The league rail supports native touch swiping, Previous and Next buttons,
   Left and Right Arrow keys, visible position text, reduced motion, and drag
   suppression for the card-wide League HQ action.
+- Mobile grid stacking excludes the league rail, so the first and later
+  matchup cards all retain the same full-width snap track instead of allowing
+  the first card to collapse beside the rail's implicit tracks.
 - Create and Join buttons are removed from the Dashboard, including the empty
   state. Those routes remain available in the authenticated top-right menu.
 

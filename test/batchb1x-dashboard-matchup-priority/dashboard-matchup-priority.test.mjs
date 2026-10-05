@@ -67,6 +67,10 @@ test('B1X offers swipe, arrow-button, and keyboard navigation without a new data
   assert.match(styles, /scroll-snap-type:\s*x mandatory/);
   assert.match(styles, /overscroll-behavior-x:\s*contain/);
   assert.match(styles, /touch-action:\s*pan-x pan-y pinch-zoom/);
+  assert.match(styles, /\.league-carousel\s*\{[\s\S]*?width:\s*100%;[\s\S]*?grid-template-columns:\s*none;/);
+  assert.match(styles, /\.league-carousel\s*>\s*\.league-card\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*100%;/);
+  assert.match(styles, /\.league-grid:not\(\.league-carousel\)\s*\{\s*grid-template-columns:\s*1fr;/);
+  assert.doesNotMatch(styles, /\.league-grid\s*\{\s*grid-template-columns:\s*1fr;/);
 });
 
 test('B1X removes routine league creation from the dashboard and signed-in mobile bottom edge', async () => {

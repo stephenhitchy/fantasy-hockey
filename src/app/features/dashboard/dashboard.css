@@ -290,10 +290,13 @@
 }
 
 .league-carousel {
+  width: 100%;
+  min-width: 0;
   grid-template-columns: none;
   grid-auto-columns: 100%;
   grid-auto-flow: column;
   overflow-x: auto;
+  overflow-anchor: none;
   overscroll-behavior-x: contain;
   overscroll-behavior-inline: contain;
   scroll-snap-type: x mandatory;
@@ -302,6 +305,11 @@
   touch-action: auto;
   touch-action: pan-x pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
+}
+
+.league-carousel > .league-card {
+  width: 100%;
+  max-width: 100%;
 }
 
 .league-carousel:focus-visible {
@@ -567,7 +575,7 @@
   .hero-copy h1 {
     font-size: 30px;
   }
-  .league-grid {
+  .league-grid:not(.league-carousel) {
     grid-template-columns: 1fr;
   }
   .league-summary-row {
