@@ -4950,12 +4950,6 @@ async function runLeagueAutomation(
       : null;
     const draftSeasonSourceGameIdsByTeam =
       resolveFrozenSeasonSourceGameIdsByTeam(scoringDraft);
-    livePlayerTeamIdentity = replayControl
-      ? null
-      : await phaseTimer.measure(
-          'league-and-team-load',
-          () => loadCurrentNhlPlayerTeamIdentity(),
-        );
     const projectionRefreshPolicy = replayControl
       ? 'saved-only' as const
       : 'refresh-if-needed' as const;

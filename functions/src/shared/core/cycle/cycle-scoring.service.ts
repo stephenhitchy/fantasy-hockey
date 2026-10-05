@@ -631,12 +631,38 @@ async function loadSchedulesByTeam(
       })
     );
 
-    for (const result of results) {
+    const failures: Array<{
+      teamAbbreviation: string;
+      reason: unknown;
+    }> = [];
+
+    results.forEach((result, resultIndex) => {
       if (result.status === 'fulfilled') {
         schedulesByTeam[result.value.teamAbbreviation] = result.value.schedule;
       } else {
-        console.warn('Unable to load scoring schedule.', result.reason);
+        failures.push({
+          teamAbbreviation: batch[resultIndex],
+          reason: result.reason,
+        });
       }
+    });
+
+    if (failures.length > 0) {
+      const details = failures
+        .map(({ teamAbbreviation, reason }) => {
+          const message = reason instanceof Error
+            ? reason.message
+            : String(reason);
+
+          return `${teamAbbreviation}: ${message}`;
+        })
+        .join(' | ');
+
+      throw new Error(
+        `Unable to load NHL schedule for ${failures
+          .map((failure) => failure.teamAbbreviation)
+          .join(', ')}. ${details}`,
+      );
     }
 
     if (index + NHL_SCORING_BATCH_SIZE < teamAbbreviations.length) {

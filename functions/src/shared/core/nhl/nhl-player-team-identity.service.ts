@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db } from '../firebase';
 import {
   getCurrentNhlDraftSkaters,
+  getCurrentNhlPlayerTeamIdentity,
   NHL_DRAFT_CLUBS,
   type NhlDraftSkater,
 } from './nhl-api.service';
@@ -23,6 +24,9 @@ const MAX_PERSISTED_MISSING_COVERAGE_PLAYER_IDS = 128;
 const IDENTITY_WAIT_ATTEMPTS = 50;
 const IDENTITY_WAIT_MILLISECONDS = 500;
 const MINIMUM_CURRENT_SKATER_COUNT = 300;
+const EXACT_IDENTITY_FALLBACK_BATCH_SIZE = 4;
+const EXACT_IDENTITY_FALLBACK_BATCH_DELAY_MILLISECONDS = 250;
+const MAX_EXACT_IDENTITY_FALLBACK_PLAYER_IDS = 32;
 
 export interface NhlPlayerTeamIdentitySnapshot {
   generatedAt: string;
@@ -487,6 +491,87 @@ function buildStoredEntries(
     }));
 }
 
+function buildStoredEntriesFromSnapshot(
+  snapshot: NhlPlayerTeamIdentitySnapshot,
+): StoredNhlPlayerTeamIdentityEntry[] {
+  return [...snapshot.byPlayerId.entries()]
+    .sort(([first], [second]) => first - second)
+    .map(([playerId, teamAbbreviation]) => ({
+      playerId,
+      teamAbbreviation,
+      teamConfirmedAt:
+        snapshot.teamConfirmedAtByPlayerId.get(playerId) ??
+        snapshot.generatedAt,
+    }));
+}
+
+async function addExactRequiredPlayerIdentityEvidence(
+  players: StoredNhlPlayerTeamIdentityEntry[],
+  requiredPlayerIds: readonly number[],
+): Promise<{
+  players: StoredNhlPlayerTeamIdentityEntry[];
+  exactEvidencePlayerIds: ReadonlySet<number>;
+}> {
+  const byPlayerId = new Map(
+    players.map((player) => [player.playerId, player] as const),
+  );
+  const missingPlayerIds = requiredPlayerIds
+    .filter((playerId) => !byPlayerId.has(playerId))
+    .slice(0, MAX_EXACT_IDENTITY_FALLBACK_PLAYER_IDS);
+  const exactEvidencePlayerIds = new Set<number>();
+
+  for (
+    let index = 0;
+    index < missingPlayerIds.length;
+    index += EXACT_IDENTITY_FALLBACK_BATCH_SIZE
+  ) {
+    const batch = missingPlayerIds.slice(
+      index,
+      index + EXACT_IDENTITY_FALLBACK_BATCH_SIZE,
+    );
+    const results = await Promise.allSettled(
+      batch.map((playerId) =>
+        getCurrentNhlPlayerTeamIdentity(playerId, true)
+      ),
+    );
+
+    results.forEach((result, resultIndex) => {
+      const playerId = batch[resultIndex];
+
+      if (result.status === 'rejected') {
+        console.warn('Unable to load exact NHL player identity.', {
+          playerId,
+          error: result.reason,
+        });
+        return;
+      }
+
+      if (!result.value) {
+        return;
+      }
+
+      byPlayerId.set(result.value.playerId, {
+        playerId: result.value.playerId,
+        teamAbbreviation: result.value.teamAbbreviation,
+      });
+      exactEvidencePlayerIds.add(result.value.playerId);
+    });
+
+    if (
+      index + EXACT_IDENTITY_FALLBACK_BATCH_SIZE <
+      missingPlayerIds.length
+    ) {
+      await wait(EXACT_IDENTITY_FALLBACK_BATCH_DELAY_MILLISECONDS);
+    }
+  }
+
+  return {
+    players: [...byPlayerId.values()]
+      .sort((first, second) => first.playerId - second.playerId),
+    exactEvidencePlayerIds,
+  };
+}
+
 function createIdentityHash(
   players: StoredNhlPlayerTeamIdentityEntry[],
 ): string {
@@ -601,14 +686,31 @@ async function claimRefresh(
 async function completeRefresh(
   attemptId: string,
   requiredPlayerIds: readonly number[],
+  priorSnapshot: NhlPlayerTeamIdentitySnapshot | null,
+  minimumGeneratedAtMilliseconds: number,
 ): Promise<NhlPlayerTeamIdentitySnapshot> {
   // The provider catalog is read over several seconds. Its safe evidence
   // boundary is when that read began, not when the final club response
   // arrived; otherwise a refresh spanning puck drop could masquerade as a
   // wholly post-puck-drop observation.
-  const generatedAt = new Date().toISOString();
-  const providerPlayers = buildStoredEntries(
-    await getCurrentNhlDraftSkaters(true),
+  const refreshStartedAt = new Date().toISOString();
+  const canSupplementPriorSnapshot = snapshotIsFresh(
+    priorSnapshot,
+    Date.now(),
+    minimumGeneratedAtMilliseconds,
+  );
+  const generatedAt = canSupplementPriorSnapshot
+    ? priorSnapshot.generatedAt
+    : refreshStartedAt;
+  const basePlayers = canSupplementPriorSnapshot
+    ? buildStoredEntriesFromSnapshot(priorSnapshot)
+    : buildStoredEntries(await getCurrentNhlDraftSkaters(true));
+  const {
+    players: providerPlayers,
+    exactEvidencePlayerIds,
+  } = await addExactRequiredPlayerIdentityEvidence(
+    basePlayers,
+    requiredPlayerIds,
   );
   const reference = db.doc(NHL_PLAYER_TEAM_IDENTITY_PATH);
   let publishedPlayers: StoredNhlPlayerTeamIdentityEntry[] = [];
@@ -631,17 +733,23 @@ async function completeRefresh(
       );
     }
 
-    publishedPlayers = providerPlayers.map((player) => ({
-      ...player,
-      teamConfirmedAt: resolveNhlPlayerTeamConfirmedAt({
-        currentTeamAbbreviation: player.teamAbbreviation,
-        generatedAt,
-        previousTeamAbbreviation: previous?.byPlayerId.get(player.playerId),
-        previousTeamConfirmedAt:
-          previous?.teamConfirmedAtByPlayerId.get(player.playerId),
-        previousGeneratedAt: previous?.generatedAt,
-      }),
-    }));
+    publishedPlayers = providerPlayers.map((player) => {
+      const evidenceGeneratedAt = exactEvidencePlayerIds.has(player.playerId)
+        ? refreshStartedAt
+        : generatedAt;
+
+      return {
+        ...player,
+        teamConfirmedAt: resolveNhlPlayerTeamConfirmedAt({
+          currentTeamAbbreviation: player.teamAbbreviation,
+          generatedAt: evidenceGeneratedAt,
+          previousTeamAbbreviation: previous?.byPlayerId.get(player.playerId),
+          previousTeamConfirmedAt:
+            previous?.teamConfirmedAtByPlayerId.get(player.playerId),
+          previousGeneratedAt: previous?.generatedAt,
+        }),
+      };
+    });
     identityHash = createIdentityHash(publishedPlayers);
     publishedSnapshot = {
       generatedAt,
@@ -680,7 +788,9 @@ async function completeRefresh(
       {
         schemaVersion: NHL_PLAYER_TEAM_IDENTITY_SCHEMA_VERSION,
         status: 'ready',
-        source: 'server:nhl-current-rosters',
+        source: exactEvidencePlayerIds.size > 0
+          ? 'server:nhl-current-rosters+player-landing'
+          : 'server:nhl-current-rosters',
         generatedAt,
         identityHash,
         playerCount: publishedPlayers.length,
@@ -864,8 +974,10 @@ export async function loadCurrentNhlPlayerTeamIdentity(
   }
 
   // A fresh aggregate catalog can still omit the exact player this scoring
-  // run owns. Such a miss bypasses the normal freshness shortcut once, forcing
-  // a new provider read before the run either receives exact coverage or fails.
+  // run owns. Such a miss bypasses the normal freshness shortcut once so a
+  // bounded exact-player lookup can recover coverage without reloading all 32
+  // club rosters. A stale or pre-boundary snapshot still requires the complete
+  // club refresh before exact missing-player evidence is added.
   const claim = await claimRefresh(
     nowMilliseconds,
     requiredPlayerIds,
@@ -909,6 +1021,8 @@ export async function loadCurrentNhlPlayerTeamIdentity(
     refreshed = await completeRefresh(
       claim.attemptId,
       requiredPlayerIds,
+      claim.snapshot,
+      minimumGeneratedAtMilliseconds,
     );
   } catch (error: unknown) {
     await recordRefreshFailure(claim.attemptId, error).catch(() => undefined);

@@ -27,10 +27,19 @@ the current NHL team abbreviation.
 - The shared Firestore document is `appData/nhlPlayerTeamIdentity`.
 - A complete snapshot must contain at least 300 unique supported skaters.
 - Duplicate player ids assigned to different clubs reject the refresh.
-- The source is refreshed at most once every 30 minutes.
+- The aggregate source is fresh for five minutes.
 - A Firestore lease prevents the four scoring workers from rebuilding it at the
   same time.
 - Waiting workers make a bounded read-only wait for the claimed refresh.
+- An active skater omitted from the NHL club-roster response can be recovered
+  from that stable id's NHL player-landing response. Exact fallbacks are limited
+  to 32 ids per refresh and loaded in paced batches of four.
+- A fresh aggregate with missing coverage is supplemented without repeating the
+  full 32-club read. Its original aggregate evidence timestamp is retained so
+  the supplement cannot masquerade as a post-puck-drop refresh for other
+  players.
+- A stale aggregate or a puck-drop evidence boundary still requires a complete
+  club refresh before exact player evidence is merged.
 - If no complete fresh identity map is available, the scoring task fails and
   retains the last published scoring snapshot. It never falls back to settling
   an old-team absence as zero.
@@ -40,6 +49,17 @@ the current NHL team abbreviation.
 The NHL responses continue to flow through the existing retry, in-process
 deduplication, and Shadow shared-cache observation path. This change does not
 promote the Shadow NHL cache to scoring authority.
+
+League automation waits until the exact active-cycle and playoff-bank skater
+ids are known before requesting identity. It no longer performs an unscoped
+identity refresh before roster picks are loaded.
+
+Schedule loading also fails immediately with the affected club and original
+provider cause when any requested team schedule is unavailable. A rejected NHL
+request is never converted into a misleading frozen-game-missing diagnosis.
+The server-scoring source checksum advances only for this fail-closed diagnostic
+path; the shared Scoring V4 formulas and six-game selection utility remain
+byte-for-byte unchanged.
 
 ## Six-game ownership policy
 
@@ -84,25 +104,34 @@ changes.
 
 ## Deployment and rollback
 
-Production requires both the server scorer and the Hosting presentation:
+The 2026-10-05 identity-coverage recovery requires the five live scoring
+entrypoints plus both roster-action entrypoints that share the same identity
+authority:
 
 ```bash
 firebase deploy --project nhl-fantasy-app-ab673 \
-  --only functions:processLeagueAutomationTask,functions:runScheduledLeagueAutomation,functions:runSeasonStartAutomation,functions:initializeSeasonAfterDraft,functions:requestLeagueLiveScoringRefresh
+  --only "functions:processLeagueAutomationTask,functions:runScheduledLeagueAutomation,functions:runSeasonStartAutomation,functions:initializeSeasonAfterDraft,functions:requestLeagueLiveScoringRefresh,functions:applyImmediateRosterMove,functions:executeSecureRosterAction"
+```
 
+The original D1L-C presentation also requires Hosting when it is not already
+live:
+
+```bash
 firebase deploy --project nhl-fantasy-app-ab673 \
   --only hosting:app
 ```
 
-Do not deploy only Hosting; that would change labels only after data exists and
-would not repair scoring authority. No migration or production data rewrite is
-required. The first live scoring task after deployment creates the shared
-identity document and republishes affected active windows.
+No Hosting file changed in the 2026-10-05 recovery, so a new Hosting deployment
+is not required for that repair. Do not deploy only Hosting for the full D1L-C
+feature; that would change labels only after data exists and would not repair
+scoring authority. No migration or production data rewrite is required. The
+first live scoring task after deployment supplements the shared identity
+document and republishes affected active windows.
 
 Rollback is the prior clean source commit followed by the same targeted
-Function and Hosting selectors. Existing identity documents and the additive
-window fields can remain in Firestore; older code ignores them. Do not delete or
-rewrite completed windows.
+Function selectors, plus Hosting only if Hosting was part of the release.
+Existing identity documents and the additive window fields can remain in
+Firestore; older code ignores them. Do not delete or rewrite completed windows.
 
 ## Verification
 
@@ -123,5 +152,6 @@ npm run release:verify-clean-deploy-source
 
 The focused suite covers zero-game remapping, partial windows, already-remapped
 stability, completed-window immutability, stable-id live scoring, replay
-isolation, fail-closed catalog behavior, and the Dashboard/Game Film display
-overlay.
+isolation, fresh and stale exact-player fallback, bounded negative coverage,
+fail-closed catalog behavior, schedule-provider error preservation, and the
+Dashboard/Game Film display overlay.

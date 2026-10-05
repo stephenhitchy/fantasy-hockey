@@ -318,42 +318,104 @@ test('the first confirmation time survives refreshes only while the NHL club is 
   );
 });
 
-test('a fresh aggregate missing a required player forces one provider refresh', async (t) => {
+test('a fresh aggregate recovers an active required player from exact NHL profile evidence', async (t) => {
   const identityModule = loadFreshIdentityModule();
+  const priorGeneratedAt = new Date().toISOString();
   const store = createFakeIdentityStore(identityModule, {
     includeRequiredPlayer: false,
+    generatedAt: priorGeneratedAt,
   });
-  let refreshCount = 0;
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
 
   t.mock.method(firebase.db, 'doc', store.doc);
   t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
-  t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async (forceRefresh) => {
-    refreshCount += 1;
+  t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () => {
+    catalogRefreshCount += 1;
+    return refreshedSkaters({ includeRequiredPlayer: false });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async (
+    playerId,
+    forceRefresh,
+  ) => {
+    profileRefreshCount += 1;
+    assert.equal(playerId, REQUIRED_PLAYER_ID);
     assert.equal(forceRefresh, true);
-    return refreshedSkaters({ includeRequiredPlayer: true });
+    return {
+      playerId: REQUIRED_PLAYER_ID,
+      teamAbbreviation: 'CBJ',
+    };
   });
 
   const snapshot = await identityModule.loadCurrentNhlPlayerTeamIdentity([
     REQUIRED_PLAYER_ID,
   ]);
 
-  assert.equal(refreshCount, 1);
+  assert.equal(catalogRefreshCount, 0);
+  assert.equal(profileRefreshCount, 1);
   assert.equal(snapshot.byPlayerId.get(REQUIRED_PLAYER_ID), 'CBJ');
+  assert.equal(snapshot.generatedAt, priorGeneratedAt);
 });
 
-test('one forced refresh that still lacks a required player records a cooldown and fails closed', async (t) => {
+test('a stale aggregate combines a complete club refresh with exact NHL profile evidence', async (t) => {
   const identityModule = loadFreshIdentityModule();
+  const priorGeneratedAt = new Date(
+    Date.now() - 10 * 60 * 1000,
+  ).toISOString();
   const store = createFakeIdentityStore(identityModule, {
     includeRequiredPlayer: false,
+    generatedAt: priorGeneratedAt,
   });
-  let refreshCount = 0;
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
 
   t.mock.method(firebase.db, 'doc', store.doc);
   t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
   t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async (forceRefresh) => {
-    refreshCount += 1;
+    catalogRefreshCount += 1;
     assert.equal(forceRefresh, true);
     return refreshedSkaters({ includeRequiredPlayer: false });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async (
+    playerId,
+    forceRefresh,
+  ) => {
+    profileRefreshCount += 1;
+    assert.equal(playerId, REQUIRED_PLAYER_ID);
+    assert.equal(forceRefresh, true);
+    return {
+      playerId: REQUIRED_PLAYER_ID,
+      teamAbbreviation: 'CBJ',
+    };
+  });
+
+  const snapshot = await identityModule.loadCurrentNhlPlayerTeamIdentity([
+    REQUIRED_PLAYER_ID,
+  ]);
+
+  assert.equal(catalogRefreshCount, 1);
+  assert.equal(profileRefreshCount, 1);
+  assert.equal(snapshot.byPlayerId.get(REQUIRED_PLAYER_ID), 'CBJ');
+  assert.equal(Date.parse(snapshot.generatedAt) > Date.parse(priorGeneratedAt), true);
+});
+
+test('one exact lookup that still lacks a required player records a cooldown and fails closed', async (t) => {
+  const identityModule = loadFreshIdentityModule();
+  const store = createFakeIdentityStore(identityModule, {
+    includeRequiredPlayer: false,
+  });
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
+
+  t.mock.method(firebase.db, 'doc', store.doc);
+  t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
+  t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () => {
+    catalogRefreshCount += 1;
+    return refreshedSkaters({ includeRequiredPlayer: false });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async () => {
+    profileRefreshCount += 1;
+    return null;
   });
 
   await assert.rejects(
@@ -383,7 +445,8 @@ test('one forced refresh that still lacks a required player records a cooldown a
       return true;
     },
   );
-  assert.equal(refreshCount, 1);
+  assert.equal(catalogRefreshCount, 0);
+  assert.equal(profileRefreshCount, 1);
   assert.deepEqual(
     store.getData().missingCoverage.missingPlayerIds,
     [REQUIRED_PLAYER_ID],
@@ -405,13 +468,18 @@ test('negative coverage stays bounded while an exact large request is suppressed
     { length: 200 },
     (_, index) => 9_000_000 + index,
   );
-  let refreshCount = 0;
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
 
   t.mock.method(firebase.db, 'doc', store.doc);
   t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
   t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () => {
-    refreshCount += 1;
+    catalogRefreshCount += 1;
     return refreshedSkaters({ includeRequiredPlayer: false });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async () => {
+    profileRefreshCount += 1;
+    return null;
   });
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -430,7 +498,8 @@ test('negative coverage stays bounded while an exact large request is suppressed
     );
   }
 
-  assert.equal(refreshCount, 1);
+  assert.equal(catalogRefreshCount, 0);
+  assert.equal(profileRefreshCount, 32);
   assert.equal(store.getData().missingCoverage.missingPlayerIds.length, 128);
   assert.equal(
     store.getData().missingCoverage.requestMissingPlayerCount,
@@ -443,13 +512,18 @@ test('an expired missing-coverage boundary permits one new provider retry', asyn
   const store = createFakeIdentityStore(identityModule, {
     includeRequiredPlayer: false,
   });
-  let refreshCount = 0;
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
 
   t.mock.method(firebase.db, 'doc', store.doc);
   t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
   t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () => {
-    refreshCount += 1;
+    catalogRefreshCount += 1;
     return refreshedSkaters({ includeRequiredPlayer: false });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async () => {
+    profileRefreshCount += 1;
+    return null;
   });
 
   await assert.rejects(
@@ -467,7 +541,8 @@ test('an expired missing-coverage boundary permits one new provider retry', asyn
     { code: 'nhl-player-team-identity-coverage-incomplete' },
   );
 
-  assert.equal(refreshCount, 2);
+  assert.equal(catalogRefreshCount, 0);
+  assert.equal(profileRefreshCount, 2);
 });
 
 test('a newer evidence boundary bypasses negative coverage and can recover the player', async (t) => {
@@ -475,13 +550,18 @@ test('a newer evidence boundary bypasses negative coverage and can recover the p
   const store = createFakeIdentityStore(identityModule, {
     includeRequiredPlayer: false,
   });
-  let refreshCount = 0;
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
 
   t.mock.method(firebase.db, 'doc', store.doc);
   t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
   t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () => {
-    refreshCount += 1;
-    return refreshedSkaters({ includeRequiredPlayer: refreshCount > 1 });
+    catalogRefreshCount += 1;
+    return refreshedSkaters({ includeRequiredPlayer: true });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async () => {
+    profileRefreshCount += 1;
+    return null;
   });
 
   await assert.rejects(
@@ -500,7 +580,8 @@ test('a newer evidence boundary bypasses negative coverage and can recover the p
     minimumGeneratedAtMilliseconds,
   });
 
-  assert.equal(refreshCount, 2);
+  assert.equal(catalogRefreshCount, 1);
+  assert.equal(profileRefreshCount, 1);
   assert.equal(recovered.byPlayerId.get(REQUIRED_PLAYER_ID), 'CBJ');
   assert.equal(store.getData().missingCoverage, null);
 });

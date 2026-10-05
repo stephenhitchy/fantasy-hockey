@@ -692,6 +692,18 @@ export interface NhlCurrentRosterResponse {
   defensemen?: NhlCurrentRosterPlayer[];
 }
 
+interface NhlPlayerLandingResponse {
+  playerId?: number;
+  isActive?: boolean;
+  currentTeamAbbrev?: string;
+  position?: string;
+}
+
+export interface NhlPlayerTeamIdentityEvidence {
+  playerId: number;
+  teamAbbreviation: string;
+}
+
 export interface NhlDraftClubRosterSnapshot {
   club: NhlDraftClub;
   roster: NhlCurrentRosterResponse;
@@ -700,6 +712,7 @@ export interface NhlDraftClubRosterSnapshot {
 const NHL_ROSTER_BATCH_SIZE = 1;
 const NHL_ROSTER_DELAY_MS = 350;
 const NHL_ROSTER_CACHE_MILLISECONDS = 6 * 60 * 60 * 1000;
+const NHL_PLAYER_LANDING_CACHE_MILLISECONDS = 5 * 60 * 1000;
 const NHL_ROSTER_CACHE_KEY = 'fantasy-hockey:nhl-rosters:v1';
 
 let cachedDraftSkaters: {
@@ -800,6 +813,66 @@ function getCurrentDraftRosterSeason(): string {
     : year - 1;
 
   return `${seasonStartYear}${seasonStartYear + 1}`;
+}
+
+/**
+ * Loads exact current-club evidence for a skater who is absent from the NHL's
+ * club-roster catalog. Inactive players and goalies are not valid substitutes
+ * for the server-owned skater identity map.
+ */
+export async function getCurrentNhlPlayerTeamIdentity(
+  playerId: number,
+  forceRefresh: boolean = false
+): Promise<NhlPlayerTeamIdentityEvidence | null> {
+  if (!Number.isSafeInteger(playerId) || playerId <= 0) {
+    throw new Error(
+      `NHL player identity received an invalid player id: ${String(playerId)}.`
+    );
+  }
+
+  const url = `${NHL_API_BASE_URL}/player/${playerId}/landing`;
+
+  if (forceRefresh) {
+    const existingRequest = apiRequestInFlight.get(url);
+
+    if (existingRequest) {
+      await existingRequest.catch(() => undefined);
+    }
+
+    apiResponseCache.delete(url);
+  }
+
+  const profile = await getCachedApiJson<NhlPlayerLandingResponse>(
+    url,
+    NHL_PLAYER_LANDING_CACHE_MILLISECONDS,
+    `NHL player ${playerId} landing request failed`
+  );
+
+  if (profile.playerId !== playerId) {
+    throw new Error(
+      `The NHL player landing response for ${playerId} returned mismatched player id ${String(profile.playerId)}.`
+    );
+  }
+
+  if (profile.isActive !== true || !getDraftPosition(profile.position)) {
+    return null;
+  }
+
+  const teamAbbreviation = profile.currentTeamAbbrev?.trim().toUpperCase();
+
+  if (
+    !teamAbbreviation ||
+    !supportedDraftClubAbbreviations.has(teamAbbreviation)
+  ) {
+    throw new Error(
+      `The NHL player landing response for ${playerId} did not contain a supported current club.`
+    );
+  }
+
+  return {
+    playerId,
+    teamAbbreviation,
+  };
 }
 
 async function getDraftClubRoster(

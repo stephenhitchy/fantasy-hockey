@@ -283,7 +283,37 @@ test('live scoring uses the current-team game and stable player id, not the stal
   assert.equal(summary.teamIdentityChanged, true);
 });
 
-test('server scoring loads one shared current-team catalog and historical replay bypasses it', async () => {
+test('a schedule provider failure keeps its team and provider cause visible', async (t) => {
+  t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async (team) => {
+    throw new Error(
+      `NHL season schedule request failed for ${team}: 429 Too Many Requests`,
+    );
+  });
+
+  await assert.rejects(
+    cycleScoring.calculateCycleScoring({
+      picks: [scoringPick()],
+      cycleNumber: 1,
+      season: '20262027',
+      requiredGamesPerCycle: 6,
+      scoringRules: scoringRules.defaultScoringRules,
+      currentTeamAbbreviationByPlayerId: new Map([[PLAYER_ID, 'CBJ']]),
+      currentTeamConfirmedAtByPlayerId: new Map([
+        [PLAYER_ID, '2026-10-01T22:00:00Z'],
+      ]),
+      currentTeamIdentityHash: 'test-current-team-identity',
+      currentTeamIdentityGeneratedAt: '2026-10-01T23:01:00Z',
+    }),
+    (error) => {
+      assert.match(error.message, /Unable to load NHL schedule for CBJ/);
+      assert.match(error.message, /429 Too Many Requests/);
+      assert.doesNotMatch(error.message, /missing frozen game id/i);
+      return true;
+    },
+  );
+});
+
+test('server scoring loads exact roster identity once picks are known and historical replay bypasses it', async () => {
   const [automation, scorer, identityService, dashboard, detail] = await Promise.all([
     read('functions/src/league-automation.ts'),
     read('functions/src/shared/core/cycle/cycle-scoring.service.ts'),
@@ -292,7 +322,18 @@ test('server scoring loads one shared current-team catalog and historical replay
     read('src/app/features/cycles/cycle-asset-detail/cycle-asset-detail.ts'),
   ]);
 
-  assert.match(automation, /replayControl\s*\?\s*null\s*:\s*await phaseTimer\.measure\([\s\S]*?loadCurrentNhlPlayerTeamIdentity/);
+  assert.equal(
+    [...automation.matchAll(/loadCurrentNhlPlayerTeamIdentity\(/g)].length,
+    2,
+  );
+  assert.doesNotMatch(
+    automation,
+    /loadCurrentNhlPlayerTeamIdentity\(\)/,
+  );
+  assert.match(
+    automation,
+    /loadCurrentNhlPlayerTeamIdentity\(\s*requiredRosteredPlayerIds/,
+  );
   assert.match(automation, /currentTeamAbbreviationByPlayerId:\s*livePlayerTeamIdentity\?\.byPlayerId/);
   assert.match(automation, /currentTeamConfirmedAtByPlayerId:\s*livePlayerTeamIdentity\?\.teamConfirmedAtByPlayerId/);
   assert.match(scorer, /sourceTeamAbbreviationByGameId/);
