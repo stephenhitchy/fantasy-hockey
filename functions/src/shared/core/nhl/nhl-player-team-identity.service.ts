@@ -23,6 +23,7 @@ const IDENTITY_MISSING_COVERAGE_RETRY_MILLISECONDS = 5 * 60 * 1000;
 const MAX_PERSISTED_MISSING_COVERAGE_PLAYER_IDS = 128;
 const IDENTITY_WAIT_ATTEMPTS = 50;
 const IDENTITY_WAIT_MILLISECONDS = 500;
+const IDENTITY_REFRESH_HANDOFF_ATTEMPTS = 4;
 const MINIMUM_CURRENT_SKATER_COUNT = 300;
 const EXACT_IDENTITY_FALLBACK_BATCH_SIZE = 4;
 const EXACT_IDENTITY_FALLBACK_BATCH_DELAY_MILLISECONDS = 250;
@@ -705,12 +706,34 @@ async function completeRefresh(
   const basePlayers = canSupplementPriorSnapshot
     ? buildStoredEntriesFromSnapshot(priorSnapshot)
     : buildStoredEntries(await getCurrentNhlDraftSkaters(true));
+  const basePlayerIds = new Set(
+    basePlayers.map((player) => player.playerId),
+  );
+  const priorPlayerIds = priorSnapshot
+    ? [...priorSnapshot.byPlayerId.keys()]
+    : [];
+  const priorExactOnlyPlayerIds = canSupplementPriorSnapshot
+    ? []
+    : priorPlayerIds
+        .filter((playerId) => !basePlayerIds.has(playerId))
+        .sort((first, second) => first - second);
+  // A complete aggregate refresh must not erase active exact-player evidence
+  // discovered for another league. Revalidate those aggregate omissions so a
+  // later caller cannot replace the shared map with a narrower catalog. The
+  // current caller stays first so its required coverage retains priority under
+  // the bounded exact-lookup limit.
+  const exactLookupPlayerIds = [
+    ...new Set([
+      ...requiredPlayerIds,
+      ...priorExactOnlyPlayerIds,
+    ]),
+  ];
   const {
     players: providerPlayers,
     exactEvidencePlayerIds,
   } = await addExactRequiredPlayerIdentityEvidence(
     basePlayers,
-    requiredPlayerIds,
+    exactLookupPlayerIds,
   );
   const reference = db.doc(NHL_PLAYER_TEAM_IDENTITY_PATH);
   let publishedPlayers: StoredNhlPlayerTeamIdentityEntry[] = [];
@@ -813,53 +836,6 @@ async function completeRefresh(
   }
 
   return publishedSnapshot;
-}
-
-async function recordMissingCoverageEvidence(
-  snapshot: NhlPlayerTeamIdentitySnapshot,
-  requiredPlayerIds: readonly number[],
-): Promise<void> {
-  const missingPlayerIds = inspectNhlPlayerTeamIdentityCoverage(
-    snapshot,
-    requiredPlayerIds,
-  ).missingPlayerIds;
-
-  if (missingPlayerIds.length === 0) {
-    return;
-  }
-
-  const reference = db.doc(NHL_PLAYER_TEAM_IDENTITY_PATH);
-
-  await db.runTransaction(async (transaction) => {
-    const saved = await transaction.get(reference);
-    const data = saved.exists
-      ? saved.data() as Record<string, unknown>
-      : undefined;
-    const current = normalizeStoredSnapshot(data);
-
-    if (
-      !current ||
-      current.identityHash !== snapshot.identityHash ||
-      current.generatedAt !== snapshot.generatedAt
-    ) {
-      return;
-    }
-
-    transaction.set(
-      reference,
-      {
-        missingCoverage: buildMissingCoverageEvidence({
-          snapshot: current,
-          missingPlayerIds,
-          previous: normalizeStoredMissingCoverageEvidence(
-            data?.['missingCoverage'],
-          ),
-        }),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-  });
 }
 
 async function recordRefreshFailure(
@@ -978,60 +954,71 @@ export async function loadCurrentNhlPlayerTeamIdentity(
   // bounded exact-player lookup can recover coverage without reloading all 32
   // club rosters. A stale or pre-boundary snapshot still requires the complete
   // club refresh before exact missing-player evidence is added.
-  const claim = await claimRefresh(
-    nowMilliseconds,
-    requiredPlayerIds,
-    minimumGeneratedAtMilliseconds,
-  );
-
-  if (claim.kind === 'ready' && claim.snapshot) {
-    cachedSnapshot = claim.snapshot;
-    return requireNhlPlayerTeamIdentityCoverage(
-      claim.snapshot,
+  for (
+    let handoffAttempt = 0;
+    handoffAttempt < IDENTITY_REFRESH_HANDOFF_ATTEMPTS;
+    handoffAttempt += 1
+  ) {
+    const claim = await claimRefresh(
+      Date.now(),
       requiredPlayerIds,
-    );
-  }
-
-  if (claim.kind === 'coverage-missing' && claim.snapshot) {
-    cachedSnapshot = claim.snapshot;
-    return requireNhlPlayerTeamIdentityCoverage(
-      claim.snapshot,
-      requiredPlayerIds,
-    );
-  }
-
-  if (claim.kind === 'waiting') {
-    const refreshed = await waitForClaimedRefresh(
       minimumGeneratedAtMilliseconds,
     );
+
+    if (
+      (claim.kind === 'ready' || claim.kind === 'coverage-missing') &&
+      claim.snapshot
+    ) {
+      cachedSnapshot = claim.snapshot;
+      return requireNhlPlayerTeamIdentityCoverage(
+        claim.snapshot,
+        requiredPlayerIds,
+      );
+    }
+
+    if (claim.kind === 'waiting') {
+      const refreshed = await waitForClaimedRefresh(
+        minimumGeneratedAtMilliseconds,
+      );
+      cachedSnapshot = refreshed;
+
+      if (
+        inspectNhlPlayerTeamIdentityCoverage(
+          refreshed,
+          requiredPlayerIds,
+        ).complete
+      ) {
+        return refreshed;
+      }
+
+      // The worker that owned the lease may have refreshed for a different
+      // league. Claim one bounded follow-up supplement for this caller instead
+      // of recording false negative coverage against another worker's scope.
+      continue;
+    }
+
+    let refreshed: NhlPlayerTeamIdentitySnapshot;
+
+    try {
+      refreshed = await completeRefresh(
+        claim.attemptId,
+        requiredPlayerIds,
+        claim.snapshot,
+        minimumGeneratedAtMilliseconds,
+      );
+    } catch (error: unknown) {
+      await recordRefreshFailure(claim.attemptId, error).catch(() => undefined);
+      throw error;
+    }
+
     cachedSnapshot = refreshed;
-    await recordMissingCoverageEvidence(
-      refreshed,
-      requiredPlayerIds,
-    );
     return requireNhlPlayerTeamIdentityCoverage(
       refreshed,
       requiredPlayerIds,
     );
   }
 
-  let refreshed: NhlPlayerTeamIdentitySnapshot;
-
-  try {
-    refreshed = await completeRefresh(
-      claim.attemptId,
-      requiredPlayerIds,
-      claim.snapshot,
-      minimumGeneratedAtMilliseconds,
-    );
-  } catch (error: unknown) {
-    await recordRefreshFailure(claim.attemptId, error).catch(() => undefined);
-    throw error;
-  }
-
-  cachedSnapshot = refreshed;
-  return requireNhlPlayerTeamIdentityCoverage(
-    refreshed,
-    requiredPlayerIds,
+  throw new Error(
+    'NHL current-team identity refresh did not converge after bounded lease handoffs. Scoring was left unchanged and will retry.',
   );
 }

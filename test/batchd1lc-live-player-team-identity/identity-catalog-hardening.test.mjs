@@ -16,6 +16,7 @@ const nhlApi = require(NHL_API_MODULE_PATH);
 const firebase = require(FIREBASE_MODULE_PATH);
 
 const REQUIRED_PLAYER_ID = 8_482_720;
+const SECOND_REQUIRED_PLAYER_ID = 8_478_873;
 
 function rosterSnapshot({
   feedClub,
@@ -136,6 +137,55 @@ function createFakeIdentityStore(identityModule, {
     updateData: (update) => {
       data = { ...data, ...update };
     },
+  };
+}
+
+function createWaitingIdentityStore(identityModule) {
+  let referenceReadCount = 0;
+  let data = {
+    schemaVersion: identityModule.NHL_PLAYER_TEAM_IDENTITY_SCHEMA_VERSION,
+    status: 'refreshing',
+    generatedAt: new Date().toISOString(),
+    identityHash: 'c'.repeat(64),
+    players: storedPlayers({ includeRequiredPlayer: false }),
+    refreshAttemptId: 'other-league-refresh',
+    leaseExpiresAt: {
+      toMillis: () => Date.now() + 60_000,
+    },
+  };
+  const snapshot = () => ({
+    exists: true,
+    data: () => data,
+  });
+  const reference = {
+    async get() {
+      referenceReadCount += 1;
+
+      if (referenceReadCount === 2) {
+        data = {
+          ...data,
+          status: 'ready',
+          refreshAttemptId: 'other-league-refresh',
+          leaseExpiresAt: null,
+        };
+      }
+
+      return snapshot();
+    },
+  };
+  const set = (_reference, update, options) => {
+    data = options?.merge
+      ? { ...data, ...update }
+      : update;
+  };
+
+  return {
+    doc: () => reference,
+    runTransaction: async (callback) => callback({
+      get: async () => snapshot(),
+      set,
+    }),
+    getData: () => data,
   };
 }
 
@@ -399,6 +449,102 @@ test('a stale aggregate combines a complete club refresh with exact NHL profile 
   assert.equal(Date.parse(snapshot.generatedAt) > Date.parse(priorGeneratedAt), true);
 });
 
+test('a full aggregate refresh revalidates exact-only players needed by other leagues', async (t) => {
+  const identityModule = loadFreshIdentityModule();
+  const priorGeneratedAt = new Date(
+    Date.now() - 10 * 60 * 1000,
+  ).toISOString();
+  const firstConfirmedAt = new Date(
+    Date.now() - 20 * 60 * 1000,
+  ).toISOString();
+  const store = createFakeIdentityStore(identityModule, {
+    includeRequiredPlayer: true,
+    generatedAt: priorGeneratedAt,
+    teamConfirmedAt: firstConfirmedAt,
+  });
+  const exactLookupPlayerIds = [];
+
+  t.mock.method(firebase.db, 'doc', store.doc);
+  t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
+  t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () =>
+    refreshedSkaters({ includeRequiredPlayer: false })
+  );
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async (
+    playerId,
+    forceRefresh,
+  ) => {
+    exactLookupPlayerIds.push(playerId);
+    assert.equal(forceRefresh, true);
+
+    if (playerId === SECOND_REQUIRED_PLAYER_ID) {
+      return {
+        playerId,
+        teamAbbreviation: 'ANA',
+      };
+    }
+
+    if (playerId === REQUIRED_PLAYER_ID) {
+      return {
+        playerId,
+        teamAbbreviation: 'CBJ',
+      };
+    }
+
+    assert.fail(`Unexpected exact identity lookup for ${playerId}.`);
+  });
+
+  const snapshot = await identityModule.loadCurrentNhlPlayerTeamIdentity([
+    SECOND_REQUIRED_PLAYER_ID,
+  ]);
+
+  assert.deepEqual(exactLookupPlayerIds, [
+    SECOND_REQUIRED_PLAYER_ID,
+    REQUIRED_PLAYER_ID,
+  ]);
+  assert.equal(snapshot.byPlayerId.get(SECOND_REQUIRED_PLAYER_ID), 'ANA');
+  assert.equal(snapshot.byPlayerId.get(REQUIRED_PLAYER_ID), 'CBJ');
+  assert.equal(
+    snapshot.teamConfirmedAtByPlayerId.get(REQUIRED_PLAYER_ID),
+    firstConfirmedAt,
+  );
+  assert.equal(store.getData().source, 'server:nhl-current-rosters+player-landing');
+});
+
+test('a waiter supplements its own missing coverage after another league refreshes', async (t) => {
+  const identityModule = loadFreshIdentityModule();
+  const store = createWaitingIdentityStore(identityModule);
+  let catalogRefreshCount = 0;
+  let profileRefreshCount = 0;
+
+  t.mock.method(firebase.db, 'doc', store.doc);
+  t.mock.method(firebase.db, 'runTransaction', store.runTransaction);
+  t.mock.method(nhlApi, 'getCurrentNhlDraftSkaters', async () => {
+    catalogRefreshCount += 1;
+    return refreshedSkaters({ includeRequiredPlayer: false });
+  });
+  t.mock.method(nhlApi, 'getCurrentNhlPlayerTeamIdentity', async (
+    playerId,
+    forceRefresh,
+  ) => {
+    profileRefreshCount += 1;
+    assert.equal(playerId, SECOND_REQUIRED_PLAYER_ID);
+    assert.equal(forceRefresh, true);
+    return {
+      playerId,
+      teamAbbreviation: 'ANA',
+    };
+  });
+
+  const snapshot = await identityModule.loadCurrentNhlPlayerTeamIdentity([
+    SECOND_REQUIRED_PLAYER_ID,
+  ]);
+
+  assert.equal(catalogRefreshCount, 0);
+  assert.equal(profileRefreshCount, 1);
+  assert.equal(snapshot.byPlayerId.get(SECOND_REQUIRED_PLAYER_ID), 'ANA');
+  assert.equal(store.getData().missingCoverage, null);
+});
+
 test('one exact lookup that still lacks a required player records a cooldown and fails closed', async (t) => {
   const identityModule = loadFreshIdentityModule();
   const store = createFakeIdentityStore(identityModule, {
@@ -581,7 +727,11 @@ test('a newer evidence boundary bypasses negative coverage and can recover the p
   });
 
   assert.equal(catalogRefreshCount, 1);
-  assert.equal(profileRefreshCount, 1);
+  assert.equal(
+    profileRefreshCount,
+    2,
+    'The refresh rechecks the prior aggregate player displaced by the fixture.',
+  );
   assert.equal(recovered.byPlayerId.get(REQUIRED_PLAYER_ID), 'CBJ');
   assert.equal(store.getData().missingCoverage, null);
 });

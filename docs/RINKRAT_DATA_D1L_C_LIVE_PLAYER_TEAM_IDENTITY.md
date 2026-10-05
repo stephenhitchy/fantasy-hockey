@@ -34,10 +34,17 @@ the current NHL team abbreviation.
 - An active skater omitted from the NHL club-roster response can be recovered
   from that stable id's NHL player-landing response. Exact fallbacks are limited
   to 32 ids per refresh and loaded in paced batches of four.
+- A later complete club refresh revalidates prior exact-only players that are
+  still absent from the aggregate response. One league therefore cannot erase
+  exact identity evidence already needed by another league.
 - A fresh aggregate with missing coverage is supplemented without repeating the
   full 32-club read. Its original aggregate evidence timestamp is retained so
   the supplement cannot masquerade as a post-puck-drop refresh for other
   players.
+- A worker that waited for a refresh scoped to another league may claim a
+  bounded follow-up supplement for its own missing ids. It does not publish
+  negative-coverage cooldown evidence for ids that the first worker never
+  requested.
 - A stale aggregate or a puck-drop evidence boundary still requires a complete
   club refresh before exact player evidence is merged.
 - If no complete fresh identity map is available, the scoring task fails and
@@ -127,6 +134,12 @@ feature; that would change labels only after data exists and would not repair
 scoring authority. No migration or production data rewrite is required. The
 first live scoring task after deployment supplements the shared identity
 document and republishes affected active windows.
+
+The first Production recovery sweep proved the exact-player fallback but also
+showed that a later stale aggregate refresh could narrow the shared catalog to
+the current caller's ids. The follow-up guard above preserves and revalidates
+prior exact-only coverage across league refreshes and makes disjoint lease
+waiters converge without a false five-minute cooldown.
 
 Rollback is the prior clean source commit followed by the same targeted
 Function selectors, plus Hosting only if Hosting was part of the release.
