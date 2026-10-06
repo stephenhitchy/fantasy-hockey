@@ -103,11 +103,14 @@ import {
   LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_COUNT,
   LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS,
   LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MIN_RELIABILITY_RATE,
+  LEAGUE_AUTOMATION_STALE_DUE_MILLISECONDS,
   LEAGUE_AUTOMATION_WATCHDOG_REQUIRED_BLOCKING_STREAK,
   buildLeagueAutomationCapacityRecommendation,
+  classifyLeagueAutomationFreshness,
   decideLeagueAutomationWatchdogAction,
   shouldTreatLeagueAutomationDueAgeAsBacklog,
   type LeagueAutomationCapacityRecommendation,
+  type LeagueAutomationFreshnessResult,
   type LeagueAutomationWatchdogAction,
   type LeagueAutomationWatchdogStatus,
 } from './shared/core/live-scoring/league-automation-season-safety.util';
@@ -196,8 +199,10 @@ const LEAGUE_AUTOMATION_QUEUED_TASK_LEASE_MILLISECONDS = 75 * 60 * 1000;
 const LEAGUE_AUTOMATION_PROCESSING_TASK_LEASE_MILLISECONDS = 12 * 60 * 1000;
 const LEAGUE_AUTOMATION_RECOVERY_STALE_MILLISECONDS = 25 * 60 * 1000;
 const LEAGUE_AUTOMATION_STALE_TASK_SWEEP_LIMIT = 100;
+const LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT = 50;
 const LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT = 500;
 const LEAGUE_AUTOMATION_BOOTSTRAP_TRANSACTION_LIMIT = 50;
+const LEAGUE_AUTOMATION_BOOTSTRAP_STALE_MILLISECONDS = 2 * 60 * 60 * 1000;
 const LEAGUE_AUTOMATION_TASK_HISTORY_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
 const LEAGUE_AUTOMATION_TASK_HISTORY_CLEANUP_LIMIT = 500;
 const LEAGUE_AUTOMATION_ADMIN_LEAGUE_LIMIT = 200;
@@ -416,8 +421,13 @@ interface LeagueAutomationAdminLeague {
   lastRefreshCadence: LeagueAutomationRefreshCadence;
   lastRefreshDelayMilliseconds: number | null;
   lastError: string;
+  consecutiveFailureCount: number;
   activeTaskId: string;
   activeTaskLeaseExpiresAt: string | null;
+  freshnessStatus: LeagueAutomationFreshnessResult['status'];
+  freshnessSeverity: LeagueAutomationFreshnessResult['severity'];
+  freshnessReason: string;
+  dueAgeMilliseconds: number;
   isCanary: boolean;
   isInternalTest: boolean;
   canonicalAuthorityConfigured: boolean;
@@ -2381,6 +2391,20 @@ function buildLeagueAutomationPromotionGates(input: {
   const pendingCount = getLeagueAutomationNumber(
     input.health?.['queueActivePendingTaskCount'],
   ) ?? 0;
+  const staleLeagueCount = getLeagueAutomationNumber(
+    input.health?.['queueStaleLeagueCount'],
+  ) ?? 0;
+  const failedLegacyLeagueCount = getLeagueAutomationNumber(
+    input.health?.['failedLeagueCount'],
+  ) ?? 0;
+  const bootstrapAge = getLeagueAutomationAgeMilliseconds(
+    input.health?.['queueLastBootstrapAt'],
+    now,
+  );
+  const bootstrapHealthy =
+    input.health?.['queueLastBootstrapStatus'] === 'success' &&
+    bootstrapAge !== null &&
+    bootstrapAge <= LEAGUE_AUTOMATION_BOOTSTRAP_STALE_MILLISECONDS;
   const queueSuccessCount = getLeagueAutomationNumber(
     input.health?.['queueTaskSuccessCount'],
   ) ?? 0;
@@ -2485,6 +2509,29 @@ function buildLeagueAutomationPromotionGates(input: {
       passed: coverageTarget > 0 && coverageCount >= coverageTarget,
       blocking: true,
       detail: `${coverageCount}/${coverageTarget || 'unknown'} completed-draft league schedules are covered.`,
+    },
+    {
+      id: 'schedule-coverage-fresh',
+      label: 'The scoring schedule audit is current',
+      passed: bootstrapHealthy,
+      blocking: true,
+      detail: bootstrapAge === null
+        ? 'No successful scoring schedule audit is recorded.'
+        : `${input.health?.['queueLastBootstrapStatus'] ?? 'not-recorded'}; latest successful evidence is ${Math.round(bootstrapAge / 60_000)} minutes old.`,
+    },
+    {
+      id: 'no-stale-league-schedules',
+      label: 'No league scoring schedule is stale',
+      passed: staleLeagueCount === 0,
+      blocking: true,
+      detail: `${staleLeagueCount} league schedule(s) are at least ${Math.round(LEAGUE_AUTOMATION_STALE_DUE_MILLISECONDS / 60_000)} minutes overdue without a healthy task.`,
+    },
+    {
+      id: 'legacy-recovery-healthy',
+      label: 'The legacy recovery scorer is healthy',
+      passed: failedLegacyLeagueCount === 0,
+      blocking: true,
+      detail: `${failedLegacyLeagueCount} league run(s) failed in the latest legacy sweep.`,
     },
     {
       id: 'dispatcher-fresh',
@@ -2633,6 +2680,18 @@ async function loadLeagueAutomationAdminLeagues(
     ...config.canaryLeagueIds,
     ...config.internalTestLeagueIds,
     ...config.canonicalAuthorityLeagueIds,
+    ...normalizeLeagueAutomationLeagueIds(
+      healthData['queueStaleLeagueIds'],
+    ),
+    ...normalizeLeagueAutomationLeagueIds(
+      healthData['legacyLastFailedLeagueIds'],
+    ),
+    ...normalizeLeagueAutomationLeagueIds(
+      healthData['queueLastBootstrapRepairedLeagueIds'],
+    ),
+    ...normalizeLeagueAutomationLeagueIds(
+      healthData['queueLastBootstrapCreatedLeagueIds'],
+    ),
   ].filter(Boolean))];
   const missingManagedLeagueRefs = explicitlyManagedLeagueIds
     .filter((leagueId) =>
@@ -2683,6 +2742,7 @@ async function loadLeagueAutomationAdminLeagues(
     authorityRefs.length > 0 ? db.getAll(...authorityRefs) : Promise.resolve([]),
   ]);
 
+  const nowMilliseconds = Date.now();
   const leagues = uniqueDocuments.map((leagueDocument, index) => {
     const leagueData = leagueDocument.data() ?? {};
     const draftData = draftSnapshots[index]?.data() ?? {};
@@ -2695,6 +2755,29 @@ async function loadLeagueAutomationAdminLeagues(
     const historicalReplayEnabled = replayData['enabled'] === true;
     const scheduleExists = scheduleSnapshot?.exists === true;
     const scoringEnabled = scheduleExists && scheduleData['scoringEnabled'] !== false;
+    const lastError = getLeagueAutomationString(
+      scheduleData['lastError'] || scheduleData['lastQueueError'],
+    ).slice(0, 500);
+    const consecutiveFailureCount = normalizeLeagueAutomationRevision(
+      scheduleData['consecutiveFailureCount'],
+    );
+    const freshness = classifyLeagueAutomationFreshness({
+      nowMilliseconds,
+      draftComplete: draftStatus === 'complete',
+      historicalReplayEnabled,
+      scheduleExists,
+      scoringEnabled,
+      queueStatus: getLeagueAutomationString(
+        scheduleData['queueStatus'],
+        'not-scheduled',
+      ),
+      nextScoringAtMilliseconds: toMilliseconds(scheduleData['nextScoringAt']),
+      activeTaskLeaseExpiresAtMilliseconds: toMilliseconds(
+        scheduleData['activeTaskLeaseExpiresAt'],
+      ),
+      consecutiveFailureCount,
+      lastError,
+    });
     const eligibility = getLeagueAutomationCanaryEligibility({
       draftStatus,
       historicalReplayEnabled,
@@ -2739,13 +2822,16 @@ async function loadLeagueAutomationAdminLeagues(
       lastRefreshDelayMilliseconds: getLeagueAutomationNumber(
         scheduleData['lastRefreshDelayMilliseconds'],
       ),
-      lastError: getLeagueAutomationString(
-        scheduleData['lastError'] || scheduleData['lastQueueError'],
-      ).slice(0, 500),
+      lastError,
+      consecutiveFailureCount,
       activeTaskId: getLeagueAutomationString(scheduleData['activeTaskId']),
       activeTaskLeaseExpiresAt: getLeagueAutomationIso(
         scheduleData['activeTaskLeaseExpiresAt'],
       ),
+      freshnessStatus: freshness.status,
+      freshnessSeverity: freshness.severity,
+      freshnessReason: freshness.reason,
+      dueAgeMilliseconds: freshness.dueAgeMilliseconds,
       isCanary: config.canaryLeagueIds.includes(leagueDocument.id),
       isInternalTest: config.internalTestLeagueIds.includes(leagueDocument.id),
       canonicalAuthorityConfigured,
@@ -2793,6 +2879,10 @@ async function loadLeagueAutomationAdminLeagues(
   leagues.sort((left, right) => {
     if (left.leagueId === focusLeagueId) return -1;
     if (right.leagueId === focusLeagueId) return 1;
+    if (left.freshnessSeverity !== right.freshnessSeverity) {
+      const priority = { critical: 0, warning: 1, info: 2, healthy: 3 } as const;
+      return priority[left.freshnessSeverity] - priority[right.freshnessSeverity];
+    }
     if (
       left.canonicalAuthorityConfigured !==
       right.canonicalAuthorityConfigured
@@ -2907,6 +2997,49 @@ function buildLeagueAutomationSeasonSafetyAlerts(input: {
   const completedDraftCount = getLeagueAutomationNumber(
     input.healthData['queueScheduleCoverageCompletedDraftCount'],
   ) ?? 0;
+  const bootstrapAge = getLeagueAutomationAgeMilliseconds(
+    input.healthData['queueLastBootstrapAt'],
+    now,
+  );
+  const bootstrapStatus = getLeagueAutomationString(
+    input.healthData['queueLastBootstrapStatus'],
+    'not-recorded',
+  );
+  const bootstrapError = getLeagueAutomationString(
+    input.healthData['queueLastBootstrapError'],
+  ).slice(0, 500);
+  const repairedScheduleCount = getLeagueAutomationNumber(
+    input.healthData['queueScheduleCoverageRepairedCount'],
+  ) ?? 0;
+  const createdScheduleCount = getLeagueAutomationNumber(
+    input.healthData['queueScheduleCoverageCreatedCount'],
+  ) ?? 0;
+  const createdLeagueIds = normalizeLeagueAutomationLeagueIds(
+    input.healthData['queueLastBootstrapCreatedLeagueIds'],
+  );
+  const createdLeagueIdsTruncated =
+    input.healthData['queueLastBootstrapCreatedLeagueIdsTruncated'] === true;
+  const repairedLeagueIds = normalizeLeagueAutomationLeagueIds(
+    input.healthData['queueLastBootstrapRepairedLeagueIds'],
+  );
+  const repairedLeagueIdsTruncated =
+    input.healthData['queueLastBootstrapRepairedLeagueIdsTruncated'] === true;
+  const staleLeagueCount = getLeagueAutomationNumber(
+    input.healthData['queueStaleLeagueCount'],
+  ) ?? 0;
+  const staleLeagueIds = normalizeLeagueAutomationLeagueIds(
+    input.healthData['queueStaleLeagueIds'],
+  );
+  const staleLeagueIdsTruncated =
+    input.healthData['queueStaleLeagueIdsTruncated'] === true;
+  const failedLegacyLeagueCount = getLeagueAutomationNumber(
+    input.healthData['failedLeagueCount'],
+  ) ?? 0;
+  const failedLegacyLeagueIds = normalizeLeagueAutomationLeagueIds(
+    input.healthData['legacyLastFailedLeagueIds'],
+  );
+  const failedLegacyLeagueIdsTruncated =
+    input.healthData['legacyLastFailedLeagueIdsTruncated'] === true;
   const feedFailures = getLeagueAutomationNumber(
     input.feedData['consecutiveFailureCount'],
   ) ?? 0;
@@ -3070,6 +3203,67 @@ function buildLeagueAutomationSeasonSafetyAlerts(input: {
       severity: 'critical',
       label: 'Completed leagues are missing scoring schedules',
       detail: `${scheduleCoverage} of ${completedDraftCount} completed-Draft leagues have schedule coverage.`,
+    });
+  }
+
+  if (completedDraftCount > 0 && bootstrapStatus === 'error') {
+    alerts.push({
+      id: 'schedule-bootstrap-failed',
+      severity: 'critical',
+      label: 'Scoring schedule coverage audit failed',
+      detail: bootstrapError ||
+        'The hourly schedule audit failed before complete coverage could be confirmed.',
+    });
+  } else if (
+    completedDraftCount > 0 &&
+    (bootstrapAge === null ||
+      bootstrapAge > LEAGUE_AUTOMATION_BOOTSTRAP_STALE_MILLISECONDS)
+  ) {
+    alerts.push({
+      id: 'schedule-bootstrap-stale',
+      severity: 'critical',
+      label: 'Scoring schedule coverage evidence is stale',
+      detail: bootstrapAge === null
+        ? 'No successful hourly scoring schedule audit is recorded.'
+        : `The last successful schedule audit is ${Math.round(bootstrapAge / 60_000)} minutes old.`,
+    });
+  }
+
+  if (createdScheduleCount > 0 || repairedScheduleCount > 0) {
+    alerts.push({
+      id: 'schedule-repairs',
+      severity: 'warning',
+      label: 'Scoring schedules required repair',
+      detail:
+        `${createdScheduleCount} missing schedule(s) created` +
+        `${createdLeagueIds.length > 0 ? ` (${createdLeagueIds.join(', ')})` : ''}; ` +
+        `${repairedScheduleCount} invalid schedule(s) repaired` +
+        `${repairedLeagueIds.length > 0 ? ` (${repairedLeagueIds.join(', ')})` : ''}.` +
+        `${createdLeagueIdsTruncated || repairedLeagueIdsTruncated ? ' Additional affected leagues are omitted from this bounded alert.' : ''}`,
+    });
+  }
+
+  if (staleLeagueCount > 0) {
+    alerts.push({
+      id: 'stale-league-schedules',
+      severity: 'critical',
+      label: 'League scoring schedules are stale',
+      detail:
+        `${staleLeagueCount} league schedule(s) are at least ${Math.round(LEAGUE_AUTOMATION_STALE_DUE_MILLISECONDS / 60_000)} minutes overdue without a healthy task` +
+        `${staleLeagueIds.length > 0 ? `: ${staleLeagueIds.join(', ')}` : '.'}` +
+        `${staleLeagueIdsTruncated ? ' Additional stale leagues are omitted from this bounded alert.' : ''}`,
+    });
+  }
+
+  if (failedLegacyLeagueCount > 0) {
+    alerts.push({
+      id: 'legacy-sweep-failures',
+      severity: 'critical',
+      label: 'The latest legacy scoring sweep failed for leagues',
+      detail:
+        `${failedLegacyLeagueCount} league scoring run(s) failed` +
+        `${failedLegacyLeagueIds.length > 0 ? `: ${failedLegacyLeagueIds.join(', ')}` : '.'}` +
+        `${failedLegacyLeagueIdsTruncated ? ' Additional failed leagues are omitted from this bounded alert.' : ''}`,
     });
   }
 
@@ -3401,12 +3595,61 @@ async function buildLeagueAutomationQueueAdminSnapshot(
       queueOldestObservedDueAgeMilliseconds: getLeagueAutomationNumber(
         healthData['queueOldestObservedDueAgeMilliseconds'],
       ),
+      queueStaleLeagueCount: getLeagueAutomationNumber(
+        healthData['queueStaleLeagueCount'],
+      ) ?? 0,
+      queueStaleLeagueIds: normalizeLeagueAutomationLeagueIds(
+        healthData['queueStaleLeagueIds'],
+      ),
+      queueStaleLeagueIdsTruncated:
+        healthData['queueStaleLeagueIdsTruncated'] === true,
+      queueDueScheduleScanTruncated:
+        healthData['queueDueScheduleScanTruncated'] === true,
       queueScheduleCoverageCount: getLeagueAutomationNumber(
         healthData['queueScheduleCoverageCount'],
       ) ?? 0,
       queueScheduleCoverageCompletedDraftCount: getLeagueAutomationNumber(
         healthData['queueScheduleCoverageCompletedDraftCount'],
       ) ?? 0,
+      queueScheduleCoverageRepairedCount: getLeagueAutomationNumber(
+        healthData['queueScheduleCoverageRepairedCount'],
+      ) ?? 0,
+      queueScheduleCoverageCreatedCount: getLeagueAutomationNumber(
+        healthData['queueScheduleCoverageCreatedCount'],
+      ) ?? 0,
+      queueLastBootstrapStatus: getLeagueAutomationString(
+        healthData['queueLastBootstrapStatus'],
+        'not-recorded',
+      ),
+      queueLastBootstrapAt: getLeagueAutomationIso(
+        healthData['queueLastBootstrapAt'],
+      ),
+      queueLastBootstrapError: getLeagueAutomationString(
+        healthData['queueLastBootstrapError'],
+      ).slice(0, 500),
+      queueLastBootstrapCreatedLeagueIds: normalizeLeagueAutomationLeagueIds(
+        healthData['queueLastBootstrapCreatedLeagueIds'],
+      ),
+      queueLastBootstrapCreatedLeagueIdsTruncated:
+        healthData['queueLastBootstrapCreatedLeagueIdsTruncated'] === true,
+      queueLastBootstrapRepairedLeagueIds: normalizeLeagueAutomationLeagueIds(
+        healthData['queueLastBootstrapRepairedLeagueIds'],
+      ),
+      queueLastBootstrapRepairedLeagueIdsTruncated:
+        healthData['queueLastBootstrapRepairedLeagueIdsTruncated'] === true,
+      legacyLastRunAt: getLeagueAutomationIso(healthData['lastRunAt']),
+      legacyLastRunStatus: getLeagueAutomationString(
+        healthData['status'],
+        'not-recorded',
+      ),
+      legacyLastFailedLeagueCount: getLeagueAutomationNumber(
+        healthData['failedLeagueCount'],
+      ) ?? 0,
+      legacyLastFailedLeagueIds: normalizeLeagueAutomationLeagueIds(
+        healthData['legacyLastFailedLeagueIds'],
+      ),
+      legacyLastFailedLeagueIdsTruncated:
+        healthData['legacyLastFailedLeagueIdsTruncated'] === true,
       queueTaskMaxConcurrentDispatches:
         LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
       queueNearLiveCanaryRefreshIntervalMilliseconds:
@@ -6159,12 +6402,16 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
   existingScheduleCount: number;
   createdScheduleCount: number;
   repairedScheduleCount: number;
+  createdLeagueIds: string[];
+  repairedLeagueIds: string[];
 }> {
   const leagueIds = await getCompletedDraftLeagueIds();
   const now = Date.now();
   let existingScheduleCount = 0;
   let createdScheduleCount = 0;
   let repairedScheduleCount = 0;
+  const createdLeagueIds: string[] = [];
+  const repairedLeagueIds: string[] = [];
 
   for (let offset = 0; offset < leagueIds.length; offset += LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT) {
     const batchIds = leagueIds.slice(offset, offset + LEAGUE_AUTOMATION_BOOTSTRAP_BATCH_LIMIT);
@@ -6188,7 +6435,13 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
           transaction.getAll(...scheduleRefs),
           transaction.getAll(...replayRefs),
         ]);
-        const result = { existing: 0, created: 0, repaired: 0 };
+        const result = {
+          existing: 0,
+          created: 0,
+          repaired: 0,
+          createdIds: [] as string[],
+          repairedIds: [] as string[],
+        };
 
         scheduleSnapshots.forEach((snapshot, index) => {
           const leagueId = transactionIds[index];
@@ -6257,8 +6510,10 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
           );
           if (repairingExistingSchedule) {
             result.repaired += 1;
+            result.repairedIds.push(leagueId);
           } else {
             result.created += 1;
+            result.createdIds.push(leagueId);
           }
         });
 
@@ -6267,6 +6522,14 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
       existingScheduleCount += counts.existing;
       createdScheduleCount += counts.created;
       repairedScheduleCount += counts.repaired;
+      createdLeagueIds.push(...counts.createdIds.slice(
+        0,
+        LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT - createdLeagueIds.length,
+      ));
+      repairedLeagueIds.push(...counts.repairedIds.slice(
+        0,
+        LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT - repairedLeagueIds.length,
+      ));
     }
   }
 
@@ -6275,6 +6538,8 @@ async function bootstrapMissingLeagueAutomationSchedules(): Promise<{
     existingScheduleCount,
     createdScheduleCount,
     repairedScheduleCount,
+    createdLeagueIds,
+    repairedLeagueIds,
   };
 }
 
@@ -8178,25 +8443,55 @@ export const bootstrapLeagueAutomationSchedules = onSchedule(
   },
   async () => {
     const startedAt = Date.now();
-    const result = await bootstrapMissingLeagueAutomationSchedules();
+    const healthRef = db.doc('appData/leagueAutomation');
 
-    await db.doc('appData/leagueAutomation').set(
-      {
-        queueFoundationSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
-        queueScheduleCoverageCompletedDraftCount: result.completedDraftLeagueCount,
-        queueScheduleCoverageExistingCount: result.existingScheduleCount,
-        queueScheduleCoverageCreatedCount: result.createdScheduleCount,
-        queueScheduleCoverageRepairedCount: result.repairedScheduleCount,
-        queueScheduleCoverageCount:
-          result.existingScheduleCount +
-          result.createdScheduleCount +
-          result.repairedScheduleCount,
-        queueLastBootstrapDurationMilliseconds: Date.now() - startedAt,
-        queueLastBootstrapAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    try {
+      const result = await bootstrapMissingLeagueAutomationSchedules();
+
+      await healthRef.set(
+        {
+          queueFoundationSchemaVersion: LEAGUE_AUTOMATION_QUEUE_SCHEMA_VERSION,
+          queueScheduleCoverageCompletedDraftCount:
+            result.completedDraftLeagueCount,
+          queueScheduleCoverageExistingCount: result.existingScheduleCount,
+          queueScheduleCoverageCreatedCount: result.createdScheduleCount,
+          queueScheduleCoverageRepairedCount: result.repairedScheduleCount,
+          queueScheduleCoverageCount:
+            result.existingScheduleCount +
+            result.createdScheduleCount +
+            result.repairedScheduleCount,
+          queueLastBootstrapStatus: 'success',
+          queueLastBootstrapError: '',
+          queueLastBootstrapCreatedLeagueIds: result.createdLeagueIds,
+          queueLastBootstrapCreatedLeagueIdsTruncated:
+            result.createdScheduleCount > result.createdLeagueIds.length,
+          queueLastBootstrapRepairedLeagueIds: result.repairedLeagueIds,
+          queueLastBootstrapRepairedLeagueIdsTruncated:
+            result.repairedScheduleCount > result.repairedLeagueIds.length,
+          queueLastBootstrapDurationMilliseconds: Date.now() - startedAt,
+          queueLastBootstrapAttemptAt: FieldValue.serverTimestamp(),
+          queueLastBootstrapAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to verify league scoring schedule coverage.';
+
+      await healthRef.set(
+        {
+          queueLastBootstrapStatus: 'error',
+          queueLastBootstrapError: message.slice(0, 500),
+          queueLastBootstrapDurationMilliseconds: Date.now() - startedAt,
+          queueLastBootstrapAttemptAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ).catch(() => undefined);
+      throw error;
+    }
   },
 );
 
@@ -8261,6 +8556,14 @@ export const dispatchDueLeagueAutomation = onSchedule(
       dueSchedules[0]?.expectedDueAtMilliseconds ?? null;
     const oldestEligibleDueAt =
       eligibleSchedules[0]?.expectedDueAtMilliseconds ?? null;
+    const staleDueSchedules = dueSchedules.filter((schedule) =>
+      !isLeagueAutomationScheduleActive(schedule, now) &&
+      now - schedule.expectedDueAtMilliseconds >=
+        LEAGUE_AUTOMATION_STALE_DUE_MILLISECONDS
+    );
+    const staleLeagueIds = staleDueSchedules
+      .slice(0, LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT)
+      .map((schedule) => schedule.leagueId);
 
     await db.doc('appData/leagueAutomation').set(
       {
@@ -8286,6 +8589,12 @@ export const dispatchDueLeagueAutomation = onSchedule(
           oldestObservedDueAt === null
             ? null
             : Math.max(0, now - oldestObservedDueAt),
+        queueStaleLeagueCount: staleDueSchedules.length,
+        queueStaleLeagueIds: staleLeagueIds,
+        queueStaleLeagueIdsTruncated:
+          staleDueSchedules.length > staleLeagueIds.length ||
+          dueSchedules.length >= scanLimit,
+        queueDueScheduleScanTruncated: dueSchedules.length >= scanLimit,
         queueTaskMaxConcurrentDispatches:
           LEAGUE_AUTOMATION_QUEUE_MAX_CONCURRENT_DISPATCHES,
         queueTaskMaxPendingTasks: LEAGUE_AUTOMATION_QUEUE_MAX_PENDING_TASKS,
@@ -8610,6 +8919,11 @@ export const runScheduledLeagueAutomation = onSchedule(
     const failed = results.filter(
       (result) => result.status === 'rejected',
     ).length;
+    const failedLeagueIds = results
+      .flatMap((result, index) =>
+        result.status === 'rejected' ? [leagueIds[index]] : []
+      )
+      .slice(0, LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT);
 
     await db.doc('appData/leagueAutomation').set(
       {
@@ -8628,6 +8942,9 @@ export const runScheduledLeagueAutomation = onSchedule(
         successfulLeagueCount: successful,
         skippedLeagueCount: skipped,
         failedLeagueCount: failed,
+        legacyLastFailedLeagueIds: failedLeagueIds,
+        legacyLastFailedLeagueIdsTruncated:
+          failed > failedLeagueIds.length,
         durationMilliseconds: Date.now() - startedAt,
         lastRunAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),

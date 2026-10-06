@@ -153,6 +153,37 @@ test('configured and focus leagues remain visible even beyond the newest 200 res
   assert.match(automation, /db\.getAll\(\.\.\.missingManagedLeagueRefs\)/);
 });
 
+test('freshness diagnosis reuses bounded automation reads and preserves exact affected league ids', async () => {
+  const [automation, componentTs, componentHtml, service] = await Promise.all([
+    read('functions/src/league-automation.ts'),
+    read('src/app/features/release/scoring-queue-control-center/scoring-queue-control-center.ts'),
+    read('src/app/features/release/scoring-queue-control-center/scoring-queue-control-center.html'),
+    read('src/app/core/admin/scoring-queue-control.service.ts'),
+  ]);
+
+  assert.match(automation, /LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT = 50/);
+  assert.match(automation, /staleLeagueIds/);
+  assert.match(automation, /queueLastBootstrapRepairedLeagueIds/);
+  assert.match(automation, /queueLastBootstrapCreatedLeagueIds/);
+  assert.match(automation, /legacyLastFailedLeagueIds/);
+  assert.match(automation, /schedule-bootstrap-failed/);
+  assert.match(automation, /stale-league-schedules/);
+  assert.match(automation, /legacy-sweep-failures/);
+  assert.match(automation, /schedule-coverage-fresh/);
+  assert.match(automation, /no-stale-league-schedules/);
+  assert.match(automation, /legacy-recovery-healthy/);
+  assert.match(automation, /\.slice\(0, LEAGUE_AUTOMATION_ALERT_LEAGUE_ID_LIMIT\)/);
+  assert.match(automation, /healthData\['queueStaleLeagueIds'\]/);
+  assert.match(automation, /healthData\['legacyLastFailedLeagueIds'\]/);
+  assert.match(automation, /healthData\['queueLastBootstrapRepairedLeagueIds'\]/);
+  assert.match(automation, /healthData\['queueLastBootstrapCreatedLeagueIds'\]/);
+  assert.match(service, /freshnessStatus: LeagueAutomationFreshnessStatus/);
+  assert.match(componentTs, /getFreshnessLabel/);
+  assert.match(componentHtml, /Schedule coverage audit/);
+  assert.match(componentHtml, /Stale schedules/);
+  assert.match(componentHtml, /Legacy recovery sweep/);
+});
+
 test('P1F scripts, current release label, runbook, and deployment order are documented', async () => {
   const [packageSource, runtime, productionRuntime, documentation, blueprint, capacity, runbook, readme, functionsPackage] = await Promise.all([
     read('package.json'),

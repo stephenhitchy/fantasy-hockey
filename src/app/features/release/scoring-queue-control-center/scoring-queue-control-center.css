@@ -986,6 +986,7 @@ textarea {
 }
 
 .scoring-path,
+.freshness-status,
 .internal-test-badge,
 .unsaved-badge {
   display: inline-flex;
@@ -998,6 +999,26 @@ textarea {
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.freshness-status-healthy {
+  background: var(--queue-success-soft);
+  color: var(--queue-success);
+}
+
+.freshness-status-info {
+  background: var(--queue-info-soft);
+  color: var(--queue-info);
+}
+
+.freshness-status-warning {
+  background: var(--queue-warning-soft);
+  color: var(--queue-warning);
+}
+
+.freshness-status-critical {
+  background: var(--queue-danger-soft);
+  color: var(--queue-danger);
 }
 
 .queue-path-legacy {
@@ -1070,12 +1091,19 @@ textarea {
 }
 
 .league-eligibility-note,
+.league-freshness-note,
 .league-error-note {
   grid-column: 1 / -1;
   margin: 0;
   padding: var(--rr-space-2) var(--rr-space-3);
   border-radius: calc(var(--rr-radius-md) * 1.5);
   line-height: var(--rr-line-normal);
+}
+
+.league-freshness-note {
+  border: var(--rr-border-width) solid var(--queue-warning-border);
+  background: var(--queue-warning-soft);
+  color: var(--queue-text);
 }
 
 .league-eligibility-note {

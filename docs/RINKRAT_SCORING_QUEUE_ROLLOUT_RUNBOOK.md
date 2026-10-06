@@ -80,6 +80,42 @@ leagueAutomationTasks/{taskId}
 
 The Firestore browser rules remain unchanged. These records are written through Admin SDK Functions.
 
+## League freshness and exact operational alerts
+
+The control center derives a per-league freshness state from the existing
+server-owned schedule fields. It does not create another scoring poller or
+Firestore scan. The dispatcher records evidence from its already-bounded due
+schedule query, the hourly schedule bootstrap records coverage and repair
+evidence, and the legacy recovery sweep records exact failures from the leagues
+it already attempted.
+
+A scoring schedule becomes **Stale** when its next scoring time is at least 25
+minutes overdue and no queued or processing task holds a valid lease. The same
+classification distinguishes:
+
+- a healthy future schedule;
+- a due schedule still inside the bounded recovery window;
+- a queued or processing task with a valid lease;
+- an active recovery after an earlier failure;
+- a failed schedule with no healthy retry;
+- a completed-Draft league with no schedule;
+- an enabled schedule with no next scoring time;
+- intentionally paused, Historical Replay, and draft-incomplete leagues.
+
+The control center shows the exact affected league IDs for stale schedules,
+newly created missing schedules, repaired invalid schedules, and legacy sweep
+failures. Each evidence list is bounded to 50 IDs and says when additional IDs
+were truncated. Alert IDs are also included when loading the control-center
+league table, so an affected older league is not hidden merely because it falls
+outside the newest 200 leagues.
+
+These alerts are detection and audit evidence only. They do not rewrite fantasy
+points, player windows, standings, transactions, or queue configuration. A
+stale schedule or failed schedule audit blocks promotion after the existing
+two-strike watchdog window. A legacy sweep failure remains a visible critical
+alert but does not automatically roll Canary or Primary back, because Shadow
+uses that same legacy path and would not be a safer fallback for that failure.
+
 ## Recommended league layout
 
 Maintain two different internal leagues:
@@ -200,6 +236,9 @@ Production Primary is protected by all of the following:
 - at least one canary must be configured;
 - at least three queued tasks must have completed successfully;
 - schedule coverage must be complete;
+- the latest hourly schedule coverage audit must be current and successful;
+- no live scoring schedule may be at least 25 minutes stale without an active lease;
+- the latest legacy recovery sweep must have no failed leagues;
 - dispatcher heartbeat must be fresh;
 - latest enqueue failures must be zero;
 - latest stale recovery count must be zero;
@@ -314,6 +353,26 @@ firebase deploy --only hosting:app \
 ```
 
 No Firestore Rule, index, TTL, or data migration deployment is required.
+
+## Targeted deployment for exact league freshness diagnostics
+
+Deploy the server evidence producers and control-center reader before Hosting:
+
+```bash
+firebase use nhl-fantasy-app-ab673
+
+firebase deploy --only "functions:bootstrapLeagueAutomationSchedules,functions:dispatchDueLeagueAutomation,functions:getLeagueAutomationQueueControlCenter,functions:monitorLeagueAutomationSeasonSafety,functions:runScheduledLeagueAutomation" \
+  -m "Exact league scoring freshness diagnostics"
+
+firebase deploy --only hosting:app \
+  -m "Scoring freshness and operational alerts"
+```
+
+This deployment does not include the task worker because its scoring behavior
+did not change. It does not require Firestore Rules, indexes, TTL, data
+migration, queue-mode, worker-limit, or pending-task-limit changes. Keep
+Production in Shadow unless the existing Canary acceptance procedure has been
+completed separately.
 
 ## Production posture after P1F and D1D
 

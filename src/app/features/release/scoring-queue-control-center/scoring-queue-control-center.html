@@ -112,6 +112,35 @@
           </strong>
           <small>Completed-draft leagues mirrored</small>
         </article>
+        <article
+          [class.health-attention]="current.health.queueLastBootstrapStatus !== 'success'"
+        >
+          <span>Schedule coverage audit</span>
+          <strong>{{ current.health.queueLastBootstrapStatus ?? 'Not recorded' }}</strong>
+          <small>
+            {{ formatTimestamp(current.health.queueLastBootstrapAt ?? null) }} ·
+            {{ current.health.queueScheduleCoverageCreatedCount ?? 0 }} created ·
+            {{ current.health.queueScheduleCoverageRepairedCount ?? 0 }} repaired
+          </small>
+        </article>
+        <article [class.health-attention]="(current.health.queueStaleLeagueCount ?? 0) > 0">
+          <span>Stale schedules</span>
+          <strong>{{ current.health.queueStaleLeagueCount ?? 0 }}</strong>
+          <small>
+            At least 25 minutes overdue without a healthy task
+            @if (current.health.queueDueScheduleScanTruncated) {
+              · bounded scan reached
+            }
+          </small>
+        </article>
+        <article [class.health-attention]="(current.health.legacyLastFailedLeagueCount ?? 0) > 0">
+          <span>Legacy recovery sweep</span>
+          <strong>{{ current.health.legacyLastRunStatus ?? 'Not recorded' }}</strong>
+          <small>
+            {{ current.health.legacyLastFailedLeagueCount ?? 0 }} failed ·
+            {{ formatTimestamp(current.health.legacyLastRunAt ?? null) }}
+          </small>
+        </article>
         <article [class.health-attention]="(current.health.queueActivePendingTaskCount ?? 0) > 0">
           <span>Active tasks</span>
           <strong>
@@ -570,12 +599,18 @@
             <article
               class="league-control-row"
               [class.league-control-row-canary]="isSelectedCanary(league.leagueId)"
-              [class.league-control-row-attention]="league.lastError || !league.scheduleExists"
+              [class.league-control-row-attention]="
+                league.freshnessSeverity === 'critical' ||
+                league.freshnessSeverity === 'warning'
+              "
             >
               <div class="league-identity">
                 <div>
                   <span [class]="'scoring-path ' + getScoringPathClass(league)">
                     {{ getScoringPathLabel(league) }}
+                  </span>
+                  <span [class]="getFreshnessClass(league)">
+                    {{ getFreshnessLabel(league) }}
                   </span>
                   @if (isSelectedInternalTest(league.leagueId)) {
                     <span class="internal-test-badge">Internal Test</span>
@@ -614,6 +649,15 @@
                   <dd>{{ league.lastOutcome }} · {{ formatDuration(league.lastDurationMilliseconds) }}</dd>
                 </div>
                 <div>
+                  <dt>Schedule freshness</dt>
+                  <dd>
+                    {{ getFreshnessLabel(league) }}
+                    @if (league.dueAgeMilliseconds > 0) {
+                      · {{ formatDuration(league.dueAgeMilliseconds) }} overdue
+                    }
+                  </dd>
+                </div>
+                <div>
                   <dt>Perfect parity streak</dt>
                   <dd>
                     {{ league.canonicalParityConsecutivePassingRunCount }} /
@@ -624,6 +668,15 @@
 
               @if (!league.canaryEligible) {
                 <p class="league-eligibility-note">{{ league.canaryEligibilityReason }}</p>
+              }
+
+              @if (league.freshnessStatus !== 'healthy') {
+                <p
+                  class="league-freshness-note"
+                  [class.league-error-note]="league.freshnessSeverity === 'critical'"
+                >
+                  {{ league.freshnessReason }}
+                </p>
               }
 
               @if (league.lastError) {

@@ -73,10 +73,8 @@ export class ScoringQueueControlCenter implements OnInit {
         case 'internal':
           return this.selectedInternalTestLeagueIds().includes(league.leagueId);
         case 'attention':
-          return Boolean(league.lastError) ||
-            league.queueStatus === 'error' ||
-            !league.scheduleExists ||
-            league.historicalReplayEnabled ||
+          return league.freshnessSeverity === 'critical' ||
+            league.freshnessSeverity === 'warning' ||
             league.canonicalAuthorityCircuitState === 'open';
         default:
           return true;
@@ -730,6 +728,37 @@ export class ScoringQueueControlCenter implements OnInit {
 
   getScoringPathClass(league: LeagueAutomationAdminLeague): string {
     return `queue-path-${league.scoringPath}`;
+  }
+
+  getFreshnessLabel(league: LeagueAutomationAdminLeague): string {
+    switch (league.freshnessStatus) {
+      case 'healthy':
+        return 'On schedule';
+      case 'due':
+        return 'Due now';
+      case 'active':
+        return 'Scoring now';
+      case 'recovering':
+        return 'Retry active';
+      case 'stale':
+        return 'Scoring stale';
+      case 'failing':
+        return 'Scoring failed';
+      case 'missing-schedule':
+        return 'Schedule missing';
+      case 'schedule-invalid':
+        return 'Schedule invalid';
+      case 'paused':
+        return 'Paused';
+      case 'historical-replay':
+        return 'Replay controlled';
+      default:
+        return 'Waiting for Draft';
+    }
+  }
+
+  getFreshnessClass(league: LeagueAutomationAdminLeague): string {
+    return `freshness-status freshness-status-${league.freshnessSeverity}`;
   }
 
   getAuditActionLabel(action: string): string {

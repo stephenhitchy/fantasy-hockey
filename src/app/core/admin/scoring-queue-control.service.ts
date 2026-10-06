@@ -13,6 +13,18 @@ export type LeagueAutomationScoringPath =
   | 'historical-replay'
   | 'draft-incomplete'
   | 'paused';
+export type LeagueAutomationFreshnessStatus =
+  | 'healthy'
+  | 'due'
+  | 'active'
+  | 'recovering'
+  | 'stale'
+  | 'failing'
+  | 'missing-schedule'
+  | 'schedule-invalid'
+  | 'paused'
+  | 'historical-replay'
+  | 'draft-incomplete';
 
 export interface LeagueAutomationPromotionGate {
   id: string;
@@ -126,8 +138,13 @@ export interface LeagueAutomationAdminLeague {
   lastRefreshCadence: LeagueAutomationRefreshCadence;
   lastRefreshDelayMilliseconds: number | null;
   lastError: string;
+  consecutiveFailureCount: number;
   activeTaskId: string;
   activeTaskLeaseExpiresAt: string | null;
+  freshnessStatus: LeagueAutomationFreshnessStatus;
+  freshnessSeverity: 'healthy' | 'info' | 'warning' | 'critical';
+  freshnessReason: string;
+  dueAgeMilliseconds: number;
   isCanary: boolean;
   isInternalTest: boolean;
   canonicalAuthorityConfigured: boolean;
@@ -181,8 +198,26 @@ export interface LeagueAutomationQueueHealth {
   queueTaskRetryAttemptCount?: number;
   queueOldestDueAgeMilliseconds?: number | null;
   queueOldestObservedDueAgeMilliseconds?: number | null;
+  queueStaleLeagueCount?: number;
+  queueStaleLeagueIds?: string[];
+  queueStaleLeagueIdsTruncated?: boolean;
+  queueDueScheduleScanTruncated?: boolean;
   queueScheduleCoverageCount?: number;
   queueScheduleCoverageCompletedDraftCount?: number;
+  queueScheduleCoverageCreatedCount?: number;
+  queueScheduleCoverageRepairedCount?: number;
+  queueLastBootstrapStatus?: string;
+  queueLastBootstrapAt?: string | null;
+  queueLastBootstrapError?: string;
+  queueLastBootstrapCreatedLeagueIds?: string[];
+  queueLastBootstrapCreatedLeagueIdsTruncated?: boolean;
+  queueLastBootstrapRepairedLeagueIds?: string[];
+  queueLastBootstrapRepairedLeagueIdsTruncated?: boolean;
+  legacyLastRunAt?: string | null;
+  legacyLastRunStatus?: string;
+  legacyLastFailedLeagueCount?: number;
+  legacyLastFailedLeagueIds?: string[];
+  legacyLastFailedLeagueIdsTruncated?: boolean;
   queueTaskMaxConcurrentDispatches?: number;
   queueNearLiveCanaryRefreshIntervalMilliseconds?: number;
   queueNearLiveCanaryMaxLeagueCount?: number;

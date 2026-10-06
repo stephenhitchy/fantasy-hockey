@@ -5,6 +5,164 @@ export const LEAGUE_AUTOMATION_CAPACITY_REPRESENTATIVE_SAMPLE_COUNT = 100;
 export const LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_DAY_COUNT = 3;
 export const LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS = 20_000;
 export const LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MIN_RELIABILITY_RATE = 0.995;
+export const LEAGUE_AUTOMATION_STALE_DUE_MILLISECONDS = 25 * 60 * 1000;
+
+export type LeagueAutomationFreshnessStatus =
+  | 'healthy'
+  | 'due'
+  | 'active'
+  | 'recovering'
+  | 'stale'
+  | 'failing'
+  | 'missing-schedule'
+  | 'schedule-invalid'
+  | 'paused'
+  | 'historical-replay'
+  | 'draft-incomplete';
+
+export interface LeagueAutomationFreshnessResult {
+  status: LeagueAutomationFreshnessStatus;
+  severity: 'healthy' | 'info' | 'warning' | 'critical';
+  reason: string;
+  dueAgeMilliseconds: number;
+}
+
+export function classifyLeagueAutomationFreshness(input: {
+  nowMilliseconds: number;
+  draftComplete: boolean;
+  historicalReplayEnabled: boolean;
+  scheduleExists: boolean;
+  scoringEnabled: boolean;
+  queueStatus: string;
+  nextScoringAtMilliseconds: number;
+  activeTaskLeaseExpiresAtMilliseconds: number;
+  consecutiveFailureCount: number;
+  lastError: string;
+  staleAfterMilliseconds?: number;
+}): LeagueAutomationFreshnessResult {
+  const nowMilliseconds = Number.isFinite(input.nowMilliseconds)
+    ? Math.max(0, input.nowMilliseconds)
+    : 0;
+  const nextScoringAtMilliseconds = Number.isFinite(
+    input.nextScoringAtMilliseconds,
+  )
+    ? Math.max(0, input.nextScoringAtMilliseconds)
+    : 0;
+  const activeTaskLeaseExpiresAtMilliseconds = Number.isFinite(
+    input.activeTaskLeaseExpiresAtMilliseconds,
+  )
+    ? Math.max(0, input.activeTaskLeaseExpiresAtMilliseconds)
+    : 0;
+  const staleAfterMilliseconds = Number.isFinite(input.staleAfterMilliseconds)
+    ? Math.max(1, input.staleAfterMilliseconds ?? 0)
+    : LEAGUE_AUTOMATION_STALE_DUE_MILLISECONDS;
+  const dueAgeMilliseconds = nextScoringAtMilliseconds > 0
+    ? Math.max(0, nowMilliseconds - nextScoringAtMilliseconds)
+    : 0;
+  const active = (
+    input.queueStatus === 'queued' || input.queueStatus === 'processing'
+  ) && activeTaskLeaseExpiresAtMilliseconds > nowMilliseconds;
+  const failing = Math.max(0, Math.trunc(input.consecutiveFailureCount)) > 0 ||
+    input.queueStatus === 'error' ||
+    Boolean(input.lastError.trim());
+
+  if (!input.draftComplete) {
+    return {
+      status: 'draft-incomplete',
+      severity: 'info',
+      reason: 'The Draft is not complete, so live scoring is not expected yet.',
+      dueAgeMilliseconds: 0,
+    };
+  }
+
+  if (input.historicalReplayEnabled) {
+    return {
+      status: 'historical-replay',
+      severity: 'info',
+      reason: 'Historical replay owns this league’s serialized scoring schedule.',
+      dueAgeMilliseconds: 0,
+    };
+  }
+
+  if (!input.scheduleExists) {
+    return {
+      status: 'missing-schedule',
+      severity: 'critical',
+      reason: 'This completed-Draft league has no server-owned scoring schedule.',
+      dueAgeMilliseconds: 0,
+    };
+  }
+
+  if (!input.scoringEnabled) {
+    return {
+      status: 'paused',
+      severity: 'info',
+      reason: 'Live scoring is intentionally paused for this league.',
+      dueAgeMilliseconds: 0,
+    };
+  }
+
+  if (active && failing) {
+    return {
+      status: 'recovering',
+      severity: 'warning',
+      reason: 'A new scoring task is active after an earlier recorded failure.',
+      dueAgeMilliseconds,
+    };
+  }
+
+  if (active) {
+    return {
+      status: 'active',
+      severity: 'healthy',
+      reason: 'A scoring task currently holds a valid server lease.',
+      dueAgeMilliseconds,
+    };
+  }
+
+  if (failing) {
+    return {
+      status: 'failing',
+      severity: 'critical',
+      reason: 'The latest scoring attempt failed and no healthy retry is active.',
+      dueAgeMilliseconds,
+    };
+  }
+
+  if (nextScoringAtMilliseconds <= 0) {
+    return {
+      status: 'schedule-invalid',
+      severity: 'critical',
+      reason: 'Scoring is enabled but the next server scoring time is missing.',
+      dueAgeMilliseconds: 0,
+    };
+  }
+
+  if (dueAgeMilliseconds >= staleAfterMilliseconds) {
+    return {
+      status: 'stale',
+      severity: 'critical',
+      reason: `The scoring schedule is ${Math.round(dueAgeMilliseconds / 60_000)} minutes overdue with no active task.`,
+      dueAgeMilliseconds,
+    };
+  }
+
+  if (dueAgeMilliseconds > 0) {
+    return {
+      status: 'due',
+      severity: 'info',
+      reason: 'The scoring schedule is due and still inside the bounded recovery window.',
+      dueAgeMilliseconds,
+    };
+  }
+
+  return {
+    status: 'healthy',
+    severity: 'healthy',
+    reason: 'The next scoring check is scheduled and no failure is recorded.',
+    dueAgeMilliseconds: 0,
+  };
+}
 
 export function shouldTreatLeagueAutomationDueAgeAsBacklog(
   mode: 'shadow' | 'canary' | 'primary',
@@ -39,6 +197,9 @@ const QUEUE_BLOCKING_ALERT_IDS = new Set([
   'queue-backlog-blocking',
   'enqueue-failures',
   'schedule-coverage',
+  'schedule-bootstrap-failed',
+  'schedule-bootstrap-stale',
+  'stale-league-schedules',
   'capacity-evidence-stale',
   'capacity-refresh-failed',
   'capacity-p95-high',
