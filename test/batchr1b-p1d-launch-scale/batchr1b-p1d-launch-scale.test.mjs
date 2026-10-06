@@ -514,6 +514,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '21b45b0b3efeeaee02b69a4f2593ccb5a9b0592169467196e600495e55f8b259',
+    '5208144eb48cb805aae152960fab13d36e4a7480a9500ba7ad3a88637e112e94',
   );
 });

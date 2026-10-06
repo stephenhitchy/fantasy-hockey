@@ -131,6 +131,22 @@ For a high or critical production advisory:
 
 When no upstream fix exists, document the compensating control, affected surface, owner, and deadline. Do not silently suppress the advisory.
 
+### 2026-10-06 Functions proxy trust patch
+
+GitHub advisory `GHSA-jqcg-44mw-7w3h` affects the Cloud Functions dependency
+path `firebase-functions > express > proxy-addr`. RinkRat locks
+`proxy-addr` 2.0.8, the patched release, inside Express's existing `~2.0.7`
+range. This is a lockfile-only transitive patch: RinkRat does not declare a
+direct override, upgrade Firebase or Express, or add an advisory exception.
+
+The patch changes no request-trust configuration or application behavior. A
+clean Functions install, the strict dependency audit, the S3C regression test,
+and the Functions build are required release evidence. Fully remediating a
+deployed environment requires replacing every current RinkRat Function
+revision that was packaged with the vulnerable dependency. Prepare that as an
+explicit, source-reviewed, quota-safe Functions release; do not infer that a
+Hosting release or a partial Function selector updates the remaining revisions.
+
 ### Temporary browser-only Firestore transport exception
 
 On 2026-09-30, `npm audit` began reporting

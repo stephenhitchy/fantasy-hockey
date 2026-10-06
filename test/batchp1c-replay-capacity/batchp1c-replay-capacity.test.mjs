@@ -313,7 +313,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
     assert.equal(
       await hashFunctionsRuntimeIntegrity({ excludedPaths: exclusions }),
-    '21b45b0b3efeeaee02b69a4f2593ccb5a9b0592169467196e600495e55f8b259',
+    '5208144eb48cb805aae152960fab13d36e4a7480a9500ba7ad3a88637e112e94',
     );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([
