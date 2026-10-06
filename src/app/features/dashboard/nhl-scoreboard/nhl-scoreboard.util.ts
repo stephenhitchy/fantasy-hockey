@@ -385,9 +385,3 @@ export function formatNhlGameStatus(
     minute: '2-digit',
   }).format(start);
 }
-
-export function getNhlScoreboardRefreshDelay(games: readonly NhlScoreGame[]): number {
-  return games.some(isNhlScoreGameLive)
-    ? 30_000
-    : 5 * 60 * 1000;
-}

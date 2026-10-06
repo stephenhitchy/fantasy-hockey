@@ -7,19 +7,29 @@
         @if (hasVisibleRosterPresence()) {
           Open a player badge to see who you have, their game points, and the matching fantasy matchup.
         } @else if (hasLiveGames()) {
-          Live scores update automatically.
+          Use Refresh scores when you want the latest live results.
         } @else {
           Scores and upcoming puck drops from around the league.
         }
       </p>
     </div>
 
-    <div class="nhl-panel-status" aria-live="polite">
-      @if (refreshing()) {
-        <span>Updating…</span>
-      } @else if (lastUpdatedAt()) {
-        <span>Updated {{ getUpdatedLabel() }}</span>
-      }
+    <div class="nhl-panel-status">
+      <span aria-live="polite">
+        @if (refreshing()) {
+          Updating…
+        } @else if (lastUpdatedAt()) {
+          Updated {{ getUpdatedLabel() }}
+        }
+      </span>
+      <button
+        type="button"
+        class="rr-button rr-button--quiet nhl-panel-refresh"
+        [disabled]="loading() || refreshing()"
+        (click)="refreshScores()"
+      >
+        Refresh scores
+      </button>
     </div>
   </div>
 
@@ -60,7 +70,7 @@
 
   @if (errorMessage() && games().length > 0) {
     <div class="nhl-panel-inline-error rr-notice rr-notice--warning" role="status">
-      This NHL date could not update. The games already on screen are unchanged; use the date button to try again.
+      This NHL date could not update. The games already on screen are unchanged; use Refresh scores to try again.
     </div>
   }
 
@@ -72,7 +82,7 @@
   } @else if (errorMessage() && games().length === 0) {
     <div class="nhl-panel-error rr-notice rr-notice--warning" role="status">
       <strong>Scoreboard unavailable</strong>
-      <span>Fantasy league tools are unaffected. Scores will retry automatically.</span>
+      <span>Fantasy league tools are unaffected. Use Refresh scores to try again.</span>
     </div>
   } @else if (visibleGames().length === 0) {
     <div class="nhl-panel-empty rr-state">

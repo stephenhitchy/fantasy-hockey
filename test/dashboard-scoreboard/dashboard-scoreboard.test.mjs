@@ -102,7 +102,6 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
     formatNhlScoreboardHeading,
     getDashboardNhlRosterGamePointDisplay,
     getDashboardNhlRosterEntryRoute,
-    getNhlScoreboardRefreshDelay,
     getNhlScoreboardRailIndex,
     selectDashboardNhlGames,
   } = await loadUtility();
@@ -367,11 +366,6 @@ test('Batch 8A.1 NHL scoreboard behavior', async (suite) => {
       gameScores: {},
     }), { label: 'Not scoring in this matchup', tone: 'not-counting' });
   });
-
-  await suite.test('uses a faster refresh only while at least one game is live', () => {
-    assert.equal(getNhlScoreboardRefreshDelay([makeGame({ gameState: 'LIVE' })]), 30_000);
-    assert.equal(getNhlScoreboardRefreshDelay([makeGame({ gameState: 'FUT' })]), 300_000);
-  });
 });
 
 test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
@@ -420,25 +414,24 @@ test('Batch 8A.1 NHL scoreboard source contracts', async (suite) => {
     assert.match(template, /openTodayScoreDate/);
     assert.match(template, /openNextScoreDate/);
     assert.match(component, /getNhlScoreForDate/);
-    assert.match(component, /!this\.viewingToday\(\)/);
     assert.match(component, /strip\.scrollLeft = 0/);
     assert.match(template, /This NHL date could not update/);
     assert.match(template, /<time \[attr\.datetime\]="game\.gameDate"/);
     assert.match(template, /getGameDateLabel\(game\)/);
   });
 
-  await suite.test('keeps date arrows on the outer edges and relies on automatic score refreshes', () => {
+  await suite.test('keeps date arrows on the outer edges and refreshes scores only on demand', () => {
     assert.match(template, /class="rr-button rr-button--quiet nhl-date-previous"/);
     assert.match(template, /class="rr-button rr-button--quiet nhl-date-next"/);
     assert.match(scoreboardStyles, /\.nhl-date-previous\s*\{[^}]*grid-column:\s*1[^}]*justify-self:\s*start/s);
     assert.match(scoreboardStyles, /\.nhl-date-next\s*\{[^}]*grid-column:\s*3[^}]*justify-self:\s*end/s);
-    assert.doesNotMatch(template, /\(click\)="refreshScores\(\)"/);
-    assert.doesNotMatch(template, />\s*Update points\s*</);
-    assert.doesNotMatch(component, /refreshScores\(\)/);
+    assert.match(template, /\(click\)="refreshScores\(\)"/);
+    assert.match(template, />\s*Refresh scores\s*</);
+    assert.match(component, /async refreshScores\(\): Promise<void>/);
     assert.match(component, /void this\.refreshRosterGamePoints\(\)/);
-    assert.match(component, /this\.scheduleRefresh\(\)/);
-    assert.match(component, /retryingError \? 60_000 : getNhlScoreboardRefreshDelay/);
-    assert.match(component, /this\.loadScores\(true, this\.requestedDate\(\)\)/);
+    assert.match(component, /await this\.loadScores\(true, this\.requestedDate\(\)\)/);
+    assert.doesNotMatch(component, /scheduleRefresh|refreshTimer|setTimeout|clearTimeout/);
+    assert.doesNotMatch(template, /update automatically|retry automatically/i);
   });
 
   await suite.test('keeps live and favorite-team games prominent while making the full slate reachable', () => {

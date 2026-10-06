@@ -29,7 +29,6 @@ import {
   getDashboardNhlRosterGamePointDisplay,
   getDashboardNhlRosterEntryRoute,
   getNhlScoreboardRailIndex,
-  getNhlScoreboardRefreshDelay,
   isNhlScoreboardDateToday,
   isFavoriteTeamGame,
   isNhlScoreGameFinal,
@@ -109,7 +108,6 @@ export class NhlScoreboard implements OnDestroy {
     ),
   );
 
-  private refreshTimer: number | null = null;
   private requestGeneration = 0;
   private rosterRefreshGeneration = 0;
   private gameStripPositionFrame: number | null = null;
@@ -138,7 +136,6 @@ export class NhlScoreboard implements OnDestroy {
   ngOnDestroy(): void {
     this.requestGeneration += 1;
     this.rosterRefreshGeneration += 1;
-    this.clearRefreshTimer();
 
     if (this.gameStripPositionFrame !== null && typeof window !== 'undefined') {
       window.cancelAnimationFrame(this.gameStripPositionFrame);
@@ -168,6 +165,10 @@ export class NhlScoreboard implements OnDestroy {
   async openTodayScoreDate(): Promise<void> {
     this.pendingScrollRestore = null;
     await this.loadScores(false, null);
+  }
+
+  async refreshScores(): Promise<void> {
+    await this.loadScores(true, this.requestedDate());
   }
 
   getGameStatus(game: NhlScoreGame): string {
@@ -512,7 +513,6 @@ export class NhlScoreboard implements OnDestroy {
     targetDate: string | null = this.requestedDate(),
   ): Promise<void> {
     const generation = ++this.requestGeneration;
-    this.clearRefreshTimer();
     this.requestedDate.set(targetDate);
 
     if (this.games().length === 0) {
@@ -563,29 +563,7 @@ export class NhlScoreboard implements OnDestroy {
 
       this.loading.set(false);
       this.refreshing.set(false);
-      this.scheduleRefresh();
     }
-  }
-
-  private scheduleRefresh(): void {
-    const retryingError = Boolean(this.errorMessage());
-
-    if (typeof window === 'undefined' || (!this.viewingToday() && !retryingError)) {
-      return;
-    }
-
-    this.refreshTimer = window.setTimeout(() => {
-      void this.loadScores(true, this.requestedDate());
-    }, retryingError ? 60_000 : getNhlScoreboardRefreshDelay(this.games()));
-  }
-
-  private clearRefreshTimer(): void {
-    if (this.refreshTimer === null || typeof window === 'undefined') {
-      return;
-    }
-
-    window.clearTimeout(this.refreshTimer);
-    this.refreshTimer = null;
   }
 
   private getRosterEntryGameContext(entry: DashboardNhlRosterEntry): {

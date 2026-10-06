@@ -10142,7 +10142,7 @@ Give league names enough room to remain recognizable and add a lightweight NHL-w
 - League-title typography increased slightly while team names remain compact.
 - Added a standalone **Around the NHL** scoreboard above My Leagues.
 - The scoreboard uses RinkRat's existing server-side NHL proxy and the NHL web score feeds at `/v1/score/now` and the strictly validated `/v1/score/YYYY-MM-DD`; no browser request is sent directly to the upstream service.
-- Previous, Today, and Next controls let managers move between past and future NHL dates without reloading the Dashboard. Only the current date auto-refreshes.
+- Previous, Today, and Next controls let managers move between past and future NHL dates without reloading the Dashboard. No date runs a background refresh timer; managers can request a fresh result with the explicit **Refresh scores** action.
 - Live games appear first, followed by the user's favorite-team game, then the remaining games by puck-drop time.
 - The panel shows up to six games in a horizontally scrollable strip, including the explicit game date, team logos, records, scores, game state, time/period, and available broadcast label.
 - Each NHL team row can show a compact roster badge with the manager's total roster spots for that club across every league. Active, bench, and IR skaters count, and each team-goalie unit counts once.
@@ -10154,7 +10154,7 @@ Give league names enough room to remain recognizable and add a lightweight NHL-w
 - The open area of every Dashboard league card now links to League HQ. The state-specific primary action and **My Team** remain independent controls above that card-wide link.
 - Dashboard cache version 9 prevents earlier count-only or player-detail-only roster summaries from mixing with matchup and per-game score context.
 - Game Center now calls each individual contest inside a season matchup **Head-to-Head**. For example, the prior ambiguous `Matchup 1 · matchup-3` title is presented as `Matchup 1 · Head-to-Head 3`; stored IDs and routes are unchanged.
-- During live games the panel refreshes every 30 seconds. Outside live games it refreshes every five minutes.
+- The panel loads once when the Dashboard opens and refreshes only after explicit date navigation or the **Refresh scores** action. This avoids sustained browser traffic when several NHL games are active at once.
 - NHL scoreboard failures remain isolated from fantasy league loading and never block Dashboard or league actions.
 - The proxy caches the shared score response for 15 seconds to prevent every dashboard visitor from creating a separate upstream request.
 
