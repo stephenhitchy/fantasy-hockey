@@ -19,6 +19,8 @@ This is a Hosting-only presentation change.
 - When more than one league is available, an accessible layout toggle switches
   between the swipe rail and a responsive all-matchups grid. The browser keeps
   the manager's choice locally without a profile write or additional read.
+- Grid cards scale score typography from the card width so larger scores remain
+  contained without hiding digits or weakening their visual priority.
 - Mobile grid stacking excludes the league rail, so the first and later
   matchup cards all retain the same full-width snap track instead of allowing
   the first card to collapse beside the rail's implicit tracks.

@@ -283,6 +283,24 @@
 
 .league-gallery > .league-card {
   height: 100%;
+  container-type: inline-size;
+}
+
+.league-gallery .dashboard-matchup-score {
+  gap: 8px;
+  padding: 10px;
+}
+
+.league-gallery .dashboard-matchup-team > strong {
+  max-width: 100%;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  font-size: clamp(1.65rem, 9cqi, 2.35rem);
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.league-gallery .dashboard-matchup-state {
+  min-width: 48px;
 }
 
 .league-carousel-navigation {

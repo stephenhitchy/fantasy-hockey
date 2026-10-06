@@ -151,6 +151,9 @@ test('B1X lets managers switch between the matchup rail and every matchup', asyn
   assert.match(component, /saveDashboardMatchupViewMode\(mode\)/);
   assert.doesNotMatch(component, /onSnapshot|addEventListener/);
   assert.match(styles, /\.league-gallery\s*>\s*\.league-card\s*\{[\s\S]*?height:\s*100%/);
+  assert.match(styles, /\.league-gallery\s*>\s*\.league-card\s*\{[\s\S]*?container-type:\s*inline-size/);
+  assert.match(styles, /\.league-gallery\s+\.dashboard-matchup-team\s*>\s*strong\s*\{[\s\S]*?max-width:\s*100%[\s\S]*?font-size:\s*clamp\(1\.65rem, 9cqi, 2\.35rem\)[\s\S]*?white-space:\s*nowrap/);
+  assert.match(styles, /\.league-gallery\s+\.dashboard-matchup-state\s*\{[\s\S]*?min-width:\s*48px/);
 });
 
 test('B1X restores season-focused signed-in mobile navigation without routine league creation', async () => {
