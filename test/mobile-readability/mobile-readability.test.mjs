@@ -127,20 +127,22 @@ test('Batch M1 adaptive mobile navigation behavior', async (suite) => {
 });
 
 test('Batch M1 navigation source contracts', async (suite) => {
-  const [navbar, template] = await Promise.all([
+  const [navbar, template, mobileNavigation] = await Promise.all([
     read('src/app/shared/navbar/navbar.ts'),
     read('src/app/shared/navbar/navbar.html'),
+    read('src/app/core/navigation/mobile-league-navigation.service.ts'),
   ]);
 
   await suite.test('keeps global navigation independent from league and Draft listeners', () => {
     assert.match(navbar, /listenToAuthState/);
     assert.match(navbar, /NavigationEnd/);
-    assert.doesNotMatch(navbar, /listenToFantasyDraft/);
-    assert.doesNotMatch(navbar, /listenToEarliestUnfinishedOwnerMatchup/);
-    assert.doesNotMatch(navbar, /draftStatus|latestCycle|league-wide cycle/i);
+    assert.match(navbar, /MobileLeagueNavigationService/);
+    assert.doesNotMatch(`${navbar}\n${mobileNavigation}`, /listenToFantasyDraft/);
+    assert.doesNotMatch(`${navbar}\n${mobileNavigation}`, /listenToEarliestUnfinishedOwnerMatchup/);
+    assert.doesNotMatch(`${navbar}\n${mobileNavigation}`, /onSnapshot|draftStatus|latestCycle|league-wide cycle/i);
   });
 
-  await suite.test('keeps signed-in destinations in the top-right menu instead of a bottom bar', () => {
+  await suite.test('keeps season actions in the signed-in bottom bar and setup actions in More', () => {
     assert.match(template, /@if \(!authenticated\(\)\) \{[\s\S]*?class="mobile-bottom-nav mobile-bottom-nav--signed-out"/);
     assert.match(template, /routerLink="\/dashboard"[\s\S]*?<strong>Dashboard<\/strong>/);
     assert.match(template, /routerLink="\/leagues\/create"[\s\S]*?<strong>Create League<\/strong>/);
@@ -148,8 +150,14 @@ test('Batch M1 navigation source contracts', async (suite) => {
     assert.match(template, /routerLink="\/scoring"[\s\S]*?<strong>Scoring Guide<\/strong>/);
     assert.match(template, /<strong>Support<\/strong>/);
     assert.match(template, /<strong>Account<\/strong>/);
-    const bottomNavigation = template.match(/<nav class="mobile-bottom-nav[\s\S]*?<\/nav>/)?.[0] ?? '';
-    assert.doesNotMatch(bottomNavigation, /\/dashboard|\/leagues\/(?:create|join)|\/scoring"/);
+    const bottomNavigation = template.match(
+      /<nav class="mobile-bottom-nav mobile-bottom-nav--signed-in"[\s\S]*?<\/nav>/,
+    )?.[0] ?? '';
+    assert.match(bottomNavigation, /\/dashboard/);
+    assert.match(bottomNavigation, /mobileMatchupRoute\(\)/);
+    assert.match(bottomNavigation, /mobileTeamRoute\(\)/);
+    assert.match(bottomNavigation, /<span>More<\/span>/);
+    assert.doesNotMatch(bottomNavigation, /\/leagues\/(?:create|join)|\/scoring"/);
     assert.doesNotMatch(template, /mobileLeaguePrimary/);
     assert.doesNotMatch(template, /<strong>League HQ<\/strong>/);
   });

@@ -24,13 +24,21 @@ This is a Hosting-only presentation change.
 
 ## Mobile navigation
 
-The persistent signed-in bottom navigation is removed. Dashboard, Scoring
-Guide, Create League, Join League, Support, Account, and Sign Out remain in the
-existing keyboard-safe top-right menu. The signed-out public bottom navigation
-is unchanged so public resources and sign-in remain easy to reach.
+The persistent signed-in bottom navigation is restored with the four destinations
+managers use during the season: **Dashboard**, **Matchup**, **My Team**, and
+**More**. Create League and Join League remain in the keyboard-safe More menu
+instead of occupying permanent bottom-bar positions. The signed-out public
+bottom navigation is unchanged.
 
-The signed-in layout releases the space previously reserved for the bottom
-bar, including the bottom-safe connection notice and menu sheet placement.
+Matchup and My Team follow the league currently visible in the Dashboard rail.
+League routes also update this context from their URL. The Dashboard's existing
+bounded summaries provide the exact Game Center route; no navigation listener,
+league listener, matchup listener, or additional Firestore read is introduced.
+If no league or current matchup exists, the corresponding control remains
+visibly and accessibly unavailable instead of guessing a destination.
+
+The signed-in layout reserves safe-area space for the restored bar, connection
+notice, transaction workbench, footer, and More sheet.
 
 ## Data and authority boundaries
 

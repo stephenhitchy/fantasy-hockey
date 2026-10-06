@@ -100,9 +100,10 @@ test('the schedule example places the missed marker on Game 4', async () => {
   assert.match(strip, /class="upcoming">6/);
 });
 
-test('the global navbar contains only durable destinations and opens no league listeners', async () => {
-  const [source, template] = await Promise.all([
+test('the global navbar keeps durable setup links in More and opens no league listeners', async () => {
+  const [source, contextSource, template] = await Promise.all([
     read('src/app/shared/navbar/navbar.ts'),
+    read('src/app/core/navigation/mobile-league-navigation.service.ts'),
     read('src/app/shared/navbar/navbar.html'),
   ]);
 
@@ -117,8 +118,12 @@ test('the global navbar contains only durable destinations and opens no league l
     assert.match(template, new RegExp(`>${label}<`));
   }
 
-  assert.doesNotMatch(template, /League HQ|My Team|Add \/ Drop|Matchup|Draft Room|Fairness Report|Scoring Calculator/);
-  assert.doesNotMatch(source, /listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|getRememberedLastLeagueId/);
+  for (const label of ['Matchup', 'My Team', 'More']) {
+    assert.match(template, new RegExp(`>${label}<`));
+  }
+
+  assert.doesNotMatch(template, /League HQ|Add \/ Drop|Draft Room|Fairness Report|Scoring Calculator/);
+  assert.doesNotMatch(source + contextSource, /listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup/);
   assert.doesNotMatch(source, /PlatformAdminService|RinkRatPwaService/);
 });
 

@@ -117,6 +117,76 @@
   </div>
 </header>
 
+@if (authenticated()) {
+  <nav class="mobile-bottom-nav mobile-bottom-nav--signed-in" aria-label="Mobile navigation">
+    <a
+      routerLink="/dashboard"
+      class="rr-nav-item rr-nav-item--stacked"
+      [class.active]="isExactRoute('/dashboard')"
+      [attr.aria-current]="isExactRoute('/dashboard') ? 'page' : null"
+    >
+      <span class="nav-icon pixel-icon icon-home" aria-hidden="true"></span>
+      <span>Dashboard</span>
+    </a>
+
+    @if (mobileMatchupRoute(); as matchupRoute) {
+      <a
+        [routerLink]="matchupRoute"
+        class="rr-nav-item rr-nav-item--stacked"
+        [class.active]="isCurrentMobileMatchup()"
+        [attr.aria-current]="isCurrentMobileMatchup() ? 'page' : null"
+      >
+        <span class="nav-icon pixel-icon icon-matchup" aria-hidden="true"></span>
+        <span>Matchup</span>
+      </a>
+    } @else {
+      <button
+        type="button"
+        class="rr-nav-item rr-nav-item--stacked"
+        aria-label="Matchup unavailable until your league has a current matchup"
+        disabled
+      >
+        <span class="nav-icon pixel-icon icon-matchup" aria-hidden="true"></span>
+        <span>Matchup</span>
+      </button>
+    }
+
+    @if (mobileTeamRoute(); as teamRoute) {
+      <a
+        [routerLink]="teamRoute"
+        class="rr-nav-item rr-nav-item--stacked"
+        [class.active]="isCurrentMobileTeam()"
+        [attr.aria-current]="isCurrentMobileTeam() ? 'page' : null"
+      >
+        <span class="nav-icon pixel-icon icon-team" aria-hidden="true"></span>
+        <span>My Team</span>
+      </a>
+    } @else {
+      <button
+        type="button"
+        class="rr-nav-item rr-nav-item--stacked"
+        aria-label="My Team unavailable until you join a league"
+        disabled
+      >
+        <span class="nav-icon pixel-icon icon-team" aria-hidden="true"></span>
+        <span>My Team</span>
+      </button>
+    }
+
+    <button
+      type="button"
+      class="rr-nav-item rr-nav-item--stacked"
+      [class.active]="moreOpen()"
+      [attr.aria-expanded]="moreOpen()"
+      aria-controls="mobile-more-menu"
+      (click)="toggleMore()"
+    >
+      <span class="nav-icon pixel-icon icon-more" aria-hidden="true"></span>
+      <span>More</span>
+    </button>
+  </nav>
+}
+
 @if (!authenticated()) {
   <nav class="mobile-bottom-nav mobile-bottom-nav--signed-out" aria-label="Mobile navigation">
     <a routerLink="/" class="rr-nav-item rr-nav-item--stacked" [class.active]="isExactRoute('/')">

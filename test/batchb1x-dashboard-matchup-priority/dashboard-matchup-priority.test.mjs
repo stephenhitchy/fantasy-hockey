@@ -7,6 +7,11 @@ import {
   clampDashboardLeagueRailIndex,
   getDashboardLeagueRailIndex,
 } from '../../src/app/features/dashboard/dashboard-league-carousel.util.ts';
+import {
+  getMobileLeagueRouteContext,
+  isMobileMatchupRoute,
+  isMobileTeamRoute,
+} from '../../src/app/core/navigation/mobile-league-navigation.util.ts';
 
 const projectRoot = resolve(import.meta.dirname, '..', '..');
 const read = (path) => readFile(join(projectRoot, path), 'utf8');
@@ -24,6 +29,23 @@ test('B1X dashboard matchup rail calculations remain bounded and deterministic',
   assert.equal(getDashboardLeagueRailIndex(899, offsets), 2);
   assert.equal(getDashboardLeagueRailIndex(1100, offsets), 3);
   assert.equal(getDashboardLeagueRailIndex(20, []), 0);
+});
+
+test('B1X derives mobile league context without guessing a matchup cycle', () => {
+  assert.deepEqual(
+    getMobileLeagueRouteContext('/leagues/league-1/cycles/7/matchups/matchup-2?view=team'),
+    { leagueId: 'league-1', cycleNumber: 7 },
+  );
+  assert.deepEqual(
+    getMobileLeagueRouteContext('/leagues/league-1/team'),
+    { leagueId: 'league-1', cycleNumber: null },
+  );
+  assert.equal(getMobileLeagueRouteContext('/leagues/create'), null);
+  assert.equal(getMobileLeagueRouteContext('/dashboard'), null);
+  assert.equal(isMobileMatchupRoute('/leagues/league-1/cycles/7', 'league-1'), true);
+  assert.equal(isMobileMatchupRoute('/leagues/league-1/team', 'league-1'), false);
+  assert.equal(isMobileTeamRoute('/leagues/league-1/team', 'league-1'), true);
+  assert.equal(isMobileTeamRoute('/leagues/league-1/teams/owner-2', 'league-1'), false);
 });
 
 test('B1X makes league matchups the first dashboard feature and emphasizes both scores', async () => {
@@ -73,7 +95,7 @@ test('B1X offers swipe, arrow-button, and keyboard navigation without a new data
   assert.doesNotMatch(styles, /\.league-grid\s*\{\s*grid-template-columns:\s*1fr;/);
 });
 
-test('B1X removes routine league creation from the dashboard and signed-in mobile bottom edge', async () => {
+test('B1X restores season-focused signed-in mobile navigation without routine league creation', async () => {
   const [dashboard, navbar, navbarStyles, layoutStyles, mobileAudit] = await Promise.all([
     read('src/app/features/dashboard/dashboard.html'),
     read('src/app/shared/navbar/navbar.html'),
@@ -85,6 +107,21 @@ test('B1X removes routine league creation from the dashboard and signed-in mobil
   assert.doesNotMatch(dashboard, /routerLink="\/leagues\/(?:create|join)"/);
   assert.match(dashboard, /Create or join from the top-right menu/);
 
+  const signedInStart = navbar.indexOf(
+    '<nav class="mobile-bottom-nav mobile-bottom-nav--signed-in"',
+  );
+  const signedInEnd = navbar.indexOf('</nav>', signedInStart);
+  const signedInBottomNavigation = signedInStart >= 0 && signedInEnd >= 0
+    ? navbar.slice(signedInStart, signedInEnd + '</nav>'.length)
+    : '';
+  assert.match(signedInBottomNavigation, /routerLink="\/dashboard"/);
+  assert.match(signedInBottomNavigation, /mobileMatchupRoute\(\)/);
+  assert.match(signedInBottomNavigation, /mobileTeamRoute\(\)/);
+  assert.match(signedInBottomNavigation, /<span>Matchup<\/span>/);
+  assert.match(signedInBottomNavigation, /<span>My Team<\/span>/);
+  assert.match(signedInBottomNavigation, /<span>More<\/span>/);
+  assert.doesNotMatch(signedInBottomNavigation, /\/leagues\/(?:create|join)|<span>Scoring<\/span>/);
+
   const signedOutBottomNavigation = navbar.match(
     /@if \(!authenticated\(\)\) \{[\s\S]*?<nav class="mobile-bottom-nav[\s\S]*?<\/nav>[\s\S]*?\}/,
   )?.[0] ?? '';
@@ -95,12 +132,13 @@ test('B1X removes routine league creation from the dashboard and signed-in mobil
     assert.match(navbar, new RegExp(`routerLink="${destination.replaceAll('/', '\\/')}"`));
   }
 
-  assert.match(navbarStyles, /max-height:\s*min\(86dvh, 760px\)/);
-  assert.match(layoutStyles, /--rr-mobile-nav-height:\s*0px/);
-  assert.match(layoutStyles, /padding:\s*20px 10px calc\(24px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(navbarStyles, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(navbarStyles, /max-height:\s*min\(72dvh, 720px\)/);
+  assert.match(layoutStyles, /--rr-mobile-nav-height:\s*70px/);
+  assert.match(layoutStyles, /padding:\s*20px 10px calc\(88px \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(mobileAudit, /Create League/);
   assert.match(mobileAudit, /Mobile \$\{label\} destination is missing from the durable global navigation/);
-  assert.match(mobileAudit, /Signed-in destinations were restored to the persistent mobile bottom navigation/);
+  assert.match(mobileAudit, /Signed-in bottom navigation contains setup-only destinations/);
 });
 
 test('B1X is documented as a Hosting-only presentation change', async () => {

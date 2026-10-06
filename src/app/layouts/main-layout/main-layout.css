@@ -1,5 +1,5 @@
 :host {
-  --rr-mobile-nav-height: 0px;
+  --rr-mobile-nav-height: 70px;
 
   display: block;
   min-width: 0;
@@ -134,7 +134,7 @@
 @media (max-width: 780px) {
   .main-content {
     min-height: 100dvh;
-    padding: 20px 10px calc(24px + env(safe-area-inset-bottom));
+    padding: 20px 10px calc(88px + env(safe-area-inset-bottom));
   }
 }
 
@@ -259,7 +259,7 @@
   .site-footer {
     align-items: flex-start;
     flex-direction: column;
-    margin-bottom: calc(36px + env(safe-area-inset-bottom));
+    margin-bottom: 140px;
   }
 }
 
@@ -357,7 +357,7 @@
   .client-connection-notice {
     top: auto;
     right: 8px;
-    bottom: calc(16px + env(safe-area-inset-bottom));
+    bottom: calc(86px + env(safe-area-inset-bottom));
     width: calc(100vw - 16px);
     padding: 9px 11px;
     border-radius: 10px;

@@ -21,6 +21,7 @@ function forbidMatch(source, expression, message) {
 const [
   tokens,
   navbarSource,
+  mobileNavigationSource,
   navbarTemplate,
   navbarCss,
   layoutCss,
@@ -33,6 +34,7 @@ const [
 ] = await Promise.all([
   read('src/rinkrat-design-tokens.css'),
   read('src/app/shared/navbar/navbar.ts'),
+  read('src/app/core/navigation/mobile-league-navigation.service.ts'),
   read('src/app/shared/navbar/navbar.html'),
   read('src/app/shared/navbar/navbar.css'),
   read('src/app/layouts/main-layout/main-layout.css'),
@@ -65,8 +67,8 @@ requireMatch(
   'Navbar is not following route changes for active-link state.',
 );
 forbidMatch(
-  navbarSource,
-  /listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|getRememberedLastLeagueId/,
+  `${navbarSource}\n${mobileNavigationSource}`,
+  /listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|onSnapshot/,
   'Global navigation still opens league, Draft, or matchup listeners.',
 );
 for (const [label, expression] of [
@@ -92,7 +94,27 @@ requireMatch(
 forbidMatch(
   signedOutBottomNavigation,
   /\/dashboard|\/leagues\/(?:create|join)|\/scoring"/,
-  'Signed-in destinations were restored to the persistent mobile bottom navigation.',
+  'Signed-out navigation contains authenticated destinations.',
+);
+const signedInBottomNavigation = navbarTemplate.match(
+  /<nav class="mobile-bottom-nav mobile-bottom-nav--signed-in"[\s\S]*?<\/nav>/,
+)?.[0] ?? '';
+for (const [label, expression] of [
+  ['Dashboard', /routerLink="\/dashboard"/],
+  ['Matchup', /mobileMatchupRoute\(\)/],
+  ['My Team', /mobileTeamRoute\(\)/],
+  ['More', /<span>More<\/span>/],
+]) {
+  requireMatch(
+    signedInBottomNavigation,
+    expression,
+    `Signed-in mobile ${label} action is missing.`,
+  );
+}
+forbidMatch(
+  signedInBottomNavigation,
+  /\/leagues\/(?:create|join)|\/scoring"/,
+  'Signed-in bottom navigation contains setup-only destinations.',
 );
 requireMatch(
   navbarTemplate,
@@ -157,7 +179,7 @@ if (tinyBottomNavLabel.test(navbarCss)) {
 }
 
 console.log('RinkRat Batch M1 mobile audit');
-console.log(`  League-independent global navigation: ${!/listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|getRememberedLastLeagueId/.test(navbarSource) ? 'yes' : 'no'}`);
+console.log(`  Listener-free league-aware navigation: ${!/listenToFantasyDraft|listenToEarliestUnfinishedOwnerMatchup|onSnapshot/.test(`${navbarSource}\n${mobileNavigationSource}`) ? 'yes' : 'no'}`);
 console.log(`  Shared 12px mobile floor: ${/--rr-mobile-text-micro:\s*var\(--rr-text-xs\)/.test(tokens) ? 'yes' : 'no'}`);
 console.log(`  Shared 44px action target: ${/--rr-mobile-control-min-height:\s*var\(--rr-touch-target\)/.test(tokens) ? 'yes' : 'no'}`);
 console.log(`  Primary surfaces covered: ${surfaces.filter(([, source]) => /--rr-mobile-text-(?:micro|label|player|score)/.test(source)).length}/${surfaces.length}`);

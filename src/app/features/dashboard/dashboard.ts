@@ -3,6 +3,7 @@ import {
   ElementRef,
   OnDestroy,
   computed,
+  inject,
   signal,
   viewChild,
 } from '@angular/core';
@@ -13,6 +14,7 @@ import {
   type ManagerBriefingItem,
 } from '../../core/league/manager-briefing.util';
 import { waitForAuthenticatedUser } from '../../core/guards/auth.guard';
+import { MobileLeagueNavigationService } from '../../core/navigation/mobile-league-navigation.service';
 import { CURRENT_TRAINING_CAMP_VERSION } from '../../core/onboarding/training-camp.service';
 import { getUserProfile, UserProfile } from '../../core/user/user.service';
 import { applyUserTheme, loadStoredUserTheme } from '../../core/user/user-theme.service';
@@ -115,6 +117,8 @@ function writeDashboardCache(cache: DashboardCache): void {
   styleUrl: './dashboard.css',
 })
 export class Dashboard implements OnDestroy {
+  private readonly mobileLeagueNavigation = inject(MobileLeagueNavigationService);
+
   readonly leagueSummaries = signal<LeagueSummary[]>([]);
   readonly profile = signal<UserProfile | null>(null);
   readonly loading = signal(true);
@@ -511,10 +515,12 @@ export class Dashboard implements OnDestroy {
       behavior: reducedMotion ? 'auto' : 'smooth',
     });
     this.activeLeagueIndex.set(targetIndex);
+    this.syncMobileLeagueNavigation();
   }
 
   private resetLeagueRailPosition(): void {
     this.activeLeagueIndex.set(0);
+    this.syncMobileLeagueNavigation();
 
     if (typeof window === 'undefined') {
       return;
@@ -549,6 +555,7 @@ export class Dashboard implements OnDestroy {
 
       if (!rail) {
         this.activeLeagueIndex.set(0);
+        this.syncMobileLeagueNavigation();
         return;
       }
 
@@ -556,7 +563,34 @@ export class Dashboard implements OnDestroy {
         this.getLeagueCardOffset(rail, card),
       );
       this.activeLeagueIndex.set(getDashboardLeagueRailIndex(rail.scrollLeft, offsets));
+      this.syncMobileLeagueNavigation();
     });
+  }
+
+  private syncMobileLeagueNavigation(): void {
+    const leagues = this.orderedLeagueSummaries();
+    const activeIndex = clampDashboardLeagueRailIndex(
+      this.activeLeagueIndex(),
+      leagues.length,
+    );
+    const selectedLeagueId = leagues[activeIndex]?.leagueId ?? '';
+
+    this.mobileLeagueNavigation.setDashboardContexts(
+      leagues.map((league) => {
+        const activity = league.dashboardActivity;
+        const hasGameCenterDestination = activity?.stage === 'matchup-active' ||
+          activity?.stage === 'matchup-complete' ||
+          activity?.stage === 'cycle-complete';
+
+        return {
+          leagueId: league.leagueId,
+          matchupRoute: hasGameCenterDestination && activity
+            ? [...activity.primaryActionRoute]
+            : null,
+        };
+      }),
+      selectedLeagueId,
+    );
   }
 
   private getLeagueCards(rail: HTMLDivElement): HTMLElement[] {
