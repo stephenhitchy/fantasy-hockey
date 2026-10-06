@@ -1,7 +1,7 @@
 @if (loading()) {
   <section class="dashboard-state" aria-live="polite">
     <span class="state-icon pixel-icon icon-loading icon-xl" aria-hidden="true"></span>
-    <strong>Loading your leagues...</strong>
+    <strong>Loading...</strong>
   </section>
 } @else {
   <section class="pixel-dashboard-page">
@@ -44,14 +44,40 @@
             <h2>Matchups</h2>
           </div>
 
-          <div class="league-status">
-            @if (leaguesLoading()) {
-              <span class="refreshing-badge rr-badge rr-badge--info" aria-live="polite"> Refreshing </span>
-            }
+          <div class="matchup-heading-controls">
+            <div
+              class="matchup-view-toggle"
+              role="group"
+              aria-label="Matchup layout"
+              [hidden]="orderedLeagueSummaries().length <= 1"
+            >
+              <button
+                type="button"
+                [class.matchup-view-toggle__option--active]="matchupViewMode() === 'carousel'"
+                [attr.aria-pressed]="matchupViewMode() === 'carousel'"
+                (click)="setMatchupViewMode('carousel')"
+              >
+                Swipe
+              </button>
+              <button
+                type="button"
+                [class.matchup-view-toggle__option--active]="matchupViewMode() === 'all'"
+                [attr.aria-pressed]="matchupViewMode() === 'all'"
+                (click)="setMatchupViewMode('all')"
+              >
+                All
+              </button>
+            </div>
 
-            <span class="league-count rr-badge">
-              {{ leagueSummaries().length }}
-            </span>
+            <div class="league-status">
+              @if (leaguesLoading()) {
+                <span class="refreshing-badge rr-badge rr-badge--info" aria-live="polite"> Refreshing </span>
+              }
+
+              <span class="league-count rr-badge">
+                {{ leagueSummaries().length }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -59,6 +85,7 @@
           <nav
             class="league-carousel-navigation"
             [class.league-carousel-navigation--single]="orderedLeagueSummaries().length === 1"
+            [hidden]="matchupViewMode() !== 'carousel'"
             aria-label="Browse league matchups"
           >
             <button
@@ -95,7 +122,12 @@
         }
 
         @if (leaguesLoading() && leagueSummaries().length === 0) {
-          <div class="league-grid league-carousel dashboard-skeletons" aria-label="Loading leagues">
+          <div
+            class="league-grid dashboard-skeletons"
+            [class.league-carousel]="matchupViewMode() === 'carousel'"
+            [class.league-gallery]="matchupViewMode() === 'all'"
+            aria-label="Loading leagues"
+          >
             <article class="league-card skeleton-card rr-card rr-card--padded" aria-hidden="true">
               <div class="skeleton-line skeleton-title"></div>
               <div class="skeleton-line skeleton-copy"></div>
@@ -120,11 +152,13 @@
           <div
             #leagueRail
             id="dashboard-league-rail"
-            class="league-grid league-carousel"
+            class="league-grid"
+            [class.league-carousel]="matchupViewMode() === 'carousel'"
+            [class.league-gallery]="matchupViewMode() === 'all'"
             role="region"
-            tabindex="0"
-            aria-label="Your leagues. Swipe or use the Left and Right Arrow keys to browse."
-            aria-describedby="dashboard-league-position"
+            [attr.tabindex]="matchupViewMode() === 'carousel' ? 0 : null"
+            [attr.aria-label]="matchupViewMode() === 'carousel' ? 'Your leagues. Swipe or use the Left and Right Arrow keys to browse.' : 'All league matchups'"
+            [attr.aria-describedby]="matchupViewMode() === 'carousel' ? 'dashboard-league-position' : null"
             (keydown)="handleLeagueRailKeydown($event)"
             (scroll)="handleLeagueRailScroll()"
           >

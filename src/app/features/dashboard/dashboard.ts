@@ -24,7 +24,10 @@ import { NhlScoreboard } from './nhl-scoreboard/nhl-scoreboard';
 import { combineDashboardNhlTeamRosterCounts } from './nhl-scoreboard/nhl-scoreboard.util';
 import {
   clampDashboardLeagueRailIndex,
+  type DashboardMatchupViewMode,
   getDashboardLeagueRailIndex,
+  loadDashboardMatchupViewMode,
+  saveDashboardMatchupViewMode,
 } from './dashboard-league-carousel.util';
 
 interface DashboardCache {
@@ -125,6 +128,7 @@ export class Dashboard implements OnDestroy {
   readonly leaguesLoading = signal(false);
   readonly errorMessage = signal('');
   readonly activeLeagueIndex = signal(0);
+  readonly matchupViewMode = signal<DashboardMatchupViewMode>(loadDashboardMatchupViewMode());
   readonly leagueRail = viewChild<ElementRef<HTMLDivElement>>('leagueRail');
 
   private userId = '';
@@ -385,6 +389,20 @@ export class Dashboard implements OnDestroy {
     }
   }
 
+  setMatchupViewMode(mode: DashboardMatchupViewMode): void {
+    if (this.matchupViewMode() === mode) {
+      return;
+    }
+
+    this.matchupViewMode.set(mode);
+    this.leagueCardPointer = null;
+    saveDashboardMatchupViewMode(mode);
+
+    if (mode === 'carousel') {
+      this.restoreActiveLeagueRailPosition();
+    }
+  }
+
   openNextLeague(): void {
     if (this.canOpenNextLeague()) {
       this.scrollToLeague(this.activeLeagueIndex() + 1);
@@ -392,7 +410,13 @@ export class Dashboard implements OnDestroy {
   }
 
   handleLeagueRailKeydown(event: KeyboardEvent): void {
-    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) {
+    if (
+      this.matchupViewMode() !== 'carousel' ||
+      event.target !== event.currentTarget ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
       return;
     }
 
@@ -406,6 +430,10 @@ export class Dashboard implements OnDestroy {
   }
 
   handleLeagueRailScroll(): void {
+    if (this.matchupViewMode() !== 'carousel') {
+      return;
+    }
+
     const rail = this.leagueRail()?.nativeElement;
     const pointer = this.leagueCardPointer;
 
@@ -418,7 +446,7 @@ export class Dashboard implements OnDestroy {
   }
 
   beginLeagueCardPointer(leagueId: string, event: PointerEvent): void {
-    if (!event.isPrimary) {
+    if (this.matchupViewMode() !== 'carousel' || !event.isPrimary) {
       return;
     }
 
@@ -536,6 +564,36 @@ export class Dashboard implements OnDestroy {
 
       if (rail) {
         rail.scrollLeft = 0;
+      }
+    });
+  }
+
+  private restoreActiveLeagueRailPosition(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.leagueRailPositionFrame !== null) {
+      window.cancelAnimationFrame(this.leagueRailPositionFrame);
+    }
+
+    this.leagueRailPositionFrame = window.requestAnimationFrame(() => {
+      this.leagueRailPositionFrame = null;
+      const rail = this.leagueRail()?.nativeElement;
+
+      if (!rail) {
+        return;
+      }
+
+      const cards = this.getLeagueCards(rail);
+      const targetIndex = clampDashboardLeagueRailIndex(
+        this.activeLeagueIndex(),
+        cards.length,
+      );
+      const targetCard = cards[targetIndex];
+
+      if (targetCard) {
+        rail.scrollLeft = this.getLeagueCardOffset(rail, targetCard);
       }
     });
   }

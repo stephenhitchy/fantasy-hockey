@@ -5,7 +5,11 @@ import test from 'node:test';
 
 import {
   clampDashboardLeagueRailIndex,
+  DASHBOARD_MATCHUP_VIEW_STORAGE_KEY,
   getDashboardLeagueRailIndex,
+  loadDashboardMatchupViewMode,
+  normalizeDashboardMatchupViewMode,
+  saveDashboardMatchupViewMode,
 } from '../../src/app/features/dashboard/dashboard-league-carousel.util.ts';
 import {
   getMobileLeagueRouteContext,
@@ -29,6 +33,36 @@ test('B1X dashboard matchup rail calculations remain bounded and deterministic',
   assert.equal(getDashboardLeagueRailIndex(899, offsets), 2);
   assert.equal(getDashboardLeagueRailIndex(1100, offsets), 3);
   assert.equal(getDashboardLeagueRailIndex(20, []), 0);
+});
+
+test('B1X preserves a safe browser-local matchup layout preference', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+
+  assert.equal(normalizeDashboardMatchupViewMode('carousel'), 'carousel');
+  assert.equal(normalizeDashboardMatchupViewMode('all'), 'all');
+  assert.equal(normalizeDashboardMatchupViewMode('unknown'), 'carousel');
+  assert.equal(loadDashboardMatchupViewMode(storage), 'carousel');
+
+  saveDashboardMatchupViewMode('all', storage);
+
+  assert.equal(values.get(DASHBOARD_MATCHUP_VIEW_STORAGE_KEY), 'all');
+  assert.equal(loadDashboardMatchupViewMode(storage), 'all');
+  assert.equal(loadDashboardMatchupViewMode({
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {},
+  }), 'carousel');
+  assert.doesNotThrow(() => saveDashboardMatchupViewMode('carousel', {
+    getItem: () => null,
+    setItem: () => {
+      throw new Error('blocked');
+    },
+  }));
 });
 
 test('B1X derives mobile league context without guessing a matchup cycle', () => {
@@ -71,7 +105,10 @@ test('B1X offers swipe, arrow-button, and keyboard navigation without a new data
     read('src/app/features/dashboard/dashboard.css'),
   ]);
 
-  assert.match(template, /#leagueRail[\s\S]*?role="region"[\s\S]*?tabindex="0"/);
+  assert.match(
+    template,
+    /#leagueRail[\s\S]*?role="region"[\s\S]*?\[attr\.tabindex\]="matchupViewMode\(\) === 'carousel' \? 0 : null"/,
+  );
   assert.match(template, /handleLeagueRailKeydown\(\$event\)/);
   assert.match(template, /handleLeagueRailScroll\(\)/);
   assert.match(template, /\[disabled\]="!canOpenPreviousLeague\(\)"/);
@@ -93,6 +130,27 @@ test('B1X offers swipe, arrow-button, and keyboard navigation without a new data
   assert.match(styles, /\.league-carousel\s*>\s*\.league-card\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*100%;/);
   assert.match(styles, /\.league-grid:not\(\.league-carousel\)\s*\{\s*grid-template-columns:\s*1fr;/);
   assert.doesNotMatch(styles, /\.league-grid\s*\{\s*grid-template-columns:\s*1fr;/);
+});
+
+test('B1X lets managers switch between the matchup rail and every matchup', async () => {
+  const [template, component, styles] = await Promise.all([
+    read('src/app/features/dashboard/dashboard.html'),
+    read('src/app/features/dashboard/dashboard.ts'),
+    read('src/app/features/dashboard/dashboard.css'),
+  ]);
+
+  assert.match(template, /role="group"[\s\S]*?aria-label="Matchup layout"/);
+  assert.match(template, /\[hidden\]="orderedLeagueSummaries\(\)\.length <= 1"/);
+  assert.match(template, /\[hidden\]="matchupViewMode\(\) !== 'carousel'"/);
+  assert.match(template, /setMatchupViewMode\('carousel'\)/);
+  assert.match(template, /setMatchupViewMode\('all'\)/);
+  assert.match(template, /\[attr\.aria-pressed\]="matchupViewMode\(\) === 'carousel'"/);
+  assert.match(template, /\[attr\.aria-pressed\]="matchupViewMode\(\) === 'all'"/);
+  assert.match(template, /\[class\.league-carousel\]="matchupViewMode\(\) === 'carousel'"/);
+  assert.match(template, /\[class\.league-gallery\]="matchupViewMode\(\) === 'all'"/);
+  assert.match(component, /saveDashboardMatchupViewMode\(mode\)/);
+  assert.doesNotMatch(component, /onSnapshot|addEventListener/);
+  assert.match(styles, /\.league-gallery\s*>\s*\.league-card\s*\{[\s\S]*?height:\s*100%/);
 });
 
 test('B1X restores season-focused signed-in mobile navigation without routine league creation', async () => {

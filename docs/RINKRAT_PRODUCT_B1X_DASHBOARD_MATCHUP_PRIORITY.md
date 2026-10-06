@@ -16,6 +16,9 @@ This is a Hosting-only presentation change.
 - The league rail supports native touch swiping, Previous and Next buttons,
   Left and Right Arrow keys, visible position text, reduced motion, and drag
   suppression for the card-wide League HQ action.
+- When more than one league is available, an accessible layout toggle switches
+  between the swipe rail and a responsive all-matchups grid. The browser keeps
+  the manager's choice locally without a profile write or additional read.
 - Mobile grid stacking excludes the league rail, so the first and later
   matchup cards all retain the same full-width snap track instead of allowing
   the first card to collapse beside the rail's implicit tracks.
