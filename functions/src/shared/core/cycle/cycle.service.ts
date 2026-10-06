@@ -96,6 +96,7 @@ import {
   resolveConsistentPlayerWindowContinuity,
   resolvePlayerWindowContinuity,
 } from './player-window-continuity.util';
+import { normalizeInjuryReplacementWindowPlan } from './injury-replacement-window.util';
 import {
   getNhlTeamSeasonSchedule,
   NhlTeamSeasonGame,
@@ -2112,12 +2113,18 @@ async function loadCompletedContinuitySeeds(input: {
         `without required player-window continuity.`,
       );
     }
+    const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
+      window.injuryReplacementWindow,
+    );
+    const currentInjurySegment = injuryReplacementWindow?.segments.at(-1);
     const continuity = advancePlayerWindowContinuity({
       previousAsset: pick.asset,
       nextAsset: pick.asset,
       previousContinuity: persistedContinuity,
-      completedScheduledGameIds: window.scheduledGameIds,
+      completedScheduledGameIds:
+        currentInjurySegment?.scheduledGameIds ?? window.scheduledGameIds,
       completedScheduleTeamAbbreviation:
+        currentInjurySegment?.sourceTeamAbbreviation ??
         window.scheduleTeamAbbreviation,
       ownerId: pick.ownerId,
       rosterSlotId,

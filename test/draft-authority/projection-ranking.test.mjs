@@ -62,7 +62,7 @@ function playerPool() {
       skater(position, offset + 1, 100 - offset - positionIndex * 0.1),
     ),
   );
-  const defenders = Array.from({ length: 60 }, (_, offset) =>
+  const defenders = Array.from({ length: 80 }, (_, offset) =>
     defender(offset + 1, 100 - offset * 0.8),
   );
   const goalies = Array.from({ length: 32 }, (_, offset) =>
@@ -72,10 +72,10 @@ function playerPool() {
   return [...forwards, ...defenders, ...goalies];
 }
 
-describe('league-adjusted Draft Ranking V3', () => {
-  test('models each team bench as two forwards, one defender, and no goalie unit', () => {
-    assert.equal(DRAFT_RANKING_MODEL_VERSION, 3);
-    assert.deepEqual(DRAFT_BENCH_DEMAND_PER_TEAM, { F: 2, D: 1, G: 0 });
+describe('league-adjusted Draft Ranking V4', () => {
+  test('models each team bench as three forwards, two defenders, and no goalie unit', () => {
+    assert.equal(DRAFT_RANKING_MODEL_VERSION, 4);
+    assert.deepEqual(DRAFT_BENCH_DEMAND_PER_TEAM, { F: 3, D: 2, G: 0 });
 
     const ranked = rankSharedProjectionAssets(playerPool(), 10);
     const positiveValueCount = (positions) => ranked.filter((asset) =>
@@ -84,14 +84,14 @@ describe('league-adjusted Draft Ranking V3', () => {
       asset.draftValueAboveReplacement > 0
     ).length;
 
-    assert.equal(positiveValueCount(FORWARD_POSITIONS), 110);
-    assert.equal(positiveValueCount(['D']), 50);
+    assert.equal(positiveValueCount(FORWARD_POSITIONS), 120);
+    assert.equal(positiveValueCount(['D']), 60);
     assert.equal(positiveValueCount(['G']), 10);
   });
 
   test('moves reserve goalie units below the drafted pool for supported league sizes', () => {
     for (const teamCount of [4, 6, 8, 10, 12]) {
-      const expectedDraftedAssetCount = teamCount * 17;
+      const expectedDraftedAssetCount = teamCount * 19;
       const ranked = rankSharedProjectionAssets(playerPool(), teamCount);
       const draftedPool = ranked.filter(
         (asset) => (asset.draftRank ?? Number.MAX_SAFE_INTEGER) <= expectedDraftedAssetCount,
@@ -126,10 +126,10 @@ describe('league-adjusted Draft Ranking V3', () => {
   test('fades skater demand instead of creating a one-rank scoring cliff', () => {
     const ranked = rankSharedProjectionAssets(playerPool(), 10);
     const lastExpectedDefender = ranked.find(
-      (asset) => asset.position === 'D' && asset.draftPositionRank === 50,
+      (asset) => asset.position === 'D' && asset.draftPositionRank === 60,
     );
     const firstReserveDefender = ranked.find(
-      (asset) => asset.position === 'D' && asset.draftPositionRank === 51,
+      (asset) => asset.position === 'D' && asset.draftPositionRank === 61,
     );
 
     assert.ok(lastExpectedDefender);
@@ -165,7 +165,7 @@ describe('league-adjusted Draft Ranking V3', () => {
     assert.equal(pool[0].draftRankingVersion, undefined);
     assert.equal(pool[0].draftProjectedCyclePoints, originalProjection);
     assert.ok(ranked.every((asset) => asset.projectionModelVersion === 11));
-    assert.ok(ranked.every((asset) => asset.draftRankingVersion === 3));
+    assert.ok(ranked.every((asset) => asset.draftRankingVersion === 4));
   });
 
   test('browser and server ranking implementations remain byte-for-byte aligned', async () => {

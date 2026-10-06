@@ -3158,7 +3158,7 @@ export class DraftRoom implements OnDestroy {
   }
 
   getBenchRequirement(): number {
-    return this.draft()?.benchSlots ?? 3;
+    return this.draft()?.benchSlots ?? 5;
   }
 
   getOpenBenchSlotCount(ownerId: string): number {

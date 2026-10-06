@@ -427,6 +427,10 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
 
     'roster-moves.ts',
 
+    // B1V adds exact mixed-player injury windows and expands the roster bench.
+    'shared/core/cycle/injury-replacement-window.util.ts',
+    'shared/core/team/roster-config.ts',
+
     'shared/core/replay/roster-move-replay-context.util.ts',
 
     'shared/security/firestore-document-id-core.util.ts',
@@ -519,7 +523,7 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/projection/projection-ranking.util.ts',
   ]));
   assert.deepEqual(unchangedFunctions, {
-    count: 18,
-    digest: '03731668e1767ab18aa82e9750d160ac4fe7dd1398e7d74877ddc51bffdb4ed3',
+    count: 17,
+    digest: '5a830e82e7e0cee4576e2c43ba46fac783424df8c1230a948daa9cb0f31f595a',
   });
 });

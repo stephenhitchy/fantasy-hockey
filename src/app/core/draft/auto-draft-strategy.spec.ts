@@ -8,8 +8,8 @@ import {
 describe('auto-draft roster strategy', () => {
   const noBenchPlayers = { F: 0, D: 0, G: 0 } as const;
 
-  it('targets two forwards, one defenseman, and no reserve goalie unit', () => {
-    expect(AUTO_DRAFT_BENCH_ROLE_TARGETS).toEqual({ F: 2, D: 1, G: 0 });
+  it('targets three forwards, two defensemen, and no reserve goalie unit', () => {
+    expect(AUTO_DRAFT_BENCH_ROLE_TARGETS).toEqual({ F: 3, D: 2, G: 0 });
   });
 
   it('maps all forward positions into one bench coverage role', () => {
@@ -54,36 +54,36 @@ describe('auto-draft roster strategy', () => {
     ).toBe(true);
   });
 
-  it('allows a second forward while the two-forward target remains open', () => {
+  it('allows a third forward while the three-forward target remains open', () => {
     expect(
       isAutomaticDraftCandidateAllowed({
         hasOpenStartingSlot: false,
         destination: 'bench',
         assetPosition: 'RW',
-        existingBenchRoleCounts: { F: 1, D: 0, G: 0 },
+        existingBenchRoleCounts: { F: 2, D: 0, G: 0 },
       }),
     ).toBe(true);
   });
 
-  it('rejects a third forward after the two-forward target is filled', () => {
+  it('rejects a fourth forward after the three-forward target is filled', () => {
     const context = {
       hasOpenStartingSlot: false,
       destination: 'bench' as const,
       assetPosition: 'RW' as const,
-      existingBenchRoleCounts: { F: 2, D: 0, G: 0 },
+      existingBenchRoleCounts: { F: 3, D: 0, G: 0 },
     };
 
     expect(isAutomaticDraftCandidateAllowed(context)).toBe(false);
     expect(getAutoDraftCandidateBlockReason(context)).toBe('bench-role-filled');
   });
 
-  it('fills defense after two forward bench picks', () => {
+  it('fills defense after three forward bench picks', () => {
     expect(
       isAutomaticDraftCandidateAllowed({
         hasOpenStartingSlot: false,
         destination: 'bench',
         assetPosition: 'D',
-        existingBenchRoleCounts: { F: 2, D: 0, G: 0 },
+        existingBenchRoleCounts: { F: 3, D: 0, G: 0 },
       }),
     ).toBe(true);
   });

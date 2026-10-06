@@ -23,8 +23,8 @@ export type DraftBenchRole = 'F' | 'D' | 'G';
 export const AUTO_DRAFT_BENCH_ROLE_TARGETS: Readonly<
   Record<DraftBenchRole, number>
 > = {
-  F: 2,
-  D: 1,
+  F: 3,
+  D: 2,
   G: 0,
 };
 

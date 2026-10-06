@@ -1,6 +1,7 @@
 import {
   DraftPosition,
   DraftableAsset,
+  InjuryReplacementWindowPlan,
   PlayerWindowContinuity,
 } from '../draft/draft.models';
 
@@ -40,6 +41,8 @@ export interface FantasyAssetCycleWindow {
   sourceTeamAbbreviationByGameId?: Record<string, string>;
   teamIdentityChanged?: boolean;
   playerWindowContinuity?: PlayerWindowContinuity;
+  injuryReplacementWindow?: InjuryReplacementWindowPlan;
+  scoringAssetKeyByGameId?: Record<string, string>;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];

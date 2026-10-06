@@ -60,7 +60,7 @@ export const TRAINING_CAMP_STEPS: readonly TrainingCampStep[] = [
         label: 'Drill 1',
         title: 'Start 14 scoring spots',
         body:
-          'Your active lineup has 3 left wings, 3 centers, 3 right wings, 4 defensemen, and 1 team goalie unit. You also get 3 bench spots and 3 injured-reserve spots.',
+          'Your active lineup has 3 left wings, 3 centers, 3 right wings, 4 defensemen, and 1 team goalie unit. You also get 5 bench spots and 3 injured-reserve spots.',
         coachNote:
           'Only active lineup spots earn points. Bench and injured-reserve spots protect your depth.',
       },

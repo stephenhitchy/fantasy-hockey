@@ -19,8 +19,8 @@ export type AutoDraftCandidateBlockReason =
 export const AUTO_DRAFT_BENCH_ROLE_TARGETS: Readonly<
   Record<AutoDraftBenchRole, number>
 > = {
-  F: 2,
-  D: 1,
+  F: 3,
+  D: 2,
   G: 0,
 };
 
@@ -39,7 +39,7 @@ export function getAutoDraftBenchRole(position: AutoDraftPositionCode): AutoDraf
 /**
  * Auto-draft follows two strict phases:
  * 1. Fill every active roster slot.
- * 2. Fill the bench with two forwards and one defenseman. A second team goalie
+ * 2. Fill the bench with three forwards and two defensemen. A second team goalie
  *    unit is left on waivers because it cannot be injured.
  *
  * Manual drafting is intentionally unaffected by this policy. If a manager manually

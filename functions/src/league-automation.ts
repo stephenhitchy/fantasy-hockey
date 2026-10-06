@@ -82,6 +82,7 @@ import {
   FantasyCycle,
 } from './shared/core/cycle/cycle.models';
 import { resolvePlayerWindowContinuity } from './shared/core/cycle/player-window-continuity.util';
+import { normalizeInjuryReplacementWindowPlan } from './shared/core/cycle/injury-replacement-window.util';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
 import {
   buildHistoricalReplaySkaterTimelineEntries,
@@ -4151,7 +4152,15 @@ async function buildReplayGamesByAssetKey(
   const uniqueAssets = new Map<string, DraftableAsset>();
 
   for (const pick of picks) {
-    uniqueAssets.set(pick.asset.assetKey, pick.asset);
+    const plan = normalizeInjuryReplacementWindowPlan(
+      pick.injuryReplacementWindow,
+    );
+
+    for (const asset of plan
+      ? plan.segments.map((segment) => segment.asset)
+      : [pick.asset]) {
+      uniqueAssets.set(asset.assetKey, asset);
+    }
   }
 
   const assets = [...uniqueAssets.values()];
@@ -5281,11 +5290,17 @@ async function runLeagueAutomation(
         const requiredRosteredPlayerIds = [
           ...new Set(
             [...picks, ...playoffIdentityPicks]
-              .filter((pick) => pick.asset.assetType === 'skater')
-              .map((pick) =>
-                pick.asset.assetType === 'skater'
-                  ? pick.asset.player.id
-                  : 0,
+              .flatMap((pick) => {
+                const plan = normalizeInjuryReplacementWindowPlan(
+                  pick.injuryReplacementWindow,
+                );
+
+                return plan
+                  ? plan.segments.map((segment) => segment.asset)
+                  : [pick.asset];
+              })
+              .map((asset) =>
+                asset.assetType === 'skater' ? asset.player.id : 0,
               )
               .filter((playerId) => playerId > 0),
           ),

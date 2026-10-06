@@ -126,6 +126,7 @@ export type FantasyTransactionType =
   | 'cancel-queued-move'
   | 'queue-active-bench-swap'
   | 'active-bench-swap-activated'
+  | 'injury-replacement'
   | 'move-bench-to-ir'
   | 'activate-ir-to-bench';
 
@@ -244,6 +245,13 @@ export interface QueueActiveBenchSwapInput {
   effectiveLabel?: string | null;
 }
 
+export interface ReplaceInjuredRosterAssetInput {
+  leagueId: string;
+  ownerId: string;
+  activeSlotId: string;
+  benchSlotId: string;
+}
+
 export interface ActivateIrRosterAssetInput {
   leagueId: string;
   ownerId: string;
@@ -308,7 +316,7 @@ export const DEFAULT_DRAFT_ROSTER_REQUIREMENTS: DraftRosterRequirements = {
   G: 1,
 };
 
-export const DEFAULT_DRAFT_BENCH_SLOTS = 3;
+export const DEFAULT_DRAFT_BENCH_SLOTS = 5;
 
 export const DEFAULT_DRAFT_TOTAL_ROUNDS =
   DEFAULT_DRAFT_ROSTER_REQUIREMENTS.LW +
@@ -2159,6 +2167,29 @@ export async function queueActiveBenchSwap({
   return {
     mode: result.mode,
     effectiveCycleNumber: result.effectiveCycleNumber,
+  };
+}
+
+export async function replaceInjuredRosterAsset({
+  leagueId,
+  ownerId,
+  activeSlotId,
+  benchSlotId,
+}: ReplaceInjuredRosterAssetInput): Promise<RosterMoveExecutionResult> {
+  if (!ownerId) {
+    throw new Error('The roster owner is required.');
+  }
+
+  const result = await applyImmediateRosterMove({
+    leagueId,
+    moveType: 'injury-replacement',
+    activeSlotId,
+    benchSlotId,
+  });
+
+  return {
+    mode: 'immediate',
+    effectiveCycleNumber: result.cycleNumber,
   };
 }
 

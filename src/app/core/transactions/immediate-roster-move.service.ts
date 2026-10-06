@@ -8,6 +8,7 @@ export type ImmediateRosterMoveType =
   | 'active-bench-swap'
   | 'activate-ir-active'
   | 'move-active-to-ir'
+  | 'injury-replacement'
   | 'drop-active';
 
 export interface ImmediateRosterMoveRequest {

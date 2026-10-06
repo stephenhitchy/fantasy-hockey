@@ -1525,7 +1525,7 @@ export const ensureFantasyRoster = onCall(
       const roster = normalizeFantasyRoster(source);
       const needsMigration =
         source.schemaVersion !== 2 ||
-        !Array.isArray(source.benchSlots) || source.benchSlots.length !== 3 ||
+        !Array.isArray(source.benchSlots) || source.benchSlots.length !== 5 ||
         !Array.isArray(source.irSlots) || source.irSlots.length !== 3 ||
         !Array.isArray(source.activeSlots) || source.activeSlots.length !== 14;
       if (needsMigration) {

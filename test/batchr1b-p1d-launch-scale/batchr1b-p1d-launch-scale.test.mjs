@@ -414,6 +414,10 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
 
         'src/roster-moves.ts',
 
+        // B1V adds exact mixed-player injury windows and expands the roster bench.
+        'src/shared/core/cycle/injury-replacement-window.util.ts',
+        'src/shared/core/team/roster-config.ts',
+
         'src/shared/core/replay/roster-move-replay-context.util.ts',
 
         'src/shared/security/firestore-document-id-core.util.ts',
@@ -510,6 +514,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    'a0d6be2895a0543237e41afabda99ff4cfaf9833ec5f5ea5755a3a379b3093e3',
+    '21b45b0b3efeeaee02b69a4f2593ccb5a9b0592169467196e600495e55f8b259',
   );
 });

@@ -443,6 +443,26 @@ export interface PlayerWindowContinuity {
   lastScheduleTeamAbbreviation?: string;
 }
 
+export interface InjuryReplacementWindowSegment {
+  segmentId: string;
+  reason: 'original' | 'injury-replacement';
+  assetKey: string;
+  asset: DraftableAsset;
+  scheduledGameIds: number[];
+  sourceTeamAbbreviation: string;
+  assignmentNotBeforeMilliseconds?: number;
+  activatedAtMilliseconds?: number;
+  playerWindowContinuity?: PlayerWindowContinuity;
+}
+
+export interface InjuryReplacementWindowPlan {
+  schemaVersion: 1;
+  latestTransactionId: string;
+  replacementCount: number;
+  requiredGames: number;
+  segments: InjuryReplacementWindowSegment[];
+}
+
 export interface DraftPick extends DraftPickPreview {
   asset: DraftableAsset;
 
@@ -464,6 +484,7 @@ export interface DraftPick extends DraftPickPreview {
    */
   sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
   playerWindowContinuity?: PlayerWindowContinuity;
+  injuryReplacementWindow?: InjuryReplacementWindowPlan;
   snapshottedAt?: unknown;
   snapshotSource?: string;
   snapshotOrder?: number;

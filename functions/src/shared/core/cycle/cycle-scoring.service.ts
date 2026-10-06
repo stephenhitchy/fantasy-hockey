@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   DraftableAsset,
   DraftPick,
+  InjuryReplacementWindowPlan,
   PlayerWindowContinuity,
 } from '../draft/draft.models';
 import {
@@ -63,6 +64,10 @@ import {
   type ResolvedLivePlayerWindow,
 } from './live-player-team-window.util';
 import { resolvePlayerWindowContinuity } from './player-window-continuity.util';
+import {
+  getInjuryReplacementAssetKeyByGameId,
+  normalizeInjuryReplacementWindowPlan,
+} from './injury-replacement-window.util';
 
 export type CycleGameRuntimeState =
   | 'scheduled'
@@ -105,6 +110,8 @@ export interface CycleAssetScoreSummary {
   playerWindowContinuity?: PlayerWindowContinuity;
   /** Compact stint identity; cumulative game history stays out of aggregates. */
   playerWindowContinuityId?: string;
+  injuryReplacementWindow?: InjuryReplacementWindowPlan;
+  scoringAssetKeyByGameId?: Record<string, string>;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];
@@ -503,22 +510,38 @@ function getMinutesFromToi(toi: string | undefined): number {
   return Number((minutes + seconds / 60).toFixed(2));
 }
 
+function getPickInjuryReplacementPlan(
+  pick: DraftPick,
+): InjuryReplacementWindowPlan | null {
+  return normalizeInjuryReplacementWindowPlan(pick.injuryReplacementWindow);
+}
+
+function getPickScoringAssets(pick: DraftPick): DraftableAsset[] {
+  const plan = getPickInjuryReplacementPlan(pick);
+
+  return plan
+    ? plan.segments.map((segment) => segment.asset)
+    : [pick.asset];
+}
+
 function getUniqueDraftedTeams(
   input: CalculateCycleScoringInput,
 ): string[] {
   const teams = new Set<string>();
 
   for (const pick of input.picks) {
-    teams.add(getAssetTeamAbbreviation(pick.asset));
+    for (const asset of getPickScoringAssets(pick)) {
+      teams.add(getAssetTeamAbbreviation(asset));
 
-    if (pick.asset.assetType === 'skater') {
-      const currentTeam = input.currentTeamAbbreviationByPlayerId
-        ?.get(pick.asset.player.id)
-        ?.trim()
-        .toUpperCase();
+      if (asset.assetType === 'skater') {
+        const currentTeam = input.currentTeamAbbreviationByPlayerId
+          ?.get(asset.player.id)
+          ?.trim()
+          .toUpperCase();
 
-      if (currentTeam) {
-        teams.add(currentTeam);
+        if (currentTeam) {
+          teams.add(currentTeam);
+        }
       }
     }
 
@@ -560,8 +583,10 @@ function getUniqueSkaterAssets(picks: DraftPick[]): DraftableAsset[] {
   const skatersByKey = new Map<string, DraftableAsset>();
 
   for (const pick of picks) {
-    if (pick.asset.assetType === 'skater') {
-      skatersByKey.set(pick.asset.assetKey, pick.asset);
+    for (const asset of getPickScoringAssets(pick)) {
+      if (asset.assetType === 'skater') {
+        skatersByKey.set(asset.assetKey, asset);
+      }
     }
   }
 
@@ -1257,8 +1282,16 @@ function canReuseFinalGame(
   previous: CycleAssetScoreSummary | undefined,
   gameId: number,
   assetType: DraftableAsset['assetType'],
+  assetKey?: string,
 ): boolean {
   const key = String(gameId);
+
+  if (
+    assetKey &&
+    (previous?.scoringAssetKeyByGameId?.[key] ?? previous?.assetKey) !== assetKey
+  ) {
+    return false;
+  }
 
   return isReusableNhlFinalScore({
     assetType,
@@ -1333,6 +1366,13 @@ function buildResultFingerprint(
         summary.scheduleTeamAbbreviation ?? '',
         summary.teamIdentityChanged ? 'team-updated' : 'team-stored',
         summary.playerWindowContinuityId ?? 'legacy-continuity',
+        summary.injuryReplacementWindow
+          ? JSON.stringify(summary.injuryReplacementWindow)
+          : 'single-asset-window',
+        Object.entries(summary.scoringAssetKeyByGameId ?? {})
+          .sort(([first], [second]) => first.localeCompare(second))
+          .map(([gameId, assetKey]) => `${gameId}:${assetKey}`)
+          .join(','),
         Object.entries(summary.sourceTeamAbbreviationByGameId ?? {})
           .sort(([first], [second]) => first.localeCompare(second))
           .map(([gameId, team]) => `${gameId}:${team}`)
@@ -1367,8 +1407,10 @@ function buildCurrentPickIdentityDigest(
   const playerIds = new Set<number>();
 
   for (const pick of picks) {
-    if (pick.asset.assetType === 'skater') {
-      playerIds.add(pick.asset.player.id);
+    for (const asset of getPickScoringAssets(pick)) {
+      if (asset.assetType === 'skater') {
+        playerIds.add(asset.player.id);
+      }
     }
   }
 
@@ -1580,6 +1622,14 @@ export async function calculateCycleScoring(
   const sourceTeamByWindowGameId = new Map<string, Record<string, string>>();
   const teamIdentityChangedByWindowId = new Map<string, boolean>();
   const previousByWindowId = new Map<string, CycleAssetScoreSummary | undefined>();
+  const scoringAssetByWindowGameId = new Map<
+    string,
+    ReadonlyMap<number, DraftableAsset>
+  >();
+  const injuryReplacementPlanByWindowId = new Map<
+    string,
+    InjuryReplacementWindowPlan
+  >();
   const gameIdsToLoad = new Set<number>();
   const skaterAssetKeysNeedingFinalLogs = new Set<string>();
 
@@ -1636,32 +1686,235 @@ export async function calculateCycleScoring(
       input.cycleNumber,
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
+    const savedInjuryReplacementPlan = getPickInjuryReplacementPlan(pick);
     const pickContinuity = resolvePlayerWindowContinuity({
       value: pick.playerWindowContinuity,
       ownerId: pick.ownerId,
       rosterSlotId: getRosterSlotId(pick),
       asset: pick.asset,
     });
-    const previous = getPreviousWindowSummary(
-      input.previousResult,
-      windowId,
-      pick.asset.assetKey,
-      pickContinuity?.continuityId,
-    );
-    const resolvedWindow = getRelevantAssetGames(
-      pick,
-      schedulesByTeam,
-      sourceNhlBlockNumber,
-      input.requiredGamesPerCycle,
-      previous,
-      scheduleDecisionAtMilliseconds,
-      input.replayGamesByAssetKey,
-      input.currentTeamAbbreviationByPlayerId,
-      input.currentTeamConfirmedAtByPlayerId,
-      input.sourceNhlTargetGameIdsByTeam,
-      input.seasonSourceGameIdsByTeam,
-      confirmedCurrentTeamAppearanceGameIdsByPlayerId,
-    );
+    const savedPrevious = savedInjuryReplacementPlan
+      ? input.previousResult?.windowScores?.[windowId]
+      : getPreviousWindowSummary(
+          input.previousResult,
+          windowId,
+          pick.asset.assetKey,
+          pickContinuity?.continuityId,
+        );
+    const previousInjuryReplacementPlan =
+      normalizeInjuryReplacementWindowPlan(
+        savedPrevious?.injuryReplacementWindow,
+      );
+    const injuryReplacementPlan =
+      savedInjuryReplacementPlan &&
+      previousInjuryReplacementPlan?.latestTransactionId ===
+        savedInjuryReplacementPlan.latestTransactionId
+        ? previousInjuryReplacementPlan
+        : savedInjuryReplacementPlan;
+    const previous = savedPrevious;
+    let resolvedWindow: ResolvedLivePlayerWindow;
+    let scoringAssetsByGameId: ReadonlyMap<number, DraftableAsset>;
+
+    if (injuryReplacementPlan) {
+      const currentSegment = injuryReplacementPlan.segments.at(-1);
+
+      if (
+        !currentSegment ||
+        currentSegment.assetKey !== pick.asset.assetKey ||
+        injuryReplacementPlan.requiredGames !== input.requiredGamesPerCycle
+      ) {
+        throw new Error(
+          `The injury-replacement plan for ${windowId} does not match its current active asset or game allowance.`,
+        );
+      }
+
+      const exactSegments = injuryReplacementPlan.segments.slice(0, -1);
+      const exactAssignments = exactSegments.flatMap((segment) => {
+        const sourceTeam = segment.sourceTeamAbbreviation.trim().toUpperCase();
+        const scheduleById = new Map(
+          (
+            input.replayGamesByAssetKey?.[segment.assetKey] ??
+            schedulesByTeam[sourceTeam] ??
+            []
+          ).map((game) => [game.id, game] as const),
+        );
+
+        return segment.scheduledGameIds.map((gameId) => {
+          const game = scheduleById.get(gameId);
+
+          if (!game) {
+            throw new Error(
+              `The NHL schedule for ${sourceTeam} is missing injury-replacement game ${gameId} in ${windowId}.`,
+            );
+          }
+
+          return {
+            game,
+            asset: segment.asset,
+            sourceTeam,
+          };
+        });
+      });
+      const currentSegmentGameIdSet = new Set(currentSegment.scheduledGameIds);
+      const filterCurrentSegmentGameIds = (gameIds: readonly number[] | undefined) =>
+        (gameIds ?? []).filter((gameId) => currentSegmentGameIdSet.has(gameId));
+      const filterCurrentSegmentRecord = <T>(
+        record: Readonly<Record<string, T>> | undefined,
+      ): Record<string, T> => Object.fromEntries(
+        Object.entries(record ?? {}).filter(([gameId]) =>
+          currentSegmentGameIdSet.has(Number(gameId)),
+        ),
+      );
+      const currentSegmentPrevious = previous
+        ? {
+            ...previous,
+            scheduledGameIds: [...currentSegment.scheduledGameIds],
+            completedGameIds: filterCurrentSegmentGameIds(
+              previous.completedGameIds,
+            ),
+            liveGameIds: filterCurrentSegmentGameIds(previous.liveGameIds),
+            appearanceGameIds: filterCurrentSegmentGameIds(
+              previous.appearanceGameIds,
+            ),
+            incompleteFinalGameIds: filterCurrentSegmentGameIds(
+              previous.incompleteFinalGameIds,
+            ),
+            gameScores: filterCurrentSegmentRecord(previous.gameScores),
+            gameStates: filterCurrentSegmentRecord(previous.gameStates),
+            gameInputCompleteness: filterCurrentSegmentRecord(
+              previous.gameInputCompleteness,
+            ),
+            scheduleTeamAbbreviation:
+              currentSegment.sourceTeamAbbreviation,
+            sourceTeamAbbreviationByGameId: filterCurrentSegmentRecord(
+              previous.sourceTeamAbbreviationByGameId,
+            ),
+          }
+        : undefined;
+      let currentResolvedWindow: ResolvedLivePlayerWindow;
+
+      if (input.replayGamesByAssetKey) {
+        const replaySchedule =
+          input.replayGamesByAssetKey[currentSegment.assetKey] ?? [];
+        const replayScheduleById = new Map(
+          replaySchedule.map((game) => [game.id, game] as const),
+        );
+        const games = currentSegment.scheduledGameIds.map((gameId) => {
+          const game = replayScheduleById.get(gameId);
+
+          if (!game) {
+            throw new Error(
+              `Historical replay is missing injury-replacement game ${gameId} for ${currentSegment.assetKey} in ${windowId}.`,
+            );
+          }
+
+          return game;
+        });
+        currentResolvedWindow = {
+          games,
+          scheduleTeamAbbreviation:
+            currentSegment.sourceTeamAbbreviation,
+          sourceTeamAbbreviationByGameId: Object.fromEntries(
+            games.map((game) => [
+              String(game.id),
+              currentSegment.sourceTeamAbbreviation,
+            ]),
+          ),
+          teamIdentityChanged: false,
+        };
+      } else {
+        currentResolvedWindow = getRelevantAssetGames(
+          {
+            ...pick,
+            asset: currentSegment.asset,
+            sourceNhlTargetGameIds: currentSegment.scheduledGameIds,
+            playerWindowContinuity:
+              currentSegment.playerWindowContinuity ??
+              pick.playerWindowContinuity,
+            injuryReplacementWindow: undefined,
+          },
+          schedulesByTeam,
+          sourceNhlBlockNumber,
+          currentSegment.scheduledGameIds.length,
+          currentSegmentPrevious,
+          scheduleDecisionAtMilliseconds,
+          undefined,
+          input.currentTeamAbbreviationByPlayerId,
+          input.currentTeamConfirmedAtByPlayerId,
+          input.sourceNhlTargetGameIdsByTeam,
+          input.seasonSourceGameIdsByTeam,
+          confirmedCurrentTeamAppearanceGameIdsByPlayerId,
+        );
+      }
+      const effectiveCurrentSegment = {
+        ...currentSegment,
+        scheduledGameIds: currentResolvedWindow.games.map((game) => game.id),
+        sourceTeamAbbreviation:
+          currentResolvedWindow.scheduleTeamAbbreviation,
+      };
+      const effectiveInjuryReplacementPlan: InjuryReplacementWindowPlan = {
+        ...injuryReplacementPlan,
+        segments: [...exactSegments, effectiveCurrentSegment],
+      };
+      const currentAssignments = currentResolvedWindow.games.map((game) => ({
+        game,
+        asset: currentSegment.asset,
+        sourceTeam:
+          currentResolvedWindow.sourceTeamAbbreviationByGameId[
+            String(game.id)
+          ] ?? currentResolvedWindow.scheduleTeamAbbreviation,
+      }));
+      const assignments = [...exactAssignments, ...currentAssignments];
+
+      if (assignments.length !== input.requiredGamesPerCycle) {
+        throw new Error(
+          `The injury-replacement plan for ${windowId} owns ${assignments.length} games instead of ${input.requiredGamesPerCycle}.`,
+        );
+      }
+
+      const games = assignments.map((assignment) => assignment.game);
+      const sourceTeamAbbreviationByGameId = Object.fromEntries(
+        assignments.map((assignment) => [
+          String(assignment.game.id),
+          assignment.sourceTeam,
+        ]),
+      );
+      scoringAssetsByGameId = new Map(
+        assignments.map((assignment) => [
+          assignment.game.id,
+          assignment.asset,
+        ] as const),
+      );
+      resolvedWindow = {
+        games,
+        scheduleTeamAbbreviation:
+          currentResolvedWindow.scheduleTeamAbbreviation,
+        sourceTeamAbbreviationByGameId,
+        teamIdentityChanged: currentResolvedWindow.teamIdentityChanged,
+      };
+      injuryReplacementPlanByWindowId.set(
+        windowId,
+        effectiveInjuryReplacementPlan,
+      );
+    } else {
+      resolvedWindow = getRelevantAssetGames(
+        pick,
+        schedulesByTeam,
+        sourceNhlBlockNumber,
+        input.requiredGamesPerCycle,
+        previous,
+        scheduleDecisionAtMilliseconds,
+        input.replayGamesByAssetKey,
+        input.currentTeamAbbreviationByPlayerId,
+        input.currentTeamConfirmedAtByPlayerId,
+        input.sourceNhlTargetGameIdsByTeam,
+        input.seasonSourceGameIdsByTeam,
+        confirmedCurrentTeamAppearanceGameIdsByPlayerId,
+      );
+      scoringAssetsByGameId = new Map(
+        resolvedWindow.games.map((game) => [game.id, pick.asset] as const),
+      );
+    }
     const games = resolvedWindow.games;
 
     gamesByWindowId.set(windowId, games);
@@ -1678,9 +1931,11 @@ export async function calculateCycleScoring(
       resolvedWindow.teamIdentityChanged,
     );
     previousByWindowId.set(windowId, previous);
+    scoringAssetByWindowGameId.set(windowId, scoringAssetsByGameId);
 
     for (const game of games) {
       const state = getGameRuntimeState(game);
+      const scoringAsset = scoringAssetsByGameId.get(game.id) ?? pick.asset;
 
       if (state === 'live') {
         gameIdsToLoad.add(game.id);
@@ -1689,12 +1944,17 @@ export async function calculateCycleScoring(
 
       if (
         state === 'final' &&
-        !canReuseFinalGame(previous, game.id, pick.asset.assetType)
+        !canReuseFinalGame(
+          previous,
+          game.id,
+          scoringAsset.assetType,
+          scoringAsset.assetKey,
+        )
       ) {
         gameIdsToLoad.add(game.id);
 
-        if (pick.asset.assetType === 'skater') {
-          skaterAssetKeysNeedingFinalLogs.add(pick.asset.assetKey);
+        if (scoringAsset.assetType === 'skater') {
+          skaterAssetKeysNeedingFinalLogs.add(scoringAsset.assetKey);
         }
       }
     }
@@ -1757,18 +2017,17 @@ export async function calculateCycleScoring(
         return false;
       }
 
-      return input.picks
-        .filter((pick) => pick.asset.assetKey === asset.assetKey)
-        .some((pick) => {
+      return input.picks.some((pick) => {
           const pickWindowCycleNumber = getPickWindowCycleNumber(
             pick,
             input.cycleNumber,
           );
-          const games = gamesByWindowId.get(
-            getWindowId(pick, pickWindowCycleNumber),
-          ) ?? [];
+          const windowId = getWindowId(pick, pickWindowCycleNumber);
+          const games = gamesByWindowId.get(windowId) ?? [];
+          const scoringAssets = scoringAssetByWindowGameId.get(windowId);
 
           return games.some((game) =>
+            scoringAssets?.get(game.id)?.assetKey === asset.assetKey &&
             getGameRuntimeState(game) === 'live' &&
             getEffectiveGameRuntimeState(game, gameDataById.get(game.id)) === 'final'
           );
@@ -1824,6 +2083,10 @@ export async function calculateCycleScoring(
     const sourceTeamAbbreviationByGameId =
       sourceTeamByWindowGameId.get(windowId) ?? {};
     const previous = previousByWindowId.get(windowId);
+    const scoringAssetsByGameId =
+      scoringAssetByWindowGameId.get(windowId) ?? new Map<number, DraftableAsset>();
+    const injuryReplacementPlan =
+      injuryReplacementPlanByWindowId.get(windowId);
     const gameScores: Record<string, number> = {};
     const gameStates: Record<string, CycleGameRuntimeState> = {};
     const gameInputCompleteness: Record<string, NhlFinalInputCompleteness> = {};
@@ -1839,6 +2102,7 @@ export async function calculateCycleScoring(
 
     for (const game of games) {
       const gameIdKey = String(game.id);
+      const scoringAsset = scoringAssetsByGameId.get(game.id) ?? pick.asset;
       const gameData = gameDataById.get(game.id);
       const state = getEffectiveGameRuntimeState(game, gameData);
       gameStates[gameIdKey] = state;
@@ -1854,7 +2118,12 @@ export async function calculateCycleScoring(
 
       if (
         state === 'final' &&
-        canReuseFinalGame(previous, game.id, pick.asset.assetType)
+        canReuseFinalGame(
+          previous,
+          game.id,
+          scoringAsset.assetType,
+          scoringAsset.assetKey,
+        )
       ) {
         const previousScore = previous?.gameScores?.[gameIdKey] ?? 0;
         const appeared = previous?.appearanceGameIds?.includes(game.id) ?? false;
@@ -1882,7 +2151,7 @@ export async function calculateCycleScoring(
             scoringInput: input,
             observation: compareDirectAndCanonicalGameScore({
               gameId: game.id,
-              asset: pick.asset,
+              asset: scoringAsset,
               canonicalGame: input.canonicalParityGamesById.get(game.id),
               gameIsFinal: true,
               scoringRules: input.scoringRules,
@@ -1903,23 +2172,23 @@ export async function calculateCycleScoring(
         continue;
       }
 
-      const playerLogLoad = pick.asset.assetType === 'skater'
-        ? gameLogsByPlayerId.get(pick.asset.player.id)
+      const playerLogLoad = scoringAsset.assetType === 'skater'
+        ? gameLogsByPlayerId.get(scoringAsset.player.id)
         : undefined;
-      const gameLog = pick.asset.assetType === 'skater'
+      const gameLog = scoringAsset.assetType === 'skater'
         ? playerLogLoad?.gameLogByGameId.get(game.id)
         : undefined;
 
       if (state === 'final') {
         const completeness = getFinalGameInputCompleteness({
-          asset: pick.asset,
+          asset: scoringAsset,
           gameId: game.id,
           gameData,
           playerLogLoad,
           sourceTeamAbbreviation:
             input.replayGamesByAssetKey
               ? input.replaySourceTeamAbbreviationByAssetGameId
-                  ?.[pick.asset.assetKey]
+                  ?.[scoringAsset.assetKey]
                   ?.[gameIdKey]
               : sourceTeamAbbreviationByGameId[gameIdKey],
           requireSourceTeamAbbreviation: Boolean(input.replayGamesByAssetKey),
@@ -1956,7 +2225,7 @@ export async function calculateCycleScoring(
               scoringInput: input,
               observation: compareDirectAndCanonicalGameScore({
                 gameId: game.id,
-                asset: pick.asset,
+                asset: scoringAsset,
                 canonicalGame: input.canonicalParityGamesById.get(game.id),
                 gameIsFinal: true,
                 scoringRules: input.scoringRules,
@@ -1986,16 +2255,16 @@ export async function calculateCycleScoring(
         completedGameIds.push(game.id);
       }
 
-      const directScoreResult = pick.asset.assetType === 'skater'
+      const directScoreResult = scoringAsset.assetType === 'skater'
         ? calculateSkaterGameScore(
-            pick.asset,
+            scoringAsset,
             gameData,
             gameLog,
             state === 'final',
             input.scoringRules
           )
         : calculateGoalieUnitGameScore(
-            pick.asset,
+            scoringAsset,
             gameData,
             state === 'final',
             input.scoringRules
@@ -2013,7 +2282,7 @@ export async function calculateCycleScoring(
           scoringInput: input,
           observation: compareDirectAndCanonicalGameScore({
             gameId: game.id,
-            asset: pick.asset,
+            asset: scoringAsset,
             canonicalGame: input.canonicalParityGamesById.get(game.id),
             gameIsFinal: state === 'final',
             scoringRules: input.scoringRules,
@@ -2074,6 +2343,13 @@ export async function calculateCycleScoring(
         teamIdentityChangedByWindowId.get(windowId) === true,
       ...(summaryContinuity
         ? { playerWindowContinuityId: summaryContinuity.continuityId }
+        : {}),
+      ...(injuryReplacementPlan
+        ? {
+            injuryReplacementWindow: injuryReplacementPlan,
+            scoringAssetKeyByGameId:
+              getInjuryReplacementAssetKeyByGameId(injuryReplacementPlan),
+          }
         : {}),
       completedGameIds,
       incompleteFinalGameIds,

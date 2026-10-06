@@ -1,6 +1,7 @@
 import {
   DraftPosition,
   DraftableAsset,
+  InjuryReplacementWindowPlan,
   PlayerWindowContinuity,
 } from '../draft/draft.models';
 import type { NhlFinalInputCompleteness } from '../nhl/nhl-final-input-completeness.util';
@@ -42,6 +43,8 @@ export interface FantasyAssetCycleWindow {
   teamIdentityChanged?: boolean;
   /** Player schedule lineage used to prevent cross-window game reuse. */
   playerWindowContinuity?: PlayerWindowContinuity;
+  injuryReplacementWindow?: InjuryReplacementWindowPlan;
+  scoringAssetKeyByGameId?: Record<string, string>;
   completedGameIds: number[];
   liveGameIds: number[];
   appearanceGameIds: number[];

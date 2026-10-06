@@ -2053,7 +2053,7 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     totalRounds:
       typeof value.totalRounds === 'number' && Number.isFinite(value.totalRounds)
         ? Math.max(1, Math.trunc(value.totalRounds))
-        : 17,
+        : 19,
     rosterRequirements: value.rosterRequirements ?? {
       LW: 3,
       C: 3,
@@ -2064,7 +2064,7 @@ function normalizeDraft(value: Partial<FantasyDraft>): FantasyDraft {
     benchSlots:
       typeof value.benchSlots === 'number' && Number.isFinite(value.benchSlots)
         ? Math.max(0, Math.trunc(value.benchSlots))
-        : 3,
+        : 5,
     roundOneOrder: Array.isArray(value.roundOneOrder)
       ? value.roundOneOrder.filter((entry): entry is string => typeof entry === 'string' && !!entry)
       : [],

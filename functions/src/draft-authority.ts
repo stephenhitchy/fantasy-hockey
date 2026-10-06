@@ -78,8 +78,8 @@ const DEFAULT_ROSTER_REQUIREMENTS: DraftRosterRequirements = {
   D: 4,
   G: 1,
 };
-const DEFAULT_BENCH_SLOTS = 3;
-const DEFAULT_TOTAL_ROUNDS = 17;
+const DEFAULT_BENCH_SLOTS = 5;
+const DEFAULT_TOTAL_ROUNDS = 19;
 const MAX_LEAGUE_TEAMS = 32;
 
 function getLeagueRequiredGamesPerCycle(data: Record<string, unknown>): number {

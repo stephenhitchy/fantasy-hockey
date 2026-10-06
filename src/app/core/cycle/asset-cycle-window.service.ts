@@ -9,7 +9,10 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../firebase';
-import { DraftPick, PlayerWindowContinuity } from '../draft/draft.models';
+import {
+  DraftPick,
+  PlayerWindowContinuity,
+} from '../draft/draft.models';
 import { getFrozenCycleProjection } from '../projection/cycle-projection.util';
 import {
   AssetCycleWindowStatus,
@@ -19,6 +22,7 @@ import {
 } from './cycle.models';
 import { CycleAssetScoreSummary, CycleScoringResult } from './cycle-scoring.service';
 import { resolveSourceNhlBlockNumber } from './cycle-window-selection.util';
+import { normalizeInjuryReplacementWindowPlan } from './injury-replacement-window.util';
 
 function getCycleDocumentId(cycleNumber: number): string {
   return `cycle-${cycleNumber}`;
@@ -178,6 +182,9 @@ function normalizeAssetCycleWindow(
   const playerWindowContinuity = normalizePlayerWindowContinuity(
     value.playerWindowContinuity,
   );
+  const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
+    value.injuryReplacementWindow,
+  );
 
   return {
     id: value.id ?? '',
@@ -205,6 +212,10 @@ function normalizeAssetCycleWindow(
     ),
     teamIdentityChanged: value.teamIdentityChanged === true,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+    ...(injuryReplacementWindow ? { injuryReplacementWindow } : {}),
+    scoringAssetKeyByGameId: normalizeStringRecord(
+      value.scoringAssetKeyByGameId,
+    ),
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -307,6 +318,11 @@ function buildWindow(
     summary?.playerWindowContinuity ??
     previous?.playerWindowContinuity ??
     normalizePlayerWindowContinuity(pick.playerWindowContinuity);
+  const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
+    summary?.injuryReplacementWindow ??
+      pick.injuryReplacementWindow ??
+      previous?.injuryReplacementWindow,
+  );
 
   return {
     id: windowId,
@@ -334,6 +350,10 @@ function buildWindow(
     teamIdentityChanged:
       summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+    ...(injuryReplacementWindow ? { injuryReplacementWindow } : {}),
+    scoringAssetKeyByGameId:
+      summary?.scoringAssetKeyByGameId ??
+      normalizeStringRecord(previous?.scoringAssetKeyByGameId),
     completedGameIds: summary?.completedGameIds ?? normalizeNumberArray(previous?.completedGameIds),
     liveGameIds: summary?.liveGameIds ?? normalizeNumberArray(previous?.liveGameIds),
     appearanceGameIds:
@@ -387,6 +407,8 @@ function stableWindowFingerprint(teamWindows: FantasyTeamCycleWindows): string {
       scheduledGameDates: window.scheduledGameDates,
       scheduledGameLabels: window.scheduledGameLabels,
       playerWindowContinuity: window.playerWindowContinuity ?? null,
+      injuryReplacementWindow: window.injuryReplacementWindow ?? null,
+      scoringAssetKeyByGameId: window.scoringAssetKeyByGameId ?? {},
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,

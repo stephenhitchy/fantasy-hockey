@@ -13,7 +13,10 @@ import {
   optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
-import { DraftableAsset } from './shared/core/draft/draft.models';
+import {
+  DraftableAsset,
+  InjuryReplacementWindowPlan,
+} from './shared/core/draft/draft.models';
 import {
   FantasyRoster,
   RosterAsset,
@@ -33,6 +36,12 @@ import {
   buildSourceNhlTargetGameIdsByTeam,
 } from './shared/core/cycle/cycle-window-selection.util';
 import { createPlayerWindowContinuity } from './shared/core/cycle/player-window-continuity.util';
+import {
+  buildInjuryReplacementWindowPlan,
+  getInjuryReplacementAssetKeyByGameId,
+  getInjuryReplacementGameIds,
+  normalizeInjuryReplacementWindowPlan,
+} from './shared/core/cycle/injury-replacement-window.util';
 
 const FUNCTION_REGION = 'us-central1';
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
@@ -44,6 +53,7 @@ type ImmediateRosterMoveType =
   | 'active-bench-swap'
   | 'activate-ir-active'
   | 'move-active-to-ir'
+  | 'injury-replacement'
   | 'drop-active';
 
 interface ImmediateRosterMoveRequest {
@@ -67,10 +77,11 @@ interface SlotWindowContext {
 interface NhlScheduleGame {
   id?: number;
   gameDate?: string;
+  startTimeUTC?: string;
   gameType?: number;
   gameState?: string;
-  homeTeam?: { score?: number };
-  awayTeam?: { score?: number };
+  homeTeam?: { abbrev?: string; score?: number };
+  awayTeam?: { abbrev?: string; score?: number };
 }
 
 interface RosterMoveSeasonWindowAnchor {
@@ -222,6 +233,56 @@ function isUntouchedWindow(window: Record<string, unknown>): boolean {
     asArray(window['completedGameIds']).length === 0 &&
     asArray(window['liveGameIds']).length === 0 &&
     asArray(window['appearanceGameIds']).length === 0;
+}
+
+function filterGameRecord(
+  value: unknown,
+  allowedGameIds: ReadonlySet<number>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(asRecord(value)).filter(([gameId]) => {
+      const parsed = Number(gameId);
+      return Number.isSafeInteger(parsed) && allowedGameIds.has(parsed);
+    }),
+  );
+}
+
+function getInjuryReplacementProjectionPoints(
+  plan: InjuryReplacementWindowPlan,
+): number | null {
+  let hasProjection = false;
+  const projectedPoints = plan.segments.reduce((total, segment) => {
+    const projection =
+      segment.asset.frozenCycleProjectionPoints ??
+      segment.asset.projectedCyclePoints;
+
+    if (typeof projection !== 'number' || !Number.isFinite(projection)) {
+      return total;
+    }
+
+    hasProjection = true;
+    return total + projection *
+      (segment.scheduledGameIds.length / plan.requiredGames);
+  }, 0);
+
+  return hasProjection ? Number(projectedPoints.toFixed(1)) : null;
+}
+
+function selectCurrentInjuryReplacementPlan(
+  pickValue: unknown,
+  windowValue: unknown,
+): InjuryReplacementWindowPlan | null {
+  const pickPlan = normalizeInjuryReplacementWindowPlan(pickValue);
+  const windowPlan = normalizeInjuryReplacementWindowPlan(windowValue);
+
+  if (
+    pickPlan &&
+    windowPlan?.latestTransactionId === pickPlan.latestTransactionId
+  ) {
+    return windowPlan;
+  }
+
+  return pickPlan ?? windowPlan;
 }
 
 function rosterContainsAsset(roster: FantasyRoster, assetKey: string): boolean {
@@ -398,6 +459,146 @@ function getScheduleGameState(
   }
 
   return 'scheduled';
+}
+
+function getScheduleGameStartMilliseconds(game: NhlScheduleGame): number | null {
+  const startTimeUTC = asString(game.startTimeUTC);
+
+  if (!startTimeUTC) {
+    return null;
+  }
+
+  const milliseconds = Date.parse(startTimeUTC);
+  return Number.isFinite(milliseconds) ? milliseconds : null;
+}
+
+async function loadRosterMoveSchedule(
+  asset: DraftableAsset | RosterAsset,
+): Promise<NhlScheduleGame[]> {
+  const teamAbbreviation = getAssetTeamAbbreviation(asset).trim().toUpperCase();
+  const season = getNhlSeasonForDate(new Date());
+  const url =
+    `${NHL_API_BASE_URL}/club-schedule-season/${teamAbbreviation.toLowerCase()}/${season}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new HttpsError(
+      'unavailable',
+      `Unable to verify ${teamAbbreviation}'s injury-replacement schedule.`,
+    );
+  }
+
+  const payload = await response.json();
+  queueNhlSharedCacheObservation({
+    url,
+    payload,
+    source: 'functions-core',
+  });
+
+  const schedule = asArray(asRecord(payload)['games'])
+    .map((value) => asRecord(value) as NhlScheduleGame)
+    .filter((game) => game.gameType === 2)
+    .sort((first, second) => {
+      const firstStart = getScheduleGameStartMilliseconds(first);
+      const secondStart = getScheduleGameStartMilliseconds(second);
+
+      if (firstStart !== null && secondStart !== null && firstStart !== secondStart) {
+        return firstStart - secondStart;
+      }
+
+      return asString(first.gameDate).localeCompare(asString(second.gameDate)) ||
+        asNumber(first.id) - asNumber(second.id);
+    });
+
+  if (schedule.length === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      `No regular-season schedule was found for ${teamAbbreviation}.`,
+    );
+  }
+
+  return schedule;
+}
+
+function getStartedScheduledGameIds(input: {
+  scheduledGameIds: readonly number[];
+  schedule: readonly NhlScheduleGame[];
+  boundaryMilliseconds: number;
+}): Set<number> {
+  const scheduleById = new Map(
+    input.schedule.flatMap((game) =>
+      typeof game.id === 'number' && Number.isSafeInteger(game.id)
+        ? [[game.id, game] as const]
+        : [],
+    ),
+  );
+  const startedGameIds = new Set<number>();
+
+  for (const gameId of input.scheduledGameIds) {
+    const game = scheduleById.get(gameId);
+
+    if (!game) {
+      throw new HttpsError(
+        'failed-precondition',
+        `The NHL schedule is missing frozen game ${gameId}. No injury replacement was applied.`,
+      );
+    }
+
+    const state = getScheduleGameState(game);
+    const startMilliseconds = getScheduleGameStartMilliseconds(game);
+
+    if (state === 'live' || state === 'final') {
+      if (startMilliseconds === null) {
+        throw new HttpsError(
+          'failed-precondition',
+          `NHL game ${gameId} has started without an exact puck-drop time. Try again shortly.`,
+        );
+      }
+      startedGameIds.add(gameId);
+      continue;
+    }
+
+    if (startMilliseconds === null) {
+      throw new HttpsError(
+        'failed-precondition',
+        `NHL game ${gameId} is missing its puck-drop time. No injury replacement was applied.`,
+      );
+    }
+
+    if (startMilliseconds <= input.boundaryMilliseconds) {
+      startedGameIds.add(gameId);
+    }
+  }
+
+  return startedGameIds;
+}
+
+function selectFutureInjuryReplacementGames(input: {
+  schedule: readonly NhlScheduleGame[];
+  boundaryMilliseconds: number;
+  count: number;
+}): NhlScheduleGame[] {
+  const games = input.schedule.filter((game) => {
+    const gameId = game.id;
+    const startMilliseconds = getScheduleGameStartMilliseconds(game);
+
+    return typeof gameId === 'number' &&
+      Number.isSafeInteger(gameId) &&
+      getScheduleGameState(game) === 'scheduled' &&
+      startMilliseconds !== null &&
+      startMilliseconds > input.boundaryMilliseconds;
+  }).slice(0, input.count);
+
+  if (games.length !== input.count) {
+    throw new HttpsError(
+      'failed-precondition',
+      `The replacement does not have ${input.count} verifiable future game${
+        input.count === 1 ? '' : 's'
+      } remaining. No roster change was applied.`,
+    );
+  }
+
+  return games;
 }
 
 async function loadRosterMoveReplayContext(
@@ -965,7 +1166,7 @@ export const applyImmediateRosterMove = onCall(
       { maxBytes: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/ },
     ) ?? '';
 
-    if (!['add-drop-active', 'add-open-active', 'active-bench-swap', 'activate-ir-active', 'move-active-to-ir', 'drop-active'].includes(moveType)) {
+    if (!['add-drop-active', 'add-open-active', 'active-bench-swap', 'activate-ir-active', 'move-active-to-ir', 'injury-replacement', 'drop-active'].includes(moveType)) {
       throw new HttpsError('invalid-argument', 'That immediate roster move type is not supported.');
     }
 
@@ -988,7 +1189,7 @@ export const applyImmediateRosterMove = onCall(
       throw new HttpsError('invalid-argument', 'The incoming player is required.');
     }
 
-    if (moveType === 'active-bench-swap' && !benchSlotId) {
+    if ((moveType === 'active-bench-swap' || moveType === 'injury-replacement') && !benchSlotId) {
       throw new HttpsError('invalid-argument', 'The bench slot is required.');
     }
 
@@ -1018,6 +1219,7 @@ export const applyImmediateRosterMove = onCall(
         'The current slot window is not ready yet. Refresh and try again.',
       );
     }
+    const actionBoundaryMilliseconds = Date.now();
 
     const scoringRules = asRecord(leagueSnapshot.data()?.['scoringRules']);
     const gamesPerCycle = Math.max(
@@ -1041,9 +1243,14 @@ export const applyImmediateRosterMove = onCall(
       db.doc(`leagues/${leagueId}/teams/${team.id}/roster/current`),
     );
 
-    const [preflightRosterSnapshot, preflightRosterPickSnapshot] = await Promise.all([
+    const [
+      preflightRosterSnapshot,
+      preflightRosterPickSnapshot,
+      preflightTeamWindowsSnapshot,
+    ] = await Promise.all([
       rosterRef.get(),
       rosterPickRef.get(),
+      teamWindowsRef.get(),
     ]);
 
     if (!preflightRosterSnapshot.exists) {
@@ -1086,7 +1293,8 @@ export const applyImmediateRosterMove = onCall(
     }
 
     let rosterMoveIdentity: NhlPlayerTeamIdentitySnapshot | null = null;
-    const preflightSelectedIncomingAsset = moveType === 'active-bench-swap'
+    const preflightSelectedIncomingAsset =
+      moveType === 'active-bench-swap' || moveType === 'injury-replacement'
       ? preflightRoster.benchSlots.find((slot) => slot.slotId === benchSlotId)
           ?.asset
       : moveType === 'activate-ir-active'
@@ -1134,7 +1342,10 @@ export const applyImmediateRosterMove = onCall(
     }
 
     if (preflightActiveAsset) {
-      if (getAssetKey(preflightActiveAsset) !== preflightOutgoingAssetKey) {
+      if (
+        moveType !== 'injury-replacement' &&
+        getAssetKey(preflightActiveAsset) !== preflightOutgoingAssetKey
+      ) {
         throw new HttpsError(
           'aborted',
           'The active roster and current cycle assignment are out of sync. Refresh and try again.',
@@ -1148,7 +1359,7 @@ export const applyImmediateRosterMove = onCall(
     // the outgoing NHL team's real schedule. This closes the small gap between
     // puck drop and the next scoring-worker refresh: both individual assets
     // truly must be untouched for an immediate current-cycle rewrite.
-    if (preflightActiveAsset) {
+    if (preflightActiveAsset && moveType !== 'injury-replacement') {
       const outgoingEligibilityCycle = Math.max(
         preflightActiveAsset.eligibleFromCycleNumber ?? 1,
         await getEarliestEligibleCycleNumber(
@@ -1169,7 +1380,7 @@ export const applyImmediateRosterMove = onCall(
 
     let preflightMoveToIrAvailabilityStatus = '';
 
-    if (moveType === 'move-active-to-ir') {
+    if (moveType === 'move-active-to-ir' || moveType === 'injury-replacement') {
       if (!preflightActiveAsset || preflightActiveAsset.assetType !== 'skater') {
         throw new HttpsError('failed-precondition', 'Only skaters can be moved to IR.');
       }
@@ -1194,8 +1405,12 @@ export const applyImmediateRosterMove = onCall(
     let preflightIrBenchSlotId = '';
     let preflightIrBenchAssetKey = '';
 
-    if (moveType === 'active-bench-swap' || moveType === 'activate-ir-active') {
-      if (moveType === 'active-bench-swap') {
+    if (
+      moveType === 'active-bench-swap' ||
+      moveType === 'injury-replacement' ||
+      moveType === 'activate-ir-active'
+    ) {
+      if (moveType === 'active-bench-swap' || moveType === 'injury-replacement') {
         const preflightBenchSlot = preflightRoster.benchSlots.find(
           (slot) => slot.slotId === benchSlotId,
         );
@@ -1211,15 +1426,17 @@ export const applyImmediateRosterMove = onCall(
         }
 
         preflightBenchAssetKey = getAssetKey(preflightBenchAsset);
-        preflightBenchEligibilityCycle = Math.max(
-          preflightBenchAsset.eligibleFromCycleNumber ?? 1,
-          await getEarliestEligibleCycleNumber(
-            preflightBenchAsset,
-            gamesPerCycle,
-            leagueId,
-            currentTeamAbbreviationByPlayerId,
-          ),
-        );
+        if (moveType === 'active-bench-swap') {
+          preflightBenchEligibilityCycle = Math.max(
+            preflightBenchAsset.eligibleFromCycleNumber ?? 1,
+            await getEarliestEligibleCycleNumber(
+              preflightBenchAsset,
+              gamesPerCycle,
+              leagueId,
+              currentTeamAbbreviationByPlayerId,
+            ),
+          );
+        }
       } else {
         const preflightIrSlot = preflightRoster.irSlots.find((slot) => slot.slotId === irSlotId);
         const preflightIrAsset = preflightIrSlot?.asset
@@ -1277,7 +1494,8 @@ export const applyImmediateRosterMove = onCall(
       }
     }
 
-    const rawPreflightIncomingAsset = moveType === 'active-bench-swap'
+    const rawPreflightIncomingAsset =
+      moveType === 'active-bench-swap' || moveType === 'injury-replacement'
         ? rosterAssetToDraftableAsset(
             preflightRoster.benchSlots.find((slot) => slot.slotId === benchSlotId)!.asset!,
           )
@@ -1303,6 +1521,163 @@ export const applyImmediateRosterMove = onCall(
         )
       : null;
     const transactionRef = db.collection(`leagues/${leagueId}/transactions`).doc();
+    let preflightInjuryPlan: InjuryReplacementWindowPlan | null = null;
+    let preflightExistingInjuryTransactionId = '';
+    let preflightCurrentSegmentGameIds: number[] = [];
+    let preflightInjuryGameDateById: Record<string, string> = {};
+    let preflightInjuryGameLabelById: Record<string, string> = {};
+
+    if (moveType === 'injury-replacement') {
+      if (rosterMoveReplayContext.mode !== 'live') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Injury replacement is unavailable while historical replay is active.',
+        );
+      }
+      if (
+        !preflightActiveAsset ||
+        preflightActiveAsset.assetType !== 'skater' ||
+        !resolvedIncomingAsset ||
+        resolvedIncomingAsset.assetType !== 'skater'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'An injured skater and a matching bench skater are required.',
+        );
+      }
+      if (preflightActiveAsset.position !== resolvedIncomingAsset.position) {
+        throw new HttpsError(
+          'failed-precondition',
+          `The replacement must play ${preflightActiveAsset.position}.`,
+        );
+      }
+      if (!IR_ELIGIBLE_STATUSES.has(preflightMoveToIrAvailabilityStatus)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The active player is no longer eligible for an injury replacement.',
+        );
+      }
+
+      const preflightWindows = preflightTeamWindowsSnapshot.exists
+        ? asArray(preflightTeamWindowsSnapshot.data()?.['windows']).map(asRecord)
+        : [];
+      const preflightWindow = preflightWindows.find(
+        (window) => asString(window['rosterSlotId']) === activeSlotId,
+      ) ?? null;
+      const pickData = preflightRosterPickSnapshot.data() ?? {};
+      const previousPlan = selectCurrentInjuryReplacementPlan(
+        pickData['injuryReplacementWindow'],
+        preflightWindow?.['injuryReplacementWindow'],
+      );
+      preflightExistingInjuryTransactionId = previousPlan?.latestTransactionId ?? '';
+      const currentSegment = previousPlan?.segments.at(-1);
+      const currentScheduledGameIds = currentSegment?.scheduledGameIds ??
+        asArray(preflightWindow?.['scheduledGameIds'] ?? pickData['sourceNhlTargetGameIds'])
+          .filter(
+            (gameId): gameId is number =>
+              typeof gameId === 'number' &&
+              Number.isSafeInteger(gameId) &&
+              gameId > 0,
+          );
+      preflightCurrentSegmentGameIds = [...currentScheduledGameIds];
+
+      if (currentScheduledGameIds.length === 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The active slot does not have a verifiable six-game schedule yet. Try again shortly.',
+        );
+      }
+
+      const [outgoingSchedule, incomingSchedule] = await Promise.all([
+        loadRosterMoveSchedule(preflightActiveAsset),
+        loadRosterMoveSchedule(resolvedIncomingAsset),
+      ]);
+      const startedCurrentGameIds = getStartedScheduledGameIds({
+        scheduledGameIds: currentScheduledGameIds,
+        schedule: outgoingSchedule,
+        boundaryMilliseconds: actionBoundaryMilliseconds,
+      });
+      const priorRetainedGameCount = previousPlan
+        ? previousPlan.segments.slice(0, -1).reduce(
+            (total, segment) => total + segment.scheduledGameIds.length,
+            0,
+          )
+        : 0;
+      const remainingGames = gamesPerCycle -
+        priorRetainedGameCount -
+        startedCurrentGameIds.size;
+
+      if (remainingGames <= 0) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This active slot has already used all of its games for the matchup.',
+        );
+      }
+
+      const incomingGames = selectFutureInjuryReplacementGames({
+        schedule: incomingSchedule,
+        boundaryMilliseconds: actionBoundaryMilliseconds,
+        count: remainingGames,
+      });
+      const incomingContinuity = createPlayerWindowContinuity({
+        ownerId,
+        rosterSlotId: activeSlotId,
+        asset: resolvedIncomingAsset,
+        activationKey: `injury-${transactionRef.id}`,
+        assignmentNotBefore: actionBoundaryMilliseconds,
+      });
+
+      preflightInjuryPlan = buildInjuryReplacementWindowPlan({
+        previousPlan,
+        currentAsset: rosterAssetToDraftableAsset(preflightActiveAsset),
+        currentPlayerWindowContinuity:
+          currentSegment?.playerWindowContinuity ??
+          (pickData['playerWindowContinuity'] as
+            | import('./shared/core/draft/draft.models').PlayerWindowContinuity
+            | undefined),
+        currentScheduledGameIds,
+        startedCurrentGameIds,
+        currentSourceTeamAbbreviation:
+          currentSegment?.sourceTeamAbbreviation ??
+          getAssetTeamAbbreviation(preflightActiveAsset),
+        incomingAsset: resolvedIncomingAsset,
+        incomingScheduledGameIds: incomingGames.map((game) => game.id!),
+        incomingSourceTeamAbbreviation:
+          getAssetTeamAbbreviation(resolvedIncomingAsset),
+        incomingPlayerWindowContinuity: incomingContinuity ?? undefined,
+        transactionId: transactionRef.id,
+        boundaryMilliseconds: actionBoundaryMilliseconds,
+        requiredGames: gamesPerCycle,
+      });
+      const scheduleById = new Map(
+        [...outgoingSchedule, ...incomingSchedule].flatMap((game) =>
+          typeof game.id === 'number' && Number.isSafeInteger(game.id)
+            ? [[game.id, game] as const]
+            : [],
+        ),
+      );
+      preflightInjuryGameDateById = Object.fromEntries(
+        getInjuryReplacementGameIds(preflightInjuryPlan).map((gameId) => [
+          String(gameId),
+          asString(scheduleById.get(gameId)?.gameDate),
+        ]),
+      );
+      preflightInjuryGameLabelById = Object.fromEntries(
+        preflightInjuryPlan.segments.flatMap((segment) =>
+          segment.scheduledGameIds.map((gameId) => {
+            const game = scheduleById.get(gameId);
+            const team = segment.sourceTeamAbbreviation;
+            const homeTeam = asString(game?.homeTeam?.abbrev).toUpperCase();
+            const awayTeam = asString(game?.awayTeam?.abbrev).toUpperCase();
+            const label = homeTeam === team
+              ? `vs ${awayTeam}`
+              : `@ ${homeTeam}`;
+
+            return [String(gameId), label] as const;
+          }),
+        ),
+      );
+    }
 
     return db.runTransaction(async (transaction) => {
       const [
@@ -1420,7 +1795,11 @@ export const applyImmediateRosterMove = onCall(
         (window) => asString(window['rosterSlotId']) === activeSlotId,
       );
 
-      if (windowIndex >= 0 && !isUntouchedWindow(windows[windowIndex])) {
+      if (
+        moveType !== 'injury-replacement' &&
+        windowIndex >= 0 &&
+        !isUntouchedWindow(windows[windowIndex])
+      ) {
         throw new HttpsError(
           'failed-precondition',
           'This slot has started its current six-game window. The move must wait for the next boundary.',
@@ -1581,6 +1960,107 @@ export const applyImmediateRosterMove = onCall(
           asset: null,
         };
         irSlotIdForTransaction = irSlotId;
+      } else if (moveType === 'injury-replacement') {
+        const benchSlotIndex = roster.benchSlots.findIndex(
+          (slot) => slot.slotId === benchSlotId,
+        );
+        const benchAsset = benchSlotIndex >= 0
+          ? roster.benchSlots[benchSlotIndex].asset
+          : null;
+
+        if (
+          !outgoingAsset ||
+          outgoingAsset.assetType !== 'skater' ||
+          !benchAsset ||
+          benchAsset.assetType !== 'skater' ||
+          !preflightInjuryPlan ||
+          !resolvedIncomingAsset
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The injured player or selected bench replacement is no longer available.',
+          );
+        }
+        if (
+          getAssetKey(benchAsset) !== preflightBenchAssetKey ||
+          getAssetKey(resolvedIncomingAsset) !== preflightBenchAssetKey
+        ) {
+          throw new HttpsError(
+            'aborted',
+            'The selected bench replacement changed while the move was being checked.',
+          );
+        }
+        if (outgoingAsset.position !== benchAsset.position) {
+          throw new HttpsError(
+            'failed-precondition',
+            `The replacement must play ${outgoingAsset.position}.`,
+          );
+        }
+        if (!IR_ELIGIBLE_STATUSES.has(preflightMoveToIrAvailabilityStatus)) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The active player is no longer eligible for an injury replacement.',
+          );
+        }
+
+        const savedPickData = rosterPickSnapshot.data() ?? {};
+        const savedWindow = windowIndex >= 0 ? windows[windowIndex] : null;
+        const savedExistingPlan = selectCurrentInjuryReplacementPlan(
+          savedPickData['injuryReplacementWindow'],
+          savedWindow?.['injuryReplacementWindow'],
+        );
+        const savedCurrentSegmentGameIds =
+          savedExistingPlan?.segments.at(-1)?.scheduledGameIds ??
+          asArray(savedWindow?.['scheduledGameIds'] ?? savedPickData['sourceNhlTargetGameIds'])
+            .filter(
+              (gameId): gameId is number =>
+                typeof gameId === 'number' &&
+                Number.isSafeInteger(gameId) &&
+                gameId > 0,
+            );
+
+        if (
+          (savedExistingPlan?.latestTransactionId ?? '') !==
+            preflightExistingInjuryTransactionId ||
+          JSON.stringify(savedCurrentSegmentGameIds) !==
+            JSON.stringify(preflightCurrentSegmentGameIds)
+        ) {
+          throw new HttpsError(
+            'aborted',
+            'The scoring window changed while the injury replacement was being checked. Please try again.',
+          );
+        }
+
+        const openIrSlotIndex = roster.irSlots.findIndex((slot) => slot.asset === null);
+        if (openIrSlotIndex < 0) {
+          throw new HttpsError(
+            'failed-precondition',
+            'All Injured Reserve slots are already filled.',
+          );
+        }
+
+        incomingAsset = resolvedIncomingAsset;
+        droppedAsset = null;
+        irSlotIdForTransaction = roster.irSlots[openIrSlotIndex].slotId;
+        benchSlotIdForTransaction = benchSlotId;
+        roster.irSlots[openIrSlotIndex] = {
+          ...roster.irSlots[openIrSlotIndex],
+          asset: { ...outgoingAsset, rosterStatus: 'injured' },
+        };
+        roster.benchSlots[benchSlotIndex] = {
+          ...roster.benchSlots[benchSlotIndex],
+          asset: null,
+        };
+        roster.activeSlots[activeSlotIndex] = {
+          ...activeSlot,
+          asset: createRosterAsset(
+            resolvedIncomingAsset,
+            context.cycleNumber,
+            'active',
+          ),
+          pendingMove: null,
+          openFromCycleNumber: null,
+        };
       } else if (moveType === 'active-bench-swap') {
         const benchSlotIndex = roster.benchSlots.findIndex((slot) => slot.slotId === benchSlotId);
         if (benchSlotIndex < 0 || !roster.benchSlots[benchSlotIndex].asset) {
@@ -1725,20 +2205,160 @@ export const applyImmediateRosterMove = onCall(
         }
         transaction.delete(rosterPickRef);
       } else if (incomingAsset) {
-        const playerWindowContinuity = createPlayerWindowContinuity({
-          ownerId,
-          rosterSlotId: activeSlotId,
-          asset: incomingAsset,
-          activationKey: `move-${transactionRef.id}`,
-          assignmentNotBefore: Date.now(),
-        });
-        const resetWindow = buildResetWindow(
-          windowIndex >= 0 ? windows[windowIndex] : {},
-          incomingAsset,
-          ownerId,
-          activeSlotId,
-          context.cycleNumber,
-        );
+        const playerWindowContinuity = moveType === 'injury-replacement'
+          ? preflightInjuryPlan?.segments.at(-1)?.playerWindowContinuity ?? null
+          : createPlayerWindowContinuity({
+              ownerId,
+              rosterSlotId: activeSlotId,
+              asset: incomingAsset,
+              activationKey: `move-${transactionRef.id}`,
+              assignmentNotBefore: Date.now(),
+            });
+        const previousWindow = windowIndex >= 0 ? windows[windowIndex] : {};
+        let resetWindow: Record<string, unknown>;
+
+        if (moveType === 'injury-replacement') {
+          if (!preflightInjuryPlan) {
+            throw new HttpsError(
+              'aborted',
+              'The injury-replacement ownership plan is unavailable. Please try again.',
+            );
+          }
+
+          const scheduledGameIds = getInjuryReplacementGameIds(preflightInjuryPlan);
+          const scheduledGameIdSet = new Set(scheduledGameIds);
+          const completedGameIds = asArray(previousWindow['completedGameIds'])
+            .filter(
+              (gameId): gameId is number =>
+                typeof gameId === 'number' && scheduledGameIdSet.has(gameId),
+            );
+          const liveGameIds = asArray(previousWindow['liveGameIds'])
+            .filter(
+              (gameId): gameId is number =>
+                typeof gameId === 'number' && scheduledGameIdSet.has(gameId),
+            );
+          const appearanceGameIds = asArray(previousWindow['appearanceGameIds'])
+            .filter(
+              (gameId): gameId is number =>
+                typeof gameId === 'number' && scheduledGameIdSet.has(gameId),
+            );
+          const incompleteFinalGameIds = asArray(
+            previousWindow['incompleteFinalGameIds'],
+          ).filter(
+            (gameId): gameId is number =>
+              typeof gameId === 'number' && scheduledGameIdSet.has(gameId),
+          );
+          const gameScores = filterGameRecord(
+            previousWindow['gameScores'],
+            scheduledGameIdSet,
+          );
+          const fantasyPoints = Number(
+            Object.values(gameScores).reduce<number>(
+              (total, value) =>
+                total +
+                (typeof value === 'number' && Number.isFinite(value) ? value : 0),
+              0,
+            ).toFixed(1),
+          );
+          const nowIso = new Date(actionBoundaryMilliseconds).toISOString();
+
+          resetWindow = {
+            ...previousWindow,
+            id:
+              asString(previousWindow['id']) ||
+              getWindowId(ownerId, activeSlotId, context.cycleNumber),
+            ownerId,
+            rosterSlotId: activeSlotId,
+            cycleNumber: context.cycleNumber,
+            position: incomingAsset.position,
+            assetKey: incomingAsset.assetKey,
+            asset: incomingAsset,
+            status:
+              completedGameIds.length > 0 ||
+              liveGameIds.length > 0 ||
+              incompleteFinalGameIds.length > 0
+                ? 'active'
+                : 'scheduled',
+            scheduledGameIds,
+            scheduledGameDates: scheduledGameIds.map(
+              (gameId) => preflightInjuryGameDateById[String(gameId)] ?? '',
+            ),
+            scheduledGameLabels: scheduledGameIds.map(
+              (gameId) => preflightInjuryGameLabelById[String(gameId)] ?? '',
+            ),
+            scheduleTeamAbbreviation:
+              preflightInjuryPlan.segments.at(-1)?.sourceTeamAbbreviation ?? null,
+            sourceTeamAbbreviationByGameId: Object.fromEntries(
+              preflightInjuryPlan.segments.flatMap((segment) =>
+                segment.scheduledGameIds.map((gameId) => [
+                  String(gameId),
+                  segment.sourceTeamAbbreviation,
+                ]),
+              ),
+            ),
+            teamIdentityChanged: false,
+            injuryReplacementWindow: preflightInjuryPlan,
+            scoringAssetKeyByGameId:
+              getInjuryReplacementAssetKeyByGameId(preflightInjuryPlan),
+            completedGameIds,
+            liveGameIds,
+            appearanceGameIds,
+            incompleteFinalGameIds,
+            gameInputCompleteness: filterGameRecord(
+              previousWindow['gameInputCompleteness'],
+              scheduledGameIdSet,
+            ),
+            gameScores,
+            gameStates: filterGameRecord(
+              previousWindow['gameStates'],
+              scheduledGameIdSet,
+            ),
+            scheduledGames: scheduledGameIds.length,
+            gamesPlayed: completedGameIds.length,
+            actualGamesPlayed: appearanceGameIds.filter((gameId) =>
+              completedGameIds.includes(gameId),
+            ).length,
+            gamesLeft: Math.max(0, scheduledGameIds.length - completedGameIds.length),
+            fantasyPoints,
+            frozenProjectionPoints:
+              getInjuryReplacementProjectionPoints(preflightInjuryPlan),
+            frozenProjectionVersion: incomingAsset.frozenProjectionVersion ?? null,
+            frozenProjectionSource: incomingAsset.frozenProjectionSource ?? null,
+            frozenProjectionSnapshotId:
+              incomingAsset.frozenProjectionSnapshotId ??
+              incomingAsset.sharedProjectionSnapshotId ??
+              null,
+            frozenProjectionGeneratedAt:
+              incomingAsset.frozenProjectionGeneratedAt ??
+              incomingAsset.projectionGeneratedAt ??
+              null,
+            frozenProjectionFrozenAt: nowIso,
+            frozenProjectionTargetGameIds: scheduledGameIds,
+            firstScheduledGameDate:
+              preflightInjuryGameDateById[String(scheduledGameIds[0])] ?? null,
+            lastScheduledGameDate:
+              preflightInjuryGameDateById[
+                String(scheduledGameIds.at(-1) ?? '')
+              ] ?? null,
+            startedAt:
+              completedGameIds.length > 0 ||
+              liveGameIds.length > 0 ||
+              incompleteFinalGameIds.length > 0
+                ? previousWindow['startedAt'] ?? nowIso
+                : null,
+            completedAt: null,
+            createdAt: previousWindow['createdAt'] ?? nowIso,
+            updatedAt: nowIso,
+          };
+        } else {
+          resetWindow = buildResetWindow(
+            previousWindow,
+            incomingAsset,
+            ownerId,
+            activeSlotId,
+            context.cycleNumber,
+          );
+        }
         resetWindow['playerWindowContinuity'] =
           playerWindowContinuity ?? null;
         resetWindowForBank = {
@@ -1769,14 +2389,16 @@ export const applyImmediateRosterMove = onCall(
         const incomingTeamAbbreviation = getAssetTeamAbbreviation(incomingAsset)
           .trim()
           .toUpperCase();
-        const incomingSourceNhlTargetGameIds = asArray(
-          sourceNhlTargetGameIdsByTeam[incomingTeamAbbreviation],
-        ).filter(
-          (gameId): gameId is number =>
-            typeof gameId === 'number' &&
-            Number.isSafeInteger(gameId) &&
-            gameId > 0,
-        );
+        const incomingSourceNhlTargetGameIds = moveType === 'injury-replacement'
+          ? preflightInjuryPlan?.segments.at(-1)?.scheduledGameIds ?? []
+          : asArray(
+              sourceNhlTargetGameIdsByTeam[incomingTeamAbbreviation],
+            ).filter(
+              (gameId): gameId is number =>
+                typeof gameId === 'number' &&
+                Number.isSafeInteger(gameId) &&
+                gameId > 0,
+            );
         const fallbackOrder = 100000 + activeSlotIndex + 1;
         const nextRosterPick = {
           ...existingPickWithoutDirectTargetIds,
@@ -1790,8 +2412,13 @@ export const applyImmediateRosterMove = onCall(
           cycleWindowId: getWindowId(ownerId, activeSlotId, context.cycleNumber),
           snapshotCycleNumber: context.cycleNumber,
           snapshotOrder: asNumber(existingPick['snapshotOrder'], fallbackOrder),
-          snapshotSource: 'immediate-untouched-roster-move',
+          snapshotSource: moveType === 'injury-replacement'
+            ? 'injury-replacement'
+            : 'immediate-untouched-roster-move',
           playerWindowContinuity: playerWindowContinuity ?? null,
+          ...(moveType === 'injury-replacement' && preflightInjuryPlan
+            ? { injuryReplacementWindow: preflightInjuryPlan }
+            : {}),
           snapshottedAt: FieldValue.serverTimestamp(),
           ...(incomingSourceNhlTargetGameIds.length > 0
             ? { sourceNhlTargetGameIds: incomingSourceNhlTargetGameIds }
@@ -1988,6 +2615,8 @@ export const applyImmediateRosterMove = onCall(
 
       const transactionType = moveType === 'active-bench-swap'
         ? 'active-bench-swap-activated'
+        : moveType === 'injury-replacement'
+          ? 'injury-replacement'
         : moveType === 'activate-ir-active'
           ? 'activate-from-ir'
           : moveType === 'move-active-to-ir'
@@ -2008,11 +2637,15 @@ export const applyImmediateRosterMove = onCall(
           ? roster.activeSlots[activeSlotIndex].asset
           : moveType === 'move-active-to-ir'
             ? outgoingAsset
+            : moveType === 'injury-replacement'
+              ? outgoingAsset
             : moveType === 'activate-ir-active'
               ? outgoingAsset
               : null,
         activatedAsset: moveType === 'activate-ir-active'
           ? roster.activeSlots[activeSlotIndex].asset
+          : moveType === 'injury-replacement'
+            ? roster.activeSlots[activeSlotIndex].asset
           : null,
         droppedAsset:
           moveType === 'move-active-to-ir' || moveType === 'active-bench-swap'
@@ -2031,7 +2664,13 @@ export const applyImmediateRosterMove = onCall(
         rosterSlotId: activeSlotId,
         effectiveCycleNumber: context.cycleNumber,
         effectiveLabel: `Cycle ${context.cycleNumber}`,
-        immediateUntouchedWindow: true,
+        immediateUntouchedWindow: moveType !== 'injury-replacement',
+        injuryReplacementWindow: moveType === 'injury-replacement'
+          ? preflightInjuryPlan
+          : null,
+        availabilityStatus: moveType === 'injury-replacement'
+          ? preflightMoveToIrAvailabilityStatus
+          : null,
         ...(rosterMoveIdentity
           ? {
               nhlPlayerTeamIdentityHash: rosterMoveIdentity.identityHash,
@@ -2046,7 +2685,9 @@ export const applyImmediateRosterMove = onCall(
         applied: true as const,
         cycleNumber: context.cycleNumber,
         activeSlotId,
-        message: `Applied immediately to untouched Cycle ${context.cycleNumber}.`,
+        message: moveType === 'injury-replacement'
+          ? `Injury replacement applied to the remaining games in Cycle ${context.cycleNumber}.`
+          : `Applied immediately to untouched Cycle ${context.cycleNumber}.`,
       };
     });
   },

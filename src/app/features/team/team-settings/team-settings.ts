@@ -47,6 +47,7 @@ import {
   moveBenchRosterAssetToIr,
   moveRosterAssetToIr,
   queueActiveBenchSwap,
+  replaceInjuredRosterAsset,
   type RosterDropSource,
 } from '../../../core/draft/draft.service';
 import { previewActiveBenchSwapTiming } from '../../../core/transactions/active-bench-swap-timing.service';
@@ -337,7 +338,28 @@ export class TeamSettings implements OnDestroy {
       (slot) => slot.slotId === this.benchSwapTargetSlotId(),
     )?.asset ?? null;
 
-    if (!preview || !benchAsset) {
+    if (!benchAsset) {
+      return null;
+    }
+
+    if (this.isPendingBenchSwapInjuryReplacement()) {
+      const activeName = activeAsset
+        ? this.getRosterAssetName(activeAsset)
+        : 'The injured starter';
+      const currentCycleNumber = this.latestCycle()?.cycleNumber;
+      const matchupLabel = currentCycleNumber
+        ? `Matchup ${currentCycleNumber}`
+        : 'the current matchup';
+
+      return {
+        tone: 'ready',
+        matchupLabel,
+        headline: `This injury replacement takes effect now in ${matchupLabel}`,
+        detail: `${activeName} keeps every game and point already started. ${this.getRosterAssetName(benchAsset)} receives only the slot’s remaining future games; earlier bench points never transfer.`,
+      };
+    }
+
+    if (!preview) {
       return null;
     }
 
@@ -1897,6 +1919,14 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
+    if (this.isPendingBenchSwapInjuryReplacement()) {
+      this.benchSwapTimingGeneration += 1;
+      this.benchSwapTimingPreview.set(null);
+      this.benchSwapTimingError.set('');
+      this.benchSwapTimingLoading.set(false);
+      return;
+    }
+
     const generation = ++this.benchSwapTimingGeneration;
     const benchSlotId = benchSlot.slotId;
     const activeSlotId = targetSlot.slotId;
@@ -1942,10 +1972,24 @@ export class TeamSettings implements OnDestroy {
       this.isOwnTeam() &&
       this.getPendingBenchSwapSlot()?.asset &&
       this.getBenchSwapTargetSlots().some((slot) => slot.slotId === this.benchSwapTargetSlotId()) &&
-      this.benchSwapTimingPreview() &&
+      (this.isPendingBenchSwapInjuryReplacement() || this.benchSwapTimingPreview()) &&
       !this.benchSwapTimingLoading() &&
       this.clientHealth.competitiveActionsReady() &&
       !this.rosterMoveLoading(),
+    );
+  }
+
+  isPendingBenchSwapInjuryReplacement(): boolean {
+    const benchAsset = this.getPendingBenchSwapSlot()?.asset ?? null;
+    const targetSlot = this.getBenchSwapTargetSlots().find(
+      (slot) => slot.slotId === this.benchSwapTargetSlotId(),
+    );
+
+    return Boolean(
+      benchAsset?.assetType === 'skater' &&
+      targetSlot?.asset?.assetType === 'skater' &&
+      targetSlot.asset.position === benchAsset.position &&
+      this.canMoveSlotToIr(targetSlot),
     );
   }
 
@@ -1967,7 +2011,15 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    if (!this.benchSwapTimingPreview()) {
+    const targetAsset = targetSlot.asset;
+    const injuryReplacement =
+      targetAsset?.assetType === 'skater' &&
+      this.isPlayerIrEligible(targetAsset) &&
+      benchSlot.asset.assetType === 'skater' &&
+      targetAsset.position === benchSlot.asset.position &&
+      this.getOpenIrSlotCount() > 0;
+
+    if (!injuryReplacement && !this.benchSwapTimingPreview()) {
       this.benchSwapTimingError.set(
         'RinkRat must verify the exact matchup timing before this swap can be confirmed.',
       );
@@ -1990,19 +2042,29 @@ export class TeamSettings implements OnDestroy {
     await this.waitForRosterOverlayDismissal();
 
     try {
-      const request = queueActiveBenchSwap({
-        leagueId: this.leagueId,
-        ownerId: this.userId,
-        activeSlotId: targetSlot.slotId,
-        benchSlotId: benchSlot.slotId,
-      });
+      const request = injuryReplacement
+        ? replaceInjuredRosterAsset({
+            leagueId: this.leagueId,
+            ownerId: this.userId,
+            activeSlotId: targetSlot.slotId,
+            benchSlotId: benchSlot.slotId,
+          })
+        : queueActiveBenchSwap({
+            leagueId: this.leagueId,
+            ownerId: this.userId,
+            activeSlotId: targetSlot.slotId,
+            benchSlotId: benchSlot.slotId,
+          });
       const execution = await this.awaitRosterMutationConfirmation(
         request,
         previousRosterFingerprint,
         operationGeneration,
       );
       const effectiveCycleNumber =
-        execution?.effectiveCycleNumber ?? this.getRosterMoveEffectiveCycleNumber();
+        execution?.effectiveCycleNumber ??
+        (injuryReplacement
+          ? this.latestCycle()?.cycleNumber ?? 1
+          : this.getRosterMoveEffectiveCycleNumber());
       const observedTarget = this.roster()?.activeSlots.find(
         (slot) => slot.slotId === targetSlot.slotId,
       );
@@ -2014,7 +2076,9 @@ export class TeamSettings implements OnDestroy {
         execution?.mode ?? (observedImmediate ? 'immediate' : observedQueued ? 'queued' : 'queued');
 
       this.rosterMoveMessage.set(
-        mode === 'immediate'
+        injuryReplacement
+          ? `${incomingName} replaced the injured starter immediately in ${targetSlot.position} Slot ${targetSlot.slotNumber}. The starter moved to Injured Reserve, all already-started points remain, and only the slot’s remaining future games belong to ${incomingName}.`
+          : mode === 'immediate'
           ? `${incomingName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither six-game count had started, so the swap applies to Matchup ${effectiveCycleNumber}.`
           : `${incomingName} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${effectiveCycleNumber}.`,
       );
@@ -3169,6 +3233,7 @@ export class TeamSettings implements OnDestroy {
       'waiver-award',
       'slot-move-activated',
       'active-bench-swap-activated',
+      'injury-replacement',
     ].includes(transaction.type);
   }
 
@@ -3232,6 +3297,9 @@ export class TeamSettings implements OnDestroy {
 
       case 'active-bench-swap-activated':
         return `Started ${this.getTransactionAssetName(transaction.addedAsset)}`;
+
+      case 'injury-replacement':
+        return `Replaced injured ${this.getTransactionAssetName(transaction.movedAsset)}`;
 
       case 'move-bench-to-ir':
         return `Moved ${this.getTransactionAssetName(transaction.movedAsset)} from bench to Injured Reserve`;
@@ -3308,6 +3376,9 @@ export class TeamSettings implements OnDestroy {
 
       case 'active-bench-swap-activated':
         return `${this.getTransactionAssetName(transaction.addedAsset)} began the active slot’s new six-game count. ${this.getTransactionAssetName(transaction.droppedAsset)} moved to the bench.`;
+
+      case 'injury-replacement':
+        return `${this.getTransactionAssetName(transaction.movedAsset)} moved to Injured Reserve and kept every already-started game and point. ${this.getTransactionAssetName(transaction.activatedAsset)} receives only the remaining future games in that same six-game slot.`;
 
       case 'move-bench-to-ir':
         return `${this.getTransactionAssetName(transaction.movedAsset)} moved from the bench to Injured Reserve (IR) and opened a flexible bench spot.`;

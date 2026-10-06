@@ -19,6 +19,7 @@ import {
 } from './cycle.models';
 import { CycleAssetScoreSummary, CycleScoringResult } from './cycle-scoring.service';
 import { resolveSourceNhlBlockNumber } from './cycle-window-selection.util';
+import { normalizeInjuryReplacementWindowPlan } from './injury-replacement-window.util';
 import {
   normalizePlayerWindowContinuity,
   resolveConsistentPlayerWindowContinuity,
@@ -150,6 +151,9 @@ function normalizeAssetCycleWindow(
         asset,
       })
     : normalizePlayerWindowContinuity(value.playerWindowContinuity);
+  const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
+    value.injuryReplacementWindow,
+  );
 
   return {
     id: value.id ?? '',
@@ -177,6 +181,10 @@ function normalizeAssetCycleWindow(
     ),
     teamIdentityChanged: value.teamIdentityChanged === true,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+    ...(injuryReplacementWindow ? { injuryReplacementWindow } : {}),
+    scoringAssetKeyByGameId: normalizeStringRecord(
+      value.scoringAssetKeyByGameId,
+    ),
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -296,6 +304,11 @@ function buildWindow(
     rosterSlotId,
     asset: pick.asset,
   });
+  const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
+    summary?.injuryReplacementWindow ??
+      pick.injuryReplacementWindow ??
+      previous?.injuryReplacementWindow,
+  );
 
   return {
     id: windowId,
@@ -323,6 +336,10 @@ function buildWindow(
     teamIdentityChanged:
       summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+    ...(injuryReplacementWindow ? { injuryReplacementWindow } : {}),
+    scoringAssetKeyByGameId:
+      summary?.scoringAssetKeyByGameId ??
+      normalizeStringRecord(previous?.scoringAssetKeyByGameId),
     completedGameIds: summary?.completedGameIds ?? normalizeNumberArray(previous?.completedGameIds),
     liveGameIds: summary?.liveGameIds ?? normalizeNumberArray(previous?.liveGameIds),
     appearanceGameIds:
@@ -386,6 +403,8 @@ function stableWindowFingerprint(teamWindows: FantasyTeamCycleWindows): string {
         window.sourceTeamAbbreviationByGameId ?? {},
       teamIdentityChanged: window.teamIdentityChanged === true,
       playerWindowContinuity: window.playerWindowContinuity ?? null,
+      injuryReplacementWindow: window.injuryReplacementWindow ?? null,
+      scoringAssetKeyByGameId: window.scoringAssetKeyByGameId ?? {},
       completedGameIds: window.completedGameIds,
       liveGameIds: window.liveGameIds,
       appearanceGameIds: window.appearanceGameIds,

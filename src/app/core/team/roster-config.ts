@@ -40,7 +40,7 @@ export const DEFAULT_ROSTER_GROUPS: RosterGroup[] = [
   }
 ];
 
-export const BENCH_SLOT_COUNT = 3;
+export const BENCH_SLOT_COUNT = 5;
 
 export const IR_SLOT_COUNT = 3;
 

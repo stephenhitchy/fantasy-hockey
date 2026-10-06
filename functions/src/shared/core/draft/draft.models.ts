@@ -461,6 +461,32 @@ export interface PlayerWindowContinuity {
   lastScheduleTeamAbbreviation?: string;
 }
 
+export interface InjuryReplacementWindowSegment {
+  segmentId: string;
+  reason: 'original' | 'injury-replacement';
+  assetKey: string;
+  asset: DraftableAsset;
+  scheduledGameIds: number[];
+  sourceTeamAbbreviation: string;
+  assignmentNotBeforeMilliseconds?: number;
+  activatedAtMilliseconds?: number;
+  playerWindowContinuity?: PlayerWindowContinuity;
+}
+
+/**
+ * Versioned, server-authored ownership plan for a six-game active-slot window
+ * that was split by one or more verified injury replacements. Every game id
+ * belongs to exactly one segment and the combined plan never exceeds the
+ * league's normal per-slot game allowance.
+ */
+export interface InjuryReplacementWindowPlan {
+  schemaVersion: 1;
+  latestTransactionId: string;
+  replacementCount: number;
+  requiredGames: number;
+  segments: InjuryReplacementWindowSegment[];
+}
+
 export interface DraftPick extends DraftPickPreview {
   asset: DraftableAsset;
 
@@ -483,6 +509,7 @@ export interface DraftPick extends DraftPickPreview {
   sourceNhlTargetGameIdsByTeam?: Record<string, number[]>;
   /** Skaters only. Team-goalie units continue to use fixed club blocks. */
   playerWindowContinuity?: PlayerWindowContinuity;
+  injuryReplacementWindow?: InjuryReplacementWindowPlan;
   /** Server timestamp written when this slot-window snapshot became active. */
   snapshottedAt?: unknown;
   snapshotSource?: string;

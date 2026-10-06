@@ -1304,7 +1304,7 @@
                 <span class="eyebrow">Injured Reserve Move</span>
                 <h2 id="ir-bench-title">Move {{ getRosterAssetName(irBenchAsset) }} to Bench</h2>
                 <p>
-                  Choose one of your three bench slots. Replacing an occupied slot sends that player
+                  Choose one of your five bench slots. Replacing an occupied slot sends that player
                   or goalie unit to waivers.
                 </p>
               </div>
@@ -1425,11 +1425,16 @@
           >
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
-                <span class="eyebrow">Fair Lineup Change</span>
+                <span class="eyebrow">{{
+                  isPendingBenchSwapInjuryReplacement()
+                    ? 'Injury Replacement'
+                    : 'Fair Lineup Change'
+                }}</span>
                 <h2 id="bench-swap-title">Start {{ getRosterAssetName(benchSwapAsset) }}</h2>
                 <p>
-                  Choose the matching active slot. If both six-game counts are untouched, the swap
-                  applies immediately; otherwise it waits until both spots can change fairly.
+                  Choose a matching active slot. Normal swaps follow six-game timing. Only players
+                  listed as Out, Injured Reserve, or Long-Term Injured Reserve can be replaced
+                  immediately.
                 </p>
               </div>
               <button
@@ -1455,10 +1460,8 @@
             </div>
 
             <div class="lineup-change-pill-row">
-              <span class="lineup-change-pill good">Moves now if both counts are untouched</span>
-              <span class="lineup-change-pill neutral"
-                >Schedules safely if either count has started</span
-              >
+              <span class="lineup-change-pill good">Server-verified timing</span>
+              <span class="lineup-change-pill neutral">Six-game ownership protected</span>
             </div>
 
             <div class="ir-activation-target-list lineup-change-target-list">
@@ -1529,7 +1532,7 @@
               [class.lineup-swap-timing--waiting]="benchSwapTimingMessage()?.tone === 'waiting'"
               aria-live="polite"
             >
-              @if (benchSwapTimingLoading()) {
+              @if (benchSwapTimingLoading() && !isPendingBenchSwapInjuryReplacement()) {
                 <span class="rr-spinner" aria-hidden="true"></span>
                 <div>
                   <small>Matchup timing</small>
@@ -1586,7 +1589,7 @@
                       ? getCompetitiveActionButtonBlockLabel()
                       : rosterMoveLoading()
                         ? 'Applying...'
-                        : benchSwapTimingLoading()
+                        : benchSwapTimingLoading() && !isPendingBenchSwapInjuryReplacement()
                           ? 'Checking Matchup...'
                         : 'Confirm Swap'
                   }}</strong>

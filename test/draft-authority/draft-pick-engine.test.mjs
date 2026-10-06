@@ -37,7 +37,7 @@ function emptyRoster() {
         openFromCycleNumber: null,
       };
     }),
-    benchSlots: Array.from({ length: 3 }, (_, index) => ({
+    benchSlots: Array.from({ length: 5 }, (_, index) => ({
       slotId: `B-${index + 1}`,
       slotNumber: index + 1,
       asset: null,
@@ -83,9 +83,9 @@ function draft(order = ['a', 'b']) {
     schemaVersion: 3,
     status: 'live',
     format: 'snake',
-    totalRounds: 17,
+    totalRounds: 19,
     rosterRequirements: { LW: 3, C: 3, RW: 3, D: 4, G: 1 },
-    benchSlots: 3,
+    benchSlots: 5,
     roundOneOrder: order,
     nextOverallPick: 1,
     draftedAssetKeys: [],
@@ -216,7 +216,7 @@ describe('server draft pick engine', () => {
     assert.equal(selection.selectionType, 'queue');
   });
 
-  test('automatic bench selection fills defense after two forwards', () => {
+  test('automatic bench selection fills defense after three forwards', () => {
     const roster = fillAllStarters(emptyRoster());
     roster.benchSlots[0].asset = {
       ...skater('skater-310', 'LW', 40),
@@ -225,6 +225,11 @@ describe('server draft pick engine', () => {
     };
     roster.benchSlots[1].asset = {
       ...skater('skater-311', 'C', 40),
+      rosterStatus: 'benched',
+      cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
+    };
+    roster.benchSlots[2].asset = {
+      ...skater('skater-314', 'RW', 40),
       rosterStatus: 'benched',
       cycleScore: { cycleNumber: 1, gamesCounted: 0, fantasyPoints: 0 },
     };

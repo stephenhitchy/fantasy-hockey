@@ -3,7 +3,7 @@ import {
   DraftPosition,
 } from '../draft/draft.models';
 
-export const DRAFT_RANKING_MODEL_VERSION = 3;
+export const DRAFT_RANKING_MODEL_VERSION = 4;
 
 const GOALIE_UNIT_TALENT_SCALE = 0.88;
 const GOALIE_UNIT_STARTER_TALENT_WEIGHT = 0.45;
@@ -27,13 +27,13 @@ const POSITIONS: DraftPosition[] = ['LW', 'C', 'RW', 'D', 'G'];
 const FORWARD_POSITIONS: DraftPosition[] = ['LW', 'C', 'RW'];
 
 /**
- * Expected draft demand for RinkRat's three flexible bench slots. Team goalie
+ * Expected draft demand for RinkRat's five flexible bench slots. Team goalie
  * units have no default bench demand because they cannot be injured and the
  * undrafted pool remains the replacement source.
  */
 export const DRAFT_BENCH_DEMAND_PER_TEAM = {
-  F: 2,
-  D: 1,
+  F: 3,
+  D: 2,
   G: 0,
 } as const;
 

@@ -17,7 +17,7 @@ For each fantasy team, the ranking model expects:
 
 ```text
 Starters: 3 LW, 3 C, 3 RW, 4 D, 1 Team Goalie Unit
-Bench:    2 forwards, 1 defenseman, 0 Team Goalie Units
+Bench:    3 forwards, 2 defensemen, 0 Team Goalie Units
 ```
 
 The two forward bench positions are assigned to the best remaining LW, C, or
@@ -29,7 +29,7 @@ The team count therefore changes the board deterministically. In a 10-team
 league, ten Team Goalie Units retain starter demand and the 11th is the first
 waiver replacement. In a 12-team league, units 11 and 12 regain starter demand.
 Assets outside expected draft demand remain ordered, but are placed after the
-17-round drafted pool so high raw projections cannot create a late positional
+19-round drafted pool so high raw projections cannot create a late positional
 wall.
 
 ## Goalie-unit curve
@@ -43,17 +43,17 @@ need default bench coverage.
 
 Projection V11 rate calculations, season projections, six-game projections,
 snapshot hash schema and algorithm, and scoring values are not recalibrated.
-New snapshot contents carry `draftRankingVersion: 2`; older ranking snapshots
+New snapshot contents carry `draftRankingVersion: 4`; older ranking snapshots
 are not reused as if they contained the new curve.
 
 ## Auto-Draft
 
 Server-authoritative Auto-Draft continues to fill all starting slots before
-the bench. Its three bench targets are now:
+the bench. Its five bench targets are now:
 
 ```text
-2 forwards
-1 defenseman
+3 forwards
+2 defensemen
 0 reserve Team Goalie Units
 ```
 

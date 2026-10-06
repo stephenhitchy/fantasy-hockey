@@ -17,8 +17,8 @@ import {
 const TEAM_COUNT = 4;
 const REGULAR_SEASON_CYCLE_COUNT = 11;
 const ACTIVE_ROSTER_SLOTS_PER_TEAM = 14;
-const DRAFT_SLOTS_PER_TEAM = 17;
-const BENCH_SLOTS_PER_TEAM = 3;
+const DRAFT_SLOTS_PER_TEAM = 19;
+const BENCH_SLOTS_PER_TEAM = 5;
 const IR_SLOTS_PER_TEAM = 3;
 const GAMES_PER_WINDOW = 6;
 
@@ -90,7 +90,7 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     checks,
     'draft-roster-count',
     'League and draft',
-    'A four-team draft fills all 14 active roster slots plus three bench slots per team',
+    'A four-team draft fills all 14 active roster slots plus five bench slots per team',
     String(TEAM_COUNT * DRAFT_SLOTS_PER_TEAM),
     String(draftedAssetKeys.length),
     draftedAssetKeys.length === TEAM_COUNT * DRAFT_SLOTS_PER_TEAM,
@@ -100,7 +100,7 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     'draft-assets-unique',
     'League and draft',
     'No asset can be drafted twice',
-    '68 unique assets',
+    '76 unique assets',
     `${new Set(draftedAssetKeys).size} unique assets`,
     new Set(draftedAssetKeys).size === draftedAssetKeys.length,
   );
@@ -108,10 +108,10 @@ export function runFullSeasonLifecycleSimulator(): SeasonLifecycleSimulationResu
     checks,
     'roster-reserve-capacity',
     'League and draft',
-    'Every team receives three flexible bench slots and three IR slots',
-    '3 bench · 3 IR',
+    'Every team receives five flexible bench slots and three IR slots',
+    '5 bench · 3 IR',
     `${BENCH_SLOTS_PER_TEAM} bench · ${IR_SLOTS_PER_TEAM} IR`,
-    BENCH_SLOTS_PER_TEAM === 3 && IR_SLOTS_PER_TEAM === 3,
+    BENCH_SLOTS_PER_TEAM === 5 && IR_SLOTS_PER_TEAM === 3,
   );
 
   const allRegularGameIds: number[] = [];
