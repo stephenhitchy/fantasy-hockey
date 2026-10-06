@@ -5,10 +5,15 @@ import test from 'node:test';
 
 import {
   clampDashboardLeagueRailIndex,
+  DASHBOARD_ACTIVE_LEAGUE_STORAGE_PREFIX,
   DASHBOARD_MATCHUP_VIEW_STORAGE_KEY,
+  getDashboardActiveLeagueStorageKey,
   getDashboardLeagueRailIndex,
+  loadDashboardActiveLeagueId,
   loadDashboardMatchupViewMode,
   normalizeDashboardMatchupViewMode,
+  resolveDashboardActiveLeagueIndex,
+  saveDashboardActiveLeagueId,
   saveDashboardMatchupViewMode,
 } from '../../src/app/features/dashboard/dashboard-league-carousel.util.ts';
 import {
@@ -63,6 +68,52 @@ test('B1X preserves a safe browser-local matchup layout preference', () => {
       throw new Error('blocked');
     },
   }));
+});
+
+test('B1X restores the last matchup selected for each signed-in manager', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  const leagues = [
+    { leagueId: 'league-one' },
+    { leagueId: 'league-two' },
+    { leagueId: 'league-three' },
+  ];
+
+  assert.equal(
+    getDashboardActiveLeagueStorageKey('manager-one'),
+    `${DASHBOARD_ACTIVE_LEAGUE_STORAGE_PREFIX}:manager-one`,
+  );
+  assert.equal(getDashboardActiveLeagueStorageKey('  '), null);
+  assert.equal(loadDashboardActiveLeagueId('manager-one', storage), null);
+  assert.equal(resolveDashboardActiveLeagueIndex(leagues, null), 0);
+
+  saveDashboardActiveLeagueId('manager-one', 'league-two', storage);
+  saveDashboardActiveLeagueId('manager-two', 'league-three', storage);
+
+  assert.equal(loadDashboardActiveLeagueId('manager-one', storage), 'league-two');
+  assert.equal(loadDashboardActiveLeagueId('manager-two', storage), 'league-three');
+  assert.equal(resolveDashboardActiveLeagueIndex(leagues, 'league-two'), 1);
+  assert.equal(resolveDashboardActiveLeagueIndex(leagues, 'removed-league'), 0);
+  assert.equal(resolveDashboardActiveLeagueIndex([], 'league-two'), 0);
+  assert.equal(loadDashboardActiveLeagueId('manager-one', {
+    getItem: () => {
+      throw new Error('blocked');
+    },
+    setItem: () => {},
+  }), null);
+  assert.doesNotThrow(() => saveDashboardActiveLeagueId(
+    'manager-one',
+    'league-two',
+    {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    },
+  ));
 });
 
 test('B1X derives mobile league context without guessing a matchup cycle', () => {
@@ -149,6 +200,8 @@ test('B1X lets managers switch between the matchup rail and every matchup', asyn
   assert.match(template, /\[class\.league-carousel\]="matchupViewMode\(\) === 'carousel'"/);
   assert.match(template, /\[class\.league-gallery\]="matchupViewMode\(\) === 'all'"/);
   assert.match(component, /saveDashboardMatchupViewMode\(mode\)/);
+  assert.match(component, /loadDashboardActiveLeagueId\(this\.userId\)/);
+  assert.match(component, /saveDashboardActiveLeagueId\(this\.userId, selectedLeagueId\)/);
   assert.doesNotMatch(component, /onSnapshot|addEventListener/);
   assert.match(styles, /\.league-gallery\s*>\s*\.league-card\s*\{[\s\S]*?height:\s*100%/);
   assert.match(styles, /\.league-gallery\s*>\s*\.league-card\s*\{[\s\S]*?container-type:\s*inline-size/);

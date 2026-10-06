@@ -19,6 +19,9 @@ This is a Hosting-only presentation change.
 - When more than one league is available, an accessible layout toggle switches
   between the swipe rail and a responsive all-matchups grid. The browser keeps
   the manager's choice locally without a profile write or additional read.
+- The swipe rail also restores the last league matchup viewed by each signed-in
+  manager on that browser. A removed or unavailable league falls back to the
+  first current card without blocking Dashboard load.
 - Grid cards scale score typography from the card width so larger scores remain
   contained without hiding digits or weakening their visual priority.
 - Mobile grid stacking excludes the league rail, so the first and later

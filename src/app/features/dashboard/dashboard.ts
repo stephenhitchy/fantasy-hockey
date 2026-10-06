@@ -26,7 +26,10 @@ import {
   clampDashboardLeagueRailIndex,
   type DashboardMatchupViewMode,
   getDashboardLeagueRailIndex,
+  loadDashboardActiveLeagueId,
   loadDashboardMatchupViewMode,
+  resolveDashboardActiveLeagueIndex,
+  saveDashboardActiveLeagueId,
   saveDashboardMatchupViewMode,
 } from './dashboard-league-carousel.util';
 
@@ -542,34 +545,27 @@ export class Dashboard implements OnDestroy {
       left: Math.min(maxScrollLeft, Math.max(0, targetLeft)),
       behavior: reducedMotion ? 'auto' : 'smooth',
     });
-    this.activeLeagueIndex.set(targetIndex);
-    this.syncMobileLeagueNavigation();
+    this.selectActiveLeagueIndex(targetIndex);
   }
 
   private resetLeagueRailPosition(): void {
-    this.activeLeagueIndex.set(0);
+    const targetIndex = resolveDashboardActiveLeagueIndex(
+      this.orderedLeagueSummaries(),
+      loadDashboardActiveLeagueId(this.userId),
+    );
+
+    this.activeLeagueIndex.set(targetIndex);
     this.syncMobileLeagueNavigation();
 
-    if (typeof window === 'undefined') {
+    if (this.matchupViewMode() !== 'carousel') {
       return;
     }
 
-    if (this.leagueRailPositionFrame !== null) {
-      window.cancelAnimationFrame(this.leagueRailPositionFrame);
-    }
-
-    this.leagueRailPositionFrame = window.requestAnimationFrame(() => {
-      this.leagueRailPositionFrame = null;
-      const rail = this.leagueRail()?.nativeElement;
-
-      if (rail) {
-        rail.scrollLeft = 0;
-      }
-    });
+    this.restoreActiveLeagueRailPosition();
   }
 
   private restoreActiveLeagueRailPosition(): void {
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || this.matchupViewMode() !== 'carousel') {
       return;
     }
 
@@ -612,17 +608,31 @@ export class Dashboard implements OnDestroy {
       const rail = this.leagueRail()?.nativeElement;
 
       if (!rail) {
-        this.activeLeagueIndex.set(0);
-        this.syncMobileLeagueNavigation();
+        this.selectActiveLeagueIndex(0);
         return;
       }
 
       const offsets = this.getLeagueCards(rail).map((card) =>
         this.getLeagueCardOffset(rail, card),
       );
-      this.activeLeagueIndex.set(getDashboardLeagueRailIndex(rail.scrollLeft, offsets));
-      this.syncMobileLeagueNavigation();
+      this.selectActiveLeagueIndex(
+        getDashboardLeagueRailIndex(rail.scrollLeft, offsets),
+      );
     });
+  }
+
+  private selectActiveLeagueIndex(index: number): void {
+    const leagues = this.orderedLeagueSummaries();
+    const activeIndex = clampDashboardLeagueRailIndex(index, leagues.length);
+    const selectedLeagueId = leagues[activeIndex]?.leagueId ?? '';
+
+    this.activeLeagueIndex.set(activeIndex);
+
+    if (this.userId && selectedLeagueId) {
+      saveDashboardActiveLeagueId(this.userId, selectedLeagueId);
+    }
+
+    this.syncMobileLeagueNavigation();
   }
 
   private syncMobileLeagueNavigation(): void {
