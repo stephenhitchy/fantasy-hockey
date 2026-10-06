@@ -131,6 +131,42 @@ For a high or critical production advisory:
 
 When no upstream fix exists, document the compensating control, affected surface, owner, and deadline. Do not silently suppress the advisory.
 
+### 2026-10-06 Functions proxy trust patch
+
+GitHub advisory `GHSA-jqcg-44mw-7w3h` affects the Cloud Functions dependency
+path `firebase-functions > express > proxy-addr`. RinkRat locks
+`proxy-addr` 2.0.8, the patched release, inside Express's existing `~2.0.7`
+range. This is a lockfile-only transitive patch: RinkRat does not declare a
+direct override, upgrade Firebase or Express, or add an advisory exception.
+
+The patch changes no request-trust configuration or application behavior. A
+clean Functions install, the strict dependency audit, the S3C regression test,
+and the Functions build are required release evidence. Fully remediating a
+deployed environment requires replacing every current RinkRat Function
+revision that was packaged with the vulnerable dependency. Prepare that as an
+explicit, source-reviewed, quota-safe Functions release; do not infer that a
+Hosting release or a partial Function selector updates the remaining revisions.
+
+#### Isolated Production release candidate
+
+The 2026-10-06 security-only release branch starts from clean source
+`af72becf0a6199334948fba25dfb38c5a5dee914`, the latest verified Functions
+source used by the current 25-Function scoring, Draft, and roster deployment
+group. It intentionally excludes the later injury-replacement, five-bench,
+dashboard-layout, and player-intelligence commits. A read-only Production
+inventory found 109 active Functions distributed across 11 historical source
+packages. Firebase cannot replace a dependency inside an existing immutable
+revision, so complete remediation requires reconciling all 109 Functions to
+this one reviewed source baseline plus the lockfile patch.
+
+Before manual deployment, the committed diff from `af72becf` must contain no
+`functions/src` change, the clean-deployment guard and inherited verification
+gates must pass, and `npm run firebase:plan-function-reconcile` must produce the
+exact 11 quota-safe batches. This reconciliation is a coherent source release,
+not a claim that all 109 pre-release revisions were byte-for-byte identical.
+Deploy no Hosting, Rules, indexes, TTL policies, queue-mode changes, migrations,
+or Production data writes for this patch.
+
 ### Temporary browser-only Firestore transport exception
 
 On 2026-09-30, `npm audit` began reporting

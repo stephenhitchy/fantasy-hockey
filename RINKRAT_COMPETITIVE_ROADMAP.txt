@@ -1201,6 +1201,10 @@ Future entries:
 
 # [x] LOG.143 2026-09-30 — Responded to registry advisory drift before the FF1.42 release: advanced Angular 22 to its supported patched 22.2 line, advanced the Functions gRPC transport from 1.14.4 to 1.14.5 within its declared parent range, and added a visible, exact, expiring, fail-closed browser-only reachability exception for Firestore's still-pinned Node gRPC advisory. The raw advisory remains reported, any evidence drift blocks the gate, the exception expires 2026-10-14, and no competitive formula, authority, Firebase configuration, or Production data changed.
 
+# [x] LOG.144 2026-10-06 — Patched the critical Cloud Functions proxy-address advisory GHSA-jqcg-44mw-7w3h by advancing the transitive `proxy-addr` lock from 2.0.7 to 2.0.8 inside Express's existing supported range, without adding a direct override, upgrading Firebase or Express, or suppressing the finding. Added an S3C regression guard and release runbook evidence; no scoring formula, Projection V11 formula/hash, six-game ownership, competitive authority, Firebase configuration, queue mode, worker limit, or Production data changed.
+
+# [x] LOG.145 2026-10-06 — Prepared a separate security-only Functions release from clean `af72becf`, excluding the later injury-replacement, five-bench, dashboard-layout, and player-intelligence commits. Read-only Production evidence found 109 active Functions across 11 historical source packages; complete remediation therefore reconciles all 109 immutable revisions to the one reviewed baseline plus the lockfile patch in 11 quota-safe batches. No deployment or Production write occurred.
+
 [ ] LOG.NEXT Add a dated note whenever priorities, phases, or completion status change.
 
 END OF ROADMAP

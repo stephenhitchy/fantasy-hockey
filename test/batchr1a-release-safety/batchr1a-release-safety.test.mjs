@@ -445,6 +445,6 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    'a0d6be2895a0543237e41afabda99ff4cfaf9833ec5f5ea5755a3a379b3093e3',
+    'a6e070b805fd11540cb011fc4afdbf284cc8e2a982a99c0362b2ddef8b165ac7',
   );
 });

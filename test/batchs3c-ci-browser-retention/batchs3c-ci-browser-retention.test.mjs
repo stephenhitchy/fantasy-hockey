@@ -116,6 +116,28 @@ test('production dependency audit covers browser and Functions lockfiles with st
   assert.match(packageSource.scripts['verify:batchs3c'], /security:dependency-audit(?!:strict)/);
 });
 
+test('Cloud Functions lock the patched proxy trust parser without a direct dependency override', async () => {
+  const [functionsPackageSource, functionsLockSource, runbook] = await Promise.all([
+    read('functions/package.json'),
+    read('functions/package-lock.json'),
+    read('docs/RINKRAT_SECURITY_S3C_RUNBOOK.md'),
+  ]);
+  const functionsPackage = JSON.parse(functionsPackageSource);
+  const functionsLock = JSON.parse(functionsLockSource);
+
+  assert.equal(functionsPackage.dependencies?.['proxy-addr'], undefined);
+  assert.equal(functionsLock.packages?.['node_modules/proxy-addr']?.version, '2.0.8');
+  assert.equal(
+    functionsLock.packages?.['node_modules/express']?.dependencies?.['proxy-addr'],
+    '~2.0.7',
+  );
+  assert.match(runbook, /GHSA-jqcg-44mw-7w3h/);
+  assert.match(runbook, /`proxy-addr` 2\.0\.8/);
+  assert.match(runbook, /af72becf0a6199334948fba25dfb38c5a5dee914/);
+  assert.match(runbook, /109 active Functions distributed across 11 historical source\s+packages/);
+  assert.match(runbook, /npm run firebase:plan-function-reconcile/);
+});
+
 test('Firebase Hosting uses non-blocking CSP, Trusted Types preparation, HSTS, and a same-origin report route', async () => {
   const firebaseConfig = JSON.parse(await read('firebase.json'));
   const findings = auditHostingSecurityHeaders(firebaseConfig);
