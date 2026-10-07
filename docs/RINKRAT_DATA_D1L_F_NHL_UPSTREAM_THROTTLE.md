@@ -87,6 +87,24 @@ is required.
   `consecutiveFailureCount: 0` without moving completed games or manufacturing
   zeroes.
 
+## Protected release enforcement
+
+On 2026-10-06, a clean broad Functions release from older source `412c3b8b`
+replaced this follow-up with the prior three-attempt/no-jitter runtime. The
+result was repeated schedule 429 failures and a stale `Bar Down` snapshot until
+the current source was restored. Read
+`docs/RINKRAT_DATA_D1L_G_LIVE_SCORING_RELEASE_GUARD.md` for the incident
+evidence and enforced recovery contract.
+
+Firebase predeploy now runs a semantic D1L-F guard before and after the
+Functions build. It blocks a clean source rollback that removes the five
+critical schedule attempts, bounded jitter, adaptive throttle, measured
+two-league concurrency, five-minute failed-league retry, or exact failed-league
+logging in every revision inheriting D1L-G. A revision predating D1L-G cannot
+run a guard that it does not contain and is not a valid release source. Do not
+bypass the guard; update it only alongside an intentional, tested, and measured
+policy change.
+
 ## Rollback
 
 Revert the D1L-F follow-up source commit, rebuild, and deploy the same five

@@ -109,6 +109,13 @@ has passed the required live Canary gates.
 
 For NHL ingestion and scoring work:
 
+- never bypass the protected live-scoring predeploy guard; an intentional
+  retry, throttle, or concurrency change requires matching regression tests and
+  measured release evidence;
+- never deploy from a revision that predates the protected release guards; the
+  operator must see the clean-source, protected-roster, and protected
+  live-scoring success lines in every Firebase predeploy log and stop if any
+  marker is absent;
 - fetch shared NHL facts once when possible;
 - use deterministic source versions and hashes;
 - distinguish live/provisional data from final settlement;
@@ -142,9 +149,9 @@ standings/playoffs twice.
 Run the smallest relevant focused tests while developing.
 
 Before declaring a change ready, run the current inherited release gate.
-At the time this file was created, that gate is:
+The current inherited gate is:
 
-- `npm run verify:batchd1j2`
+- `npm run verify:batchd1lg`
 - `npm run build:all`
 
 Also run:

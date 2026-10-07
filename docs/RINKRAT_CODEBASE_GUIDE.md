@@ -140,6 +140,12 @@ experience controls. They never replace Rules or server validation.
 - `scripts/` contains deterministic verification, release, and operational
   tooling. Read a script before running it; names that mention staging or
   production can still require external authority or credentials.
+- Firebase predeploy runs clean-source plus protected roster and live-scoring
+  runtime guards before upload. A clean Git tree is necessary but not
+  sufficient: never bypass a semantic guard to release older source, and stop
+  if all three success markers are not visible in the predeploy log. A revision
+  from before a guard existed cannot execute that guard and is not a valid
+  release source.
 - `docs/` contains the architecture history, release evidence, runbooks, and
   rollback notes.
 - `public/release-manifest.json` and its validation tooling identify the bundled

@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-28
+Last updated: 2026-10-06
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -70,6 +70,20 @@ RinkRat contains:
 - a legacy scoring path retained for rollback.
 
 The direct NHL path remains the proven fallback.
+
+The 2026-10-06 scoring incident was caused by a clean broad Functions release
+from older source `412c3b8b`, which replaced the D1L-F five-attempt/jittered NHL
+schedule recovery with the previous three-attempt/no-jitter runtime. `Bar Down`
+remained safe but stale until the current source was restored. The first full
+restored sweep finished with seven successful leagues, zero failures, zero
+skips, exact matchup/snapshot totals, and zero observed NHL live-state
+mismatches. D1L-G now adds a Firebase predeploy source-contract guard so that
+the exact stale-runtime shape fails before upload in every revision inheriting
+the guard. A pre-D1L-G revision cannot run a guard that it does not contain and
+is therefore never a valid release source. This is point-in-time evidence, not
+a substitute for a fresh post-release sweep. Read
+`docs/RINKRAT_DATA_D1L_G_LIVE_SCORING_RELEASE_GUARD.md` before any broad or
+scoring-related Functions release.
 
 The D1L-B replay-only correction for traded skaters is merged and deployed:
 source-season games carry their historical team into final-input validation,

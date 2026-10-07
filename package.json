@@ -749,7 +749,10 @@
     "test:batchb1y:run": "npm --prefix functions run build && node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1v-injury-replacement/*.test.mjs test/batchb1y-roster-deployment-contract/*.test.mjs",
     "verify:batchb1y:core": "npm run verify:batchb1x:core && npm run test:batchb1y:run && npm run validate:release-manifest",
     "verify:batchb1y": "npm run toolchain:verify && npm run verify:batchb1y:core && npm run security:dependency-audit",
-    "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs"
+    "test:batchd1lg:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1lg-live-scoring-deployment-contract/*.test.mjs",
+    "verify:batchd1lg:core": "npm run verify:batchb1y:core && npm run test:batchd1lg:run && npm run validate:release-manifest",
+    "verify:batchd1lg": "npm run toolchain:verify && npm run verify:batchd1lg:core && npm run security:dependency-audit",
+    "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs && node scripts/release/verify-protected-live-scoring-runtime-contract.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
