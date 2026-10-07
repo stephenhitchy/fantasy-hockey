@@ -329,6 +329,112 @@ app-cycle-one .window-game-marker {
   padding: 0;
 }
 
+app-cycle-one .window-game-marker.marker-replacement-owner {
+  outline: 1px solid var(--rr-color-info);
+  outline-offset: 1px;
+}
+
+app-cycle-one .window-game-marker.marker-replacement-boundary::before {
+  position: absolute;
+  inset-block-start: -9px;
+  inset-inline-start: -7px;
+  color: var(--rr-color-info);
+  content: '↪';
+  font-size: 9px;
+  font-weight: 1000;
+  line-height: 1;
+  text-shadow: 0 1px 2px var(--rr-color-page);
+}
+
+app-cycle-one .fantasy-player-injury-breakdown {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+app-team-settings .roster-window-markers {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(18px, 22px));
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+app-team-settings .roster-window-marker {
+  position: relative;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--rr-color-border-strong);
+  border-radius: 6px;
+  background: var(--rr-color-surface-raised);
+  color: var(--rr-color-text-secondary);
+  font-family: var(--rr-font-numeric);
+  font-size: 10px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+app-team-settings .roster-marker-played {
+  border-color: color-mix(in srgb, var(--rr-color-success) 72%, var(--rr-color-text));
+  background: var(--rr-color-success);
+  color: var(--rr-color-page);
+}
+
+app-team-settings .roster-marker-missed {
+  border-color: color-mix(in srgb, var(--rr-color-danger) 72%, var(--rr-color-text));
+  background: var(--rr-color-danger);
+  color: var(--rr-color-text);
+}
+
+app-team-settings .roster-marker-live {
+  border-color: color-mix(in srgb, var(--rr-color-info) 72%, var(--rr-color-text));
+  background: var(--rr-color-info);
+  color: var(--rr-color-page);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rr-color-info) 28%, transparent);
+}
+
+app-team-settings .roster-marker-upcoming {
+  border-color: color-mix(in srgb, var(--rr-color-warning) 72%, var(--rr-color-text));
+  background: var(--rr-color-warning);
+  color: var(--rr-color-page);
+}
+
+app-team-settings .roster-marker-unavailable {
+  border-style: dashed;
+}
+
+app-team-settings .roster-marker-replacement-owner {
+  outline: 1px solid var(--rr-color-info);
+  outline-offset: 1px;
+}
+
+app-team-settings .roster-marker-replacement-boundary::before {
+  position: absolute;
+  inset-block-start: -8px;
+  inset-inline-start: -7px;
+  color: var(--rr-color-info);
+  content: '↪';
+  font-size: 8px;
+  font-weight: 1000;
+  line-height: 1;
+  text-shadow: 0 1px 2px var(--rr-color-page);
+}
+
+app-team-settings .roster-injury-score-breakdown,
+app-team-settings .roster-manager-injury-breakdown {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+app-team-settings .roster-manager-injury-breakdown {
+  margin-top: 10px;
+}
+
 @media (max-width: 520px) {
   app-cycle-one .fantasy-position-group,
   app-cycle-one .fantasy-position-slots,
@@ -408,6 +514,17 @@ app-cycle-one .window-game-marker {
     max-width: 100%;
     margin-left: 0;
     overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 680px) {
+  app-team-settings .roster-window-markers {
+    gap: 4px;
+  }
+
+  app-team-settings .roster-window-marker {
+    width: 21px;
+    height: 21px;
   }
 }
 

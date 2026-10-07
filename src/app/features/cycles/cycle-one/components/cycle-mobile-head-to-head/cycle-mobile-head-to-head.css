@@ -419,6 +419,7 @@
     grid-template-areas:
       'identity scores'
       'markers markers'
+      'breakdown breakdown'
       'status status';
     align-content: start;
     gap: 5px 4px;
@@ -430,6 +431,7 @@
     grid-template-areas:
       'scores identity'
       'markers markers'
+      'breakdown breakdown'
       'status status';
   }
 
@@ -517,8 +519,15 @@
   }
 
   .mobile-live-player-single .mobile-window-markers,
+  .mobile-live-player-single .mobile-injury-score-breakdown,
   .mobile-live-player-single .mobile-live-player-statusline {
     grid-column: 1 / -1;
+  }
+
+  .mobile-injury-score-breakdown {
+    grid-area: breakdown;
+    width: 100%;
+    min-width: 0;
   }
 
   .mobile-live-player-status {
@@ -631,6 +640,7 @@
   }
 
   .mobile-window-marker {
+    position: relative;
     display: grid;
     place-items: center;
     width: 23px;
@@ -644,6 +654,23 @@
     font-size: 12px;
     font-weight: 900;
     line-height: 1;
+  }
+
+  .mobile-window-marker-replacement-owner {
+    outline: 1px solid var(--rr-info);
+    outline-offset: 1px;
+  }
+
+  .mobile-window-marker-replacement-boundary::before {
+    position: absolute;
+    inset-block-start: -8px;
+    inset-inline-start: -6px;
+    color: var(--rr-info);
+    content: '↪';
+    font-size: 8px;
+    font-weight: 1000;
+    line-height: 1;
+    text-shadow: 0 1px 2px var(--rr-scoreboard);
   }
 
   .mobile-window-marker-played {

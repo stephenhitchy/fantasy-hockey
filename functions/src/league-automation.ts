@@ -82,7 +82,7 @@ import {
   FantasyCycle,
 } from './shared/core/cycle/cycle.models';
 import { resolvePlayerWindowContinuity } from './shared/core/cycle/player-window-continuity.util';
-import { normalizeInjuryReplacementWindowPlan } from './shared/core/cycle/injury-replacement-window.util';
+import { requireValidInjuryReplacementWindowPlan } from './shared/core/cycle/injury-replacement-window.util';
 import { DraftableAsset, DraftPick, FantasyDraft } from './shared/core/draft/draft.models';
 import {
   buildHistoricalReplaySkaterTimelineEntries,
@@ -4152,8 +4152,9 @@ async function buildReplayGamesByAssetKey(
   const uniqueAssets = new Map<string, DraftableAsset>();
 
   for (const pick of picks) {
-    const plan = normalizeInjuryReplacementWindowPlan(
+    const plan = requireValidInjuryReplacementWindowPlan(
       pick.injuryReplacementWindow,
+      `Historical replay pick ${pick.ownerId}/${pick.rosterSlotId ?? pick.overallPick}`,
     );
 
     for (const asset of plan
@@ -5291,8 +5292,9 @@ async function runLeagueAutomation(
           ...new Set(
             [...picks, ...playoffIdentityPicks]
               .flatMap((pick) => {
-                const plan = normalizeInjuryReplacementWindowPlan(
+                const plan = requireValidInjuryReplacementWindowPlan(
                   pick.injuryReplacementWindow,
+                  `League automation pick ${pick.ownerId}/${pick.rosterSlotId ?? pick.overallPick}`,
                 );
 
                 return plan

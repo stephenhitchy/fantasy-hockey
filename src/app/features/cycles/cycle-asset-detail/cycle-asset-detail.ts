@@ -14,6 +14,10 @@ import { FantasyCycle } from '../../../core/cycle/cycle.models';
 
 import { CycleAssetScoreSummary } from '../../../core/cycle/cycle-scoring.service';
 import {
+  buildInjuryReplacementPresentation,
+  type InjuryReplacementPresentation,
+} from '../../../core/cycle/injury-replacement-presentation.util';
+import {
   resolveSourceNhlBlockNumber,
   selectCycleWindowGames,
   selectGamesByStableIds,
@@ -67,6 +71,7 @@ import {
   resolveCycleAssetDetailSeason,
   resolveCycleAssetScoreSummary,
 } from './cycle-asset-detail-snapshot.util';
+import { InjuryReplacementScoreBreakdown } from '../../../shared/injury-replacement-score-breakdown/injury-replacement-score-breakdown';
 
 interface DetailStatChip {
   label: string;
@@ -98,6 +103,10 @@ interface CycleAssetGameDetail {
   fantasyPoints: number | null;
   statChips: DetailStatChip[];
   breakdownLines: DetailBreakdownLine[];
+  scoringAssetKey: string;
+  scoringAssetName: string;
+  injuryReplacementOwned: boolean;
+  replacementBoundary: boolean;
 }
 
 function waitForAuthUser(): Promise<User | null> {
@@ -115,6 +124,7 @@ function waitForAuthUser(): Promise<User | null> {
 
 @Component({
   selector: 'app-cycle-asset-detail',
+  imports: [InjuryReplacementScoreBreakdown],
   templateUrl: './cycle-asset-detail.html',
   styleUrl: './cycle-asset-detail.css',
 })
@@ -163,6 +173,11 @@ export class CycleAssetDetail implements OnDestroy {
       this.draftPick(),
       this.assetKey,
     ),
+  );
+
+  readonly injuryReplacementPresentation = computed(
+    (): InjuryReplacementPresentation | null =>
+      buildInjuryReplacementPresentation(this.scoreSummary()),
   );
 
   readonly totalFantasyPoints = computed(() => {
@@ -626,6 +641,7 @@ export class CycleAssetDetail implements OnDestroy {
     return [
       'game-tape-cell',
       this.getGameRowClass(row),
+      row.replacementBoundary ? 'replacement-boundary-game' : '',
       row.gameId === this.bestGame()?.gameId ? 'best-game-cell' : '',
     ].filter(Boolean).join(' ');
   }
@@ -679,15 +695,15 @@ export class CycleAssetDetail implements OnDestroy {
   getGameExplanation(row: CycleAssetGameDetail): string {
     if (!row.final) {
       return row.statusLabel.toLowerCase().includes('live')
-        ? 'This game is live. RinkRat will keep updating the saved score until the NHL result is final.'
-        : 'This is one of the six scheduled NHL team games assigned to this roster slot.';
+        ? `${row.scoringAssetName} owns this live roster-slot game. RinkRat will keep updating the saved score until the NHL result is final.`
+        : `${row.scoringAssetName} owns this scheduled NHL team game in the six-game roster slot.`;
     }
 
     if (!row.appeared && row.counted) {
-      return 'The NHL team played, so this used one of the roster slot’s six games. The player did not appear and receives 0 fantasy points.';
+      return `The NHL team played, so this used one of the roster slot’s six games. ${row.scoringAssetName} did not appear and receives 0 fantasy points.`;
     }
 
-    return 'The player appeared in this scheduled team game. The categories below show exactly how the saved fantasy score was built.';
+    return `${row.scoringAssetName} appeared in this scheduled team game. The categories below show exactly how the saved fantasy score was built.`;
   }
 
   getFrozenProjectionSourceLabel(asset: DraftableAsset): string {
@@ -797,6 +813,9 @@ export class CycleAssetDetail implements OnDestroy {
       requiredGamesPerCycle,
       snapshot?.scoringFingerprint ?? 'no-shared-snapshot',
       scoreSummary?.windowId ?? 'no-window-summary',
+      scoreSummary?.injuryReplacementWindow?.segments
+        .map((segment) => `${segment.segmentId}:${segment.assetKey}:${segment.scheduledGameIds.join(',')}`)
+        .join('|') ?? 'no-injury-replacement',
       scoreSummary
         ? scoreSummary.scheduledGameIds
             .map((gameId) => {
@@ -881,25 +900,68 @@ export class CycleAssetDetail implements OnDestroy {
       return [];
     }
 
-    const gameLogByGameId = new Map<number, NhlPlayerGameLogEntry>();
+    const snapshotGames = buildCycleAssetSnapshotGames(summary);
+    const replacement = buildInjuryReplacementPresentation(summary);
+    const segmentAssets = new Map(
+      replacement?.segments.map((segment) => [segment.assetKey, segment.asset]) ?? [],
+    );
+    const scoringAssets = new Map<string, DraftableAsset>();
 
-    try {
-      const gameLogResponse = await getRegularSeasonGameLog(asset.player.id, season);
-
-      for (const gameLog of gameLogResponse.gameLog ?? []) {
-        gameLogByGameId.set(gameLog.gameId, gameLog);
-      }
-    } catch (error: unknown) {
-      console.warn('Unable to load the player game log for the saved scoring window.', error);
+    for (const snapshotGame of snapshotGames) {
+      const ownership = replacement?.gameOwnership.find(
+        (candidate) => candidate.gameId === snapshotGame.gameId,
+      );
+      const scoringAsset = ownership
+        ? segmentAssets.get(ownership.assetKey) ?? asset
+        : asset;
+      scoringAssets.set(scoringAsset.assetKey, scoringAsset);
     }
 
+    const gameLogsByAssetKey = new Map<string, Map<number, NhlPlayerGameLogEntry>>();
+    await Promise.all(
+      [...scoringAssets.values()].map(async (scoringAsset) => {
+        if (scoringAsset.assetType !== 'skater') {
+          return;
+        }
+
+        const gameLogByGameId = new Map<number, NhlPlayerGameLogEntry>();
+
+        try {
+          const gameLogResponse = await getRegularSeasonGameLog(
+            scoringAsset.player.id,
+            season,
+          );
+
+          for (const gameLog of gameLogResponse.gameLog ?? []) {
+            gameLogByGameId.set(gameLog.gameId, gameLog);
+          }
+        } catch (error: unknown) {
+          console.warn(
+            `Unable to load the player game log for ${this.getAssetName(scoringAsset)} in the saved scoring window.`,
+            error,
+          );
+        }
+
+        gameLogsByAssetKey.set(scoringAsset.assetKey, gameLogByGameId);
+      }),
+    );
+
     const rows: CycleAssetGameDetail[] = [];
-    const snapshotGames = buildCycleAssetSnapshotGames(summary);
     const replayDetail = this.isHistoricalReplayDetail();
 
     for (let gameIndex = 0; gameIndex < snapshotGames.length; gameIndex += 1) {
       const snapshotGame = snapshotGames[gameIndex];
       const cycleGameNumber = gameIndex + 1;
+      const ownership = replacement?.gameOwnership[gameIndex] ?? null;
+      const ownedAsset = ownership
+        ? segmentAssets.get(ownership.assetKey) ?? asset
+        : asset;
+      const scoringAsset = ownedAsset.assetType === 'skater' ? ownedAsset : asset;
+      const ownershipFields = {
+        scoringAsset,
+        injuryReplacementOwned: Boolean(replacement),
+        replacementBoundary: ownership?.segmentStart ?? false,
+      };
 
       if (snapshotGame.state === 'scheduled') {
         rows.push(
@@ -916,15 +978,18 @@ export class CycleAssetDetail implements OnDestroy {
             fantasyPoints: null,
             statChips: [],
             breakdownLines: [],
+            ...ownershipFields,
           }),
         );
         continue;
       }
 
       const gameData = await this.loadGameData(snapshotGame.gameId);
-      const gameLog = gameLogByGameId.get(snapshotGame.gameId);
+      const gameLog = gameLogsByAssetKey
+        .get(scoringAsset.assetKey)
+        ?.get(snapshotGame.gameId);
       const skaterLine = gameData
-        ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
+        ? findSkaterBoxscoreLine(gameData.boxscore, scoringAsset.player.id)
         : null;
       const appeared = snapshotGame.appeared || Boolean(skaterLine || gameLog);
       const authoritativeScore = snapshotGame.fantasyPoints ?? 0;
@@ -952,6 +1017,7 @@ export class CycleAssetDetail implements OnDestroy {
                 points: authoritativeScore,
               },
             ],
+            ...ownershipFields,
           }),
         );
         continue;
@@ -983,13 +1049,14 @@ export class CycleAssetDetail implements OnDestroy {
                 points: authoritativeScore,
               },
             ],
+            ...ownershipFields,
           }),
         );
         continue;
       }
 
       const assistBreakdown = gameData
-        ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
+        ? getSkaterAssistBreakdown(gameData.playByPlay, scoringAsset.player.id)
         : {
             primaryAssists: 0,
             secondaryAssists: 0,
@@ -1003,7 +1070,7 @@ export class CycleAssetDetail implements OnDestroy {
       }
 
       const stats: SkaterGameStats = {
-        position: asset.position === 'D' ? 'D' : 'F',
+        position: scoringAsset.position === 'D' ? 'D' : 'F',
         goals: skaterLine?.goals ?? gameLog?.goals ?? 0,
         primaryAssists,
         secondaryAssists,
@@ -1046,6 +1113,7 @@ export class CycleAssetDetail implements OnDestroy {
             breakdown.total,
             authoritativeScore,
           ),
+          ...ownershipFields,
         }),
       );
     }
@@ -1064,11 +1132,25 @@ export class CycleAssetDetail implements OnDestroy {
 
     const rows: CycleAssetGameDetail[] = [];
     const snapshotGames = buildCycleAssetSnapshotGames(summary);
+    const replacement = buildInjuryReplacementPresentation(summary);
+    const segmentAssets = new Map(
+      replacement?.segments.map((segment) => [segment.assetKey, segment.asset]) ?? [],
+    );
     const replayDetail = this.isHistoricalReplayDetail();
 
     for (let gameIndex = 0; gameIndex < snapshotGames.length; gameIndex += 1) {
       const snapshotGame = snapshotGames[gameIndex];
       const cycleGameNumber = gameIndex + 1;
+      const ownership = replacement?.gameOwnership[gameIndex] ?? null;
+      const ownedAsset = ownership
+        ? segmentAssets.get(ownership.assetKey) ?? asset
+        : asset;
+      const scoringAsset = ownedAsset.assetType === 'team-goalie-unit' ? ownedAsset : asset;
+      const ownershipFields = {
+        scoringAsset,
+        injuryReplacementOwned: Boolean(replacement),
+        replacementBoundary: ownership?.segmentStart ?? false,
+      };
 
       if (snapshotGame.state === 'scheduled') {
         rows.push(
@@ -1085,6 +1167,7 @@ export class CycleAssetDetail implements OnDestroy {
             fantasyPoints: null,
             statChips: [],
             breakdownLines: [],
+            ...ownershipFields,
           }),
         );
         continue;
@@ -1093,7 +1176,7 @@ export class CycleAssetDetail implements OnDestroy {
       const authoritativeScore = snapshotGame.fantasyPoints ?? 0;
       const gameData = await this.loadGameData(snapshotGame.gameId);
       const goalieResult = gameData
-        ? getTeamGoalieUnitResult(gameData.boxscore, asset.teamAbbreviation)
+        ? getTeamGoalieUnitResult(gameData.boxscore, scoringAsset.teamAbbreviation)
         : null;
 
       if (!goalieResult) {
@@ -1122,6 +1205,7 @@ export class CycleAssetDetail implements OnDestroy {
                 points: authoritativeScore,
               },
             ],
+            ...ownershipFields,
           }),
         );
         continue;
@@ -1165,6 +1249,7 @@ export class CycleAssetDetail implements OnDestroy {
             breakdown.total,
             authoritativeScore,
           ),
+          ...ownershipFields,
         }),
       );
     }
@@ -1525,6 +1610,9 @@ export class CycleAssetDetail implements OnDestroy {
     fantasyPoints: number | null;
     statChips: DetailStatChip[];
     breakdownLines: DetailBreakdownLine[];
+    scoringAsset: DraftableAsset;
+    injuryReplacementOwned: boolean;
+    replacementBoundary: boolean;
   }): CycleAssetGameDetail {
     return {
       gameId: input.gameId,
@@ -1541,6 +1629,10 @@ export class CycleAssetDetail implements OnDestroy {
       fantasyPoints: input.fantasyPoints,
       statChips: input.statChips,
       breakdownLines: input.breakdownLines,
+      scoringAssetKey: input.scoringAsset.assetKey,
+      scoringAssetName: this.getAssetName(input.scoringAsset),
+      injuryReplacementOwned: input.injuryReplacementOwned,
+      replacementBoundary: input.replacementBoundary,
     };
   }
 
@@ -1647,6 +1739,10 @@ export class CycleAssetDetail implements OnDestroy {
       fantasyPoints,
       statChips,
       breakdownLines,
+      scoringAssetKey: asset.assetKey,
+      scoringAssetName: this.getAssetName(asset),
+      injuryReplacementOwned: false,
+      replacementBoundary: false,
     };
   }
 

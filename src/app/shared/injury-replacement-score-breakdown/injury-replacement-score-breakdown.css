@@ -1,0 +1,145 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.injury-score-breakdown {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 42%, var(--rr-color-border));
+  border-radius: var(--rr-radius-sm, 9px);
+  background: color-mix(in srgb, var(--rr-color-info) 8%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-interface);
+  text-align: start;
+}
+
+.injury-score-total,
+.injury-score-segments,
+.injury-score-segment,
+.injury-score-owner {
+  display: flex;
+  min-width: 0;
+}
+
+.injury-score-total {
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.injury-score-total small,
+.injury-score-owner small,
+.injury-score-range {
+  color: var(--rr-color-text-muted);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.025em;
+  line-height: 1.2;
+}
+
+.injury-score-total small,
+.injury-score-owner small {
+  text-transform: uppercase;
+}
+
+.injury-score-total strong {
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-numeric);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.injury-score-segments {
+  align-items: stretch;
+  gap: 6px;
+}
+
+.injury-score-segment {
+  flex: 1 1 0;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border-inline-start: 3px solid var(--rr-color-border-strong);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--rr-color-surface) 74%, transparent);
+}
+
+.injury-score-segment--current {
+  border-inline-start-color: var(--rr-color-info);
+}
+
+.injury-score-owner {
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.injury-score-owner strong {
+  overflow: hidden;
+  color: var(--rr-color-text);
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.injury-score-segment > b {
+  color: var(--rr-color-text);
+  font-family: var(--rr-font-numeric);
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.injury-score-range {
+  white-space: nowrap;
+}
+
+.injury-score-plus {
+  align-self: center;
+  color: var(--rr-color-info);
+  font-size: 0.75rem;
+  font-weight: 950;
+}
+
+.injury-score-breakdown--compact {
+  gap: 5px;
+  padding: 7px;
+}
+
+.injury-score-breakdown--compact .injury-score-segments {
+  gap: 4px;
+}
+
+.injury-score-breakdown--compact .injury-score-segment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 5px;
+  padding: 5px 6px;
+}
+
+.injury-score-breakdown--compact .injury-score-owner small {
+  display: none;
+}
+
+.injury-score-breakdown--compact .injury-score-range {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 420px) {
+  .injury-score-segments {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .injury-score-plus {
+    display: none;
+  }
+
+  .injury-score-owner strong {
+    white-space: normal;
+  }
+}

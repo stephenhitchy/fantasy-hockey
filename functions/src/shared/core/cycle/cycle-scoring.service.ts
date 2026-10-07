@@ -65,8 +65,12 @@ import {
 } from './live-player-team-window.util';
 import { resolvePlayerWindowContinuity } from './player-window-continuity.util';
 import {
+  getInjuryReplacementProtectedGameIds,
   getInjuryReplacementAssetKeyByGameId,
-  normalizeInjuryReplacementWindowPlan,
+  hasExactInjuryReplacementScoringAssetKeyMap,
+  hasPreservedInjuryReplacementProtectedGameOwnership,
+  requireValidInjuryReplacementWindowPlan,
+  resolveConsistentInjuryReplacementWindowPlan,
 } from './injury-replacement-window.util';
 
 export type CycleGameRuntimeState =
@@ -513,7 +517,10 @@ function getMinutesFromToi(toi: string | undefined): number {
 function getPickInjuryReplacementPlan(
   pick: DraftPick,
 ): InjuryReplacementWindowPlan | null {
-  return normalizeInjuryReplacementWindowPlan(pick.injuryReplacementWindow);
+  return requireValidInjuryReplacementWindowPlan(
+    pick.injuryReplacementWindow,
+    `Roster pick ${pick.ownerId}/${getRosterSlotId(pick)}`,
+  );
 }
 
 function getPickScoringAssets(pick: DraftPick): DraftableAsset[] {
@@ -530,7 +537,57 @@ function getUniqueDraftedTeams(
   const teams = new Set<string>();
 
   for (const pick of input.picks) {
-    for (const asset of getPickScoringAssets(pick)) {
+    const savedInjuryReplacementPlan = getPickInjuryReplacementPlan(pick);
+    const rosterSlotId = getRosterSlotId(pick);
+    const continuity = resolvePlayerWindowContinuity({
+      value: pick.playerWindowContinuity,
+      ownerId: pick.ownerId,
+      rosterSlotId,
+      asset: pick.asset,
+    });
+    const windowId = getWindowId(
+      pick,
+      getPickWindowCycleNumber(pick, input.cycleNumber),
+    );
+    const previousSummary = savedInjuryReplacementPlan
+      ? input.previousResult?.windowScores?.[windowId]
+      : getPreviousWindowSummary(
+          input.previousResult,
+          windowId,
+          pick.asset.assetKey,
+          continuity?.continuityId,
+        );
+    const previousInjuryReplacementPlan =
+      requireValidInjuryReplacementWindowPlan(
+        previousSummary?.injuryReplacementWindow,
+        `Previous scoring result ${windowId}`,
+      );
+
+    if (
+      previousInjuryReplacementPlan &&
+      !hasExactInjuryReplacementScoringAssetKeyMap(
+        previousInjuryReplacementPlan,
+        previousSummary?.scoringAssetKeyByGameId,
+      )
+    ) {
+      throw new Error(
+        `Previous scoring result ${windowId} contains conflicting ` +
+          'injury-replacement game ownership.',
+      );
+    }
+
+    const injuryReplacementPlan =
+      resolveConsistentInjuryReplacementWindowPlan({
+        values: [
+          previousInjuryReplacementPlan,
+          savedInjuryReplacementPlan,
+        ],
+        context: `Scoring schedule discovery ${windowId}`,
+      });
+
+    for (const asset of injuryReplacementPlan
+      ? injuryReplacementPlan.segments.map((segment) => segment.asset)
+      : [pick.asset]) {
       teams.add(getAssetTeamAbbreviation(asset));
 
       if (asset.assetType === 'skater') {
@@ -545,24 +602,19 @@ function getUniqueDraftedTeams(
       }
     }
 
-    const rosterSlotId = getRosterSlotId(pick);
-    const continuity = resolvePlayerWindowContinuity({
-      value: pick.playerWindowContinuity,
-      ownerId: pick.ownerId,
-      rosterSlotId,
-      asset: pick.asset,
-    });
-    const previousSummary = getPreviousWindowSummary(
-      input.previousResult,
-      getWindowId(pick, getPickWindowCycleNumber(pick, input.cycleNumber)),
-      pick.asset.assetKey,
-      continuity?.continuityId,
-    );
+    for (const segment of injuryReplacementPlan?.segments ?? []) {
+      teams.add(segment.sourceTeamAbbreviation);
+      for (const sourceTeam of Object.values(
+        segment.sourceTeamAbbreviationByGameId ?? {},
+      )) {
+        teams.add(sourceTeam);
+      }
+    }
 
-    // Only a prior summary that still belongs to this exact asset stint may
-    // expand schedule loading. A replaced outgoing asset must not keep its
-    // old NHL club in the next retry, while a same-stint NHL trade still needs
-    // both clubs to preserve already-owned games.
+    // Only a prior summary that still belongs to this exact slot-window may
+    // expand schedule loading. A valid replacement plan keeps each retained
+    // owner club available, while a same-stint NHL trade still needs both
+    // clubs to preserve already-owned games.
     if (previousSummary?.scheduleTeamAbbreviation) {
       teams.add(previousSummary.scheduleTeamAbbreviation.trim().toUpperCase());
     }
@@ -1702,15 +1754,52 @@ export async function calculateCycleScoring(
           pickContinuity?.continuityId,
         );
     const previousInjuryReplacementPlan =
-      normalizeInjuryReplacementWindowPlan(
+      requireValidInjuryReplacementWindowPlan(
         savedPrevious?.injuryReplacementWindow,
+        `Previous scoring result ${windowId}`,
       );
+
+    if (
+      previousInjuryReplacementPlan &&
+      !hasExactInjuryReplacementScoringAssetKeyMap(
+        previousInjuryReplacementPlan,
+        savedPrevious?.scoringAssetKeyByGameId,
+      )
+    ) {
+      throw new Error(
+        `Previous scoring result ${windowId} contains conflicting ` +
+          'injury-replacement game ownership.',
+      );
+    }
+
     const injuryReplacementPlan =
-      savedInjuryReplacementPlan &&
-      previousInjuryReplacementPlan?.latestTransactionId ===
-        savedInjuryReplacementPlan.latestTransactionId
-        ? previousInjuryReplacementPlan
-        : savedInjuryReplacementPlan;
+      resolveConsistentInjuryReplacementWindowPlan({
+        values: [
+          previousInjuryReplacementPlan,
+          savedInjuryReplacementPlan,
+        ],
+        context: `Scoring window ${windowId}`,
+      });
+
+    if (
+      savedPrevious &&
+      injuryReplacementPlan &&
+      !hasPreservedInjuryReplacementProtectedGameOwnership({
+        previousPlan: previousInjuryReplacementPlan,
+        nextPlan: injuryReplacementPlan,
+        protectedGameIds: getInjuryReplacementProtectedGameIds(savedPrevious),
+        previousAssetKey: savedPrevious.assetKey,
+        previousScheduleTeamAbbreviation:
+          savedPrevious.scheduleTeamAbbreviation,
+        previousSourceTeamAbbreviationByGameId:
+          savedPrevious.sourceTeamAbbreviationByGameId,
+      })
+    ) {
+      throw new Error(
+        `Scoring window ${windowId} changed protected injury-replacement game ownership.`,
+      );
+    }
+
     const previous = savedPrevious;
     let resolvedWindow: ResolvedLivePlayerWindow;
     let scoringAssetsByGameId: ReadonlyMap<number, DraftableAsset>;
@@ -1728,19 +1817,34 @@ export async function calculateCycleScoring(
         );
       }
 
-      const exactSegments = injuryReplacementPlan.segments.slice(0, -1);
+      const exactSegments = injuryReplacementPlan.segments
+        .slice(0, -1)
+        .map((segment) => ({
+          ...segment,
+          sourceTeamAbbreviationByGameId: Object.fromEntries(
+            segment.scheduledGameIds.map((gameId) => [
+              String(gameId),
+              segment.sourceTeamAbbreviationByGameId?.[String(gameId)] ??
+                previous?.sourceTeamAbbreviationByGameId?.[String(gameId)] ??
+                segment.sourceTeamAbbreviation,
+            ]),
+          ),
+        }));
       const exactAssignments = exactSegments.flatMap((segment) => {
-        const sourceTeam = segment.sourceTeamAbbreviation.trim().toUpperCase();
-        const scheduleById = new Map(
-          (
-            input.replayGamesByAssetKey?.[segment.assetKey] ??
-            schedulesByTeam[sourceTeam] ??
-            []
-          ).map((game) => [game.id, game] as const),
+        const replayScheduleById = new Map(
+          (input.replayGamesByAssetKey?.[segment.assetKey] ?? [])
+            .map((game) => [game.id, game] as const),
         );
 
         return segment.scheduledGameIds.map((gameId) => {
-          const game = scheduleById.get(gameId);
+          const sourceTeam =
+            segment.sourceTeamAbbreviationByGameId?.[String(gameId)] ??
+            segment.sourceTeamAbbreviation;
+          const game = input.replayGamesByAssetKey
+            ? replayScheduleById.get(gameId)
+            : (schedulesByTeam[sourceTeam] ?? []).find(
+                (candidate) => candidate.id === gameId,
+              );
 
           if (!game) {
             throw new Error(
@@ -1756,13 +1860,25 @@ export async function calculateCycleScoring(
         });
       });
       const currentSegmentGameIdSet = new Set(currentSegment.scheduledGameIds);
+      const previousGameBelongsToCurrentSegment = (gameId: number): boolean =>
+        (
+          previous?.scoringAssetKeyByGameId?.[String(gameId)] ??
+          previous?.assetKey
+        ) === currentSegment.assetKey;
       const filterCurrentSegmentGameIds = (gameIds: readonly number[] | undefined) =>
-        (gameIds ?? []).filter((gameId) => currentSegmentGameIdSet.has(gameId));
+        (gameIds ?? []).filter(
+          (gameId) =>
+            currentSegmentGameIdSet.has(gameId) &&
+            previousGameBelongsToCurrentSegment(gameId),
+        );
       const filterCurrentSegmentRecord = <T>(
         record: Readonly<Record<string, T>> | undefined,
       ): Record<string, T> => Object.fromEntries(
-        Object.entries(record ?? {}).filter(([gameId]) =>
-          currentSegmentGameIdSet.has(Number(gameId)),
+        Object.entries(record ?? {}).filter(([gameId]) => {
+          const numericGameId = Number(gameId);
+          return currentSegmentGameIdSet.has(numericGameId) &&
+            previousGameBelongsToCurrentSegment(numericGameId);
+        },
         ),
       );
       const currentSegmentPrevious = previous
@@ -1817,7 +1933,9 @@ export async function calculateCycleScoring(
           sourceTeamAbbreviationByGameId: Object.fromEntries(
             games.map((game) => [
               String(game.id),
-              currentSegment.sourceTeamAbbreviation,
+              currentSegment.sourceTeamAbbreviationByGameId?.[
+                String(game.id)
+              ] ?? currentSegment.sourceTeamAbbreviation,
             ]),
           ),
           teamIdentityChanged: false,
@@ -1851,6 +1969,8 @@ export async function calculateCycleScoring(
         scheduledGameIds: currentResolvedWindow.games.map((game) => game.id),
         sourceTeamAbbreviation:
           currentResolvedWindow.scheduleTeamAbbreviation,
+        sourceTeamAbbreviationByGameId:
+          currentResolvedWindow.sourceTeamAbbreviationByGameId,
       };
       const effectiveInjuryReplacementPlan: InjuryReplacementWindowPlan = {
         ...injuryReplacementPlan,
@@ -1960,7 +2080,18 @@ export async function calculateCycleScoring(
     }
   }
 
-  const skatersNeedingLogs = getUniqueSkaterAssets(input.picks).filter(
+  const effectiveSkaterAssetsByKey = new Map<string, DraftableAsset>();
+
+  for (const scoringAssets of scoringAssetByWindowGameId.values()) {
+    for (const asset of scoringAssets.values()) {
+      if (asset.assetType === 'skater') {
+        effectiveSkaterAssetsByKey.set(asset.assetKey, asset);
+      }
+    }
+  }
+
+  const effectiveSkaterAssets = [...effectiveSkaterAssetsByKey.values()];
+  const skatersNeedingLogs = effectiveSkaterAssets.filter(
     (asset) =>
       skaterAssetKeysNeedingFinalLogs.has(asset.assetKey) &&
       (
@@ -2008,7 +2139,7 @@ export async function calculateCycleScoring(
     ...newlyLoadedGameLogsByPlayerId,
   ]);
 
-  const skatersNeedingPromotedFinalLogs = getUniqueSkaterAssets(input.picks).filter(
+  const skatersNeedingPromotedFinalLogs = effectiveSkaterAssets.filter(
     (asset) => {
       if (
         asset.assetType !== 'skater' ||

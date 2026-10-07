@@ -16,6 +16,9 @@ import {
   getActiveLeagueCycles,
   getCycleRosterPicksOnce,
 } from './shared/core/cycle/cycle.service';
+import {
+  requireValidInjuryReplacementWindowPlan,
+} from './shared/core/cycle/injury-replacement-window.util';
 import { DraftPick } from './shared/core/draft/draft.models';
 import {
   selectAffectedCanonicalLeagueIds,
@@ -354,6 +357,12 @@ function getPickTeamAbbreviation(pick: DraftPick): string {
     : normalizedString(pick.asset.teamAbbreviation).toUpperCase();
 }
 
+function getAssetTeamAbbreviation(asset: DraftPick['asset']): string {
+  return asset.assetType === 'skater'
+    ? normalizedString(asset.player.nhlTeamAbbreviation).toUpperCase()
+    : normalizedString(asset.teamAbbreviation).toUpperCase();
+}
+
 async function loadLeagueImpactPicks(leagueId: string): Promise<{
   picks: DraftPick[];
   cycleNumbers: number[];
@@ -388,24 +397,67 @@ async function buildLeagueScoringImpact(
   leagueId: string,
 ): Promise<LeagueScoringImpact> {
   const { picks, cycleNumbers } = await loadLeagueImpactPicks(leagueId);
-  const playerIds = [...new Set(
-    picks
-      .filter((pick) => pick.asset.assetType === 'skater')
-      .map((pick) => pick.asset.assetType === 'skater'
-        ? pick.asset.player.id
-        : 0
-      )
-      .filter((playerId) =>
-        typeof playerId === 'number' && Number.isFinite(playerId) && playerId > 0
-      )
-      .map((playerId) => Math.trunc(playerId)),
-  )].sort((left, right) => left - right)
-    .slice(0, IMPACT_INDEX_MAX_PLAYER_IDS);
-  const teamAbbreviations = [...new Set(
-    picks
-      .map((pick) => getPickTeamAbbreviation(pick))
-      .filter(Boolean),
-  )].sort().slice(0, IMPACT_INDEX_MAX_TEAM_ABBREVIATIONS);
+  const playerIdSet = new Set<number>();
+  const teamAbbreviationSet = new Set<string>();
+
+  for (const pick of picks) {
+    if (
+      pick.asset.assetType === 'skater' &&
+      typeof pick.asset.player.id === 'number' &&
+      Number.isFinite(pick.asset.player.id) &&
+      pick.asset.player.id > 0
+    ) {
+      playerIdSet.add(Math.trunc(pick.asset.player.id));
+    }
+
+    const pickTeamAbbreviation = getPickTeamAbbreviation(pick);
+
+    if (pickTeamAbbreviation) {
+      teamAbbreviationSet.add(pickTeamAbbreviation);
+    }
+
+    const injuryReplacementWindow = requireValidInjuryReplacementWindowPlan(
+      pick.injuryReplacementWindow,
+      `League ${leagueId} impact-index pick ${pick.overallPick}`,
+    );
+
+    for (const segment of injuryReplacementWindow?.segments ?? []) {
+      if (segment.asset.assetType === 'skater') {
+        playerIdSet.add(segment.asset.player.id);
+      }
+
+      const assetTeamAbbreviation = getAssetTeamAbbreviation(segment.asset);
+
+      if (assetTeamAbbreviation) {
+        teamAbbreviationSet.add(assetTeamAbbreviation);
+      }
+
+      teamAbbreviationSet.add(segment.sourceTeamAbbreviation);
+
+      for (
+        const sourceTeamAbbreviation of
+        Object.values(segment.sourceTeamAbbreviationByGameId ?? {})
+      ) {
+        teamAbbreviationSet.add(sourceTeamAbbreviation);
+      }
+    }
+  }
+
+  const playerIds = [...playerIdSet].sort((left, right) => left - right);
+  const teamAbbreviations = [...teamAbbreviationSet].sort();
+
+  if (playerIds.length > IMPACT_INDEX_MAX_PLAYER_IDS) {
+    throw new Error(
+      `league-impact-player-limit-exceeded:${leagueId}:${playerIds.length}`,
+    );
+  }
+
+  if (teamAbbreviations.length > IMPACT_INDEX_MAX_TEAM_ABBREVIATIONS) {
+    throw new Error(
+      `league-impact-team-limit-exceeded:${leagueId}:${teamAbbreviations.length}`,
+    );
+  }
+
   const sourceCycleNumbers = [...new Set(cycleNumbers)]
     .filter((cycleNumber) => Number.isInteger(cycleNumber) && cycleNumber > 0)
     .sort((left, right) => left - right);

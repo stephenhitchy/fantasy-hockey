@@ -2,6 +2,10 @@ function hasPattern(value, pattern) {
   return typeof value === 'string' && pattern.test(value);
 }
 
+function countPattern(value, pattern) {
+  return typeof value === 'string' ? [...value.matchAll(pattern)].length : 0;
+}
+
 export function evaluateProtectedRosterRuntimeContract(input = {}) {
   const blockers = [];
   const requirePattern = (label, value, pattern) => {
@@ -75,6 +79,192 @@ export function evaluateProtectedRosterRuntimeContract(input = {}) {
     input.injuryReplacementWindow,
     /normalizeInjuryReplacementWindowPlan/,
   );
+  requirePattern(
+    'Zero-game outgoing injury segments must remain as audit evidence.',
+    input.injuryReplacementWindow,
+    /const retainedSegments = \[\.\.\.priorSegments, currentSegment\];/,
+  );
+  requirePattern(
+    'Every built injury plan must round-trip through its normalizer.',
+    input.injuryReplacementWindow,
+    /const normalizedPlan = normalizeInjuryReplacementWindowPlan\(plan\)/,
+  );
+  requirePattern(
+    'Known B1V zero-start ownership must remain backward-compatible.',
+    input.injuryReplacementWindow,
+    /hasLegacyOmittedOriginalSegment/,
+  );
+  requirePattern(
+    'Injury segments must retain exact per-game NHL source-team evidence.',
+    input.injuryReplacementWindow,
+    /sourceTeamAbbreviationByGameId/,
+  );
+  requirePattern(
+    'Injury plan copies must distinguish scorer-managed current-segment evolution from immutable history.',
+    input.injuryReplacementWindow,
+    /hasCompatiblePlanLineage/,
+  );
+  requirePattern(
+    'Injury plans must strictly validate nested player-window continuity evidence.',
+    input.injuryReplacementWindow,
+    /normalizePlayerWindowContinuity\(/,
+  );
+  requirePattern(
+    'Repeated injury boundaries must remain monotonic.',
+    input.injuryReplacementWindow,
+    /replacementBoundariesAreMonotonic/,
+  );
+  requirePattern(
+    'Every injury segment must retain one roster-slot position.',
+    input.injuryReplacementWindow,
+    /segmentPositions\.size !== 1/,
+  );
+  requirePattern(
+    'Injury windows must preserve exact plan, schedule, owner-map, and protected-game evidence.',
+    input.injuryReplacementWindow,
+    /hasConsistentInjuryReplacementWindowEvidence/,
+  );
+  requirePattern(
+    'Saved injury ownership must fail closed when present but malformed.',
+    input.cycleScoring,
+    /requireValidInjuryReplacementWindowPlan\(/,
+  );
+  requirePattern(
+    'Browser fallback scoring must also fail closed on malformed injury ownership.',
+    input.browserCycleScoring,
+    /requireValidInjuryReplacementWindowPlan\(/,
+  );
+  requirePattern(
+    'Server cycle-window copies must fail closed on malformed injury ownership.',
+    input.assetCycleWindow,
+    /requireValidInjuryReplacementWindowPlan\(/,
+  );
+  requirePattern(
+    'Server cycle windows must validate exact injury ownership evidence.',
+    input.assetCycleWindow,
+    /hasConsistentInjuryReplacementWindowEvidence\(/,
+  );
+  requirePattern(
+    'Server cycle-window writes must reject conflicting injury ownership copies.',
+    input.assetCycleWindow,
+    /resolveConsistentInjuryReplacementWindowPlan\(/,
+  );
+  requirePattern(
+    'Browser cycle-window copies must reject conflicting injury ownership copies.',
+    input.browserAssetCycleWindow,
+    /resolveConsistentInjuryReplacementWindowPlan\(/,
+  );
+  requirePattern(
+    'Browser cycle windows must validate exact injury ownership evidence.',
+    input.browserAssetCycleWindow,
+    /hasConsistentInjuryReplacementWindowEvidence\(/,
+  );
+  requirePattern(
+    'League automation must fail closed on malformed injury ownership.',
+    input.leagueAutomation,
+    /requireValidInjuryReplacementWindowPlan\(/,
+  );
+  requirePattern(
+    'Roster moves must transactionally recheck injury availability.',
+    input.rosterMoves,
+    /transactionMoveToIrAvailabilityStatus/,
+  );
+  requirePattern(
+    'Injury replacement must reject a saved game allowance mismatch.',
+    input.rosterMoves,
+    /previousPlan\.requiredGames !== gamesPerCycle/,
+  );
+  requirePattern(
+    'Repeated injury replacement must verify every retained game against its exact NHL source team.',
+    input.rosterMoves,
+    /verifiedScheduleEvidenceByGameId/,
+  );
+  requirePattern(
+    'Roster moves must reject bench assets reserved by queued moves.',
+    input.rosterMoves,
+    /That bench player is reserved for another scheduled lineup move\./,
+  );
+  requirePattern(
+    'Secure roster actions must transactionally reread injury eligibility.',
+    input.rosterAuthority,
+    /resolveAuthoritativeAvailabilityStatus\(/,
+  );
+  requirePattern(
+    'Secure queued swaps must reject already-reserved bench assets.',
+    input.rosterAuthority,
+    /isBenchSlotReserved\(roster, benchSlotId\)/,
+  );
+  requirePattern(
+    'Scoring must load final logs for every effective segment asset.',
+    input.cycleScoring,
+    /effectiveSkaterAssetsByKey/,
+  );
+  requirePattern(
+    'Scoring must reject missing or conflicting saved per-game owners before final reuse.',
+    input.cycleScoring,
+    /hasExactInjuryReplacementScoringAssetKeyMap\(/,
+  );
+  requirePattern(
+    'Scoring must preserve started injury-game ownership across plan evolution.',
+    input.cycleScoring,
+    /hasPreservedInjuryReplacementProtectedGameOwnership\(/,
+  );
+  requirePattern(
+    'Opponent-overlap game IDs must not inherit another segment owner.',
+    input.cycleScoring,
+    /previousGameBelongsToCurrentSegment/,
+  );
+  requirePattern(
+    'Repeated injury moves must validate protected cycle and playoff window evidence.',
+    input.rosterMoves,
+    /assertWindowPreservesSelectedInjuryReplacementPlan\(/,
+  );
+  requirePattern(
+    'Regular asynchronous rollover must use the current injury segment only.',
+    input.cycleService,
+    /previousCurrentInjurySegment\?\.scheduledGameIds/,
+  );
+  requirePattern(
+    'Playoff banks must retain the mixed-player ownership plan.',
+    input.playoffWindowBank,
+    /injuryReplacementWindow/,
+  );
+  requirePattern(
+    'Playoff banks must retain exact game-to-player ownership.',
+    input.playoffWindowBank,
+    /scoringAssetKeyByGameId/,
+  );
+  requirePattern(
+    'Playoff bank updates must preserve started injury-game ownership.',
+    input.playoffWindowBank,
+    /hasPreservedInjuryReplacementProtectedGameOwnership\(/,
+  );
+  requirePattern(
+    'Playoff rollover must use the current injury segment only.',
+    input.playoffWindowBank,
+    /currentInjurySegment\?\.scheduledGameIds/,
+  );
+  requirePattern(
+    'Canonical impact routing must include every injury segment player and source team.',
+    input.canonicalImpactFeed,
+    /injuryReplacementWindow\?\.segments/,
+  );
+  requirePattern(
+    'Final reconciliation must compare each game with its segment owner.',
+    input.finalScoreReconciliation,
+    /asset:\s*scoringAsset/,
+  );
+
+  if (
+    countPattern(
+      input.rosterMoves,
+      /isBenchSlotReserved\([^)]*benchSlotId\)/g,
+    ) < 2
+  ) {
+    blockers.push(
+      'Reserved-bench rejection must remain in both preflight and transaction authority.',
+    );
+  }
 
   return {
     schemaVersion: 1,

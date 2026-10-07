@@ -62,6 +62,11 @@ export interface CycleWindowGameMarker {
   status: 'played' | 'missed' | 'live' | 'upcoming' | 'unavailable';
   statusLabel: string;
   title: string;
+  ariaLabel: string;
+  ownerAssetKey: string | null;
+  ownerName: string | null;
+  replacementBoundary: boolean;
+  currentOwner: boolean;
 }
 
 export interface ScoreDeltaAnimation {

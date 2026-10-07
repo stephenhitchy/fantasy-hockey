@@ -18,7 +18,7 @@ import {
 } from './cycle-window-selection.util';
 import {
   getInjuryReplacementAssetKeyByGameId,
-  normalizeInjuryReplacementWindowPlan,
+  requireValidInjuryReplacementWindowPlan,
 } from './injury-replacement-window.util';
 import {
   findSkaterBoxscoreLine,
@@ -259,17 +259,33 @@ function getMinutesFromToi(toi: string | undefined): number {
   return Number((minutes + seconds / 60).toFixed(2));
 }
 
+function getPickInjuryReplacementPlan(
+  pick: DraftPick,
+): InjuryReplacementWindowPlan | null {
+  return requireValidInjuryReplacementWindowPlan(
+    pick.injuryReplacementWindow,
+    `Roster pick ${pick.ownerId}/${getRosterSlotId(pick)}`,
+  );
+}
+
 function getUniqueDraftedTeams(picks: DraftPick[]): string[] {
   const teams = new Set<string>();
 
   for (const pick of picks) {
-    const plan = normalizeInjuryReplacementWindowPlan(
-      pick.injuryReplacementWindow,
-    );
+    const plan = getPickInjuryReplacementPlan(pick);
     for (const asset of plan
       ? plan.segments.map((segment) => segment.asset)
       : [pick.asset]) {
       teams.add(getAssetTeamAbbreviation(asset));
+    }
+
+    for (const segment of plan?.segments ?? []) {
+      teams.add(segment.sourceTeamAbbreviation);
+      for (const sourceTeam of Object.values(
+        segment.sourceTeamAbbreviationByGameId ?? {},
+      )) {
+        teams.add(sourceTeam);
+      }
     }
   }
 
@@ -280,9 +296,7 @@ function getUniqueSkaterAssets(picks: DraftPick[]): DraftableAsset[] {
   const skatersByKey = new Map<string, DraftableAsset>();
 
   for (const pick of picks) {
-    const plan = normalizeInjuryReplacementWindowPlan(
-      pick.injuryReplacementWindow,
-    );
+    const plan = getPickInjuryReplacementPlan(pick);
     for (const asset of plan
       ? plan.segments.map((segment) => segment.asset)
       : [pick.asset]) {
@@ -726,29 +740,27 @@ export async function calculateCycleScoring(
       input.cycleNumber,
     );
     const windowId = getWindowId(pick, pickWindowCycleNumber);
-    const injuryReplacementPlan = normalizeInjuryReplacementWindowPlan(
-      pick.injuryReplacementWindow,
-    );
+    const injuryReplacementPlan = getPickInjuryReplacementPlan(pick);
     let games: NhlTeamSeasonGame[];
     let scoringAssetsByGameId: ReadonlyMap<number, DraftableAsset>;
     let sourceTeamAbbreviationByGameId: Record<string, string>;
 
     if (injuryReplacementPlan) {
       const assignments = injuryReplacementPlan.segments.flatMap((segment) => {
-        const scheduleById = new Map(
-          (schedulesByTeam[segment.sourceTeamAbbreviation] ?? [])
-            .map((game) => [game.id, game] as const),
-        );
-
         return segment.scheduledGameIds.map((gameId) => {
-          const game = scheduleById.get(gameId);
+          const sourceTeam =
+            segment.sourceTeamAbbreviationByGameId?.[String(gameId)] ??
+            segment.sourceTeamAbbreviation;
+          const game = (schedulesByTeam[sourceTeam] ?? []).find(
+            (candidate) => candidate.id === gameId,
+          );
           if (!game) {
             throw new Error(
               `The NHL schedule is missing injury-replacement game ${gameId} for ${windowId}.`,
             );
           }
 
-          return { game, asset: segment.asset, team: segment.sourceTeamAbbreviation };
+          return { game, asset: segment.asset, team: sourceTeam };
         });
       });
       games = assignments.map((assignment) => assignment.game);
@@ -841,9 +853,7 @@ export async function calculateCycleScoring(
       scoringAssetByWindowGameId.get(windowId) ?? new Map<number, DraftableAsset>();
     const sourceTeamAbbreviationByGameId =
       sourceTeamByWindowGameId.get(windowId) ?? {};
-    const injuryReplacementPlan = normalizeInjuryReplacementWindowPlan(
-      pick.injuryReplacementWindow,
-    );
+    const injuryReplacementPlan = getPickInjuryReplacementPlan(pick);
     const gameScores: Record<string, number> = {};
     const gameStates: Record<string, CycleGameRuntimeState> = {};
     const completedGameIds: number[] = [];

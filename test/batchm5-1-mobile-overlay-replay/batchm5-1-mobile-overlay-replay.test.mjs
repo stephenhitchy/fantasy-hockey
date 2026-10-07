@@ -1,18 +1,69 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
+import { stripTypeScriptTypes } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import {
+const ROOT = new URL('../../', import.meta.url);
+
+async function loadCycleAssetSnapshotUtility() {
+  const injuryWindowSource = stripTypeScriptTypes(
+    await readFile(
+      new URL('src/app/core/cycle/injury-replacement-window.util.ts', ROOT),
+      'utf8',
+    ),
+    { mode: 'strip' },
+  );
+  const injuryWindowUrl = `data:text/javascript;base64,${Buffer.from(
+    injuryWindowSource,
+  ).toString('base64')}`;
+  const presentationSource = stripTypeScriptTypes(
+    (
+      await readFile(
+        new URL(
+          'src/app/core/cycle/injury-replacement-presentation.util.ts',
+          ROOT,
+        ),
+        'utf8',
+      )
+    ).replace(
+      /from ['"]\.\/injury-replacement-window\.util(?:\.ts)?['"];/,
+      `from '${injuryWindowUrl}';`,
+    ),
+    { mode: 'strip' },
+  );
+  const presentationUrl = `data:text/javascript;base64,${Buffer.from(
+    presentationSource,
+  ).toString('base64')}`;
+  const snapshotSource = stripTypeScriptTypes(
+    (
+      await readFile(
+        new URL(
+          'src/app/features/cycles/cycle-asset-detail/cycle-asset-detail-snapshot.util.ts',
+          ROOT,
+        ),
+        'utf8',
+      )
+    ).replace(
+      /from ['"]\.\.\/\.\.\/\.\.\/core\/cycle\/injury-replacement-presentation\.util(?:\.ts)?['"];/,
+      `from '${presentationUrl}';`,
+    ),
+    { mode: 'strip' },
+  );
+
+  return import(
+    `data:text/javascript;base64,${Buffer.from(snapshotSource).toString('base64')}`
+  );
+}
+
+const {
   buildCycleAssetSnapshotGames,
   parseReplaySnapshotSeason,
   resolveCycleAssetDetailSeason,
   resolveCycleAssetScoreSummary,
-} from '../../src/app/features/cycles/cycle-asset-detail/cycle-asset-detail-snapshot.util.ts';
-
-const ROOT = new URL('../../', import.meta.url);
+} = await loadCycleAssetSnapshotUtility();
 
 async function read(relativePath) {
   return readFile(new URL(relativePath, ROOT), 'utf8');
@@ -81,6 +132,8 @@ test('saved Game Center summaries resolve the exact immutable roster-slot window
     },
   };
   const pick = {
+    ownerId: exact.ownerId,
+    rosterSlotId: exact.rosterSlotId,
     cycleWindowId: exact.windowId,
     asset: { assetKey: exact.assetKey },
   };

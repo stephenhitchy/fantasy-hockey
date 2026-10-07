@@ -1,6 +1,7 @@
 import type { CycleAssetScoreSummary, CycleGameRuntimeState } from '../../../core/cycle/cycle-scoring.service';
 import type { DraftPick } from '../../../core/draft/draft.models';
 import type { SharedCycleScoringSnapshot } from '../../../core/live-scoring/live-scoring.models';
+import { resolveCycleSlotScoreSummary } from '../../../core/cycle/injury-replacement-presentation.util';
 
 export interface CycleAssetSnapshotGame {
   gameId: number;
@@ -26,12 +27,13 @@ export function resolveCycleAssetScoreSummary(
     return null;
   }
 
-  if (pick?.cycleWindowId) {
-    const windowSummary = snapshot.result.windowScores[pick.cycleWindowId];
-
-    if (windowSummary?.assetKey === assetKey) {
-      return windowSummary;
-    }
+  if (pick) {
+    return resolveCycleSlotScoreSummary(snapshot.result, {
+      ownerId: pick.ownerId,
+      assetKey,
+      rosterSlotId: pick.rosterSlotId,
+      cycleWindowId: pick.cycleWindowId,
+    });
   }
 
   const assetSummary = snapshot.result.assetScores[assetKey];

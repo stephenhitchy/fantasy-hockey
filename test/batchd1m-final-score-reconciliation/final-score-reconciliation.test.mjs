@@ -36,6 +36,18 @@ const skaterAsset = {
   },
 };
 
+const replacementSkaterAsset = {
+  assetType: 'skater',
+  assetKey: 'skater-8',
+  position: 'C',
+  player: {
+    id: 8,
+    fullName: 'Replacement Skater',
+    position: 'C',
+    nhlTeamAbbreviation: 'VAN',
+  },
+};
+
 function completeEvidence(sourceVersion, assetType = 'skater') {
   return {
     status: 'complete',
@@ -131,6 +143,66 @@ function completedWindow(overrides = {}) {
   };
 }
 
+function injuryReplacementPlan() {
+  return {
+    schemaVersion: 1,
+    latestTransactionId: 'injury-tx-1',
+    replacementCount: 1,
+    requiredGames: 2,
+    segments: [
+      {
+        segmentId: 'injury-tx-1__original',
+        reason: 'original',
+        assetKey: skaterAsset.assetKey,
+        asset: skaterAsset,
+        scheduledGameIds: [1],
+        sourceTeamAbbreviation: 'SEA',
+        sourceTeamAbbreviationByGameId: { '1': 'SEA' },
+      },
+      {
+        segmentId: 'injury-tx-1__replacement-1',
+        reason: 'injury-replacement',
+        assetKey: replacementSkaterAsset.assetKey,
+        asset: replacementSkaterAsset,
+        scheduledGameIds: [2],
+        sourceTeamAbbreviation: 'VAN',
+        sourceTeamAbbreviationByGameId: { '2': 'VAN' },
+        assignmentNotBeforeMilliseconds: 1_798_761_600_000,
+        activatedAtMilliseconds: 1_798_761_600_000,
+      },
+    ],
+  };
+}
+
+function injuryReplacementWindow(overrides = {}) {
+  return completedWindow({
+    assetKey: replacementSkaterAsset.assetKey,
+    asset: replacementSkaterAsset,
+    status: 'active',
+    scheduledGameIds: [1, 2],
+    scheduledGameDates: ['2026-10-01', '2026-10-03'],
+    scheduledGameLabels: ['vs VAN', '@ CGY'],
+    completedGameIds: [1],
+    appearanceGameIds: [1],
+    gameScores: { '1': 2 },
+    gameStates: { '1': 'final', '2': 'scheduled' },
+    scheduledGames: 2,
+    gamesPlayed: 1,
+    actualGamesPlayed: 1,
+    gamesLeft: 1,
+    fantasyPoints: 2,
+    frozenProjectionTargetGameIds: [1, 2],
+    firstScheduledGameDate: '2026-10-01',
+    lastScheduledGameDate: '2026-10-03',
+    injuryReplacementWindow: injuryReplacementPlan(),
+    scoringAssetKeyByGameId: {
+      '1': skaterAsset.assetKey,
+      '2': replacementSkaterAsset.assetKey,
+    },
+    ...overrides,
+  });
+}
+
 function reconcile(window, games = new Map([[1, canonicalGame()]]), overrides = {}) {
   return reconciliation.reconcileFinalizedWindow({
     window,
@@ -185,6 +257,95 @@ test('a legitimate zero and did-not-appear final is a verified match', () => {
   assert.equal(result.unverifiableGameCount, 0);
   assert.equal(result.integrityIssueCount, 0);
   assert.deepEqual(result.findings, []);
+});
+
+test('a retained outgoing injury game reconciles against its per-game owner', () => {
+  const result = reconcile(
+    injuryReplacementWindow(),
+    new Map([[1, canonicalGame({
+      facts: appearedCanonicalFacts({ timeOnIceSeconds: 600 }),
+    })]]),
+  );
+
+  assert.equal(result.verifiedGameCount, 1);
+  assert.equal(result.candidateGameCount, 0);
+  assert.equal(result.unverifiableGameCount, 0);
+  assert.equal(result.integrityIssueCount, 0);
+  assert.deepEqual(result.findings, []);
+});
+
+test('injury-game findings name the player who owned that game, not the current player', () => {
+  const result = reconcile(
+    injuryReplacementWindow({
+      gameScores: { '1': 0 },
+      fantasyPoints: 0,
+    }),
+    new Map([[1, canonicalGame({
+      facts: appearedCanonicalFacts({ timeOnIceSeconds: 600 }),
+    })]]),
+  );
+
+  assert.equal(result.candidateGameCount, 1);
+  assert.equal(result.findings[0].code, 'score-mismatch');
+  assert.equal(result.findings[0].gameId, 1);
+  assert.equal(result.findings[0].assetKey, skaterAsset.assetKey);
+  assert.equal(result.findings[0].assetType, 'skater');
+});
+
+test('malformed injury lineage and conflicting owner maps fail visibly closed', () => {
+  const malformedPlan = injuryReplacementPlan();
+  malformedPlan.replacementCount = 2;
+  const malformedWindow = injuryReplacementWindow({
+    injuryReplacementWindow: malformedPlan,
+  });
+  const malformedStructure = reconciliation.inspectFinalScoreTeamWindowStructure({
+    rawWindows: [malformedWindow],
+    teamKey: 'team-abc123',
+  });
+  const malformedResult = reconcile(malformedWindow);
+  const conflictingResult = reconcile(injuryReplacementWindow({
+    scoringAssetKeyByGameId: {
+      '1': replacementSkaterAsset.assetKey,
+      '2': replacementSkaterAsset.assetKey,
+    },
+  }));
+  const incompleteResult = reconcile(injuryReplacementWindow({
+    scoringAssetKeyByGameId: {
+      '1': skaterAsset.assetKey,
+    },
+  }));
+  const conflictingCurrentIdentityResult = reconcile(injuryReplacementWindow({
+    asset: {
+      ...replacementSkaterAsset,
+      player: {
+        ...replacementSkaterAsset.player,
+        id: 9,
+      },
+    },
+  }));
+
+  assert.equal(malformedStructure.inspectionIncomplete, true);
+  assert.equal(malformedStructure.safeWindowValues.length, 0);
+  assert.equal(malformedStructure.finding.code, 'team-window-structure-invalid');
+
+  for (const result of [
+    malformedResult,
+    conflictingResult,
+    incompleteResult,
+    conflictingCurrentIdentityResult,
+  ]) {
+    assert.equal(result.verifiedGameCount, 0);
+    assert.equal(result.candidateGameCount, 0);
+    assert.equal(result.unverifiableGameCount, 1);
+    assert.equal(result.integrityIssueCount, 1);
+    assert.equal(result.findingCount, 1);
+    assert.equal(result.findings.length, 1);
+    assert.equal(result.findings[0].code, 'injury-replacement-ownership-invalid');
+  }
+
+  assert.equal(conflictingResult.findings[0].gameId, 1);
+  assert.equal(conflictingResult.findings[0].assetKey, skaterAsset.assetKey);
+  assert.equal(conflictingResult.findings[0].assetType, 'skater');
 });
 
 test('a legitimate Team Goalie Unit zero uses its smaller complete source contract', () => {

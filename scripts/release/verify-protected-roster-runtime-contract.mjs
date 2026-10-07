@@ -18,8 +18,15 @@ const [
   projectionRanking,
   rosterMoves,
   cycleScoring,
+  browserCycleScoring,
+  assetCycleWindow,
+  browserAssetCycleWindow,
   cycleService,
   injuryReplacementWindow,
+  playoffWindowBank,
+  leagueAutomation,
+  canonicalImpactFeed,
+  finalScoreReconciliation,
 ] = await Promise.all([
   read('src/app/core/team/roster-config.ts'),
   read('functions/src/shared/core/team/roster-config.ts'),
@@ -30,8 +37,15 @@ const [
   read('functions/src/shared/core/projection/projection-ranking.util.ts'),
   read('functions/src/roster-moves.ts'),
   read('functions/src/shared/core/cycle/cycle-scoring.service.ts'),
+  read('src/app/core/cycle/cycle-scoring.service.ts'),
+  read('functions/src/shared/core/cycle/asset-cycle-window.service.ts'),
+  read('src/app/core/cycle/asset-cycle-window.service.ts'),
   read('functions/src/shared/core/cycle/cycle.service.ts'),
   read('functions/src/shared/core/cycle/injury-replacement-window.util.ts'),
+  read('functions/src/shared/core/playoffs/playoff-window-bank.service.ts'),
+  read('functions/src/league-automation.ts'),
+  read('functions/src/nhl-canonical-impact-feed.ts'),
+  read('functions/src/shared/core/nhl/final-score-reconciliation.util.ts'),
 ]);
 
 const result = evaluateProtectedRosterRuntimeContract({
@@ -44,8 +58,15 @@ const result = evaluateProtectedRosterRuntimeContract({
   projectionRanking,
   rosterMoves,
   cycleScoring,
+  browserCycleScoring,
+  assetCycleWindow,
+  browserAssetCycleWindow,
   cycleService,
   injuryReplacementWindow,
+  playoffWindowBank,
+  leagueAutomation,
+  canonicalImpactFeed,
+  finalScoreReconciliation,
 });
 
 if (!result.ready) {
@@ -55,5 +76,5 @@ if (!result.ready) {
   }
   process.exitCode = 1;
 } else {
-  console.log('RinkRat protected roster runtime contract passed: five bench slots and B1V injury ownership are intact.');
+  console.log('RinkRat protected roster runtime contract passed: five bench slots and hardened B1V injury ownership are intact.');
 }

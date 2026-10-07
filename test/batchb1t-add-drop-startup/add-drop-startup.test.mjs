@@ -89,7 +89,7 @@ test('new leagues prewarm the directory and recovery reuses bounded NHL fact cac
   );
 });
 
-test('competitive formulas, roster authority, Rules, and indexes remain unchanged', async () => {
+test('competitive formulas and Firebase policy remain unchanged while roster authority stays pinned', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-engine.ts'),
     '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3',
@@ -104,7 +104,7 @@ test('competitive formulas, roster authority, Rules, and indexes remain unchange
   );
   assert.equal(
     await sha256('functions/src/roster-authority.ts'),
-    '109610878ec1f2ad2809142400721ec41bae9508b74faa84199cd3b515188288',
+    'e49c9c82233a5e45527cc5d931b572a80c63a4fcf8610e70919619a743e9d5aa',
   );
   assert.equal(
     await sha256('firestore.rules'),

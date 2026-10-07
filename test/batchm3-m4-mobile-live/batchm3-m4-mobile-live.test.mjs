@@ -417,9 +417,12 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
   assert.doesNotMatch(source, /selectedDetail|DialogFocusTrapDirective|ViewportOverlayPortalDirective/);
   assert.match(styles, /@media \(max-width:\s*780px\)/);
   assert.match(styles, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
-  assert.match(template, /<small>CUR<\/small>/);
+  assert.match(template, /<small>SLOT TOTAL<\/small>/);
   assert.match(template, /<small>PROJ<\/small>/);
-  assert.match(template, /six-game details\. Current/);
+  assert.match(
+    template,
+    /six-game details\.[\s\S]*?getPickScoreAccessibilityLabel\(pick\)/,
+  );
   assert.match(
     styles,
     /\.mobile-live-player-row-head-to-head \.mobile-live-player\s*\{[\s\S]*?grid-template-areas:[\s\S]*?'identity scores'[\s\S]*?'markers markers'/,

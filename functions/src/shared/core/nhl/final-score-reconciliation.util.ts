@@ -1,4 +1,12 @@
 import type { FantasyAssetCycleWindow } from '../cycle/cycle.models';
+import {
+  getInjuryReplacementAssetKeyByGameId,
+  normalizeInjuryReplacementWindowPlan,
+} from '../cycle/injury-replacement-window.util';
+import type {
+  DraftableAsset,
+  InjuryReplacementWindowPlan,
+} from '../draft/draft.models';
 import type { ScoringRules } from '../scoring/scoring-rules';
 import { isSafeFirestoreDocumentId } from '../../security/firestore-document-id-core.util';
 import {
@@ -26,6 +34,7 @@ export type FinalScoreReconciliationFindingCode =
   | 'canonical-game-read-limit-reached'
   | 'canonical-final-evidence-incomplete'
   | 'window-asset-invalid'
+  | 'injury-replacement-ownership-invalid'
   | 'duplicate-scheduled-game-id'
   | 'duplicate-completed-game-id'
   | 'duplicate-incomplete-game-id'
@@ -438,6 +447,11 @@ function hasRequiredFinalScoreWindowStructure(
   value: Record<string, unknown>,
 ): boolean {
   const asset = value['asset'];
+  const rawInjuryReplacementWindow = value['injuryReplacementWindow'];
+  const injuryReplacementWindowIsValid =
+    rawInjuryReplacementWindow === undefined ||
+    rawInjuryReplacementWindow === null ||
+    normalizeInjuryReplacementWindowPlan(rawInjuryReplacementWindow) !== null;
 
   return (
     typeof value['id'] === 'string' && Boolean(value['id']) &&
@@ -466,7 +480,8 @@ function hasRequiredFinalScoreWindowStructure(
     isNonnegativeInteger(value['actualGamesPlayed']) &&
     isNonnegativeInteger(value['gamesLeft']) &&
     typeof value['fantasyPoints'] === 'number' &&
-    Number.isFinite(value['fantasyPoints'])
+    Number.isFinite(value['fantasyPoints']) &&
+    injuryReplacementWindowIsValid
   );
 }
 
@@ -558,13 +573,33 @@ function duplicateGameIds(values: readonly number[]): number[] {
   return [...duplicates].sort((left, right) => left - right);
 }
 
-function assetTypeForWindow(
-  window: FantasyAssetCycleWindow,
+function assetTypeForAsset(
+  asset: DraftableAsset | null | undefined,
 ): FinalScoreReconciliationFinding['assetType'] {
-  return window.asset?.assetType === 'skater' ||
-    window.asset?.assetType === 'team-goalie-unit'
-      ? window.asset.assetType
+  return asset?.assetType === 'skater' ||
+    asset?.assetType === 'team-goalie-unit'
+      ? asset.assetType
       : 'unknown';
+}
+
+function hasSameScoringAssetIdentity(
+  left: DraftableAsset,
+  right: DraftableAsset,
+): boolean {
+  if (
+    left.assetType !== right.assetType ||
+    left.assetKey !== right.assetKey ||
+    left.position !== right.position
+  ) {
+    return false;
+  }
+
+  return left.assetType === 'skater' && right.assetType === 'skater'
+    ? left.player.id === right.player.id
+    : left.assetType === 'team-goalie-unit' && right.assetType === 'team-goalie-unit'
+      ? left.teamAbbreviation.trim().toUpperCase() ===
+        right.teamAbbreviation.trim().toUpperCase()
+      : false;
 }
 
 function baseFinding(input: {
@@ -574,14 +609,17 @@ function baseFinding(input: {
   code: FinalScoreReconciliationFindingCode;
   gameId?: number | null;
   reason: string;
+  asset?: DraftableAsset | null;
 }): FinalScoreReconciliationFinding {
+  const asset = input.asset ?? input.window.asset;
+
   return {
     status: input.status,
     code: input.code,
     teamKey: input.teamKey,
     rosterSlotId: input.window.rosterSlotId,
-    assetKey: input.window.assetKey,
-    assetType: assetTypeForWindow(input.window),
+    assetKey: asset?.assetKey ?? input.window.assetKey,
+    assetType: assetTypeForAsset(asset),
     gameId: input.gameId ?? null,
     storedPoints: null,
     canonicalPoints: null,
@@ -600,7 +638,17 @@ function storageIssue(
   code: FinalScoreReconciliationFindingCode,
   reason: string,
   gameId: number | null = null,
+  asset?: DraftableAsset | null,
 ): FinalScoreReconciliationFinding {
+  const injuryReplacementPlan = gameId === null
+    ? null
+    : normalizeInjuryReplacementWindowPlan(window.injuryReplacementWindow);
+  const scoringAsset = asset === undefined && gameId !== null
+    ? injuryReplacementPlan?.segments.find(
+        (segment) => segment.scheduledGameIds.includes(gameId),
+      )?.asset
+    : asset;
+
   return baseFinding({
     window,
     teamKey,
@@ -608,15 +656,174 @@ function storageIssue(
     code,
     gameId,
     reason,
+    asset: scoringAsset,
   });
+}
+
+interface FinalScoreWindowScoringOwnership {
+  valid: boolean;
+  assetByGameId: ReadonlyMap<number, DraftableAsset>;
+  issue: FinalScoreReconciliationFinding | null;
+  reason: string;
+}
+
+function invalidInjuryReplacementOwnership(input: {
+  window: FantasyAssetCycleWindow;
+  teamKey: string;
+  reason: string;
+  plan?: InjuryReplacementWindowPlan | null;
+  assetByGameId?: ReadonlyMap<number, DraftableAsset>;
+  gameId?: number | null;
+  asset?: DraftableAsset | null;
+}): FinalScoreWindowScoringOwnership {
+  return {
+    valid: false,
+    assetByGameId: input.assetByGameId ?? new Map<number, DraftableAsset>(),
+    issue: storageIssue(
+      input.window,
+      input.teamKey,
+      'injury-replacement-ownership-invalid',
+      input.reason,
+      input.gameId ?? null,
+      input.asset,
+    ),
+    reason: input.reason,
+  };
+}
+
+function inspectFinalScoreWindowScoringOwnership(input: {
+  window: FantasyAssetCycleWindow;
+  teamKey: string;
+}): FinalScoreWindowScoringOwnership {
+  const rawPlan = input.window.injuryReplacementWindow as unknown;
+
+  if (rawPlan === undefined || rawPlan === null) {
+    return {
+      valid: true,
+      assetByGameId: new Map(
+        input.window.scheduledGameIds.map((gameId) => [gameId, input.window.asset]),
+      ),
+      issue: null,
+      reason: '',
+    };
+  }
+
+  const plan = normalizeInjuryReplacementWindowPlan(rawPlan);
+
+  if (!plan) {
+    return invalidInjuryReplacementOwnership({
+      window: input.window,
+      teamKey: input.teamKey,
+      reason:
+        'The saved injury-replacement plan is malformed, so per-game scoring ownership cannot be proven.',
+    });
+  }
+
+  const assetByGameId = new Map<number, DraftableAsset>();
+
+  for (const segment of plan.segments) {
+    for (const gameId of segment.scheduledGameIds) {
+      assetByGameId.set(gameId, segment.asset);
+    }
+  }
+
+  const planGameIds = plan.segments.flatMap(
+    (segment) => segment.scheduledGameIds,
+  );
+  const currentSegment = plan.segments.at(-1);
+
+  if (
+    plan.requiredGames !== input.window.scheduledGameIds.length ||
+    JSON.stringify(planGameIds) !== JSON.stringify(input.window.scheduledGameIds)
+  ) {
+    return invalidInjuryReplacementOwnership({
+      window: input.window,
+      teamKey: input.teamKey,
+      plan,
+      assetByGameId,
+      reason:
+        'The saved injury-replacement plan does not exactly cover this immutable window schedule.',
+    });
+  }
+
+  if (
+    !currentSegment ||
+    currentSegment.assetKey !== input.window.assetKey ||
+    !hasSameScoringAssetIdentity(currentSegment.asset, input.window.asset) ||
+    plan.segments.some((segment) => segment.asset.position !== input.window.position)
+  ) {
+    return invalidInjuryReplacementOwnership({
+      window: input.window,
+      teamKey: input.teamKey,
+      plan,
+      assetByGameId,
+      reason:
+        'The saved injury-replacement plan does not match the active slot asset and position.',
+    });
+  }
+
+  const rawScoringAssetKeys = input.window.scoringAssetKeyByGameId as unknown;
+
+  if (!isObjectRecord(rawScoringAssetKeys)) {
+    return invalidInjuryReplacementOwnership({
+      window: input.window,
+      teamKey: input.teamKey,
+      plan,
+      assetByGameId,
+      reason:
+        'The saved injury-replacement window omits its complete per-game scoring-owner map.',
+    });
+  }
+
+  const expectedScoringAssetKeys = getInjuryReplacementAssetKeyByGameId(plan);
+  const expectedGameIdKeys = Object.keys(expectedScoringAssetKeys);
+  const observedGameIdKeys = Object.keys(rawScoringAssetKeys);
+  const mismatchedGameIdKey = expectedGameIdKeys.find(
+    (gameIdKey) => rawScoringAssetKeys[gameIdKey] !== expectedScoringAssetKeys[gameIdKey],
+  );
+  const unexpectedGameIdKey = observedGameIdKeys.find(
+    (gameIdKey) => expectedScoringAssetKeys[gameIdKey] === undefined,
+  );
+
+  if (
+    observedGameIdKeys.length !== expectedGameIdKeys.length ||
+    mismatchedGameIdKey !== undefined ||
+    unexpectedGameIdKey !== undefined
+  ) {
+    const affectedGameIdKey = mismatchedGameIdKey ?? unexpectedGameIdKey;
+    const affectedGameId = affectedGameIdKey && /^[1-9]\d*$/.test(affectedGameIdKey)
+      ? Number(affectedGameIdKey)
+      : null;
+
+    return invalidInjuryReplacementOwnership({
+      window: input.window,
+      teamKey: input.teamKey,
+      plan,
+      assetByGameId,
+      gameId: affectedGameId,
+      asset: affectedGameId === null
+        ? null
+        : assetByGameId.get(affectedGameId) ?? null,
+      reason:
+        'The saved per-game scoring-owner map is incomplete or conflicts with the injury-replacement plan.',
+    });
+  }
+
+  return {
+    valid: true,
+    assetByGameId,
+    issue: null,
+    reason: '',
+  };
 }
 
 function hasReusableStoredFinal(input: {
   window: FantasyAssetCycleWindow;
   gameId: number;
   score: unknown;
+  asset: DraftableAsset;
 }): boolean {
-  const assetType = assetTypeForWindow(input.window);
+  const assetType = assetTypeForAsset(input.asset);
 
   return assetType !== 'unknown' && isReusableNhlFinalScore({
     assetType,
@@ -630,6 +837,7 @@ function getWindowStorageIssues(input: {
   window: FantasyAssetCycleWindow;
   teamKey: string;
   maxFinalGames: number;
+  scoringOwnership: FinalScoreWindowScoringOwnership;
 }): FinalScoreReconciliationFinding[] {
   const { window, teamKey } = input;
   const issues: FinalScoreReconciliationFinding[] = [];
@@ -639,6 +847,10 @@ function getWindowStorageIssues(input: {
   const appearanceIds = positiveGameIds(window.appearanceGameIds);
   const scheduledSet = new Set(scheduledIds);
   const completedSet = new Set(completedIds);
+
+  if (input.scoringOwnership.issue) {
+    issues.push(input.scoringOwnership.issue);
+  }
   const unexpectedScoreKeys = Object.keys(window.gameScores).filter((key) => {
     if (!/^[1-9]\d*$/.test(key)) {
       return true;
@@ -888,10 +1100,15 @@ export function reconcileFinalizedWindow(input: {
     positiveGameIds(input.window.completedGameIds),
   )].sort((left, right) => left - right);
   const gameIdsToInspect = uniqueCompletedGameIds.slice(0, maxFinalGames);
+  const scoringOwnership = inspectFinalScoreWindowScoringOwnership({
+    window: input.window,
+    teamKey: input.teamKey,
+  });
   const storageIssues = getWindowStorageIssues({
     window: input.window,
     teamKey: input.teamKey,
     maxFinalGames,
+    scoringOwnership,
   });
   const result: FinalScoreReconciliationWindowResult = {
     windowCount: 1,
@@ -924,9 +1141,15 @@ export function reconcileFinalizedWindow(input: {
     const storedPoints = input.window.gameScores[gameIdKey];
     const storedAppeared = input.window.appearanceGameIds.includes(gameId);
     const storedEvidence = input.window.gameInputCompleteness?.[gameIdKey];
-    const assetType = assetTypeForWindow(input.window);
+    const scoringAsset = scoringOwnership.assetByGameId.get(gameId);
+    const assetType = assetTypeForAsset(scoringAsset);
 
-    if (assetType === 'unknown') {
+    if (!scoringOwnership.valid) {
+      result.unverifiableGameCount += 1;
+      continue;
+    }
+
+    if (assetType === 'unknown' || !scoringAsset) {
       result.unverifiableGameCount += 1;
       pushFinding(baseFinding({
         window: input.window,
@@ -934,6 +1157,7 @@ export function reconcileFinalizedWindow(input: {
         status: 'unverifiable',
         code: 'window-asset-invalid',
         gameId,
+        asset: scoringAsset,
         reason: 'The saved window does not contain a supported scoring asset.',
       }));
       continue;
@@ -947,6 +1171,7 @@ export function reconcileFinalizedWindow(input: {
         status: 'unverifiable',
         code: 'stored-final-score-missing',
         gameId,
+        asset: scoringAsset,
         reason: 'A completed NHL game does not have a finite saved score.',
       }));
       continue;
@@ -961,6 +1186,7 @@ export function reconcileFinalizedWindow(input: {
           status: 'unverifiable',
           code: 'stored-final-evidence-missing',
           gameId,
+          asset: scoringAsset,
           reason: 'The saved final predates or is missing the D1L source-completeness contract.',
         }),
         storedPoints: rounded(storedPoints),
@@ -973,6 +1199,7 @@ export function reconcileFinalizedWindow(input: {
       window: input.window,
       gameId,
       score: storedPoints,
+      asset: scoringAsset,
     })) {
       result.unverifiableGameCount += 1;
       pushFinding({
@@ -982,6 +1209,7 @@ export function reconcileFinalizedWindow(input: {
           status: 'unverifiable',
           code: 'stored-final-evidence-incomplete',
           gameId,
+          asset: scoringAsset,
           reason: 'The saved final does not satisfy the reusable source-completeness contract.',
         }),
         storedPoints: rounded(storedPoints),
@@ -1005,6 +1233,7 @@ export function reconcileFinalizedWindow(input: {
             ? 'canonical-game-read-limit-reached'
             : 'canonical-game-missing',
           gameId,
+          asset: scoringAsset,
           reason: readLimitReached
             ? 'This game is beyond the bounded canonical-read limit for the current page.'
             : 'No valid current canonical game document is available for comparison.',
@@ -1028,6 +1257,7 @@ export function reconcileFinalizedWindow(input: {
           status: 'unverifiable',
           code: 'canonical-final-evidence-incomplete',
           gameId,
+          asset: scoringAsset,
           reason: canonicalGame.facts.gameState !== 'final'
             ? 'The current canonical game facts are not in a final state.'
             : 'The current canonical game facts are structurally incomplete.',
@@ -1042,7 +1272,7 @@ export function reconcileFinalizedWindow(input: {
 
     const observation = compareDirectAndCanonicalGameScore({
       gameId,
-      asset: input.window.asset,
+      asset: scoringAsset,
       canonicalGame,
       gameIsFinal: true,
       scoringRules: input.scoringRules,
@@ -1069,6 +1299,7 @@ export function reconcileFinalizedWindow(input: {
           status: 'unverifiable',
           code: 'canonical-final-evidence-incomplete',
           gameId,
+          asset: scoringAsset,
           reason: observation.status === 'matched' || observation.status === 'mismatch'
             ? 'canonical-score-invalid'
             : observation.reason,
@@ -1109,6 +1340,7 @@ export function reconcileFinalizedWindow(input: {
         status: 'candidate',
         code,
         gameId,
+        asset: scoringAsset,
         reason: 'The saved final differs from complete current canonical evidence.',
       }),
       storedPoints: observation.directPoints,

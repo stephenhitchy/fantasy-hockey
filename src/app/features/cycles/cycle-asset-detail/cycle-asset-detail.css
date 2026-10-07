@@ -226,6 +226,13 @@
   text-align: center;
 }
 
+.film-injury-score-breakdown {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .projection-delta-ahead {
   color: var(--rr-color-success);
 }
@@ -292,6 +299,53 @@
   border-top: 4px solid var(--rr-color-info);
   border-radius: 12px;
   background: var(--rr-color-surface-raised);
+}
+
+.game-tape-cell.replacement-boundary-game {
+  border-inline-start: 4px dashed var(--rr-color-info);
+}
+
+.game-tape-cell.replacement-boundary-game::before {
+  position: absolute;
+  inset-block-start: -9px;
+  inset-inline-start: -7px;
+  color: var(--rr-color-info);
+  content: '↪';
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.game-tape-owner {
+  color: var(--rr-color-info);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.game-owner-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 10px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--rr-color-info) 36%, var(--rr-color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rr-color-info) 9%, var(--rr-color-surface-raised));
+  color: var(--rr-color-text-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.game-owner-note--boundary {
+  border-style: dashed;
+  color: var(--rr-color-text);
+}
+
+.game-owner-note span {
+  color: var(--rr-color-info);
+  font-weight: 1000;
 }
 
 .game-tape-cell.played-game {

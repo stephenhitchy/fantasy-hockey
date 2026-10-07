@@ -56,6 +56,10 @@ dedicated compatibility tests:
 - six-game player-window ownership
 - seventh-game rollover
 - immutable started windows
+- injury-replacement segment ownership, including zero-game audit segments and
+  current-segment-only regular/playoff rollover
+- exact injury game-to-player and per-game source-team maps, monotonic
+  activation boundaries, and preservation of every started/live/final game
 - Draft authority
 - add/drop, waiver, IR, and transaction authority
 - standings or playoff authority
@@ -78,6 +82,9 @@ because of a later stat correction.
 - Prefer pure utilities for complicated decision logic.
 - Keep server-owned competitive decisions out of the browser.
 - Preserve idempotency and safe retry behavior.
+- Treat cycle-window, roster-pick, and assigned playoff-bank injury plans as
+  one atomic authority. A missing/conflicting copy or protected-game mismatch
+  must abort before any roster or scoring write.
 - Never silently substitute missing competitive data with zero.
 - Fail closed for writes and fail visibly for missing evidence.
 - Preserve an explicit rollback path.
@@ -151,7 +158,7 @@ Run the smallest relevant focused tests while developing.
 Before declaring a change ready, run the current inherited release gate.
 The current inherited gate is:
 
-- `npm run verify:batchd1lg`
+- `npm run verify:batchb1z`
 - `npm run build:all`
 
 Also run:

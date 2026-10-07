@@ -468,6 +468,7 @@ export interface InjuryReplacementWindowSegment {
   asset: DraftableAsset;
   scheduledGameIds: number[];
   sourceTeamAbbreviation: string;
+  sourceTeamAbbreviationByGameId?: Record<string, string>;
   assignmentNotBeforeMilliseconds?: number;
   activatedAtMilliseconds?: number;
   playerWindowContinuity?: PlayerWindowContinuity;

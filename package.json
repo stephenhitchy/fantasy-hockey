@@ -752,6 +752,9 @@
     "test:batchd1lg:run": "node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchd1lg-live-scoring-deployment-contract/*.test.mjs",
     "verify:batchd1lg:core": "npm run verify:batchb1y:core && npm run test:batchd1lg:run && npm run validate:release-manifest",
     "verify:batchd1lg": "npm run toolchain:verify && npm run verify:batchd1lg:core && npm run security:dependency-audit",
+    "test:batchb1z:run": "npm --prefix functions run build && node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1z-injury-replacement-integrity/*.test.mjs",
+    "verify:batchb1z:core": "npm run verify:batchd1lg:core && npm run test:batchb1z:run && npm run validate:release-manifest",
+    "verify:batchb1z": "npm run toolchain:verify && npm run verify:batchb1z:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs && node scripts/release/verify-protected-live-scoring-runtime-contract.mjs"
   },
   "private": true,

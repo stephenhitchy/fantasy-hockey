@@ -21,6 +21,11 @@ import {
   CycleAssetScoreSummary,
   CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
+import {
+  buildInjuryReplacementPresentation,
+  resolveCycleSlotScoreSummary,
+  type InjuryReplacementPresentation,
+} from '../../../core/cycle/injury-replacement-presentation.util';
 
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 
@@ -99,6 +104,7 @@ import { ActionSheet } from '../../../shared/action-sheet/action-sheet';
 import { AssetPortrait } from '../../../shared/asset-portrait/asset-portrait';
 import type { AssetPortraitSource } from '../../../shared/asset-portrait/asset-portrait.util';
 import { LeagueQuickNavigation } from '../../../shared/league-quick-navigation/league-quick-navigation';
+import { InjuryReplacementScoreBreakdown } from '../../../shared/injury-replacement-score-breakdown/injury-replacement-score-breakdown';
 import {
   getRosterDisplayMetric,
   getRosterDisplayMetricLabel,
@@ -123,6 +129,7 @@ import {
   buildActiveBenchSwapTimingMessage,
   type ActiveBenchSwapTimingMessage,
 } from './active-bench-swap-timing.util';
+import { resolveCycleWindowGameMarkerState } from '../../cycles/cycle-one/cycle-window-game-marker.util';
 
 import { listenToSharedCycleScoring } from '../../../core/live-scoring/live-scoring.service';
 
@@ -151,6 +158,21 @@ interface PendingRosterDrop {
   asset: RosterAsset;
 }
 
+interface RosterSlotGameMarker {
+  index: number;
+  status: 'played' | 'missed' | 'live' | 'upcoming' | 'unavailable';
+  title: string;
+  ariaLabel: string;
+  replacementBoundary: boolean;
+  currentOwner: boolean;
+}
+
+interface ActiveRosterDisplaySlot extends ActiveRosterSlot {
+  gameMarkers: RosterSlotGameMarker[];
+  injuryReplacementPresentation: InjuryReplacementPresentation | null;
+  windowLabel: string;
+}
+
 import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.config';
 
 @Component({
@@ -164,6 +186,7 @@ import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.
     ActionSheet,
     AssetPortrait,
     LeagueQuickNavigation,
+    InjuryReplacementScoreBreakdown,
   ],
   templateUrl: './team-settings.html',
   styleUrl: './team-settings.css',
@@ -2425,12 +2448,17 @@ export class TeamSettings implements OnDestroy {
     return this.roster()?.activeSlots.filter((slot) => slot.position === position) ?? [];
   }
 
-  getPositionSlotsForDisplay(position: DraftPosition): FantasyRoster['activeSlots'] {
+  getPositionSlotsForDisplay(position: DraftPosition): ActiveRosterDisplaySlot[] {
     return orderRosterEntriesForDisplay(
       this.getPositionSlots(position),
       (slot) => (slot.asset ? this.getRosterDisplayAsset(slot.asset) : null),
       this.rosterDisplayPhase(),
-    );
+    ).map((slot) => ({
+      ...slot,
+      gameMarkers: this.getRosterSlotGameMarkers(slot),
+      injuryReplacementPresentation: this.getRosterSlotInjuryReplacementPresentation(slot),
+      windowLabel: this.getRosterSlotWindowLabel(slot),
+    }));
   }
 
   getRosterDisplayOrderLabel(): string {
@@ -3023,6 +3051,144 @@ export class TeamSettings implements OnDestroy {
     }
 
     return this.cycleScoring()?.assetScores[projectionAsset.assetKey] ?? null;
+  }
+
+  getRosterSlotScoreSummary(slot: ActiveRosterSlot): CycleAssetScoreSummary | null {
+    if (!slot.asset) {
+      return null;
+    }
+
+    const assetKey = this.getRosterAssetKey(slot.asset);
+    const pick = this.cycleRosterPicks().find(
+      (candidate) =>
+        candidate.ownerId === this.viewedOwnerId() &&
+        candidate.rosterSlotId === slot.slotId,
+    );
+
+    if (!assetKey) {
+      return null;
+    }
+
+    return resolveCycleSlotScoreSummary(this.cycleScoring(), {
+      ownerId: this.viewedOwnerId(),
+      assetKey,
+      rosterSlotId: slot.slotId,
+      cycleWindowId: pick?.cycleWindowId,
+    });
+  }
+
+  getRosterSlotInjuryReplacementPresentation(
+    slot: ActiveRosterSlot,
+  ): InjuryReplacementPresentation | null {
+    return buildInjuryReplacementPresentation(this.getRosterSlotScoreSummary(slot));
+  }
+
+  getRosterSlotCurrentCycleScore(slot: ActiveRosterSlot): number | null {
+    return this.getRosterSlotScoreSummary(slot)?.currentScore ?? null;
+  }
+
+  getRosterSlotGamesPlayed(slot: ActiveRosterSlot): number | null {
+    return this.getRosterSlotScoreSummary(slot)?.gamesPlayed ?? null;
+  }
+
+  getRosterSlotGamesLeft(slot: ActiveRosterSlot): number | null {
+    return this.getRosterSlotScoreSummary(slot)?.gamesLeft ?? null;
+  }
+
+  getRosterSlotGameProgress(slot: ActiveRosterSlot): string {
+    const summary = this.getRosterSlotScoreSummary(slot);
+
+    if (!summary) {
+      return '—';
+    }
+
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+    return `${summary.gamesPlayed} / ${requiredGames}`;
+  }
+
+  getRosterSlotGameMarkers(slot: ActiveRosterSlot): RosterSlotGameMarker[] {
+    const summary = this.getRosterSlotScoreSummary(slot);
+
+    if (!summary) {
+      return [];
+    }
+
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+    const replacement = buildInjuryReplacementPresentation(summary);
+
+    return Array.from({ length: requiredGames }, (_, index) => {
+      const gameId = summary.scheduledGameIds[index] ?? null;
+      const gameDate = summary.scheduledGameDates[index] ?? null;
+      const gameLabel = summary.scheduledGameLabels[index] ?? 'Schedule pending';
+      const state = resolveCycleWindowGameMarkerState({
+        gameId,
+        completedGameIds: summary.completedGameIds,
+        appearanceGameIds: summary.appearanceGameIds,
+        liveGameIds: summary.liveGameIds,
+        gameStates: summary.gameStates,
+        actualGamesPlayed: summary.actualGamesPlayed ?? 0,
+      });
+      const owner = replacement?.gameOwnership[index] ?? null;
+      const dateLabel = gameDate
+        ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
+        : 'date pending';
+      const ownerLabel = owner ? `${owner.ariaLabel}. ` : '';
+
+      return {
+        index: index + 1,
+        status: state.status,
+        title: `${ownerLabel}Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${state.statusLabel}`,
+        ariaLabel: `${ownerLabel}Game ${index + 1}, ${gameLabel}, ${dateLabel}, ${state.statusLabel}`,
+        replacementBoundary: owner?.segmentStart ?? false,
+        currentOwner: owner?.currentSegment ?? false,
+      };
+    });
+  }
+
+  getRosterSlotWindowLabel(slot: ActiveRosterSlot): string {
+    const replacement = this.getRosterSlotInjuryReplacementPresentation(slot);
+
+    if (replacement) {
+      return `Six-game roster slot. ${replacement.accessibleLabel}`;
+    }
+
+    const summary = this.getRosterSlotScoreSummary(slot);
+    return summary
+      ? `Six-game roster slot, ${summary.gamesPlayed} played and ${summary.gamesLeft} left.`
+      : 'Six-game roster slot is still loading.';
+  }
+
+  getRosterManagerActiveSlot(): ActiveRosterSlot | null {
+    if (this.rosterManagerArea() !== 'active') {
+      return null;
+    }
+
+    return this.roster()?.activeSlots.find(
+      (slot) => slot.slotId === this.rosterManagerSlotId(),
+    ) ?? null;
+  }
+
+  get rosterManagerInjuryReplacementPresentation(): InjuryReplacementPresentation | null {
+    const activeSlot = this.getRosterManagerActiveSlot();
+    return activeSlot ? this.getRosterSlotInjuryReplacementPresentation(activeSlot) : null;
+  }
+
+  getRosterManagerScore(): number | null {
+    const activeSlot = this.getRosterManagerActiveSlot();
+    return activeSlot
+      ? this.getRosterSlotCurrentCycleScore(activeSlot)
+      : this.getRosterAssetCurrentCycleScore(this.rosterManagerAsset());
+  }
+
+  getRosterManagerProgress(): string {
+    const activeSlot = this.getRosterManagerActiveSlot();
+    return activeSlot
+      ? this.getRosterSlotGameProgress(activeSlot)
+      : this.getRosterAssetGameProgress(this.rosterManagerAsset());
   }
 
   getRosterAssetCurrentCycleScore(asset: unknown): number | null {

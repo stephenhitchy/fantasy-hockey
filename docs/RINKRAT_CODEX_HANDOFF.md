@@ -71,6 +71,15 @@ RinkRat contains:
 
 The direct NHL path remains the proven fallback.
 
+Instant injury replacement uses a versioned mixed-player ownership plan for
+each affected roster slot. B1Z hardens that plan against zero-start swaps,
+reserved-bench races, availability changes during verification, NHL trades,
+malformed saved evidence, and regular/playoff rollover drift. The browser now
+presents the combined value as a slot total with player-owned contributions
+and exact ownership on the six game dots. Read
+`docs/RINKRAT_PRODUCT_B1Z_INJURY_REPLACEMENT_INTEGRITY.md` before changing the
+roster-move, cycle-scoring, rollover, playoff-bank, or mixed-player UI paths.
+
 The 2026-10-06 scoring incident was caused by a clean broad Functions release
 from older source `412c3b8b`, which replaced the D1L-F five-attempt/jittered NHL
 schedule recovery with the previous three-attempt/no-jitter runtime. `Bar Down`

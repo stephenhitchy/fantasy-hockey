@@ -372,9 +372,9 @@
 
                           <em>
                             Games:
-                            {{ getRosterAssetGamesPlayed(asset) ?? '—' }}
+                            {{ getRosterSlotGamesPlayed(slot) ?? '—' }}
                             played /
-                            {{ getRosterAssetGamesLeft(asset) ?? '—' }}
+                            {{ getRosterSlotGamesLeft(slot) ?? '—' }}
                             left
                           </em>
 
@@ -386,9 +386,9 @@
                         <div class="fantasy-player-score-stack">
                           <div>
                             <strong>
-                              {{ getDisplayNumber(getRosterAssetCurrentCycleScore(asset)) }}
+                              {{ getDisplayNumber(getRosterSlotCurrentCycleScore(slot)) }}
                             </strong>
-                            <span>Cur</span>
+                            <span>Slot total</span>
                           </div>
 
                           <div>
@@ -405,6 +405,40 @@
                             <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
                           </div>
                         </div>
+
+                        @if (slot.gameMarkers; as markers) {
+                          @if (markers.length > 0) {
+                            <div
+                              class="roster-window-markers"
+                              [attr.aria-label]="slot.windowLabel"
+                            >
+                              @for (marker of markers; track marker.index) {
+                                <span
+                                  class="roster-window-marker"
+                                  [class.roster-marker-played]="marker.status === 'played'"
+                                  [class.roster-marker-missed]="marker.status === 'missed'"
+                                  [class.roster-marker-live]="marker.status === 'live'"
+                                  [class.roster-marker-upcoming]="marker.status === 'upcoming'"
+                                  [class.roster-marker-unavailable]="marker.status === 'unavailable'"
+                                  [class.roster-marker-replacement-boundary]="marker.replacementBoundary"
+                                  [class.roster-marker-replacement-owner]="marker.currentOwner"
+                                  role="img"
+                                  [attr.aria-label]="marker.ariaLabel"
+                                  [title]="marker.title"
+                                >{{ marker.index }}</span>
+                              }
+                            </div>
+                          }
+                        }
+
+                        @if (slot.injuryReplacementPresentation; as replacement) {
+                          <app-injury-replacement-score-breakdown
+                            class="roster-injury-score-breakdown"
+                            [presentation]="replacement"
+                            [compact]="true"
+                            [showTotal]="false"
+                          />
+                        }
 
                         @if (isOwnTeam()) {
                           <div class="roster-card-actions">
@@ -499,9 +533,9 @@
 
                         <em>
                           Games:
-                          {{ getRosterAssetGamesPlayed(asset) ?? '—' }}
+                          {{ getRosterSlotGamesPlayed(slot) ?? '—' }}
                           played /
-                          {{ getRosterAssetGamesLeft(asset) ?? '—' }}
+                          {{ getRosterSlotGamesLeft(slot) ?? '—' }}
                           left
                         </em>
 
@@ -513,9 +547,9 @@
                       <div class="fantasy-player-score-stack">
                         <div>
                           <strong>
-                            {{ getDisplayNumber(getRosterAssetCurrentCycleScore(asset)) }}
+                            {{ getDisplayNumber(getRosterSlotCurrentCycleScore(slot)) }}
                           </strong>
-                          <span>Cur</span>
+                          <span>Slot total</span>
                         </div>
 
                         <div>
@@ -532,6 +566,40 @@
                           <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
                         </div>
                       </div>
+
+                      @if (slot.gameMarkers; as markers) {
+                        @if (markers.length > 0) {
+                          <div
+                            class="roster-window-markers"
+                            [attr.aria-label]="slot.windowLabel"
+                          >
+                            @for (marker of markers; track marker.index) {
+                              <span
+                                class="roster-window-marker"
+                                [class.roster-marker-played]="marker.status === 'played'"
+                                [class.roster-marker-missed]="marker.status === 'missed'"
+                                [class.roster-marker-live]="marker.status === 'live'"
+                                [class.roster-marker-upcoming]="marker.status === 'upcoming'"
+                                [class.roster-marker-unavailable]="marker.status === 'unavailable'"
+                                [class.roster-marker-replacement-boundary]="marker.replacementBoundary"
+                                [class.roster-marker-replacement-owner]="marker.currentOwner"
+                                role="img"
+                                [attr.aria-label]="marker.ariaLabel"
+                                [title]="marker.title"
+                              >{{ marker.index }}</span>
+                            }
+                          </div>
+                        }
+                      }
+
+                      @if (slot.injuryReplacementPresentation; as replacement) {
+                        <app-injury-replacement-score-breakdown
+                          class="roster-injury-score-breakdown"
+                          [presentation]="replacement"
+                          [compact]="true"
+                          [showTotal]="false"
+                        />
+                      }
 
                       @if (isOwnTeam()) {
                         <div class="roster-card-actions">
@@ -623,9 +691,9 @@
 
                         <em>
                           Games:
-                          {{ getRosterAssetGamesPlayed(asset) ?? '—' }}
+                          {{ getRosterSlotGamesPlayed(slot) ?? '—' }}
                           played /
-                          {{ getRosterAssetGamesLeft(asset) ?? '—' }}
+                          {{ getRosterSlotGamesLeft(slot) ?? '—' }}
                           left
                         </em>
 
@@ -637,9 +705,9 @@
                       <div class="fantasy-player-score-stack">
                         <div>
                           <strong>
-                            {{ getDisplayNumber(getRosterAssetCurrentCycleScore(asset)) }}
+                            {{ getDisplayNumber(getRosterSlotCurrentCycleScore(slot)) }}
                           </strong>
-                          <span>Cur</span>
+                          <span>Slot total</span>
                         </div>
 
                         <div>
@@ -656,6 +724,40 @@
                           <span>{{ getRosterAssetDisplayMetricLabel() }}</span>
                         </div>
                       </div>
+
+                      @if (slot.gameMarkers; as markers) {
+                        @if (markers.length > 0) {
+                          <div
+                            class="roster-window-markers"
+                            [attr.aria-label]="slot.windowLabel"
+                          >
+                            @for (marker of markers; track marker.index) {
+                              <span
+                                class="roster-window-marker"
+                                [class.roster-marker-played]="marker.status === 'played'"
+                                [class.roster-marker-missed]="marker.status === 'missed'"
+                                [class.roster-marker-live]="marker.status === 'live'"
+                                [class.roster-marker-upcoming]="marker.status === 'upcoming'"
+                                [class.roster-marker-unavailable]="marker.status === 'unavailable'"
+                                [class.roster-marker-replacement-boundary]="marker.replacementBoundary"
+                                [class.roster-marker-replacement-owner]="marker.currentOwner"
+                                role="img"
+                                [attr.aria-label]="marker.ariaLabel"
+                                [title]="marker.title"
+                              >{{ marker.index }}</span>
+                            }
+                          </div>
+                        }
+                      }
+
+                      @if (slot.injuryReplacementPresentation; as replacement) {
+                        <app-injury-replacement-score-breakdown
+                          class="roster-injury-score-breakdown"
+                          [presentation]="replacement"
+                          [compact]="true"
+                          [showTotal]="false"
+                        />
+                      }
 
                       @if (isOwnTeam()) {
                         <div class="roster-card-actions">
@@ -709,10 +811,10 @@
 
       <p class="bench-cycle-guidance rr-guidance-new-only">
         @if (isOwnTeam()) {
-          Bench scores and circles do not count. Starting one schedules a fair lineup swap; played
-          NHL games are never backfilled.
+          Bench scores and circles do not count. Starts keep fair timing; played games are never
+          backfilled.
         } @else {
-          Bench scores and circles do not count until the asset enters the active lineup.
+          Bench scores and circles count only after the asset starts.
         }
       </p>
 
@@ -956,8 +1058,8 @@
 
           <div class="roster-manager-score-grid" aria-label="Player matchup summary">
             <div>
-              <span>Current points</span>
-              <strong>{{ getDisplayNumber(getRosterAssetCurrentCycleScore(managerAsset)) }}</strong>
+              <span>{{ rosterManagerArea() === 'active' ? 'Slot total' : 'Current points' }}</span>
+              <strong>{{ getDisplayNumber(getRosterManagerScore()) }}</strong>
             </div>
             <div>
               <span>Next 6 projection</span>
@@ -965,9 +1067,16 @@
             </div>
             <div>
               <span>Six-game progress</span>
-              <strong>{{ getRosterAssetGameProgress(managerAsset) }}</strong>
+              <strong>{{ getRosterManagerProgress() }}</strong>
             </div>
           </div>
+
+          @if (rosterManagerInjuryReplacementPresentation; as replacement) {
+            <app-injury-replacement-score-breakdown
+              class="roster-manager-injury-breakdown"
+              [presentation]="replacement"
+            />
+          }
         } @else {
           <div class="roster-manager-empty-summary">
             <span aria-hidden="true">＋</span>
@@ -1484,7 +1593,11 @@
                     <div class="lineup-change-target-topline">
                       <strong>{{ targetSlot.position }} Slot {{ targetSlot.slotNumber }}</strong>
                       <span class="lineup-change-target-pill">{{
-                        targetSlot.asset ? 'Swap with active' : 'Open slot'
+                        targetSlot.asset
+                          ? isPendingBenchSwapInjuryReplacement()
+                            ? 'Injury replacement'
+                            : 'Swap with active'
+                          : 'Open slot'
                       }}</span>
                     </div>
                     <div class="lineup-change-target-body">
@@ -1507,7 +1620,8 @@
                             ? getRosterAssetTeamLabel(targetSlot.asset) +
                               ' · ' +
                               targetSlot.position +
-                              ' · moves to Bench'
+                              ' · moves to ' +
+                              (isPendingBenchSwapInjuryReplacement() ? 'Injured Reserve' : 'Bench')
                             : 'Start ' +
                               getRosterAssetName(benchSwapAsset) +
                               ' here when you confirm.'
@@ -1515,7 +1629,7 @@
                         <small class="lineup-change-target-progress">
                           {{
                             targetSlot.asset
-                              ? 'Six-game progress: ' + getRosterAssetGameProgress(targetSlot.asset)
+                              ? 'Six-game progress: ' + getRosterSlotGameProgress(targetSlot)
                               : 'No existing scoring window in this slot.'
                           }}
                         </small>

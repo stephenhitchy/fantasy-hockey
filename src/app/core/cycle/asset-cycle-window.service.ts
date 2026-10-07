@@ -22,7 +22,15 @@ import {
 } from './cycle.models';
 import { CycleAssetScoreSummary, CycleScoringResult } from './cycle-scoring.service';
 import { resolveSourceNhlBlockNumber } from './cycle-window-selection.util';
-import { normalizeInjuryReplacementWindowPlan } from './injury-replacement-window.util';
+import {
+  getInjuryReplacementProtectedGameIds,
+  getInjuryReplacementAssetKeyByGameId,
+  hasConsistentInjuryReplacementWindowEvidence,
+  hasExactInjuryReplacementScoringAssetKeyMap,
+  hasPreservedInjuryReplacementProtectedGameOwnership,
+  requireValidInjuryReplacementWindowPlan,
+  resolveConsistentInjuryReplacementWindowPlan,
+} from './injury-replacement-window.util';
 
 function getCycleDocumentId(cycleNumber: number): string {
   return `cycle-${cycleNumber}`;
@@ -182,9 +190,47 @@ function normalizeAssetCycleWindow(
   const playerWindowContinuity = normalizePlayerWindowContinuity(
     value.playerWindowContinuity,
   );
-  const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
+  const injuryReplacementWindow = requireValidInjuryReplacementWindowPlan(
     value.injuryReplacementWindow,
+    `Saved cycle window ${value.ownerId ?? ownerId}/${value.rosterSlotId ?? ''}`,
   );
+  const savedScoringAssetKeyByGameId = normalizeStringRecord(
+    value.scoringAssetKeyByGameId,
+  );
+  const scoringAssetKeyByGameId = injuryReplacementWindow
+    ? getInjuryReplacementAssetKeyByGameId(injuryReplacementWindow)
+    : {};
+
+  if (
+    injuryReplacementWindow
+      ? !hasConsistentInjuryReplacementWindowEvidence({
+          plan: injuryReplacementWindow,
+          scheduledGameIds: value.scheduledGameIds,
+          scoringAssetKeyByGameId: value.scoringAssetKeyByGameId,
+          assetKey: value.assetKey ?? value.asset?.assetKey ?? '',
+          ownerId: value.ownerId ?? ownerId,
+          rosterSlotId: value.rosterSlotId ?? '',
+          position: value.position,
+          scheduleTeamAbbreviation: value.scheduleTeamAbbreviation,
+          sourceTeamAbbreviationByGameId:
+            value.sourceTeamAbbreviationByGameId,
+          completedGameIds: value.completedGameIds,
+          liveGameIds: value.liveGameIds,
+          incompleteFinalGameIds: (
+            value as Partial<FantasyAssetCycleWindow> & {
+              incompleteFinalGameIds?: number[];
+            }
+          ).incompleteFinalGameIds,
+          appearanceGameIds: value.appearanceGameIds,
+          gameStates: value.gameStates,
+        })
+      : Object.keys(savedScoringAssetKeyByGameId).length > 0
+  ) {
+    throw new Error(
+      `Saved cycle window ${value.ownerId ?? ownerId}/${value.rosterSlotId ?? ''} ` +
+        'contains conflicting injury-replacement game ownership.',
+    );
+  }
 
   return {
     id: value.id ?? '',
@@ -213,9 +259,7 @@ function normalizeAssetCycleWindow(
     teamIdentityChanged: value.teamIdentityChanged === true,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     ...(injuryReplacementWindow ? { injuryReplacementWindow } : {}),
-    scoringAssetKeyByGameId: normalizeStringRecord(
-      value.scoringAssetKeyByGameId,
-    ),
+    scoringAssetKeyByGameId,
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -318,11 +362,49 @@ function buildWindow(
     summary?.playerWindowContinuity ??
     previous?.playerWindowContinuity ??
     normalizePlayerWindowContinuity(pick.playerWindowContinuity);
-  const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
-    summary?.injuryReplacementWindow ??
-      pick.injuryReplacementWindow ??
-      previous?.injuryReplacementWindow,
-  );
+  const injuryReplacementWindow =
+    resolveConsistentInjuryReplacementWindowPlan({
+      values: [
+        summary?.injuryReplacementWindow,
+        previous?.injuryReplacementWindow,
+        pick.injuryReplacementWindow,
+      ],
+      context: `Cycle window ${pick.ownerId}/${rosterSlotId}`,
+    });
+  const selectedScoringAssetKeyByGameId =
+    summary?.scoringAssetKeyByGameId ?? previous?.scoringAssetKeyByGameId;
+
+  if (
+    previous &&
+    injuryReplacementWindow &&
+    !hasPreservedInjuryReplacementProtectedGameOwnership({
+      previousPlan: previous.injuryReplacementWindow,
+      nextPlan: injuryReplacementWindow,
+      protectedGameIds: getInjuryReplacementProtectedGameIds(previous),
+      previousAssetKey: previous.assetKey,
+      previousScheduleTeamAbbreviation: previous.scheduleTeamAbbreviation,
+      previousSourceTeamAbbreviationByGameId:
+        previous.sourceTeamAbbreviationByGameId,
+    })
+  ) {
+    throw new Error(
+      `Cycle window ${pick.ownerId}/${rosterSlotId} changed protected ` +
+        'injury-replacement game ownership.',
+    );
+  }
+
+  if (
+    injuryReplacementWindow &&
+    !hasExactInjuryReplacementScoringAssetKeyMap(
+      injuryReplacementWindow,
+      selectedScoringAssetKeyByGameId,
+    )
+  ) {
+    throw new Error(
+      `Cycle window ${pick.ownerId}/${rosterSlotId} contains conflicting ` +
+        'injury-replacement game ownership.',
+    );
+  }
 
   return {
     id: windowId,
@@ -351,9 +433,9 @@ function buildWindow(
       summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
     ...(injuryReplacementWindow ? { injuryReplacementWindow } : {}),
-    scoringAssetKeyByGameId:
-      summary?.scoringAssetKeyByGameId ??
-      normalizeStringRecord(previous?.scoringAssetKeyByGameId),
+    scoringAssetKeyByGameId: injuryReplacementWindow
+      ? getInjuryReplacementAssetKeyByGameId(injuryReplacementWindow)
+      : {},
     completedGameIds: summary?.completedGameIds ?? normalizeNumberArray(previous?.completedGameIds),
     liveGameIds: summary?.liveGameIds ?? normalizeNumberArray(previous?.liveGameIds),
     appearanceGameIds:

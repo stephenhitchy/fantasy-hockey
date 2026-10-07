@@ -51,7 +51,7 @@ test('regular rollover advances only completed same-slot skater windows', async 
   assert.match(cycleStart, /buildCurrentRosterSnapshotPicks\([\s\S]*?continuityBySlotKey/);
 });
 
-test('asynchronous regular rollover carries a continuing skater and resets a queued replacement', async () => {
+test('asynchronous regular rollover carries the current replacement segment and resets a queued replacement', async () => {
   const cycleSource = await source('functions/src/shared/core/cycle/cycle.service.ts');
   const rollover = section(
     cycleSource,
@@ -66,7 +66,15 @@ test('asynchronous regular rollover carries a continuing skater and resets a que
   );
   assert.match(
     rollover,
-    /previousPick && previousSummary\s*\? advancePlayerWindowContinuity\(\{[\s\S]*?completedScheduledGameIds: previousSummary\.scheduledGameIds/,
+    /const previousCurrentInjurySegment =\s*previousInjuryReplacementWindow\?\.segments\.at\(-1\)/,
+  );
+  assert.match(
+    rollover,
+    /previousPick && previousSummary\s*\? advancePlayerWindowContinuity\(\{[\s\S]*?completedScheduledGameIds:\s*previousCurrentInjurySegment\?\.scheduledGameIds \?\?\s*previousSummary\.scheduledGameIds/,
+  );
+  assert.match(
+    rollover,
+    /completedScheduleTeamAbbreviation:\s*previousCurrentInjurySegment\?\.sourceTeamAbbreviation \?\?\s*previousSummary\.scheduleTeamAbbreviation/,
   );
   assert.match(
     rollover,
@@ -130,7 +138,7 @@ test('an immediate roster removal deletes its snapshot and an immediate incoming
   assert.match(immediateMove, /playerWindowContinuity: playerWindowContinuity \?\? null/);
 });
 
-test('playoff banks require the preceding bank to complete, then carry or reset the slot lineage', async () => {
+test('playoff banks require the preceding bank to complete, then carry the current replacement segment or reset', async () => {
   const playoffSource = await source(
     'functions/src/shared/core/playoffs/playoff-window-bank.service.ts',
   );
@@ -150,7 +158,15 @@ test('playoff banks require the preceding bank to complete, then carry or reset 
   );
   assert.match(
     nextBank,
-    /previousPick && previousWindow\s*\? advancePlayerWindowContinuity\(\{[\s\S]*?previousContinuity,[\s\S]*?completedScheduledGameIds: previousWindow\.scheduledGameIds/,
+    /const currentInjurySegment =\s*previousInjuryReplacementWindow\?\.segments\.at\(-1\)/,
+  );
+  assert.match(
+    nextBank,
+    /previousPick && previousWindow\s*\? advancePlayerWindowContinuity\(\{[\s\S]*?previousContinuity,[\s\S]*?completedScheduledGameIds:\s*currentInjurySegment\?\.scheduledGameIds \?\?\s*previousWindow\.scheduledGameIds/,
+  );
+  assert.match(
+    nextBank,
+    /completedScheduleTeamAbbreviation:\s*currentInjurySegment\?\.sourceTeamAbbreviation \?\?\s*previousWindow\.scheduleTeamAbbreviation/,
   );
   assert.match(
     nextBank,

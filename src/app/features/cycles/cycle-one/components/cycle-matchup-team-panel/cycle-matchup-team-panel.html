@@ -170,11 +170,11 @@
                                         <strong>
                                           {{
                                             presenter.getProjectionDisplay(
-                                              presenter.getAssetCurrentCycleScore(pick.asset)
+                                              presenter.getPickCurrentCycleScore(pick)
                                             )
                                           }}
                                         </strong>
-                                        <span>Cur</span>
+                                        <span>Slot total</span>
                                         @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
                                           <small
                                             class="score-delta-pop"
@@ -189,16 +189,16 @@
 
                                       <div
                                         class="live-projection-cell"
-                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
                                       >
                                         <strong class="live-projection-value">
                                           {{
-                                            presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
+                                            presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick))
                                           }}
                                         </strong>
-                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
+                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
                                       </div>
                                       <div class="roster-rank-metric">
                                         <strong>
@@ -228,12 +228,24 @@
                                           [class.marker-unavailable]="
                                             marker.status === 'unavailable'
                                           "
+                                          [class.marker-replacement-boundary]="marker.replacementBoundary"
+                                          [class.marker-replacement-owner]="marker.currentOwner"
+                                          role="img"
+                                          [attr.aria-label]="marker.ariaLabel"
                                           [title]="marker.title"
                                         >
                                           {{ marker.index }}
                                         </span>
                                       }
                                     </div>
+                                    @if (presenter.getPickInjuryReplacementPresentation(pick); as replacement) {
+                                      <app-injury-replacement-score-breakdown
+                                        class="fantasy-player-injury-breakdown"
+                                        [presentation]="replacement"
+                                        [compact]="true"
+                                        [showTotal]="false"
+                                      />
+                                    }
                                   </article>
                                 }
                               </div>
@@ -343,11 +355,11 @@
                                         <strong>
                                           {{
                                             presenter.getProjectionDisplay(
-                                              presenter.getAssetCurrentCycleScore(pick.asset)
+                                              presenter.getPickCurrentCycleScore(pick)
                                             )
                                           }}
                                         </strong>
-                                        <span>Cur</span>
+                                        <span>Slot total</span>
                                         @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
                                           <small
                                             class="score-delta-pop"
@@ -362,16 +374,16 @@
 
                                       <div
                                         class="live-projection-cell"
-                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
                                       >
                                         <strong class="live-projection-value">
                                           {{
-                                            presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
+                                            presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick))
                                           }}
                                         </strong>
-                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
+                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
                                       </div>
                                       <div class="roster-rank-metric">
                                         <strong>
@@ -401,12 +413,24 @@
                                           [class.marker-unavailable]="
                                             marker.status === 'unavailable'
                                           "
+                                          [class.marker-replacement-boundary]="marker.replacementBoundary"
+                                          [class.marker-replacement-owner]="marker.currentOwner"
+                                          role="img"
+                                          [attr.aria-label]="marker.ariaLabel"
                                           [title]="marker.title"
                                         >
                                           {{ marker.index }}
                                         </span>
                                       }
                                     </div>
+                                    @if (presenter.getPickInjuryReplacementPresentation(pick); as replacement) {
+                                      <app-injury-replacement-score-breakdown
+                                        class="fantasy-player-injury-breakdown"
+                                        [presentation]="replacement"
+                                        [compact]="true"
+                                        [showTotal]="false"
+                                      />
+                                    }
                                   </article>
                                 }
                               </div>
@@ -514,11 +538,11 @@
                                         <strong>
                                           {{
                                             presenter.getProjectionDisplay(
-                                              presenter.getAssetCurrentCycleScore(pick.asset)
+                                              presenter.getPickCurrentCycleScore(pick)
                                             )
                                           }}
                                         </strong>
-                                        <span>Cur</span>
+                                        <span>Slot total</span>
                                         @if (presenter.getScoreDeltaAnimation(pick.asset); as scoreUpdate) {
                                           <small
                                             class="score-delta-pop"
@@ -533,16 +557,16 @@
 
                                       <div
                                         class="live-projection-cell"
-                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
                                       >
                                         <strong class="live-projection-value">
                                           {{
-                                            presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
+                                            presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick))
                                           }}
                                         </strong>
-                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
+                                        <span>Proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset)) }}</i></span>
                                       </div>
                                       <div class="roster-rank-metric">
                                         <strong>
@@ -572,12 +596,24 @@
                                           [class.marker-unavailable]="
                                             marker.status === 'unavailable'
                                           "
+                                          [class.marker-replacement-boundary]="marker.replacementBoundary"
+                                          [class.marker-replacement-owner]="marker.currentOwner"
+                                          role="img"
+                                          [attr.aria-label]="marker.ariaLabel"
                                           [title]="marker.title"
                                         >
                                           {{ marker.index }}
                                         </span>
                                       }
                                     </div>
+                                    @if (presenter.getPickInjuryReplacementPresentation(pick); as replacement) {
+                                      <app-injury-replacement-score-breakdown
+                                        class="fantasy-player-injury-breakdown"
+                                        [presentation]="replacement"
+                                        [compact]="true"
+                                        [showTotal]="false"
+                                      />
+                                    }
                                   </article>
                                 }
                               </div>

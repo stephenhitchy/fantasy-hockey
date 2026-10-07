@@ -25,6 +25,13 @@ same rules only if that current starter also becomes IR-eligible. Each segment
 stores its scoring asset and exact provider game IDs, so retries, settlement,
 and a second injury cannot duplicate or move an already-started game.
 
+The B1Z integrity extension in
+`docs/RINKRAT_PRODUCT_B1Z_INJURY_REPLACEMENT_INTEGRITY.md` is part of this
+contract. In particular, zero-game outgoing segments remain as audit evidence,
+malformed ownership fails closed, transaction-time availability and bench
+reservations are authoritative, and regular/playoff rollover advances only the
+latest segment.
+
 ## Scoring and rollover
 
 The scorer resolves each owned game against the player assigned to that game,

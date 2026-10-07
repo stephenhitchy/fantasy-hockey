@@ -419,9 +419,9 @@ test('the six-game window remains frozen and server scoring matches the fail-clo
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), '83761b67632cd35838bb3e10a4ce5a64741926ebddb035a28503c67f440862c6');
-  // B1V preserves the V4 formula while routing each frozen game to its exact
-  // original or injury-replacement asset inside the same six-game window.
-  assert.equal(sha256(serverScoring), '8420f06fceb03e272cf75e5a6732d586b715ec69bd738a61154be1b3d62c3536');
+  // B1Z preserves the V4 formula while validating exact injury-replacement
+  // ownership, source-team evidence, and protected games inside one window.
+  assert.equal(sha256(serverScoring), '93776816aa925d8586a5905244bf338dd89096a85d67a76863163a276fac29b8');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

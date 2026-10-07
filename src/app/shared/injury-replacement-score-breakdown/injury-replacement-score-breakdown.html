@@ -1,0 +1,34 @@
+@if (presentation(); as breakdown) {
+  <span
+    class="injury-score-breakdown"
+    [class.injury-score-breakdown--compact]="compact()"
+    role="group"
+    [attr.aria-label]="breakdown.accessibleLabel"
+  >
+    @if (showTotal()) {
+      <span class="injury-score-total" aria-hidden="true">
+        <small>Slot total</small>
+        <strong>{{ breakdown.totalPoints.toFixed(1) }}</strong>
+      </span>
+    }
+
+    <span class="injury-score-segments" aria-hidden="true">
+      @for (segment of breakdown.segments; track segment.segmentId; let first = $first) {
+        @if (!first) {
+          <span class="injury-score-plus">+</span>
+        }
+        <span
+          class="injury-score-segment"
+          [class.injury-score-segment--current]="segment.current"
+        >
+          <span class="injury-score-owner">
+            <strong>{{ segment.assetName }}</strong>
+            <small>{{ segment.current ? 'Replacement' : 'Owned games' }}</small>
+          </span>
+          <b>{{ segment.points.toFixed(1) }}</b>
+          <small class="injury-score-range">{{ segment.gameRangeLabel }}</small>
+        </span>
+      }
+    </span>
+  </span>
+}

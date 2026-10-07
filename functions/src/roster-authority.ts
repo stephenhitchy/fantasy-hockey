@@ -23,6 +23,7 @@ import {
   applyCurrentNhlTeamIdentity,
   getAuthoritativeAvailabilityStatus,
   loadCanonicalDraftableAsset,
+  resolveAuthoritativeAvailabilityStatus,
   resolveRosterMoveAssetCycleEligibility,
 } from './roster-moves';
 
@@ -640,11 +641,18 @@ async function executeSimpleOwnerAction(options: {
     : null;
 
   if (action === 'queue-active-bench-swap') {
+    const requestedBenchSlotId = asString(input.benchSlotId);
     const benchAsset = preflightRoster?.benchSlots.find(
-      (slot) => slot.slotId === asString(input.benchSlotId),
+      (slot) => slot.slotId === requestedBenchSlotId,
     )?.asset;
     if (!benchAsset) {
       throw new HttpsError('failed-precondition', 'The selected bench player was not found.');
+    }
+    if (isBenchSlotReserved(preflightRoster!, requestedBenchSlotId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'That bench player is reserved for another scheduled lineup move.',
+      );
     }
     preflightAssetKey = getAssetKey(benchAsset);
     const fairEffectiveCycle = await getFairEffectiveCycleNumber(
@@ -792,15 +800,34 @@ async function executeSimpleOwnerAction(options: {
       }
       if (
         activeSlot.asset.assetType !== 'skater' ||
-        getAssetKey(activeSlot.asset) !== preflightAssetKey ||
-        !IR_ELIGIBLE_STATUSES.has(preflightAvailabilityStatus)
+        getAssetKey(activeSlot.asset) !== preflightAssetKey
       ) {
         throw new HttpsError(
           'failed-precondition',
           'The player or injury status changed. Refresh and try again.',
         );
       }
-      const status = preflightAvailabilityStatus;
+      const [leagueOverrideSnapshot, globalAvailabilitySnapshot] =
+        await Promise.all([
+          transaction.get(
+            db.doc(
+              `leagues/${leagueId}/playerAvailability/${activeSlot.asset.player.id}`,
+            ),
+          ),
+          transaction.get(db.doc('appData/playerAvailability')),
+        ]);
+      const status = resolveAuthoritativeAvailabilityStatus(
+        activeSlot.asset,
+        leagueOverrideSnapshot.data(),
+        globalAvailabilitySnapshot.data(),
+      );
+
+      if (!IR_ELIGIBLE_STATUSES.has(status)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The player or injury status changed. Refresh and try again.',
+        );
+      }
       const irIndex = roster.irSlots.findIndex((slot) => slot.asset === null);
       if (irIndex < 0) {
         throw new HttpsError('failed-precondition', 'All IR slots are already filled.');
@@ -1016,6 +1043,12 @@ async function executeSimpleOwnerAction(options: {
           'The active or bench slot changed. Refresh and try again.',
         );
       }
+      if (isBenchSlotReserved(roster, benchSlotId)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'That bench player is reserved for another scheduled lineup move.',
+        );
+      }
       const authoritativeBenchAsset = applyCurrentNhlTeamIdentity(
         benchAsset,
         preflightCurrentTeamAbbreviationByPlayerId,
@@ -1057,15 +1090,34 @@ async function executeSimpleOwnerAction(options: {
       if (
         !asset ||
         asset.assetType !== 'skater' ||
-        getAssetKey(asset) !== preflightAssetKey ||
-        !IR_ELIGIBLE_STATUSES.has(preflightAvailabilityStatus)
+        getAssetKey(asset) !== preflightAssetKey
       ) {
         throw new HttpsError(
           'failed-precondition',
           'The player or injury status changed. Refresh and try again.',
         );
       }
-      const status = preflightAvailabilityStatus;
+      const [leagueOverrideSnapshot, globalAvailabilitySnapshot] =
+        await Promise.all([
+          transaction.get(
+            db.doc(
+              `leagues/${leagueId}/playerAvailability/${asset.player.id}`,
+            ),
+          ),
+          transaction.get(db.doc('appData/playerAvailability')),
+        ]);
+      const status = resolveAuthoritativeAvailabilityStatus(
+        asset,
+        leagueOverrideSnapshot.data(),
+        globalAvailabilitySnapshot.data(),
+      );
+
+      if (!IR_ELIGIBLE_STATUSES.has(status)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The player or injury status changed. Refresh and try again.',
+        );
+      }
       const assetKey = getAssetKey(asset);
       if (roster.activeSlots.some((slot) =>
         slot.pendingMove?.sourceBenchSlotId === benchSlotId &&

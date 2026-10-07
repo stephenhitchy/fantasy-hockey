@@ -4,6 +4,11 @@ import {
   CycleAssetScoreSummary,
   CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
+import {
+  buildInjuryReplacementPresentation,
+  resolveCycleSlotScoreSummary,
+  type InjuryReplacementPresentation,
+} from '../../../core/cycle/injury-replacement-presentation.util';
 
 import { getFantasyTeamProfileIconId } from '../../../core/team/team.service';
 import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
@@ -767,7 +772,7 @@ export class CycleOne implements OnDestroy {
     }
 
     return this.getTeamPicks(ownerId).reduce(
-      (total, pick) => total + this.getAssetGamesLeft(pick.asset),
+      (total, pick) => total + this.getPickGamesLeft(pick),
       0,
     );
   }
@@ -778,7 +783,7 @@ export class CycleOne implements OnDestroy {
     }
 
     return this.getTeamPicks(ownerId).reduce(
-      (total, pick) => total + this.getAssetGamesPlayed(pick.asset),
+      (total, pick) => total + this.getPickGamesPlayed(pick),
       0,
     );
   }
@@ -827,7 +832,7 @@ export class CycleOne implements OnDestroy {
 
     const picks = this.getTeamPicks(ownerId);
 
-    return picks.length > 0 && picks.every((pick) => this.getAssetGamesLeft(pick.asset) === 0);
+    return picks.length > 0 && picks.every((pick) => this.getPickGamesLeft(pick) === 0);
   }
 
   getMatchupRosterGamesLeft(matchup: FantasyMatchup): number {
@@ -1900,7 +1905,7 @@ export class CycleOne implements OnDestroy {
 
   private buildOfflinePlayerSnapshot(pick: DraftPick): OfflineMatchupPlayerSnapshot {
     const availability = this.getAssetMobileStatus(pick.asset);
-    const scoreSummary = this.getAssetScoreSummary(pick.asset);
+    const scoreSummary = this.getPickScoreSummary(pick);
     const markers: OfflineMatchupMarkerSnapshot[] = this.getWindowGameMarkers(pick).map((marker) => {
       const runtimeState = marker.gameId
         ? scoreSummary?.gameStates[String(marker.gameId)] ?? null
@@ -1917,8 +1922,8 @@ export class CycleOne implements OnDestroy {
       playerName: this.getAssetName(pick.asset),
       teamLabel: this.getAssetTeamLabel(pick.asset),
       position: pick.asset.position,
-      currentPoints: this.getAssetCurrentCycleScore(pick.asset),
-      projectedPoints: this.getAssetLiveProjection(pick.asset),
+      currentPoints: this.getPickCurrentCycleScore(pick),
+      projectedPoints: this.getPickLiveProjection(pick),
       availabilityLabel: availability
         ? [availability.shortLabel, availability.returnDateLabel].filter(Boolean).join(' · ')
         : null,
@@ -2802,6 +2807,11 @@ export class CycleOne implements OnDestroy {
       status: marker.status,
       statusLabel: marker.statusLabel,
       title: marker.title,
+      ariaLabel: marker.title,
+      ownerAssetKey: null,
+      ownerName: null,
+      replacementBoundary: false,
+      currentOwner: false,
     }));
   }
 
@@ -3009,12 +3019,13 @@ export class CycleOne implements OnDestroy {
 
   getWindowGameMarkers(pick: DraftPick): CycleWindowGameMarker[] {
     const window = this.getWindowForPick(pick);
-    const scoreSummary = this.getAssetScoreSummary(pick.asset);
+    const scoreSummary = this.getPickScoreSummary(pick);
     const liveSummary = scoreSummary &&
       (!pick.rosterSlotId || scoreSummary.rosterSlotId === pick.rosterSlotId)
       ? scoreSummary
       : null;
     const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
+    const replacementPresentation = buildInjuryReplacementPresentation(liveSummary ?? window);
 
     return Array.from({ length: requiredGames }, (_, index) => {
       const gameId = liveSummary?.scheduledGameIds[index] ??
@@ -3039,6 +3050,8 @@ export class CycleOne implements OnDestroy {
       const dateLabel = gameDate
         ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
         : 'Date pending';
+      const ownership = replacementPresentation?.gameOwnership[index] ?? null;
+      const ownershipLabel = ownership ? `${ownership.ariaLabel}. ` : '';
 
       return {
         index: index + 1,
@@ -3047,7 +3060,12 @@ export class CycleOne implements OnDestroy {
         gameLabel,
         status: markerState.status,
         statusLabel: markerState.statusLabel,
-        title: `Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${markerState.statusLabel}${gameId ? ` · NHL game ${gameId}` : ''}`,
+        title: `${ownershipLabel}Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${markerState.statusLabel}${gameId ? ` · NHL game ${gameId}` : ''}`,
+        ariaLabel: `${ownershipLabel}Game ${index + 1}, ${gameLabel}, ${dateLabel}, ${markerState.statusLabel}`,
+        ownerAssetKey: ownership?.assetKey ?? null,
+        ownerName: ownership?.assetName ?? null,
+        replacementBoundary: ownership?.segmentStart ?? false,
+        currentOwner: ownership?.currentSegment ?? false,
       };
     });
   }
@@ -3210,7 +3228,7 @@ export class CycleOne implements OnDestroy {
       return null;
     }
 
-    const projections = picks.map((pick) => this.getAssetLiveProjection(pick.asset));
+    const projections = picks.map((pick) => this.getPickLiveProjection(pick));
     if (
       !projections.every(
         (projection): projection is number => typeof projection === 'number',
@@ -3498,7 +3516,7 @@ export class CycleOne implements OnDestroy {
 
     return ownerIds.flatMap((ownerId) =>
       this.getTeamPicks(ownerId).map((pick) => {
-        const actual = this.getAssetCurrentCycleScore(pick.asset);
+        const actual = this.getPickCurrentCycleScore(pick);
         const projected = this.getBestCycleProjection(pick.asset);
         const delta =
           typeof projected === 'number' ? Number((actual - projected).toFixed(1)) : null;
@@ -3643,6 +3661,58 @@ export class CycleOne implements OnDestroy {
     return this.cycleScoring()?.assetScores[asset.assetKey] ?? null;
   }
 
+  getPickScoreSummary(pick: DraftPick): CycleAssetScoreSummary | null {
+    return resolveCycleSlotScoreSummary(this.cycleScoring(), {
+      ownerId: pick.ownerId,
+      assetKey: pick.asset.assetKey,
+      rosterSlotId: pick.rosterSlotId,
+      cycleWindowId: pick.cycleWindowId,
+    });
+  }
+
+  getPickInjuryReplacementPresentation(
+    pick: DraftPick,
+  ): InjuryReplacementPresentation | null {
+    return buildInjuryReplacementPresentation(
+      this.getPickScoreSummary(pick) ?? this.getWindowForPick(pick),
+    );
+  }
+
+  getPickScoreAccessibilityLabel(pick: DraftPick): string {
+    const replacement = this.getPickInjuryReplacementPresentation(pick);
+
+    if (replacement) {
+      return replacement.accessibleLabel;
+    }
+
+    return `Slot total ${this.getPickCurrentCycleScore(pick).toFixed(1)} points`;
+  }
+
+  getPickLiveProjection(pick: DraftPick): number | null {
+    return calculateLiveMatchupProjection(
+      this.getBestCycleProjection(pick.asset),
+      this.getPickScoreSummary(pick),
+    );
+  }
+
+  getPickCurrentCycleScore(pick: DraftPick): number {
+    return this.getPickScoreSummary(pick)?.currentScore ?? 0;
+  }
+
+  getPickGamesPlayed(pick: DraftPick): number {
+    return this.getPickScoreSummary(pick)?.gamesPlayed ?? 0;
+  }
+
+  getPickGamesLeft(pick: DraftPick): number {
+    const summary = this.getPickScoreSummary(pick);
+
+    if (summary) {
+      return summary.gamesLeft;
+    }
+
+    return Math.max(0, this.getAssetScheduledGames(pick.asset));
+  }
+
   getAssetCurrentCycleScore(asset: DraftableAsset): number {
     return this.getAssetScoreSummary(asset)?.currentScore ?? 0;
   }
@@ -3674,7 +3744,7 @@ export class CycleOne implements OnDestroy {
 
     return Number(
       this.getTeamPicks(ownerId)
-        .reduce((total, pick) => total + this.getAssetCurrentCycleScore(pick.asset), 0)
+        .reduce((total, pick) => total + this.getPickCurrentCycleScore(pick), 0)
         .toFixed(1),
     );
   }
@@ -3751,7 +3821,7 @@ export class CycleOne implements OnDestroy {
 
   getPositionCurrentTotal(ownerId: string | null, position: DraftPosition): number {
     return this.getTeamPicksByPosition(ownerId, position).reduce(
-      (total, pick) => total + this.getAssetCurrentCycleScore(pick.asset),
+      (total, pick) => total + this.getPickCurrentCycleScore(pick),
       0,
     );
   }
@@ -3778,7 +3848,7 @@ export class CycleOne implements OnDestroy {
       return null;
     }
 
-    const projections = picks.map((pick) => this.getAssetLiveProjection(pick.asset));
+    const projections = picks.map((pick) => this.getPickLiveProjection(pick));
     if (
       !projections.every(
         (projection): projection is number => typeof projection === 'number',
@@ -3794,14 +3864,14 @@ export class CycleOne implements OnDestroy {
 
   getPositionGamesPlayed(ownerId: string | null, position: DraftPosition): number {
     return this.getTeamPicksByPosition(ownerId, position).reduce(
-      (total, pick) => total + this.getAssetGamesPlayed(pick.asset),
+      (total, pick) => total + this.getPickGamesPlayed(pick),
       0,
     );
   }
 
   getPositionGamesLeft(ownerId: string | null, position: DraftPosition): number {
     return this.getTeamPicksByPosition(ownerId, position).reduce(
-      (total, pick) => total + this.getAssetGamesLeft(pick.asset),
+      (total, pick) => total + this.getPickGamesLeft(pick),
       0,
     );
   }

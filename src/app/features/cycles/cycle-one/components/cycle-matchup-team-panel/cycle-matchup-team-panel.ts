@@ -3,11 +3,12 @@ import { Component, Input } from '@angular/core';
 
 import type { FantasyMatchup } from '../../../../../core/cycle/cycle.models';
 import { ManagerAvatar } from '../../../../../shared/manager-avatar/manager-avatar';
+import { InjuryReplacementScoreBreakdown } from '../../../../../shared/injury-replacement-score-breakdown/injury-replacement-score-breakdown';
 import type { CycleOne } from '../../cycle-one';
 
 @Component({
   selector: 'app-cycle-matchup-team-panel',
-  imports: [NgStyle, ManagerAvatar],
+  imports: [NgStyle, ManagerAvatar, InjuryReplacementScoreBreakdown],
   templateUrl: './cycle-matchup-team-panel.html',
   styles: [':host { display: contents; }'],
 })

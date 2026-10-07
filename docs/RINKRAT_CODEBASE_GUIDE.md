@@ -1,6 +1,6 @@
 # RinkRat Codebase Guide
 
-Last verified against source: 2026-09-21
+Last verified against source: 2026-10-06
 
 ## Purpose
 
@@ -52,6 +52,9 @@ These are product contracts, not implementation suggestions:
 - Missing competitive evidence must not be silently converted to zero.
 - Retries must be idempotent and an older task must not overwrite or clear a
   newer source version.
+- An injury-replacement slot may contain several player segments. Every game
+  is scored against its exact saved segment asset; empty outgoing segments are
+  retained for audit, and only the current segment advances at rollover.
 
 Changing any item above requires an explicitly scoped task, dedicated
 compatibility tests, a rollback path, and exact deployment evidence.

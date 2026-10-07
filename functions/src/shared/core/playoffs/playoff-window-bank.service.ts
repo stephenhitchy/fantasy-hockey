@@ -47,6 +47,16 @@ import {
   resolveConsistentPlayerWindowContinuity,
   resolvePlayerWindowContinuity,
 } from '../cycle/player-window-continuity.util';
+import {
+  getInjuryReplacementProtectedGameIds,
+  getInjuryReplacementAssetKeyByGameId,
+  getInjuryReplacementPlanAuthorityFingerprint,
+  hasConsistentInjuryReplacementWindowEvidence,
+  hasExactInjuryReplacementScoringAssetKeyMap,
+  hasPreservedInjuryReplacementProtectedGameOwnership,
+  requireValidInjuryReplacementWindowPlan,
+  resolveConsistentInjuryReplacementWindowPlan,
+} from '../cycle/injury-replacement-window.util';
 
 function getOwnerBankRef(leagueId: string, ownerId: string) {
   return doc(db, 'leagues', leagueId, 'playoffWindowBanks', ownerId);
@@ -167,6 +177,43 @@ function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAs
         asset,
       })
     : normalizePlayerWindowContinuity(value.playerWindowContinuity);
+  const injuryReplacementWindow = requireValidInjuryReplacementWindowPlan(
+    value.injuryReplacementWindow,
+    `Playoff window ${ownerId}/${rosterSlotId}`,
+  );
+  const savedScoringAssetKeyByGameId = normalizeStringRecord(
+    value.scoringAssetKeyByGameId,
+  );
+  const scoringAssetKeyByGameId = injuryReplacementWindow
+    ? getInjuryReplacementAssetKeyByGameId(injuryReplacementWindow)
+    : {};
+
+  if (
+    injuryReplacementWindow
+      ? !hasConsistentInjuryReplacementWindowEvidence({
+          plan: injuryReplacementWindow,
+          scheduledGameIds: value.scheduledGameIds,
+          scoringAssetKeyByGameId: value.scoringAssetKeyByGameId,
+          assetKey: value.assetKey ?? asset?.assetKey ?? '',
+          ownerId,
+          rosterSlotId,
+          position: value.position,
+          scheduleTeamAbbreviation: value.scheduleTeamAbbreviation,
+          sourceTeamAbbreviationByGameId:
+            value.sourceTeamAbbreviationByGameId,
+          completedGameIds: value.completedGameIds,
+          liveGameIds: value.liveGameIds,
+          incompleteFinalGameIds: value.incompleteFinalGameIds,
+          appearanceGameIds: value.appearanceGameIds,
+          gameStates: value.gameStates,
+        })
+      : Object.keys(savedScoringAssetKeyByGameId).length > 0
+  ) {
+    throw new Error(
+      `Playoff window ${ownerId}/${rosterSlotId} contains conflicting ` +
+      'injury-replacement game ownership.',
+    );
+  }
 
   return {
     id: value.id ?? '',
@@ -194,6 +241,12 @@ function normalizeSlotWindow(value: Partial<FantasyAssetCycleWindow>): FantasyAs
     ),
     teamIdentityChanged: value.teamIdentityChanged === true,
     ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+    ...(injuryReplacementWindow
+      ? {
+          injuryReplacementWindow,
+          scoringAssetKeyByGameId,
+        }
+      : {}),
     completedGameIds: normalizeNumberArray(value.completedGameIds),
     liveGameIds: normalizeNumberArray(value.liveGameIds),
     appearanceGameIds: normalizeNumberArray(value.appearanceGameIds),
@@ -290,7 +343,19 @@ export function normalizePlayoffWindowBank(
       typeof value.playerWindowContinuitySchemaVersion === 'number'
         ? value.playerWindowContinuitySchemaVersion
         : 0,
-    picks: Array.isArray(value.picks) ? (value.picks as DraftPick[]) : [],
+    picks: Array.isArray(value.picks)
+      ? (value.picks as DraftPick[]).map((pick) => {
+          const injuryReplacementWindow =
+            requireValidInjuryReplacementWindowPlan(
+              pick.injuryReplacementWindow,
+              `Playoff bank pick ${pick.ownerId}/${pick.rosterSlotId ?? pick.overallPick}`,
+            );
+
+          return injuryReplacementWindow
+            ? { ...pick, injuryReplacementWindow }
+            : pick;
+        })
+      : [],
     slotWindows: normalizeSlotWindows(value.slotWindows),
     teamScore: typeof value.teamScore === 'number' ? value.teamScore : 0,
     completedWindowCount:
@@ -619,9 +684,78 @@ function buildSlotWindows(
     const rosterSlotId = pick.rosterSlotId ?? `legacy-pick-${pick.overallPick}`;
     const windowId =
       pick.cycleWindowId ?? `${pick.ownerId}__${rosterSlotId}__cycle-${bank.sourceCycleNumber}`;
-    const summary = scoring.windowScores[windowId] ?? scoring.assetScores[pick.asset.assetKey];
+    const candidateSummary =
+      scoring.windowScores[windowId] ?? scoring.assetScores[pick.asset.assetKey];
     const previous = previousById.get(windowId);
     const nowIso = new Date().toISOString();
+    const savedInjuryReplacementWindow =
+      resolveConsistentInjuryReplacementWindowPlan({
+        values: [
+          previous?.injuryReplacementWindow,
+          pick.injuryReplacementWindow,
+        ],
+        context: `Playoff bank ${bank.windowNumber} ${pick.ownerId}/${rosterSlotId}`,
+      });
+    const scoredInjuryReplacementWindow =
+      requireValidInjuryReplacementWindowPlan(
+        candidateSummary?.injuryReplacementWindow,
+        `Playoff scoring result ${bank.windowNumber} ${pick.ownerId}/${rosterSlotId}`,
+      );
+    const injuryReplacementWindow =
+      resolveConsistentInjuryReplacementWindowPlan({
+        values: [
+          scoredInjuryReplacementWindow,
+          savedInjuryReplacementWindow,
+        ],
+        context: `Playoff scoring ${bank.windowNumber} ${pick.ownerId}/${rosterSlotId}`,
+      });
+
+    if (
+      scoredInjuryReplacementWindow &&
+      !hasExactInjuryReplacementScoringAssetKeyMap(
+        scoredInjuryReplacementWindow,
+        candidateSummary?.scoringAssetKeyByGameId,
+      )
+    ) {
+      throw new Error(
+        `Playoff scoring ${bank.windowNumber} ${pick.ownerId}/${rosterSlotId} ` +
+          'contains conflicting injury-replacement game ownership.',
+      );
+    }
+
+    if (
+      previous &&
+      injuryReplacementWindow &&
+      !hasPreservedInjuryReplacementProtectedGameOwnership({
+        previousPlan: previous.injuryReplacementWindow,
+        nextPlan: injuryReplacementWindow,
+        protectedGameIds: getInjuryReplacementProtectedGameIds(previous),
+        previousAssetKey: previous.assetKey,
+        previousScheduleTeamAbbreviation: previous.scheduleTeamAbbreviation,
+        previousSourceTeamAbbreviationByGameId:
+          previous.sourceTeamAbbreviationByGameId,
+      })
+    ) {
+      throw new Error(
+        `Playoff scoring ${bank.windowNumber} ${pick.ownerId}/${rosterSlotId} ` +
+          'changed protected injury-replacement game ownership.',
+      );
+    }
+
+    const summaryMatchesSavedInjuryOwnership =
+      !savedInjuryReplacementWindow ||
+      Boolean(
+        scoredInjuryReplacementWindow &&
+        getInjuryReplacementPlanAuthorityFingerprint(
+          injuryReplacementWindow!,
+        ) ===
+          getInjuryReplacementPlanAuthorityFingerprint(
+            scoredInjuryReplacementWindow,
+          ),
+      );
+    const summary = summaryMatchesSavedInjuryOwnership
+      ? candidateSummary
+      : undefined;
     const playerWindowContinuity = resolveConsistentPlayerWindowContinuity({
       values: [
         summary?.playerWindowContinuity,
@@ -632,6 +766,9 @@ function buildSlotWindows(
       rosterSlotId,
       asset: pick.asset,
     });
+    const scoringAssetKeyByGameId = injuryReplacementWindow
+      ? getInjuryReplacementAssetKeyByGameId(injuryReplacementWindow)
+      : undefined;
 
     if (
       bank.playerWindowContinuitySchemaVersion ===
@@ -657,10 +794,13 @@ function buildSlotWindows(
       position: pick.asset.position,
       assetKey: pick.asset.assetKey,
       asset: pick.asset,
-      status: summary?.status ?? 'scheduled',
-      scheduledGameIds: summary?.scheduledGameIds ?? [],
-      scheduledGameDates: summary?.scheduledGameDates ?? [],
-      scheduledGameLabels: summary?.scheduledGameLabels ?? [],
+      status: summary?.status ?? previous?.status ?? 'scheduled',
+      scheduledGameIds:
+        summary?.scheduledGameIds ?? previous?.scheduledGameIds ?? [],
+      scheduledGameDates:
+        summary?.scheduledGameDates ?? previous?.scheduledGameDates ?? [],
+      scheduledGameLabels:
+        summary?.scheduledGameLabels ?? previous?.scheduledGameLabels ?? [],
       scheduleTeamAbbreviation:
         summary?.scheduleTeamAbbreviation ?? previous?.scheduleTeamAbbreviation,
       sourceTeamAbbreviationByGameId:
@@ -670,6 +810,12 @@ function buildSlotWindows(
       teamIdentityChanged:
         summary?.teamIdentityChanged ?? previous?.teamIdentityChanged ?? false,
       ...(playerWindowContinuity ? { playerWindowContinuity } : {}),
+      ...(injuryReplacementWindow
+        ? {
+            injuryReplacementWindow,
+            scoringAssetKeyByGameId,
+          }
+        : {}),
       completedGameIds: summary?.completedGameIds ?? previous?.completedGameIds ?? [],
       liveGameIds: summary?.liveGameIds ?? previous?.liveGameIds ?? [],
       appearanceGameIds: summary?.appearanceGameIds ?? previous?.appearanceGameIds ?? [],
@@ -679,11 +825,14 @@ function buildSlotWindows(
         summary?.gameInputCompleteness ?? previous?.gameInputCompleteness ?? {},
       incompleteFinalGameIds:
         summary?.incompleteFinalGameIds ?? previous?.incompleteFinalGameIds ?? [],
-      scheduledGames: summary?.scheduledGames ?? 0,
-      gamesPlayed: summary?.gamesPlayed ?? 0,
-      actualGamesPlayed: summary?.actualGamesPlayed ?? 0,
-      gamesLeft: summary?.gamesLeft ?? 0,
-      fantasyPoints: summary?.currentScore ?? 0,
+      scheduledGames:
+        summary?.scheduledGames ?? previous?.scheduledGames ?? 0,
+      gamesPlayed: summary?.gamesPlayed ?? previous?.gamesPlayed ?? 0,
+      actualGamesPlayed:
+        summary?.actualGamesPlayed ?? previous?.actualGamesPlayed ?? 0,
+      gamesLeft: summary?.gamesLeft ?? previous?.gamesLeft ?? 0,
+      fantasyPoints:
+        summary?.currentScore ?? previous?.fantasyPoints ?? 0,
       frozenProjectionPoints:
         pick.asset.frozenCycleProjectionPoints ?? pick.asset.projectedCyclePoints ?? null,
       frozenProjectionVersion:
@@ -704,13 +853,18 @@ function buildSlotWindows(
         previous?.frozenProjectionFrozenAt ?? pick.asset.frozenProjectionFrozenAt ?? null,
       frozenProjectionTargetGameIds:
         summary?.scheduledGameIds ?? previous?.frozenProjectionTargetGameIds ?? [],
-      firstScheduledGameDate: summary?.firstScheduledGameDate ?? null,
-      lastScheduledGameDate: summary?.lastScheduledGameDate ?? null,
+      firstScheduledGameDate:
+        summary?.firstScheduledGameDate ?? previous?.firstScheduledGameDate ?? null,
+      lastScheduledGameDate:
+        summary?.lastScheduledGameDate ?? previous?.lastScheduledGameDate ?? null,
       startedAt:
-        summary?.status === 'scheduled'
+        (summary?.status ?? previous?.status) === 'scheduled'
           ? (previous?.startedAt ?? null)
           : (previous?.startedAt ?? nowIso),
-      completedAt: summary?.status === 'complete' ? (previous?.completedAt ?? nowIso) : null,
+      completedAt:
+        (summary?.status ?? previous?.status) === 'complete'
+          ? (previous?.completedAt ?? nowIso)
+          : null,
       createdAt: previous?.createdAt ?? nowIso,
       updatedAt: nowIso,
     };
@@ -738,6 +892,8 @@ function bankFingerprint(bank: FantasyPlayoffWindowBank): string {
         window.sourceTeamAbbreviationByGameId ?? {},
       teamIdentityChanged: window.teamIdentityChanged === true,
       playerWindowContinuity: window.playerWindowContinuity ?? null,
+      injuryReplacementWindow: window.injuryReplacementWindow ?? null,
+      scoringAssetKeyByGameId: window.scoringAssetKeyByGameId ?? {},
       gameInputCompleteness: window.gameInputCompleteness ?? {},
       incompleteFinalGameIds: window.incompleteFinalGameIds ?? [],
       fantasyPoints: window.fantasyPoints,
@@ -772,6 +928,11 @@ function bankPickAuthorityFingerprint(picks: readonly DraftPick[]): string {
           snapshotCycleNumber: pick.snapshotCycleNumber ?? null,
           playoffWindowNumber: pick.playoffWindowNumber ?? null,
           continuityId: continuity?.continuityId ?? '',
+          injuryReplacementWindow:
+            requireValidInjuryReplacementWindowPlan(
+              pick.injuryReplacementWindow,
+              `Playoff pick fingerprint ${pick.ownerId}/${rosterSlotId}`,
+            ) ?? null,
           sourceNhlTargetGameIds: pick.sourceNhlTargetGameIds ?? [],
         };
       })
@@ -841,6 +1002,16 @@ function buildPreviousScoringResultFromBanks(
         ? {
             playerWindowContinuityId:
               window.playerWindowContinuity.continuityId,
+          }
+        : {}),
+      ...(window.injuryReplacementWindow
+        ? {
+            injuryReplacementWindow: window.injuryReplacementWindow,
+            scoringAssetKeyByGameId:
+              window.scoringAssetKeyByGameId ??
+              getInjuryReplacementAssetKeyByGameId(
+                window.injuryReplacementWindow,
+              ),
           }
         : {}),
       completedGameIds: window.completedGameIds,
@@ -1510,6 +1681,16 @@ async function createNextPlayoffBankWindow(
       const previousPick = previousPickBySlotId.get(slot.slotId);
       const previousWindow = previousWindowBySlotId.get(slot.slotId);
       const previousContinuity = previousContinuityBySlotId.get(slot.slotId);
+      const previousInjuryReplacementWindow =
+        resolveConsistentInjuryReplacementWindowPlan({
+          values: [
+            previousWindow?.injuryReplacementWindow,
+            previousPick?.injuryReplacementWindow,
+          ],
+          context: `Playoff rollover ${ownerId}/${slot.slotId}`,
+        });
+      const currentInjurySegment =
+        previousInjuryReplacementWindow?.segments.at(-1);
       const playerWindowContinuity = pendingMoveReady && slot.pendingMove
         ? createPlayerWindowContinuity({
             ownerId,
@@ -1523,8 +1704,11 @@ async function createNextPlayoffBankWindow(
               previousAsset: previousPick.asset,
               nextAsset: nextDraftableAsset,
               previousContinuity,
-              completedScheduledGameIds: previousWindow.scheduledGameIds,
+              completedScheduledGameIds:
+                currentInjurySegment?.scheduledGameIds ??
+                previousWindow.scheduledGameIds,
               completedScheduleTeamAbbreviation:
+                currentInjurySegment?.sourceTeamAbbreviation ??
                 previousWindow.scheduleTeamAbbreviation,
               ownerId,
               rosterSlotId: slot.slotId,

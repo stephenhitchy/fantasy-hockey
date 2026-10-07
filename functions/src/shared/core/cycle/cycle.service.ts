@@ -96,7 +96,9 @@ import {
   resolveConsistentPlayerWindowContinuity,
   resolvePlayerWindowContinuity,
 } from './player-window-continuity.util';
-import { normalizeInjuryReplacementWindowPlan } from './injury-replacement-window.util';
+import {
+  resolveConsistentInjuryReplacementWindowPlan,
+} from './injury-replacement-window.util';
 import {
   getNhlTeamSeasonSchedule,
   NhlTeamSeasonGame,
@@ -2113,9 +2115,14 @@ async function loadCompletedContinuitySeeds(input: {
         `without required player-window continuity.`,
       );
     }
-    const injuryReplacementWindow = normalizeInjuryReplacementWindowPlan(
-      window.injuryReplacementWindow,
-    );
+    const injuryReplacementWindow =
+      resolveConsistentInjuryReplacementWindowPlan({
+        values: [
+          window.injuryReplacementWindow,
+          pick.injuryReplacementWindow,
+        ],
+        context: `Cycle ${cycleNumber} ${slotKey}`,
+      });
     const currentInjurySegment = injuryReplacementWindow?.segments.at(-1);
     const continuity = advancePlayerWindowContinuity({
       previousAsset: pick.asset,
@@ -3006,6 +3013,16 @@ async function buildNextWindowSnapshotPicks(
         ? scoring.windowScores[previousWindowId] ??
           scoring.assetScores[previousPick.asset.assetKey]
         : undefined;
+      const previousInjuryReplacementWindow =
+        resolveConsistentInjuryReplacementWindowPlan({
+          values: [
+            previousSummary?.injuryReplacementWindow,
+            previousPick?.injuryReplacementWindow,
+          ],
+          context: `Regular-season rollover ${completedSlotKey}`,
+        });
+      const previousCurrentInjurySegment =
+        previousInjuryReplacementWindow?.segments.at(-1);
       const playerWindowContinuity =
         slot.pendingMove && pendingMoveReady
           ? createPlayerWindowContinuity({
@@ -3020,8 +3037,11 @@ async function buildNextWindowSnapshotPicks(
                 previousAsset: previousPick.asset,
                 nextAsset: nextDraftableAsset,
                 previousContinuity: previousPick.playerWindowContinuity,
-                completedScheduledGameIds: previousSummary.scheduledGameIds,
+                completedScheduledGameIds:
+                  previousCurrentInjurySegment?.scheduledGameIds ??
+                  previousSummary.scheduledGameIds,
                 completedScheduleTeamAbbreviation:
+                  previousCurrentInjurySegment?.sourceTeamAbbreviation ??
                   previousSummary.scheduleTeamAbbreviation,
                 ownerId: rosterSnapshot.ownerId,
                 rosterSlotId: slot.slotId,

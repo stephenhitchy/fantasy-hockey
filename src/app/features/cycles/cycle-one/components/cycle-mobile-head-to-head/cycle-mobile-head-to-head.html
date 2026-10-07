@@ -239,10 +239,10 @@
                     [attr.aria-label]="
                       'Open ' +
                       presenter.getAssetName(pick.asset) +
-                      ' six-game details. Current ' +
-                      presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) +
+                      ' six-game details. ' +
+                      presenter.getPickScoreAccessibilityLabel(pick) +
                       ', projected ' +
-                      presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
+                      presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick))
                     "
                     (click)="openActiveDetail(pick)"
                   >
@@ -270,32 +270,43 @@
                         [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
                         [attr.data-score-asset-key]="pick.asset.assetKey"
                       >
-                        <small>CUR</small>
-                        <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                        <small>SLOT TOTAL</small>
+                        <strong>{{ presenter.getProjectionDisplay(presenter.getPickCurrentCycleScore(pick)) }}</strong>
                       </span>
                       <span
                         class="live-projection-cell"
-                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
                       >
                         <small>PROJ</small>
                         <strong class="live-projection-value">
-                          {{ presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset)) }}
-                          <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i>
+                          {{ presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick)) }}
+                          <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset)) }}</i>
                         </strong>
                       </span>
                     </span>
 
-                    <span class="mobile-window-markers" aria-label="Six-game window">
+                    <span class="mobile-window-markers" [attr.aria-label]="presenter.getWindowStatusLabel(pick)">
                       @for (marker of presenter.getWindowGameMarkers(pick); track marker.index) {
                         <i
                           [class]="getMarkerClass(marker)"
                           [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                          role="img"
+                          [attr.aria-label]="marker.ariaLabel"
                           [attr.title]="marker.title"
                         >{{ marker.index }}</i>
                       }
                     </span>
+
+                    @if (presenter.getPickInjuryReplacementPresentation(pick); as replacement) {
+                      <app-injury-replacement-score-breakdown
+                        class="mobile-injury-score-breakdown"
+                        [presentation]="replacement"
+                        [compact]="true"
+                        [showTotal]="false"
+                      />
+                    }
 
                     @if (getActiveCompactStatus(pick); as status) {
                       <span
@@ -328,10 +339,10 @@
                     [attr.aria-label]="
                       'Open ' +
                       presenter.getAssetName(pick.asset) +
-                      ' six-game details. Current ' +
-                      presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) +
+                      ' six-game details. ' +
+                      presenter.getPickScoreAccessibilityLabel(pick) +
                       ', projected ' +
-                      presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset))
+                      presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick))
                     "
                     (click)="openActiveDetail(pick)"
                   >
@@ -359,32 +370,43 @@
                         [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
                         [attr.data-score-asset-key]="pick.asset.assetKey"
                       >
-                        <small>CUR</small>
-                        <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                        <small>SLOT TOTAL</small>
+                        <strong>{{ presenter.getProjectionDisplay(presenter.getPickCurrentCycleScore(pick)) }}</strong>
                       </span>
                       <span
                         class="live-projection-cell"
-                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                        [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                        [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                        [attr.title]="presenter.getLiveProjectionLabel(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
                       >
                         <small>PROJ</small>
                         <strong class="live-projection-value">
-                          {{ presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset)) }}
-                          <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i>
+                          {{ presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick)) }}
+                          <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset)) }}</i>
                         </strong>
                       </span>
                     </span>
 
-                    <span class="mobile-window-markers" aria-label="Six-game window">
+                    <span class="mobile-window-markers" [attr.aria-label]="presenter.getWindowStatusLabel(pick)">
                       @for (marker of presenter.getWindowGameMarkers(pick); track marker.index) {
                         <i
                           [class]="getMarkerClass(marker)"
                           [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                          role="img"
+                          [attr.aria-label]="marker.ariaLabel"
                           [attr.title]="marker.title"
                         >{{ marker.index }}</i>
                       }
                     </span>
+
+                    @if (presenter.getPickInjuryReplacementPresentation(pick); as replacement) {
+                      <app-injury-replacement-score-breakdown
+                        class="mobile-injury-score-breakdown"
+                        [presentation]="replacement"
+                        [compact]="true"
+                        [showTotal]="false"
+                      />
+                    }
 
                     @if (getActiveCompactStatus(pick); as status) {
                       <span
@@ -411,7 +433,7 @@
                   [class.mobile-live-player-team-b]="ownerId === matchup.teamBOwnerId"
                   [class.mobile-live-player-status]="presenter.hasAssetStatusFlag(pick.asset)"
                   [ngStyle]="presenter.getOwnerThemeStyles(ownerId)"
-                  [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details'"
+                  [attr.aria-label]="'Open ' + presenter.getAssetName(pick.asset) + ' six-game details. ' + presenter.getPickScoreAccessibilityLabel(pick)"
                   (click)="openActiveDetail(pick)"
                 >
                   <span class="mobile-live-player-topline">
@@ -438,33 +460,44 @@
                       [class.score-change-opponent]="presenter.isOpponentScoreGainAnimation(pick.asset)"
                       [attr.data-score-asset-key]="pick.asset.assetKey"
                     >
-                      Current
-                      <strong>{{ presenter.getProjectionDisplay(presenter.getAssetCurrentCycleScore(pick.asset)) }}</strong>
+                      Slot total
+                      <strong>{{ presenter.getProjectionDisplay(presenter.getPickCurrentCycleScore(pick)) }}</strong>
                     </span>
                     <span
                       class="live-projection-cell"
-                      [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                      [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
-                      [attr.title]="presenter.getLiveProjectionLabel(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset))"
+                      [class.live-projection-up]="presenter.isLiveProjectionUp(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                      [class.live-projection-down]="presenter.isLiveProjectionDown(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
+                      [attr.title]="presenter.getLiveProjectionLabel(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset))"
                     >
-                      Live proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getAssetLiveProjection(pick.asset), presenter.getBestCycleProjection(pick.asset)) }}</i>
-                      <strong class="live-projection-value">{{ presenter.getProjectionDisplay(presenter.getAssetLiveProjection(pick.asset)) }}</strong>
+                      Live proj <i class="live-projection-direction" aria-hidden="true">{{ presenter.getLiveProjectionDirectionSymbol(presenter.getPickLiveProjection(pick), presenter.getBestCycleProjection(pick.asset)) }}</i>
+                      <strong class="live-projection-value">{{ presenter.getProjectionDisplay(presenter.getPickLiveProjection(pick)) }}</strong>
                     </span>
                     <span>
                       Progress
-                      <strong>{{ presenter.getAssetGamesPlayed(pick.asset) }}/6</strong>
+                      <strong>{{ presenter.getPickGamesPlayed(pick) }}/6</strong>
                     </span>
                   </span>
 
-                  <span class="mobile-window-markers" aria-label="Six-game window">
+                  <span class="mobile-window-markers" [attr.aria-label]="presenter.getWindowStatusLabel(pick)">
                     @for (marker of presenter.getWindowGameMarkers(pick); track marker.index) {
                       <i
                         [class]="getMarkerClass(marker)"
                         [class.mobile-window-marker-live]="getMarkerRuntimeState(pick, marker) === 'live'"
+                        role="img"
+                        [attr.aria-label]="marker.ariaLabel"
                         [attr.title]="marker.title"
                       >{{ marker.index }}</i>
                     }
                   </span>
+
+                  @if (presenter.getPickInjuryReplacementPresentation(pick); as replacement) {
+                    <app-injury-replacement-score-breakdown
+                      class="mobile-injury-score-breakdown"
+                      [presentation]="replacement"
+                      [compact]="true"
+                      [showTotal]="false"
+                    />
+                  }
 
                   @if (getActiveCompactStatus(pick); as status) {
                       <span

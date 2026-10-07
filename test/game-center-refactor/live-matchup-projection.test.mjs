@@ -168,7 +168,7 @@ test('Game Center renders changing projections with color and a non-color direct
   assert.match(desktop, /Live proj/);
   assert.match(desktop, /live-projection-up/);
   assert.match(mobileScorebar, /getLiveProjectedCycleForTeam/);
-  assert.match(mobileRoster, /getAssetLiveProjection/);
+  assert.match(mobileRoster, /getPickLiveProjection/);
   assert.match(desktop, /class="live-projection-direction"/);
   assert.match(mobileScorebar, /class="live-projection-direction"/);
   assert.match(mobileRoster, /class="live-projection-direction"/);

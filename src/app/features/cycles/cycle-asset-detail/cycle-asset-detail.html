@@ -54,7 +54,7 @@
 
           <div class="film-scoreboard" aria-label="Current score versus projection">
             <article class="film-score-current">
-              <span>Current</span>
+              <span>Slot total</span>
               <strong>{{ getProjectionDisplay(totalFantasyPoints()) }}</strong>
               <small>Fantasy points</small>
             </article>
@@ -68,6 +68,14 @@
               {{ getProjectionDeltaLabel() }}
             </p>
           </div>
+
+          @if (injuryReplacementPresentation(); as replacement) {
+            <app-injury-replacement-score-breakdown
+              class="film-injury-score-breakdown"
+              [presentation]="replacement"
+              [showTotal]="false"
+            />
+          }
         </header>
 
         <section class="six-game-tape" aria-labelledby="six-game-tape-title">
@@ -88,6 +96,9 @@
                   <span class="game-tape-number">{{ row.cycleGameNumber }}</span>
                   <strong>{{ row.gameDate }}</strong>
                   <small>{{ row.scheduleLabel }}</small>
+                  @if (row.injuryReplacementOwned) {
+                    <small class="game-tape-owner">{{ row.scoringAssetName }}</small>
+                  }
                   <em [class]="getGameStatusBadgeClass(row)">{{ getGameStatusShortLabel(row) }}</em>
                   <b>{{ getFantasyPointDisplay(row.fantasyPoints) }}</b>
                   @if (row.gameId === bestGame()?.gameId && row.appeared) {
@@ -244,7 +255,9 @@
                 <article [class]="'game-film-row ' + getGameRowClass(row)">
                   <header class="game-film-row-header">
                     <div class="game-film-matchup">
-                      <span class="game-film-number">Game {{ row.cycleGameNumber }} · Roster-Slot Game</span>
+                      <span class="game-film-number">
+                        Game {{ row.cycleGameNumber }} · {{ row.scoringAssetName }}
+                      </span>
                       <div>
                         <strong>{{ row.gameDate }} · {{ row.scheduleLabel }}</strong>
                         <small>{{ row.scoreLabel }}</small>
@@ -256,6 +269,16 @@
                       <span>Fantasy pts</span>
                     </div>
                   </header>
+
+                  @if (row.injuryReplacementOwned) {
+                    <p class="game-owner-note" [class.game-owner-note--boundary]="row.replacementBoundary">
+                      @if (row.replacementBoundary) {
+                        <span aria-hidden="true">↪</span>
+                        Replacement begins here ·
+                      }
+                      {{ row.scoringAssetName }} owns this roster-slot game
+                    </p>
+                  }
 
                   <div class="game-film-explanation">
                     <strong>{{ getGameHeadline(row) }}</strong>

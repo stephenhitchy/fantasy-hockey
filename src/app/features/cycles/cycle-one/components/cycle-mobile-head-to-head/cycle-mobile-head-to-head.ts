@@ -4,6 +4,7 @@ import { Component, Input } from '@angular/core';
 import type { FantasyMatchup } from '../../../../../core/cycle/cycle.models';
 import type { DraftPick } from '../../../../../core/draft/draft.models';
 import type { RosterAsset } from '../../../../../core/team/roster.models';
+import { InjuryReplacementScoreBreakdown } from '../../../../../shared/injury-replacement-score-breakdown/injury-replacement-score-breakdown';
 import type { MobilePlayerAvailabilityStatus } from '../../mobile-player-status.util';
 import type { CycleOne } from '../../cycle-one';
 import type {
@@ -21,7 +22,7 @@ import {
 
 @Component({
   selector: 'app-cycle-mobile-head-to-head',
-  imports: [NgStyle],
+  imports: [NgStyle, InjuryReplacementScoreBreakdown],
   templateUrl: './cycle-mobile-head-to-head.html',
   styleUrl: './cycle-mobile-head-to-head.css',
 })
@@ -102,7 +103,12 @@ export class CycleMobileHeadToHead {
   }
 
   getMarkerClass(marker: CycleWindowGameMarker): string {
-    return `mobile-window-marker mobile-window-marker-${marker.status}`;
+    return [
+      'mobile-window-marker',
+      `mobile-window-marker-${marker.status}`,
+      marker.replacementBoundary ? 'mobile-window-marker-replacement-boundary' : '',
+      marker.currentOwner ? 'mobile-window-marker-replacement-owner' : '',
+    ].filter(Boolean).join(' ');
   }
 
   getMarkerRuntimeState(
@@ -113,7 +119,7 @@ export class CycleMobileHeadToHead {
       return null;
     }
 
-    return this.presenter.getAssetScoreSummary(pick.asset)?.gameStates[
+    return this.presenter.getPickScoreSummary(pick)?.gameStates[
       String(marker.gameId)
     ] ?? null;
   }
