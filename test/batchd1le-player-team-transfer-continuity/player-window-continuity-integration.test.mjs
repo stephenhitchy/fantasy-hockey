@@ -38,8 +38,15 @@ test('regular rollover advances only completed same-slot skater windows', async 
     /window\.status !== 'complete' \|\| window\.assetKey !== pick\.asset\.assetKey/,
   );
   assert.match(seedLoader, /advancePlayerWindowContinuity\(\{/);
-  assert.match(seedLoader, /completedScheduledGameIds: window\.scheduledGameIds/);
-  assert.match(seedLoader, /completedScheduleTeamAbbreviation:\s*window\.scheduleTeamAbbreviation/);
+  assert.match(seedLoader, /const currentInjurySegment = injuryReplacementWindow\?\.segments\.at\(-1\)/);
+  assert.match(
+    seedLoader,
+    /completedScheduledGameIds:\s*currentInjurySegment\?\.scheduledGameIds \?\? window\.scheduledGameIds/,
+  );
+  assert.match(
+    seedLoader,
+    /completedScheduleTeamAbbreviation:\s*currentInjurySegment\?\.sourceTeamAbbreviation \?\?\s*window\.scheduleTeamAbbreviation/,
+  );
   assert.match(cycleStart, /const continuityBySlotKey = await loadCompletedContinuitySeeds/);
   assert.match(cycleStart, /buildCurrentRosterSnapshotPicks\([\s\S]*?continuityBySlotKey/);
 });

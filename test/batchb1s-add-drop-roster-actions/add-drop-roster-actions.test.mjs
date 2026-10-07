@@ -148,11 +148,11 @@ test('competitive formulas, roster authority, Rules, and indexes remain unchange
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-ranking.util.ts'),
-    'cd03dc6f81fde413b70b78e0df427c0a858318bdbcc15bc424b6042c783205ad',
+    '2363a76ba5379bb18516c43633b163aaa117f241de5c647ae8ee338dedae8c5f',
   );
   assert.equal(
     await sha256('functions/src/roster-authority.ts'),
-    'a3df8b53f02aca18aa5cde91c597d77cad1e89cb26d987b8025df6f65178db76',
+    '109610878ec1f2ad2809142400721ec41bae9508b74faa84199cd3b515188288',
   );
   assert.equal(
     await sha256('firestore.rules'),

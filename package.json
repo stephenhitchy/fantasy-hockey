@@ -746,7 +746,10 @@
     "verify:batchl1b": "npm run toolchain:verify && npm run verify:batchl1b:core && npm run security:dependency-audit",
     "verify:batchl1e:core": "npm run verify:batchl1b:core && npm run test:league-join-confirmation:run && npm run validate:release-manifest",
     "verify:batchl1e": "npm run toolchain:verify && npm run verify:batchl1e:core && npm run security:dependency-audit",
-    "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs"
+    "test:batchb1y:run": "npm --prefix functions run build && node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb1v-injury-replacement/*.test.mjs test/batchb1y-roster-deployment-contract/*.test.mjs",
+    "verify:batchb1y:core": "npm run verify:batchb1x:core && npm run test:batchb1y:run && npm run validate:release-manifest",
+    "verify:batchb1y": "npm run toolchain:verify && npm run verify:batchb1y:core && npm run security:dependency-audit",
+    "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

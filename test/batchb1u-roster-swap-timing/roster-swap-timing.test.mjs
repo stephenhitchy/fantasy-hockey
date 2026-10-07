@@ -151,7 +151,7 @@ test('roster authority, scoring, Projection V11, Rules, and indexes remain uncha
   );
   assert.equal(
     await sha256('functions/src/roster-authority.ts'),
-    'a3df8b53f02aca18aa5cde91c597d77cad1e89cb26d987b8025df6f65178db76',
+    '109610878ec1f2ad2809142400721ec41bae9508b74faa84199cd3b515188288',
   );
   assert.equal(
     await sha256('firestore.rules'),
