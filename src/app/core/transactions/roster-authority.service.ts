@@ -1,6 +1,9 @@
 import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '../firebase-functions';
+import {
+  executeIdempotentRosterActionWithQuickRetry,
+} from './roster-action-transport.util';
 
 /**
  * Browser transport for server-authoritative roster, waiver, bench, and IR
@@ -38,6 +41,8 @@ export interface SecureRosterActionRequest {
   targetSlotId?: string | null;
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
+  expectedOutgoingAssetKey?: string | null;
+  submissionId?: string | null;
 }
 
 export interface SecureRosterActionResult {
@@ -50,12 +55,19 @@ export interface SecureRosterActionResult {
 const executeSecureRosterActionCallable = httpsCallable<
   SecureRosterActionRequest,
   SecureRosterActionResult
->(functions, 'executeSecureRosterAction', { timeout: 65_000 });
+>(functions, 'executeSecureRosterAction', {
+  // Keep this literal visible to the repository-wide callable safety audit.
+  timeout: 65_000,
+});
 
 export async function executeSecureRosterAction(
   request: SecureRosterActionRequest,
 ): Promise<SecureRosterActionResult> {
-  const response = await executeSecureRosterActionCallable(request);
+  const invoke = () => executeSecureRosterActionCallable(request);
+  const response = request.submissionId &&
+      (request.action === 'add-drop' || request.action === 'add-open-slot')
+    ? await executeIdempotentRosterActionWithQuickRetry(invoke)
+    : await invoke();
   return response.data;
 }
 

@@ -350,9 +350,21 @@ recovery, deployment, and rollback details.
 2. Client utilities may preview whether a move appears eligible.
 3. `src/app/core/transactions/roster-authority.service.ts` sends the user's
    intent to `executeSecureRosterAction` or requests roster initialization.
-4. Server authority revalidates current ownership, slot state, timing, league
-   rules, and transaction boundaries.
-5. The committed roster, waiver, and transaction documents drive UI success.
+4. Direct add/drop intent includes a stable submission identifier and the exact
+   outgoing asset the manager reviewed. Both add/drop callables bind that
+   normalized intent to one private deterministic transaction receipt.
+5. Server authority revalidates current ownership, slot state, exact current
+   NHL team, puck-drop timing, league rules, and transaction boundaries. The
+   interactive identity path checks only the involved skaters; scoring retains
+   its shared full-catalog authority.
+6. The committed roster, waiver, and transaction documents drive UI success.
+   Ambiguous transport failures remain pending while the existing listener and
+   bounded server-source roster reads reconcile the exact slot; a local timeout
+   never implies that the server rolled back.
+
+See `docs/RINKRAT_PRODUCT_B2A_ADD_DROP_TRANSACTION_RECOVERY.md` before changing
+add/drop receipt identity, expected-outgoing validation, exact-player identity,
+or browser recovery timing.
 
 Roster sheets use the shared viewport portal and focus trap. A portaled node no
 longer has its route-component ancestor, so styles for projected sheet content

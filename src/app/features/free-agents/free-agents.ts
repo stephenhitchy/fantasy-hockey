@@ -26,6 +26,7 @@ import {
   listenToLeagueWaivers,
   placeWaiverClaim,
   processWaiver,
+  type RosterMoveExecutionResult,
 } from '../../core/draft/draft.service';
 
 import {
@@ -97,7 +98,10 @@ import {
   RosterAsset,
 } from '../../core/team/roster.models';
 
-import { listenToFantasyRoster } from '../../core/team/roster.service';
+import {
+  getFantasyRosterFromServer,
+  listenToFantasyRoster,
+} from '../../core/team/roster.service';
 
 import { defaultScoringRules } from '../../core/scoring/scoring-rules';
 
@@ -136,11 +140,17 @@ import {
 } from './free-agent-transaction-comparison.util';
 import { buildFreeAgentMoveLens, type FreeAgentMoveLensResult } from './free-agent-move-lens.util';
 import {
+  getUnconfirmedRosterActionMessage,
   isFreeAgentOperationObserved,
+  resolveObservedFreeAgentRosterMove,
   withFreeAgentOperationTimeout,
   type FreeAgentOperationExpectation,
   type FreeAgentOperationObservation,
 } from './free-agent-operation-resolution.util';
+import {
+  isPossiblyCommittedRosterActionError,
+  ROSTER_ACTION_CONFIRMATION_WINDOW_MS,
+} from '../../core/transactions/roster-action-transport.util';
 
 type FreeAgentPositionFilter = 'ALL' | DraftPosition;
 type FreeAgentSortMode =
@@ -151,6 +161,10 @@ type FreeAgentSortMode =
   | 'PERFORMANCE'
   | 'RELIABILITY';
 type FreeAgentFlowStep = 'player-pool' | 'roster-slot';
+type RosterMoveServerReconciliation =
+  | { status: 'matched'; result: RosterMoveExecutionResult }
+  | { status: 'confirmed-absent' }
+  | { status: 'unavailable' };
 
 const UNIFIED_PLAYER_PAGE_SIZE = 50;
 
@@ -274,6 +288,7 @@ export class FreeAgents implements OnDestroy {
   private rosterListeners: Record<string, () => void> = {};
   private teamWindowListeners: Record<number, () => void> = {};
   private eligibilityRequestKey = '';
+  private selectedAssetEligibilityLoadedAt = 0;
   private restoredEligibilityKey = '';
   private hasReceivedWaivers = false;
   private viewStateRestored = false;
@@ -901,6 +916,7 @@ export class FreeAgents implements OnDestroy {
 
           if (this.selectedAddAsset()) {
             this.selectedAssetEligibility.set(null);
+            this.selectedAssetEligibilityLoadedAt = 0;
             this.eligibilityError.set(message);
           }
         },
@@ -1539,6 +1555,7 @@ export class FreeAgents implements OnDestroy {
     this.suggestedRosterFitComparisonAssetKey.set('');
     this.resetTransactionDisclosureState();
     this.selectedAssetEligibility.set(null);
+    this.selectedAssetEligibilityLoadedAt = 0;
     this.eligibilityError.set('');
     this.restoredEligibilityKey = '';
     this.persistFreeAgentViewState();
@@ -1674,7 +1691,15 @@ export class FreeAgents implements OnDestroy {
     this.persistFreeAgentViewState();
 
     try {
-      await this.loadSelectedAssetEligibility(addAsset, true);
+      // Waiver claims still use the browser preview during a later award. A
+      // direct add/drop is authoritatively revalidated by the callable, so do
+      // not make the manager wait for the same NHL schedule twice.
+      if (
+        this.selectedWaiver() ||
+        Date.now() - this.selectedAssetEligibilityLoadedAt > 30_000
+      ) {
+        await this.loadSelectedAssetEligibility(addAsset, true);
+      }
 
       const dropCandidate = this.selectedDropCandidate();
       const waiver = this.selectedWaiver();
@@ -1698,6 +1723,7 @@ export class FreeAgents implements OnDestroy {
       const effectiveCycleNumber = dropCandidate.effectiveCycleNumber;
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const leagueOwnerIds = this.teams().map((team) => team.ownerId);
+      const submissionId = waiver ? null : this.createRosterActionSubmissionId();
       const expectation: FreeAgentOperationExpectation = waiver
         ? {
             kind: 'waiver-claim',
@@ -1752,6 +1778,7 @@ export class FreeAgents implements OnDestroy {
           effectiveLabel,
           leagueOwnerIds,
           preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
+          submissionId: submissionId!,
         });
         const execution = await this.awaitRosterActionConfirmation(
           request,
@@ -1762,11 +1789,11 @@ export class FreeAgents implements OnDestroy {
 
         this.successMessage.set(
           dropCandidate.rosterArea === 'bench'
-            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
+            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId}. The player is owned immediately but cannot enter an active scoring slot before Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}.`
             : execution.mode === 'immediate'
               ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} immediately. The slot was untouched and the incoming NHL-team block had not started, so the player is active in Matchup ${execution.effectiveCycleNumber}.`
               : this.hasStartedCycleWindows()
-                ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in Matchup ${effectiveCycleNumber}.`
+                ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. The player is reserved and will activate in Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}.`
                 : `Added ${this.getAssetName(addAsset)} into the open ${addAsset.position} slot.`,
         );
       } else {
@@ -1792,6 +1819,8 @@ export class FreeAgents implements OnDestroy {
           effectiveLabel,
           leagueOwnerIds,
           preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
+          submissionId: submissionId!,
+          expectedOutgoingAssetKey: this.getRosterAssetKey(dropCandidate.asset),
         });
         const execution = await this.awaitRosterActionConfirmation(
           request,
@@ -1802,11 +1831,11 @@ export class FreeAgents implements OnDestroy {
 
         this.successMessage.set(
           dropCandidate.rosterArea === 'bench'
-            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${effectiveCycleNumber}.`
+            ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}.`
             : execution.mode === 'immediate'
               ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both six-game counts were untouched, so the change applies to Matchup ${execution.effectiveCycleNumber}.`
               : this.hasStartedCycleWindows()
-                ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started six-game count, and the move activates in Matchup ${effectiveCycleNumber}.`
+                ? `Scheduled ${this.getAssetName(addAsset)} for ${dropCandidate.slotId}. ${this.getRosterAssetName(dropCandidate.asset)} keeps the started six-game count, and the move activates in Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}.`
                 : `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)}.`,
         );
       }
@@ -3293,6 +3322,7 @@ export class FreeAgents implements OnDestroy {
     this.selectedDropSlotId.set('');
     this.resetTransactionDisclosureState();
     this.selectedAssetEligibility.set(null);
+    this.selectedAssetEligibilityLoadedAt = 0;
     this.flowStep.set('player-pool');
     this.preferredSlotId.set('');
     this.preferredRosterArea.set('');
@@ -3309,19 +3339,28 @@ export class FreeAgents implements OnDestroy {
     this.startWindowScheduleExpanded.set(false);
   }
 
-  private getFreeAgentOperationObservation(): FreeAgentOperationObservation {
-    const roster = this.myRoster();
+  private getFreeAgentOperationObservation(
+    rosterOverride?: FantasyRoster | null,
+  ): FreeAgentOperationObservation {
+    const roster = rosterOverride === undefined ? this.myRoster() : rosterOverride;
 
     return {
       activeSlots: (roster?.activeSlots ?? []).map((slot) => ({
         slotId: slot.slotId,
         assetKey: this.getRosterAssetKey(slot.asset),
         pendingIncomingAssetKey: this.getRosterAssetKey(slot.pendingMove?.incomingAsset ?? null),
+        assetEligibleFromCycleNumber: slot.asset?.eligibleFromCycleNumber ?? null,
+        pendingEffectiveCycleNumber:
+          slot.pendingMove?.requestedEffectiveCycleNumber ??
+          slot.pendingMove?.incomingAsset.eligibleFromCycleNumber ??
+          null,
       })),
       benchSlots: (roster?.benchSlots ?? []).map((slot) => ({
         slotId: slot.slotId,
         assetKey: this.getRosterAssetKey(slot.asset),
         pendingIncomingAssetKey: null,
+        assetEligibleFromCycleNumber: slot.asset?.eligibleFromCycleNumber ?? null,
+        pendingEffectiveCycleNumber: null,
       })),
       waivers: this.waivers().map((waiver) => ({
         waiverId: waiver.id,
@@ -3334,22 +3373,37 @@ export class FreeAgents implements OnDestroy {
     return isFreeAgentOperationObserved(expectation, this.getFreeAgentOperationObservation());
   }
 
-  private async waitForFreeAgentOperationObservation(
+  private resolveObservedRosterMove(
     expectation: FreeAgentOperationExpectation,
-    timeoutMs: number,
-    generation: number,
-  ): Promise<boolean> {
-    const deadline = Date.now() + Math.max(0, timeoutMs);
+    rosterOverride?: FantasyRoster | null,
+  ): RosterMoveExecutionResult | null {
+    return resolveObservedFreeAgentRosterMove(
+      expectation,
+      this.getFreeAgentOperationObservation(rosterOverride),
+    );
+  }
 
-    while (this.operationWatchGeneration === generation && Date.now() <= deadline) {
-      if (this.isFreeAgentOperationConfirmed(expectation)) {
-        return true;
-      }
-
-      await this.delay(120);
+  private async reconcileRosterMoveFromServer(
+    expectation: FreeAgentOperationExpectation,
+  ): Promise<RosterMoveServerReconciliation> {
+    if (expectation.kind !== 'roster-slot') {
+      return { status: 'unavailable' };
     }
 
-    return this.isFreeAgentOperationConfirmed(expectation);
+    try {
+      const roster = await withFreeAgentOperationTimeout(
+        getFantasyRosterFromServer(this.leagueId, this.userId),
+        5_000,
+        'The final roster confirmation read timed out.',
+      );
+      const result = this.resolveObservedRosterMove(expectation, roster);
+      return result
+        ? { status: 'matched', result }
+        : { status: 'confirmed-absent' };
+    } catch (error: unknown) {
+      console.warn('Unable to reconcile the add/drop from the server roster.', error);
+      return { status: 'unavailable' };
+    }
   }
 
   private async awaitRosterActionConfirmation<T>(
@@ -3375,11 +3429,21 @@ export class FreeAgents implements OnDestroy {
       },
     );
 
-    const deadline = Date.now() + 20_000;
+    const startedAt = Date.now();
+    const supportsExactRosterReconciliation = expectation.kind === 'roster-slot';
+    const deadline = startedAt + (
+      supportsExactRosterReconciliation
+        ? ROSTER_ACTION_CONFIRMATION_WINDOW_MS
+        : 20_000
+    );
+    let nextServerProbeAt = supportsExactRosterReconciliation
+      ? startedAt + 2_500
+      : Number.POSITIVE_INFINITY;
+    let showingSlowConfirmation = false;
 
     while (this.operationWatchGeneration === generation && Date.now() <= deadline) {
       if (this.isFreeAgentOperationConfirmed(expectation)) {
-        return listenerFallbackValue;
+        return (this.resolveObservedRosterMove(expectation) ?? listenerFallbackValue) as T;
       }
 
       if (settled) {
@@ -3387,22 +3451,42 @@ export class FreeAgents implements OnDestroy {
           return settledValue as T;
         }
 
-        // A mobile browser can receive a callable transport error a fraction of
-        // a second before the authoritative Firestore listener reports the
-        // committed transaction. Give that listener a brief reconciliation
-        // window before surfacing an error to the manager.
-        if (await this.waitForFreeAgentOperationObservation(expectation, 2_500, generation)) {
-          return listenerFallbackValue;
+        if (!isPossiblyCommittedRosterActionError(settledError)) {
+          const reconciled = await this.reconcileRosterMoveFromServer(expectation);
+          if (reconciled.status === 'matched') {
+            return reconciled.result as T;
+          }
+
+          throw settledError;
+        }
+      }
+
+      if (Date.now() >= nextServerProbeAt) {
+        if (!showingSlowConfirmation) {
+          showingSlowConfirmation = true;
+          this.rosterOperationHeadline.set('Still confirming add / drop…');
+          this.rosterOperationDetail.set(
+            'The secure request is still protected. RinkRat is checking the authoritative roster before allowing another move.',
+          );
         }
 
-        throw settledError;
+        const reconciled = await this.reconcileRosterMoveFromServer(expectation);
+        if (reconciled.status === 'matched') {
+          return reconciled.result as T;
+        }
+        nextServerProbeAt = Date.now() + 4_000;
       }
 
       await this.delay(120);
     }
 
     if (this.isFreeAgentOperationConfirmed(expectation)) {
-      return listenerFallbackValue;
+      return (this.resolveObservedRosterMove(expectation) ?? listenerFallbackValue) as T;
+    }
+
+    const finalReconciliation = await this.reconcileRosterMoveFromServer(expectation);
+    if (finalReconciliation.status === 'matched') {
+      return finalReconciliation.result as T;
     }
 
     if (settled && !rejected) {
@@ -3410,12 +3494,30 @@ export class FreeAgents implements OnDestroy {
     }
 
     if (settled && rejected) {
+      if (
+        supportsExactRosterReconciliation &&
+        isPossiblyCommittedRosterActionError(settledError)
+      ) {
+        throw new Error(
+          getUnconfirmedRosterActionMessage(finalReconciliation.status),
+        );
+      }
+
       throw settledError;
     }
 
     throw new Error(
-      'RinkRat did not receive a final server or live-roster confirmation. The screen has been unlocked so it cannot remain stuck. Check My Team before retrying because the transaction may still finish in the background.',
+      getUnconfirmedRosterActionMessage(finalReconciliation.status),
     );
+  }
+
+  private createRosterActionSubmissionId(): string {
+    const randomPart =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replaceAll('-', '')
+        : `${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+
+    return `roster_${Date.now().toString(36)}_${randomPart}`.slice(0, 120);
   }
 
   private delay(milliseconds: number): Promise<void> {
@@ -3488,6 +3590,7 @@ export class FreeAgents implements OnDestroy {
       this.selectedDropSlotId.set('');
       this.resetTransactionDisclosureState();
       this.selectedAssetEligibility.set(null);
+      this.selectedAssetEligibilityLoadedAt = 0;
       this.eligibilityError.set('');
       this.restoredEligibilityKey = '';
       this.flowStep.set('player-pool');
@@ -3605,6 +3708,7 @@ export class FreeAgents implements OnDestroy {
   ): Promise<void> {
     const requestKey = `${asset.assetKey}::${Date.now()}`;
     this.eligibilityRequestKey = requestKey;
+    this.selectedAssetEligibilityLoadedAt = 0;
     this.eligibilityLoading.set(true);
     this.eligibilityError.set('');
 
@@ -3627,6 +3731,7 @@ export class FreeAgents implements OnDestroy {
       }
 
       this.selectedAssetEligibility.set(eligibility);
+      this.selectedAssetEligibilityLoadedAt = Date.now();
       this.selectPreferredDropCandidateIfAvailable();
       this.persistFreeAgentViewState();
     } catch (error: unknown) {
@@ -3635,6 +3740,7 @@ export class FreeAgents implements OnDestroy {
       }
 
       this.selectedAssetEligibility.set(null);
+      this.selectedAssetEligibilityLoadedAt = 0;
       this.eligibilityError.set(
         error instanceof Error
           ? error.message

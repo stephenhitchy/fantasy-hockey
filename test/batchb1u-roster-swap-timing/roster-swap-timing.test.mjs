@@ -151,7 +151,7 @@ test('scoring formulas and Firebase policy remain unchanged while roster authori
   );
   assert.equal(
     await sha256('functions/src/roster-authority.ts'),
-    'e49c9c82233a5e45527cc5d931b572a80c63a4fcf8610e70919619a743e9d5aa',
+    '8342cf3c85e3d767857ffc0a7fce28f10277655e52a71ee648fba92edd908778',
   );
   assert.equal(
     await sha256('firestore.rules'),

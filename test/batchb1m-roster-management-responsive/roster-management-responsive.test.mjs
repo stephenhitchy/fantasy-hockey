@@ -201,7 +201,7 @@ test('missing scoring evidence stays missing instead of becoming a displayed zer
   assert.match(template, /Six-game progress/);
 });
 
-test('roster authority, scoring, Projection V11, Rules, and indexes remain unchanged', async () => {
+test('the reviewed roster transport, scoring, Projection V11, Rules, and indexes remain protected', async () => {
   const protectedFiles = new Map([
     [
       'src/app/core/transactions/roster-move-eligibility.service.ts',
@@ -209,7 +209,7 @@ test('roster authority, scoring, Projection V11, Rules, and indexes remain uncha
     ],
     [
       'src/app/core/draft/draft.service.ts',
-      'bb5b514800124c9a017b141a364c91051bb2350bb403e599c71afa4d2a0a84cf',
+      'e4c2124fae2eab762e0297c29908972712085ef3034a6d27ce67d72a1661af57',
     ],
     [
       'src/app/core/scoring/scoring-rules.ts',
@@ -224,6 +224,6 @@ test('roster authority, scoring, Projection V11, Rules, and indexes remain uncha
   ]);
 
   for (const [file, expectedHash] of protectedFiles) {
-    assert.equal(await sha256(file), expectedHash, `${file} must remain unchanged`);
+    assert.equal(await sha256(file), expectedHash, `${file} must match its reviewed contract`);
   }
 });

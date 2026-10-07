@@ -207,6 +207,8 @@ export interface AddDropRosterAssetInput {
   effectiveLabel?: string | null;
   leagueOwnerIds?: string[];
   preferImmediateCurrentCycle?: boolean;
+  submissionId?: string;
+  expectedOutgoingAssetKey?: string;
 }
 
 export interface AddOpenRosterAssetInput {
@@ -218,6 +220,7 @@ export interface AddOpenRosterAssetInput {
   effectiveLabel?: string | null;
   leagueOwnerIds?: string[];
   preferImmediateCurrentCycle?: boolean;
+  submissionId?: string;
 }
 
 export interface MoveRosterAssetToIrInput {
@@ -1846,6 +1849,8 @@ export async function addDropRosterAsset({
   effectiveLabel = null,
   leagueOwnerIds: _leagueOwnerIds = [],
   preferImmediateCurrentCycle = false,
+  submissionId,
+  expectedOutgoingAssetKey,
 }: AddDropRosterAssetInput): Promise<RosterMoveExecutionResult> {
   if (preferImmediateCurrentCycle) {
     const result = await applyImmediateRosterMove({
@@ -1853,6 +1858,8 @@ export async function addDropRosterAsset({
       moveType: 'add-drop-active',
       activeSlotId: dropSlotId,
       addAssetKey: addAsset.assetKey,
+      submissionId,
+      expectedOutgoingAssetKey,
     });
 
     return {
@@ -1872,6 +1879,8 @@ export async function addDropRosterAsset({
     dropSlotId,
     effectiveCycleNumber,
     effectiveLabel,
+    submissionId,
+    expectedOutgoingAssetKey,
   });
 
   return {
@@ -1889,6 +1898,7 @@ export async function addFreeAgentToOpenRosterSlot({
   effectiveLabel = null,
   leagueOwnerIds: _leagueOwnerIds = [],
   preferImmediateCurrentCycle = false,
+  submissionId,
 }: AddOpenRosterAssetInput): Promise<RosterMoveExecutionResult> {
   if (preferImmediateCurrentCycle) {
     const result = await applyImmediateRosterMove({
@@ -1896,6 +1906,8 @@ export async function addFreeAgentToOpenRosterSlot({
       moveType: 'add-open-active',
       activeSlotId: targetSlotId,
       addAssetKey: addAsset.assetKey,
+      submissionId,
+      expectedOutgoingAssetKey: null,
     });
 
     return {
@@ -1915,6 +1927,8 @@ export async function addFreeAgentToOpenRosterSlot({
     targetSlotId,
     effectiveCycleNumber,
     effectiveLabel,
+    submissionId,
+    expectedOutgoingAssetKey: null,
   });
 
   return {

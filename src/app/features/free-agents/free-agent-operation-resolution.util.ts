@@ -14,6 +14,8 @@ export interface FreeAgentOperationObservedSlot {
   slotId: string;
   assetKey: string | null;
   pendingIncomingAssetKey: string | null;
+  assetEligibleFromCycleNumber?: number | null;
+  pendingEffectiveCycleNumber?: number | null;
 }
 
 export interface FreeAgentOperationObservedWaiver {
@@ -25,6 +27,21 @@ export interface FreeAgentOperationObservation {
   activeSlots: FreeAgentOperationObservedSlot[];
   benchSlots: FreeAgentOperationObservedSlot[];
   waivers: FreeAgentOperationObservedWaiver[];
+}
+
+export interface ObservedFreeAgentRosterMoveResult {
+  mode: 'immediate' | 'queued' | 'ownership-only';
+  effectiveCycleNumber: number | null;
+}
+
+export type FreeAgentRosterFinalReadStatus = 'confirmed-absent' | 'unavailable';
+
+export function getUnconfirmedRosterActionMessage(
+  finalReadStatus: FreeAgentRosterFinalReadStatus,
+): string {
+  return finalReadStatus === 'unavailable'
+    ? 'RinkRat could not reach the authoritative roster for a final confirmation. Check My Team before retrying because the transaction may have completed.'
+    : 'The secure add/drop request ended without a matching authoritative roster change. You can safely try again.';
 }
 
 /**
@@ -103,4 +120,38 @@ export function isFreeAgentOperationObserved(
 
   return slot.assetKey === expectation.incomingAssetKey ||
     slot.pendingIncomingAssetKey === expectation.incomingAssetKey;
+}
+
+export function resolveObservedFreeAgentRosterMove(
+  expectation: FreeAgentOperationExpectation,
+  observation: FreeAgentOperationObservation,
+): ObservedFreeAgentRosterMoveResult | null {
+  if (expectation.kind !== 'roster-slot') {
+    return null;
+  }
+
+  const slots = expectation.rosterArea === 'active'
+    ? observation.activeSlots
+    : observation.benchSlots;
+  const slot = slots.find((candidate) => candidate.slotId === expectation.slotId);
+
+  if (!slot) {
+    return null;
+  }
+
+  if (slot.pendingIncomingAssetKey === expectation.incomingAssetKey) {
+    return {
+      mode: 'queued',
+      effectiveCycleNumber: slot.pendingEffectiveCycleNumber ?? null,
+    };
+  }
+
+  if (slot.assetKey !== expectation.incomingAssetKey) {
+    return null;
+  }
+
+  return {
+    mode: expectation.rosterArea === 'bench' ? 'ownership-only' : 'immediate',
+    effectiveCycleNumber: slot.assetEligibleFromCycleNumber ?? null,
+  };
 }

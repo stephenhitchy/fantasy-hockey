@@ -27,6 +27,10 @@ const [
   leagueAutomation,
   canonicalImpactFeed,
   finalScoreReconciliation,
+  rosterActionIdempotency,
+  freeAgents,
+  browserRosterService,
+  rosterActionTransport,
 ] = await Promise.all([
   read('src/app/core/team/roster-config.ts'),
   read('functions/src/shared/core/team/roster-config.ts'),
@@ -46,6 +50,10 @@ const [
   read('functions/src/league-automation.ts'),
   read('functions/src/nhl-canonical-impact-feed.ts'),
   read('functions/src/shared/core/nhl/final-score-reconciliation.util.ts'),
+  read('functions/src/shared/core/team/roster-action-idempotency.util.ts'),
+  read('src/app/features/free-agents/free-agents.ts'),
+  read('src/app/core/team/roster.service.ts'),
+  read('src/app/core/transactions/roster-action-transport.util.ts'),
 ]);
 
 const result = evaluateProtectedRosterRuntimeContract({
@@ -67,6 +75,10 @@ const result = evaluateProtectedRosterRuntimeContract({
   leagueAutomation,
   canonicalImpactFeed,
   finalScoreReconciliation,
+  rosterActionIdempotency,
+  freeAgents,
+  browserRosterService,
+  rosterActionTransport,
 });
 
 if (!result.ready) {
@@ -76,5 +88,5 @@ if (!result.ready) {
   }
   process.exitCode = 1;
 } else {
-  console.log('RinkRat protected roster runtime contract passed: five bench slots and hardened B1V injury ownership are intact.');
+  console.log('RinkRat protected roster runtime contract passed: five bench slots, hardened injury ownership, and idempotent add/drop recovery are intact.');
 }

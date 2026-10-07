@@ -1,6 +1,9 @@
 import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '../firebase-functions';
+import {
+  executeIdempotentRosterActionWithQuickRetry,
+} from './roster-action-transport.util';
 
 export type ImmediateRosterMoveType =
   | 'add-drop-active'
@@ -18,6 +21,8 @@ export interface ImmediateRosterMoveRequest {
   benchSlotId?: string | null;
   irSlotId?: string | null;
   addAssetKey?: string | null;
+  expectedOutgoingAssetKey?: string | null;
+  submissionId?: string | null;
 }
 
 export interface ImmediateRosterMoveResult {
@@ -30,12 +35,19 @@ export interface ImmediateRosterMoveResult {
 const applyImmediateRosterMoveCallable = httpsCallable<
   ImmediateRosterMoveRequest,
   ImmediateRosterMoveResult
->(functions, 'applyImmediateRosterMove', { timeout: 65_000 });
+>(functions, 'applyImmediateRosterMove', {
+  // Keep this literal visible to the repository-wide callable safety audit.
+  timeout: 65_000,
+});
 
 export async function applyImmediateRosterMove(
   request: ImmediateRosterMoveRequest,
 ): Promise<ImmediateRosterMoveResult> {
-  const response = await applyImmediateRosterMoveCallable(request);
+  const invoke = () => applyImmediateRosterMoveCallable(request);
+  const response = request.submissionId &&
+      (request.moveType === 'add-drop-active' || request.moveType === 'add-open-active')
+    ? await executeIdempotentRosterActionWithQuickRetry(invoke)
+    : await invoke();
 
   return response.data;
 }

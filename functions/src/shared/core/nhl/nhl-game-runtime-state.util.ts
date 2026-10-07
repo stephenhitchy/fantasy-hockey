@@ -16,6 +16,18 @@ const EXPLICITLY_DEFERRED_GAME_STATES = new Set([
   'CANCELED',
 ]);
 
+export function isNhlGameExplicitlyDeferred(
+  source: NhlGameRuntimeStateSource | null | undefined,
+): boolean {
+  const gameState = (source?.gameState ?? '').trim().toUpperCase();
+  const scheduleState = (source?.gameScheduleState ?? '')
+    .trim()
+    .toUpperCase();
+
+  return EXPLICITLY_DEFERRED_GAME_STATES.has(gameState) ||
+    EXPLICITLY_DEFERRED_GAME_STATES.has(scheduleState);
+}
+
 /**
  * A stale FUT response must not imply that puck drop has not happened. This
  * boundary is deliberately separate from runtime scoring state: it protects
@@ -33,15 +45,7 @@ export function hasNhlGameReachedStartSafetyBoundary(input: {
     return true;
   }
 
-  const gameState = (input.source?.gameState ?? '').trim().toUpperCase();
-  const scheduleState = (input.source?.gameScheduleState ?? '')
-    .trim()
-    .toUpperCase();
-
-  if (
-    EXPLICITLY_DEFERRED_GAME_STATES.has(gameState) ||
-    EXPLICITLY_DEFERRED_GAME_STATES.has(scheduleState)
-  ) {
+  if (isNhlGameExplicitlyDeferred(input.source)) {
     return false;
   }
 

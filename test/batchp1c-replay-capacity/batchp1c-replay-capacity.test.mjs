@@ -212,6 +212,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
     'src/roster-moves.ts',
 
+    // B2A adds isolated add/drop submission receipt and fingerprint helpers.
+    'src/shared/core/team/roster-action-idempotency.util.ts',
+
     // B1V adds exact mixed-player injury windows and expands the roster bench.
     'src/shared/core/cycle/injury-replacement-window.util.ts',
     'src/shared/core/team/roster-config.ts',

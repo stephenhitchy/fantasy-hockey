@@ -148,14 +148,17 @@ test('server roster actions evaluate the NHL schedule through the authoritative 
     moves,
     /getScheduleGameState\(game, input\.completedThroughDate \?\? null\)/,
   );
-  assert.match(moves, /completedThroughDate,\s*\}\);/);
   assert.match(
     moves,
-    /getEarliestEligibleCycleNumber\(\s*authoritativeAddAsset,\s*gamesPerCycle,\s*leagueId,\s*currentTeamAbbreviationByPlayerId,\s*\)/,
+    /completedThroughDate,\s*actionBoundaryMilliseconds:\s*replayContext\.mode === 'historical-replay'\s*\? null/,
+  );
+  assert.match(
+    moves,
+    /getEarliestEligibleCycleNumber\(\s*authoritativeAddAsset,\s*gamesPerCycle,\s*leagueId,\s*currentTeamAbbreviationByPlayerId,\s*actionBoundaryMilliseconds,\s*\)/,
   );
   assert.match(
     authority,
-    /resolveRosterMoveAssetCycleEligibility\(\s*asset,\s*gamesPerCycle,\s*leagueId,\s*undefined,\s*actionBoundaryMilliseconds,\s*\)/,
+    /resolveRosterMoveAssetCycleEligibility\(\s*asset,\s*gamesPerCycle,\s*leagueId,\s*currentTeamAbbreviationByPlayerId,\s*actionBoundaryMilliseconds,\s*\)/,
   );
 });
 

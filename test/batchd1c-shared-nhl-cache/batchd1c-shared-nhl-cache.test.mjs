@@ -93,7 +93,8 @@ test('the Functions observer is deterministic, deduplicated, best effort, and ne
   assert.match(functionsIndex, /payload: upstreamBody[\s\S]*source: 'public-proxy'/);
   assert.match(functionsIndex, /queueNhlSharedCacheObservation\(\{[\s\S]*url,[\s\S]*source: 'functions-core'/);
   assert.match(functionsIndex, /getApps\(\)\.length === 0/);
-  assert.match(rosterMoves, /club-schedule-season[\s\S]*queueNhlSharedCacheObservation/);
+  assert.match(rosterMoves, /getNhlTeamSeasonSchedule/);
+  assert.doesNotMatch(rosterMoves, /fetch\(/);
 });
 
 test('source-controlled policy forbids automatic cutover and documents every supported route', async () => {

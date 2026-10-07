@@ -80,6 +80,19 @@ and exact ownership on the six game dots. Read
 `docs/RINKRAT_PRODUCT_B1Z_INJURY_REPLACEMENT_INTEGRITY.md` before changing the
 roster-move, cycle-scoring, rollover, playoff-bank, or mixed-player UI paths.
 
+B2A is the current clean-source add/drop reliability candidate and is not yet
+deployed. It replaces the interactive 32-club identity refresh with exact
+post-boundary player lookups, runs incoming/outgoing schedule checks in
+parallel, and treats exact puck-drop time as authoritative when a cached
+provider state still says future. Direct add/drop requests now carry a stable
+private submission identifier and exact expected outgoing asset; both roster
+callables atomically save/replay the same canonical result and reject payload
+substitution. The browser keeps reconciling listener, callable, and bounded
+server-roster evidence through the full Function envelope instead of showing a
+false error at 20 seconds. Read
+`docs/RINKRAT_PRODUCT_B2A_ADD_DROP_TRANSACTION_RECOVERY.md` before changing
+add/drop transport, receipts, exact player identity, or roster confirmation.
+
 The 2026-10-06 scoring incident was caused by a clean broad Functions release
 from older source `412c3b8b`, which replaced the D1L-F five-attempt/jittered NHL
 schedule recovery with the previous three-attempt/no-jitter runtime. `Bar Down`

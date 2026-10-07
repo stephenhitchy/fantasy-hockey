@@ -195,6 +195,81 @@ export function evaluateProtectedRosterRuntimeContract(input = {}) {
     /isBenchSlotReserved\(roster, benchSlotId\)/,
   );
   requirePattern(
+    'Add/drop receipts must derive a private deterministic transaction id.',
+    input.rosterActionIdempotency,
+    /createRosterActionTransactionId/,
+  );
+  requirePattern(
+    'Add/drop receipts must bind retries to an exact request fingerprint.',
+    input.rosterActionIdempotency,
+    /createRosterActionRequestFingerprint/,
+  );
+  requirePattern(
+    'Add/drop receipts must reject a reused identifier with different intent.',
+    input.rosterActionIdempotency,
+    /status:\s*'conflict'/,
+  );
+  requirePattern(
+    'Secure add/drop authority must read the receipt inside its transaction.',
+    input.rosterAuthority,
+    /transaction\.get\(transactionRef\)/,
+  );
+  requirePattern(
+    'Immediate add/drop authority must read the receipt inside its transaction.',
+    input.rosterMoves,
+    /submissionId && isImmediateAdd[\s\S]+transaction\.get\(transactionRef\)/,
+  );
+  requirePattern(
+    'Secure add/drop authority must verify the exact outgoing asset.',
+    input.rosterAuthority,
+    /expectedOutgoingAssetKey/,
+  );
+  requirePattern(
+    'Immediate add/drop authority must verify the exact outgoing asset.',
+    input.rosterMoves,
+    /expectedOutgoingAssetKey/,
+  );
+  requirePattern(
+    'Immediate add/drop authority must reject duplicate ownership on the caller roster.',
+    input.rosterMoves,
+    /rosterContainsAsset\(roster, incomingKey\)/,
+  );
+  requirePattern(
+    'Interactive add/drop identity must use exact forced player evidence.',
+    input.rosterMoves,
+    /getCurrentNhlPlayerTeamIdentity\(playerId, true\)/,
+  );
+  requirePattern(
+    'Roster-action puck-drop checks must preserve postponed and cancelled game states.',
+    input.rosterMoves,
+    /hasNhlGameReachedStartSafetyBoundary\(/,
+  );
+  requirePattern(
+    'The browser must assign one stable add/drop submission identifier.',
+    input.freeAgents,
+    /createRosterActionSubmissionId/,
+  );
+  requirePattern(
+    'The browser must keep add/drop recovery through the callable envelope.',
+    input.freeAgents,
+    /ROSTER_ACTION_CONFIRMATION_WINDOW_MS/,
+  );
+  requirePattern(
+    'The add/drop recovery envelope must include callable and retry timing.',
+    input.rosterActionTransport,
+    /ROSTER_ACTION_CALLABLE_TIMEOUT_MS[\s\S]+ROSTER_ACTION_QUICK_RETRY_WINDOW_MS[\s\S]+7_000/,
+  );
+  requirePattern(
+    'The browser must perform an exact server roster reconciliation read.',
+    input.browserRosterService,
+    /getDocFromServer/,
+  );
+  requirePattern(
+    'Ambiguous add/drop transport failures must remain recoverable.',
+    input.rosterActionTransport,
+    /isPossiblyCommittedRosterActionError/,
+  );
+  requirePattern(
     'Scoring must load final logs for every effective segment asset.',
     input.cycleScoring,
     /effectiveSkaterAssetsByKey/,

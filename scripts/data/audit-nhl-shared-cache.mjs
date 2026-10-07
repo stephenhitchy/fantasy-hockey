@@ -89,8 +89,8 @@ if (!functionsIndexSource.includes('payload: upstreamBody')) {
 if (!functionsIndexSource.includes('getApps().length === 0')) {
   failures.push('The main Functions entrypoint must preserve safe single-app initialization after importing the cache observer.');
 }
-if (!rosterMovesSource.includes('queueNhlSharedCacheObservation')) {
-  failures.push('The direct roster-timing schedule fetch does not feed the shared Shadow cache.');
+if (!rosterMovesSource.includes('getNhlTeamSeasonSchedule')) {
+  failures.push('Roster timing does not use the bounded NHL schedule client that feeds the shared Shadow cache.');
 }
 if (!ttl.policies.some((entry) => entry.collectionGroup === 'nhlSharedDataCache')) {
   failures.push('The shared NHL cache is missing its TTL field policy.');

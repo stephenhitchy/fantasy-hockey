@@ -1,12 +1,18 @@
+import { createHash } from 'node:crypto';
+
 import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
-import { queueNhlSharedCacheObservation } from './shared/core/nhl/nhl-shared-cache.service';
 import {
+  getCurrentNhlPlayerTeamIdentity,
   getNhlTeamSeasonSchedule,
 } from './shared/core/nhl/nhl-api.service';
+import {
+  hasNhlGameReachedStartSafetyBoundary,
+  isNhlGameExplicitlyDeferred,
+} from './shared/core/nhl/nhl-game-runtime-state.util';
 import {
   loadCurrentNhlPlayerTeamIdentity,
   type NhlPlayerTeamIdentitySnapshot,
@@ -16,6 +22,12 @@ import {
   optionalFirestoreDocumentId,
   requireFirestoreDocumentId,
 } from './shared/security/firestore-document-id.util';
+import {
+  buildRosterActionSubmissionEvidence,
+  createRosterActionRequestFingerprint,
+  createRosterActionTransactionId,
+  resolveRosterActionSubmission,
+} from './shared/core/team/roster-action-idempotency.util';
 import {
   DraftableAsset,
   InjuryReplacementWindowPlan,
@@ -52,7 +64,6 @@ import {
 } from './shared/core/cycle/injury-replacement-window.util';
 
 const FUNCTION_REGION = 'us-central1';
-const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 const DEFAULT_GAMES_PER_CYCLE = 6;
 
 type ImmediateRosterMoveType =
@@ -72,6 +83,8 @@ interface ImmediateRosterMoveRequest {
   irSlotId?: unknown;
   addAssetKey?: unknown;
   addAsset?: unknown;
+  expectedOutgoingAssetKey?: unknown;
+  submissionId?: unknown;
 }
 
 interface SlotWindowContext {
@@ -88,6 +101,7 @@ interface NhlScheduleGame {
   startTimeUTC?: string;
   gameType?: number;
   gameState?: string;
+  gameScheduleState?: string;
   homeTeam?: { abbrev?: string; score?: number };
   awayTeam?: { abbrev?: string; score?: number };
 }
@@ -224,6 +238,79 @@ function getSkaterPlayerIds(
         .filter((playerId) => playerId > 0),
     ),
   ];
+}
+
+/**
+ * Loads post-click current-club evidence for only the skaters involved in an
+ * add/drop. Scoring workers still use the shared full-league identity catalog;
+ * an interactive roster action must not refresh all 32 clubs just to verify
+ * one or two players.
+ */
+export async function loadExactRosterActionPlayerTeamIdentity(
+  playerIdsValue: Iterable<number>,
+  actionBoundaryMilliseconds: number,
+): Promise<NhlPlayerTeamIdentitySnapshot | null> {
+  const playerIds = [
+    ...new Set(
+      [...playerIdsValue]
+        .filter((playerId) => Number.isSafeInteger(playerId) && playerId > 0),
+    ),
+  ].sort((first, second) => first - second);
+
+  if (playerIds.length === 0) {
+    return null;
+  }
+
+  const settled = await Promise.allSettled(
+    playerIds.map((playerId) => getCurrentNhlPlayerTeamIdentity(playerId, true)),
+  );
+  const byPlayerId = new Map<number, string>();
+
+  settled.forEach((result, index) => {
+    const playerId = playerIds[index];
+
+    if (result.status === 'rejected') {
+      console.warn('Unable to load exact roster-action NHL player identity.', {
+        playerId,
+        error: result.reason,
+      });
+      return;
+    }
+
+    if (result.value) {
+      byPlayerId.set(result.value.playerId, result.value.teamAbbreviation);
+    }
+  });
+
+  const missingPlayerIds = playerIds.filter((playerId) => !byPlayerId.has(playerId));
+  if (missingPlayerIds.length > 0) {
+    throw new HttpsError(
+      'unavailable',
+      `Current NHL team evidence is unavailable for player ${missingPlayerIds.join(', ')}. No roster move was applied.`,
+    );
+  }
+
+  const generatedAt = new Date(
+    Math.max(Date.now(), actionBoundaryMilliseconds),
+  ).toISOString();
+  const identityHash = createHash('sha256')
+    .update(JSON.stringify(
+      [...byPlayerId.entries()].map(([playerId, teamAbbreviation]) => ({
+        playerId,
+        teamAbbreviation,
+      })),
+    ))
+    .digest('hex');
+
+  return {
+    generatedAt,
+    identityHash,
+    playerCount: byPlayerId.size,
+    byPlayerId,
+    teamConfirmedAtByPlayerId: new Map(
+      playerIds.map((playerId) => [playerId, generatedAt] as const),
+    ),
+  };
 }
 
 function getRosterPickDocumentId(ownerId: string, rosterSlotId: string): string {
@@ -610,7 +697,7 @@ async function loadRosterMoveScheduleForTeam(
   if (!/^[A-Z0-9]{2,4}$/.test(teamAbbreviation)) {
     throw new HttpsError(
       'failed-precondition',
-      'The saved injury-replacement team identity is invalid.',
+      'The saved roster-move team identity is invalid.',
     );
   }
 
@@ -624,13 +711,13 @@ async function loadRosterMoveScheduleForTeam(
       'near-live-canary',
     );
   } catch (error: unknown) {
-    console.warn('Unable to load the injury-replacement NHL schedule.', {
+    console.warn('Unable to load the roster-move NHL schedule.', {
       teamAbbreviation,
       error,
     });
     throw new HttpsError(
       'unavailable',
-      `Unable to verify ${teamAbbreviation}'s injury-replacement schedule.`,
+      `Unable to verify ${teamAbbreviation}'s current six-game schedule.`,
     );
   }
 
@@ -800,6 +887,7 @@ export function determineEarliestEligibleSourceBlock(input: {
   frozenSourceGameIdsByTeam?: unknown;
   teamAbbreviation?: string;
   completedThroughDate?: string | null;
+  actionBoundaryMilliseconds?: number | null;
 }): number {
   const gamesPerCycle = Math.max(1, Math.floor(input.gamesPerCycle));
   const initialNhlBlockNumber =
@@ -880,9 +968,35 @@ export function determineEarliestEligibleSourceBlock(input: {
       );
     }
 
-    const states = blockGames.map((game) =>
-      getScheduleGameState(game, input.completedThroughDate ?? null),
-    );
+    const states = blockGames.map((game) => {
+      const state = getScheduleGameState(game, input.completedThroughDate ?? null);
+
+      if (state !== 'scheduled' || input.actionBoundaryMilliseconds === null ||
+          input.actionBoundaryMilliseconds === undefined) {
+        return state;
+      }
+
+      const reachedStartBoundary = hasNhlGameReachedStartSafetyBoundary({
+        source: game,
+        observedAtMilliseconds: input.actionBoundaryMilliseconds,
+      });
+      if (reachedStartBoundary) {
+        return 'live';
+      }
+
+      if (isNhlGameExplicitlyDeferred(game)) {
+        return 'scheduled';
+      }
+
+      if (getScheduleGameStartMilliseconds(game) === null) {
+        throw new HttpsError(
+          'failed-precondition',
+          `NHL game ${String(game.id ?? '')} is missing its exact puck-drop time. RinkRat cannot safely time this move.`,
+        );
+      }
+
+      return 'scheduled';
+    });
     const complete = blockGames.length > 0 &&
       states.every((state) => state === 'final');
 
@@ -952,40 +1066,38 @@ export async function resolveRosterMoveAssetCycleEligibility<
   const teamAbbreviation = getAssetTeamAbbreviation(authoritativeAsset)
     .trim()
     .toUpperCase();
-  const team = teamAbbreviation.toLowerCase();
   const season = replayContext.mode === 'historical-replay'
     ? replayContext.seasonOverride
     : getNhlSeasonForDate(new Date());
   const completedThroughDate = replayContext.mode === 'historical-replay'
     ? replayContext.completedThroughDate
     : null;
-  const response = await fetch(`${NHL_API_BASE_URL}/club-schedule-season/${team}/${season}`);
+  let schedule: NhlScheduleGame[];
 
-  if (!response.ok) {
+  try {
+    schedule = replayContext.mode === 'historical-replay'
+      ? await getNhlTeamSeasonSchedule(teamAbbreviation, season, 'standard')
+      : await loadRosterMoveScheduleForTeam(teamAbbreviation);
+  } catch (error: unknown) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    console.warn('Unable to resolve the roster-move NHL schedule.', {
+      teamAbbreviation,
+      season,
+      error,
+    });
     throw new HttpsError(
       'unavailable',
-      `Unable to verify ${team.toUpperCase()}'s current six-game window.`,
+      `Unable to verify ${teamAbbreviation}'s current six-game window.`,
     );
   }
-
-  const payload = await response.json();
-
-  queueNhlSharedCacheObservation({
-    url: `${NHL_API_BASE_URL}/club-schedule-season/${team}/${season}`,
-    payload,
-    source: 'functions-core',
-  });
-
-  const body = asRecord(payload);
-  const schedule = asArray(body['games'])
-    .map((value) => asRecord(value) as NhlScheduleGame)
-    .filter((game) => game.gameType === 2)
-    .sort((first, second) => asString(first.gameDate).localeCompare(asString(second.gameDate)));
 
   if (schedule.length === 0) {
     throw new HttpsError(
       'failed-precondition',
-      `No regular-season schedule was found for ${team.toUpperCase()}.`,
+      `No regular-season schedule was found for ${teamAbbreviation}.`,
     );
   }
 
@@ -1014,6 +1126,10 @@ export async function resolveRosterMoveAssetCycleEligibility<
         : undefined,
     teamAbbreviation,
     completedThroughDate,
+    actionBoundaryMilliseconds:
+      replayContext.mode === 'historical-replay'
+        ? null
+        : minimumIdentityGeneratedAtMilliseconds ?? null,
   });
 
   const earliestEligibleCycleNumber = replayContext.mode === 'historical-replay'
@@ -1256,6 +1372,56 @@ function buildWaiverPayload(
   };
 }
 
+function resolveImmediateAddReplayResult(
+  documentValue: unknown,
+  submissionId: string | null,
+  requestFingerprint: string | null,
+): {
+  applied: true;
+  cycleNumber: number;
+  activeSlotId: string;
+  message: string;
+} | null {
+  const resolution = resolveRosterActionSubmission(
+    documentValue,
+    submissionId,
+    requestFingerprint,
+  );
+
+  if (resolution.status === 'missing') {
+    return null;
+  }
+
+  if (resolution.status === 'conflict') {
+    throw new HttpsError(
+      'failed-precondition',
+      'This add/drop submission identifier was already used for a different roster move. Refresh before trying again.',
+      { reason: 'roster-submission-id-reused' },
+    );
+  }
+
+  const result = resolution.result;
+  if (
+    result['applied'] !== true ||
+    typeof result['cycleNumber'] !== 'number' ||
+    !Number.isSafeInteger(result['cycleNumber']) ||
+    typeof result['activeSlotId'] !== 'string' ||
+    typeof result['message'] !== 'string'
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The saved add/drop result is malformed. No additional roster move was applied.',
+    );
+  }
+
+  return {
+    applied: true,
+    cycleNumber: result['cycleNumber'],
+    activeSlotId: result['activeSlotId'],
+    message: result['message'],
+  };
+}
+
 export const applyImmediateRosterMove = onCall(
   {
     region: FUNCTION_REGION,
@@ -1301,6 +1467,20 @@ export const applyImmediateRosterMove = onCall(
       'injured reserve slot ID',
       { maxBytes: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/ },
     ) ?? '';
+    const expectedOutgoingAssetKey = optionalFirestoreDocumentId(
+      input.expectedOutgoingAssetKey,
+      'expected outgoing asset key',
+      { maxBytes: 160, pattern: /^[A-Za-z0-9][A-Za-z0-9._:-]*$/ },
+    );
+    const submissionId = optionalFirestoreDocumentId(
+      input.submissionId,
+      'roster submission identifier',
+      {
+        minimumLength: 8,
+        maxBytes: 120,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
+    );
 
     if (!['add-drop-active', 'add-open-active', 'active-bench-swap', 'activate-ir-active', 'move-active-to-ir', 'injury-replacement', 'drop-active'].includes(moveType)) {
       throw new HttpsError('invalid-argument', 'That immediate roster move type is not supported.');
@@ -1313,16 +1493,25 @@ export const applyImmediateRosterMove = onCall(
           pattern: /^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
         })
       : '';
-    const addAsset = requestedAssetKey
-      ? await loadCanonicalDraftableAsset(leagueId, requestedAssetKey)
-      : null;
+    const isImmediateAdd =
+      moveType === 'add-drop-active' || moveType === 'add-open-active';
     const canTargetOpenSlot =
       moveType === 'add-open-active' ||
       moveType === 'active-bench-swap' ||
       moveType === 'activate-ir-active';
 
-    if ((moveType === 'add-drop-active' || moveType === 'add-open-active') && !addAsset) {
+    if (isImmediateAdd && !requestedAssetKey) {
       throw new HttpsError('invalid-argument', 'The incoming player is required.');
+    }
+    if (
+      moveType === 'add-drop-active' &&
+      submissionId &&
+      !expectedOutgoingAssetKey
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'The player selected to be dropped is required. Refresh and review the transaction again.',
+      );
     }
 
     if ((moveType === 'active-bench-swap' || moveType === 'injury-replacement') && !benchSlotId) {
@@ -1333,11 +1522,38 @@ export const applyImmediateRosterMove = onCall(
       throw new HttpsError('invalid-argument', 'The IR slot is required.');
     }
 
-    const [leagueSnapshot, memberSnapshot, draftSnapshot, teamsSnapshot] = await Promise.all([
+    const requestFingerprint = submissionId && isImmediateAdd
+      ? createRosterActionRequestFingerprint({
+          activeSlotId,
+          addAssetKey: requestedAssetKey,
+          expectedOutgoingAssetKey,
+          moveType,
+        })
+      : null;
+    const transactionRef = submissionId && isImmediateAdd
+      ? db.doc(
+          `leagues/${leagueId}/transactions/${createRosterActionTransactionId({
+            namespace: 'roster-add',
+            leagueId,
+            ownerId,
+            submissionId,
+          })}`,
+        )
+      : db.collection(`leagues/${leagueId}/transactions`).doc();
+    const [
+      leagueSnapshot,
+      memberSnapshot,
+      draftSnapshot,
+      teamsSnapshot,
+      replaySnapshot,
+    ] = await Promise.all([
       db.doc(`leagues/${leagueId}`).get(),
       db.doc(`leagues/${leagueId}/members/${ownerId}`).get(),
       db.doc(`leagues/${leagueId}/draft/current`).get(),
       db.collection(`leagues/${leagueId}/teams`).get(),
+      submissionId && isImmediateAdd
+        ? transactionRef.get()
+        : Promise.resolve(null),
     ]);
 
     if (!leagueSnapshot.exists || !memberSnapshot.exists) {
@@ -1347,6 +1563,21 @@ export const applyImmediateRosterMove = onCall(
     if (!draftSnapshot.exists || draftSnapshot.data()?.['status'] !== 'complete') {
       throw new HttpsError('failed-precondition', 'Roster moves open after the draft is complete.');
     }
+
+    if (replaySnapshot?.exists) {
+      const replay = resolveImmediateAddReplayResult(
+        replaySnapshot.data(),
+        submissionId,
+        requestFingerprint,
+      );
+      if (replay) {
+        return replay;
+      }
+    }
+
+    const addAsset = requestedAssetKey
+      ? await loadCanonicalDraftableAsset(leagueId, requestedAssetKey)
+      : null;
 
     const context = await findSlotWindowContext(leagueId, ownerId, activeSlotId);
     if (!context) {
@@ -1375,9 +1606,11 @@ export const applyImmediateRosterMove = onCall(
     const playoffBankRef = context.playoffBankRefPath
       ? db.doc(context.playoffBankRefPath)
       : null;
-    const rosterRefs = teamsSnapshot.docs.map((team) =>
-      db.doc(`leagues/${leagueId}/teams/${team.id}/roster/current`),
-    );
+    const rosterRefs = teamsSnapshot.docs
+      .filter((team) => team.id !== ownerId)
+      .map((team) =>
+        db.doc(`leagues/${leagueId}/teams/${team.id}/roster/current`),
+      );
 
     const [
       preflightRosterSnapshot,
@@ -1481,6 +1714,16 @@ export const applyImmediateRosterMove = onCall(
     }
 
     const preflightOutgoingAssetKey = getAssetKey(preflightRosterPickAsset);
+    if (
+      moveType === 'add-drop-active' &&
+      expectedOutgoingAssetKey &&
+      getAssetKey(preflightActiveSlot.asset) !== expectedOutgoingAssetKey
+    ) {
+      throw new HttpsError(
+        'aborted',
+        'The selected active player changed before the move was checked. Refresh and review the add/drop again.',
+      );
+    }
     const rosterMoveReplayContext = await loadRosterMoveReplayContext(leagueId);
 
     if (rosterMoveReplayContext.mode === 'blocked') {
@@ -1510,10 +1753,15 @@ export const applyImmediateRosterMove = onCall(
       requiredIdentityPlayerIds.length > 0
     ) {
       const identityBoundaryMilliseconds = Date.now();
-      rosterMoveIdentity = await loadCurrentNhlPlayerTeamIdentity({
-        requiredPlayerIds: requiredIdentityPlayerIds,
-        minimumGeneratedAtMilliseconds: identityBoundaryMilliseconds,
-      });
+      rosterMoveIdentity = isImmediateAdd
+        ? await loadExactRosterActionPlayerTeamIdentity(
+            requiredIdentityPlayerIds,
+            identityBoundaryMilliseconds,
+          )
+        : await loadCurrentNhlPlayerTeamIdentity({
+            requiredPlayerIds: requiredIdentityPlayerIds,
+            minimumGeneratedAtMilliseconds: identityBoundaryMilliseconds,
+          });
     }
 
     const currentTeamAbbreviationByPlayerId = rosterMoveIdentity?.byPlayerId;
@@ -1529,15 +1777,6 @@ export const applyImmediateRosterMove = onCall(
           currentTeamAbbreviationByPlayerId,
         )
       : null;
-
-    if (authoritativeAddAsset) {
-      incomingEligibilityCycle = await getEarliestEligibleCycleNumber(
-        authoritativeAddAsset,
-        gamesPerCycle,
-        leagueId,
-        currentTeamAbbreviationByPlayerId,
-      );
-    }
 
     if (preflightActiveAsset) {
       if (
@@ -1556,15 +1795,37 @@ export const applyImmediateRosterMove = onCall(
     // the outgoing NHL team's real schedule. This closes the small gap between
     // puck drop and the next scoring-worker refresh: both individual assets
     // truly must be untouched for an immediate current-cycle rewrite.
-    if (preflightActiveAsset && moveType !== 'injury-replacement') {
+    const [resolvedIncomingEligibilityCycle, resolvedOutgoingEligibilityCycle] =
+      await Promise.all([
+        authoritativeAddAsset
+          ? getEarliestEligibleCycleNumber(
+              authoritativeAddAsset,
+              gamesPerCycle,
+              leagueId,
+              currentTeamAbbreviationByPlayerId,
+              actionBoundaryMilliseconds,
+            )
+          : Promise.resolve(1),
+        preflightActiveAsset && moveType !== 'injury-replacement'
+          ? getEarliestEligibleCycleNumber(
+              preflightActiveAsset,
+              gamesPerCycle,
+              leagueId,
+              currentTeamAbbreviationByPlayerId,
+              actionBoundaryMilliseconds,
+            )
+          : Promise.resolve(null),
+      ]);
+    incomingEligibilityCycle = resolvedIncomingEligibilityCycle;
+
+    if (
+      preflightActiveAsset &&
+      moveType !== 'injury-replacement' &&
+      resolvedOutgoingEligibilityCycle !== null
+    ) {
       const outgoingEligibilityCycle = Math.max(
         preflightActiveAsset.eligibleFromCycleNumber ?? 1,
-        await getEarliestEligibleCycleNumber(
-          preflightActiveAsset,
-          gamesPerCycle,
-          leagueId,
-          currentTeamAbbreviationByPlayerId,
-        ),
+        resolvedOutgoingEligibilityCycle,
       );
 
       if (outgoingEligibilityCycle > context.cycleNumber) {
@@ -1638,6 +1899,7 @@ export const applyImmediateRosterMove = onCall(
               gamesPerCycle,
               leagueId,
               currentTeamAbbreviationByPlayerId,
+              actionBoundaryMilliseconds,
             ),
           );
         }
@@ -1662,6 +1924,7 @@ export const applyImmediateRosterMove = onCall(
             gamesPerCycle,
             leagueId,
             currentTeamAbbreviationByPlayerId,
+            actionBoundaryMilliseconds,
           ),
         );
 
@@ -1724,7 +1987,6 @@ export const applyImmediateRosterMove = onCall(
           currentTeamAbbreviationByPlayerId,
         )
       : null;
-    const transactionRef = db.collection(`leagues/${leagueId}/transactions`).doc();
     let preflightInjuryPlan: InjuryReplacementWindowPlan | null = null;
     let preflightExistingInjuryTransactionId = '';
     let preflightExistingInjuryPlanFingerprint = '';
@@ -2012,16 +2274,25 @@ export const applyImmediateRosterMove = onCall(
       );
     }
 
+    const incomingWaiverRef = isImmediateAdd && requestedAssetKey
+      ? db.doc(`leagues/${leagueId}/waivers/${requestedAssetKey}`)
+      : null;
+
     return db.runTransaction(async (transaction) => {
       const [
+        submissionSnapshot,
         rosterSnapshot,
         cycleSnapshot,
         teamWindowsSnapshot,
         rosterPickSnapshot,
         playoffBankSnapshot,
+        incomingWaiverSnapshot,
         ...allRosterSnapshots
       ] =
         await Promise.all([
+          submissionId && isImmediateAdd
+            ? transaction.get(transactionRef)
+            : Promise.resolve(null),
           transaction.get(rosterRef),
           transaction.get(cycleRef),
           transaction.get(teamWindowsRef),
@@ -2029,8 +2300,22 @@ export const applyImmediateRosterMove = onCall(
           playoffBankRef
             ? transaction.get(playoffBankRef)
             : Promise.resolve(null),
+          incomingWaiverRef
+            ? transaction.get(incomingWaiverRef)
+            : Promise.resolve(null),
           ...rosterRefs.map((reference) => transaction.get(reference)),
         ]);
+
+      if (submissionSnapshot?.exists) {
+        const replay = resolveImmediateAddReplayResult(
+          submissionSnapshot.data(),
+          submissionId,
+          requestFingerprint,
+        );
+        if (replay) {
+          return replay;
+        }
+      }
 
       if (
         !rosterSnapshot.exists ||
@@ -2050,6 +2335,17 @@ export const applyImmediateRosterMove = onCall(
       const activeSlot = roster.activeSlots[activeSlotIndex];
       if (activeSlot.pendingMove) {
         throw new HttpsError('failed-precondition', 'That active slot already has a queued move.');
+      }
+
+      if (
+        moveType === 'add-drop-active' &&
+        expectedOutgoingAssetKey &&
+        getAssetKey(activeSlot.asset) !== expectedOutgoingAssetKey
+      ) {
+        throw new HttpsError(
+          'aborted',
+          'The selected active player changed before the move was saved. Refresh and review the add/drop again.',
+        );
       }
 
       const transactionPickAsset = rosterPickSnapshot.data()?.['asset'];
@@ -2559,6 +2855,12 @@ export const applyImmediateRosterMove = onCall(
           incomingAsset.assetKey,
           'incoming asset key',
         );
+        if (rosterContainsAsset(roster, incomingKey)) {
+          throw new HttpsError(
+            'already-exists',
+            'That player or goalie unit is already owned or reserved on your roster.',
+          );
+        }
         for (const snapshot of allRosterSnapshots as Array<{
           exists: boolean;
           data(): unknown;
@@ -2575,10 +2877,20 @@ export const applyImmediateRosterMove = onCall(
           }
         }
 
-        const activeWaiverSnapshot = await transaction.get(
-          db.doc(`leagues/${leagueId}/waivers/${incomingKey}`),
-        );
-        if (activeWaiverSnapshot.exists && activeWaiverSnapshot.data()?.['status'] === 'active') {
+        if (
+          !incomingWaiverSnapshot ||
+          incomingWaiverSnapshot.ref.path !==
+            `leagues/${leagueId}/waivers/${incomingKey}`
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The incoming waiver state could not be verified. No roster move was applied.',
+          );
+        }
+        if (
+          incomingWaiverSnapshot.exists &&
+          incomingWaiverSnapshot.data()?.['status'] === 'active'
+        ) {
           throw new HttpsError(
             'failed-precondition',
             'That player is still on waivers and must be claimed through the waiver process.',
@@ -3036,6 +3348,14 @@ export const applyImmediateRosterMove = onCall(
               : moveType === 'add-drop-active'
                 ? 'add-drop'
                 : 'add-open-slot';
+      const result = {
+        applied: true as const,
+        cycleNumber: context.cycleNumber,
+        activeSlotId,
+        message: moveType === 'injury-replacement'
+          ? `Injury replacement applied to the remaining games in Cycle ${context.cycleNumber}.`
+          : `Applied immediately to untouched Cycle ${context.cycleNumber}.`,
+      };
       transaction.set(transactionRef, {
         type: transactionType,
         ownerId,
@@ -3088,17 +3408,15 @@ export const applyImmediateRosterMove = onCall(
                 rosterMoveIdentity.generatedAt,
             }
           : {}),
+        ...buildRosterActionSubmissionEvidence({
+          submissionId: isImmediateAdd ? submissionId : null,
+          requestFingerprint: isImmediateAdd ? requestFingerprint : null,
+          result: { ...result },
+        }),
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      return {
-        applied: true as const,
-        cycleNumber: context.cycleNumber,
-        activeSlotId,
-        message: moveType === 'injury-replacement'
-          ? `Injury replacement applied to the remaining games in Cycle ${context.cycleNumber}.`
-          : `Applied immediately to untouched Cycle ${context.cycleNumber}.`,
-      };
+      return result;
     });
   },
 );

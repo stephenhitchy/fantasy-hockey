@@ -30,6 +30,10 @@ async function currentContractSources() {
     leagueAutomation,
     canonicalImpactFeed,
     finalScoreReconciliation,
+    rosterActionIdempotency,
+    freeAgents,
+    browserRosterService,
+    rosterActionTransport,
   ] = await Promise.all([
     read('src/app/core/team/roster-config.ts'),
     read('functions/src/shared/core/team/roster-config.ts'),
@@ -49,6 +53,10 @@ async function currentContractSources() {
     read('functions/src/league-automation.ts'),
     read('functions/src/nhl-canonical-impact-feed.ts'),
     read('functions/src/shared/core/nhl/final-score-reconciliation.util.ts'),
+    read('functions/src/shared/core/team/roster-action-idempotency.util.ts'),
+    read('src/app/features/free-agents/free-agents.ts'),
+    read('src/app/core/team/roster.service.ts'),
+    read('src/app/core/transactions/roster-action-transport.util.ts'),
   ]);
 
   return {
@@ -70,6 +78,10 @@ async function currentContractSources() {
     leagueAutomation,
     canonicalImpactFeed,
     finalScoreReconciliation,
+    rosterActionIdempotency,
+    freeAgents,
+    browserRosterService,
+    rosterActionTransport,
   };
 }
 

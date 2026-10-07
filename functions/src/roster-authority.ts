@@ -23,9 +23,16 @@ import {
   applyCurrentNhlTeamIdentity,
   getAuthoritativeAvailabilityStatus,
   loadCanonicalDraftableAsset,
+  loadExactRosterActionPlayerTeamIdentity,
   resolveAuthoritativeAvailabilityStatus,
   resolveRosterMoveAssetCycleEligibility,
 } from './roster-moves';
+import {
+  buildRosterActionSubmissionEvidence,
+  createRosterActionRequestFingerprint,
+  createRosterActionTransactionId,
+  resolveRosterActionSubmission,
+} from './shared/core/team/roster-action-idempotency.util';
 
 const FUNCTION_REGION = 'us-central1';
 const DEFAULT_GAMES_PER_CYCLE = 6;
@@ -67,6 +74,8 @@ interface SecureRosterActionRequest {
   targetSlotId?: unknown;
   effectiveCycleNumber?: unknown;
   effectiveLabel?: unknown;
+  expectedOutgoingAssetKey?: unknown;
+  submissionId?: unknown;
 }
 
 interface SecureRosterActionResult {
@@ -159,6 +168,20 @@ function normalizedSecureRosterActionRequest(value: unknown): SecureRosterAction
       input['waiverId'],
       'waiver ID',
       ROSTER_ASSET_ID_OPTIONS,
+    ),
+    expectedOutgoingAssetKey: optionalFirestoreDocumentId(
+      input['expectedOutgoingAssetKey'],
+      'expected outgoing asset key',
+      ROSTER_ASSET_ID_OPTIONS,
+    ),
+    submissionId: optionalFirestoreDocumentId(
+      input['submissionId'],
+      'roster submission identifier',
+      {
+        minimumLength: 8,
+        maxBytes: 120,
+        pattern: /^[A-Za-z0-9_-]+$/,
+      },
     ),
   };
 }
@@ -301,6 +324,55 @@ function actionResult(
   return { applied: true, mode, effectiveCycleNumber, message };
 }
 
+function resolveSecureAddReplayResult(
+  documentValue: unknown,
+  submissionId: string | null,
+  requestFingerprint: string | null,
+): SecureRosterActionResult | null {
+  const resolution = resolveRosterActionSubmission(
+    documentValue,
+    submissionId,
+    requestFingerprint,
+  );
+
+  if (resolution.status === 'missing') {
+    return null;
+  }
+
+  if (resolution.status === 'conflict') {
+    throw new HttpsError(
+      'failed-precondition',
+      'This add/drop submission identifier was already used for a different roster move. Refresh before trying again.',
+      { reason: 'roster-submission-id-reused' },
+    );
+  }
+
+  const result = resolution.result;
+  const mode = result['mode'];
+  const effectiveCycleNumber = result['effectiveCycleNumber'];
+  const message = result['message'];
+
+  if (
+    result['applied'] !== true ||
+    (mode !== 'immediate' && mode !== 'queued' && mode !== 'ownership-only') ||
+    (effectiveCycleNumber !== null &&
+      (typeof effectiveCycleNumber !== 'number' || !Number.isSafeInteger(effectiveCycleNumber))) ||
+    typeof message !== 'string'
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The saved add/drop result is malformed. No additional roster move was applied.',
+    );
+  }
+
+  return {
+    applied: true,
+    mode,
+    effectiveCycleNumber,
+    message,
+  };
+}
+
 async function requireOwnerContext(leagueId: string, ownerId: string): Promise<{
   league: Record<string, unknown>;
   gamesPerCycle: number;
@@ -360,12 +432,13 @@ async function getFairEffectiveCycleNumber<
   gamesPerCycle: number,
   requestedCycle: number | null,
   actionBoundaryMilliseconds: number,
+  currentTeamAbbreviationByPlayerId?: ReadonlyMap<number, string>,
 ): Promise<FairEffectiveCycleResolution<TAsset>> {
   const eligibility = await resolveRosterMoveAssetCycleEligibility(
     asset,
     gamesPerCycle,
     leagueId,
-    undefined,
+    currentTeamAbbreviationByPlayerId,
     actionBoundaryMilliseconds,
   );
   const earliest = Math.max(
@@ -407,6 +480,8 @@ async function executeAddAction(options: {
   requestedLabel: string | null;
   gamesPerCycle: number;
   actionBoundaryMilliseconds: number;
+  expectedOutgoingAssetKey: string | null;
+  submissionId: string | null;
 }): Promise<SecureRosterActionResult> {
   const {
     leagueId,
@@ -418,29 +493,93 @@ async function executeAddAction(options: {
     requestedLabel,
     gamesPerCycle,
     actionBoundaryMilliseconds,
+    expectedOutgoingAssetKey,
+    submissionId,
   } = options;
-  const canonicalAsset = await loadCanonicalDraftableAsset(leagueId, assetKey);
-  await assertAssetIsFreeAgent(leagueId, assetKey);
+  const requestFingerprint = submissionId
+    ? createRosterActionRequestFingerprint({
+        action,
+        assetKey,
+        expectedOutgoingAssetKey,
+        requestedCycle,
+        requestedLabel,
+        slotId,
+      })
+    : null;
+  const transactionRef = submissionId
+    ? db.doc(
+        `leagues/${leagueId}/transactions/${createRosterActionTransactionId({
+          namespace: 'roster-add',
+          leagueId,
+          ownerId,
+          submissionId,
+        })}`,
+      )
+    : db.collection(`leagues/${leagueId}/transactions`).doc();
+
+  if (submissionId) {
+    const replaySnapshot = await transactionRef.get();
+    if (replaySnapshot.exists) {
+      const replay = resolveSecureAddReplayResult(
+        replaySnapshot.data(),
+        submissionId,
+        requestFingerprint,
+      );
+      if (replay) {
+        return replay;
+      }
+    }
+  }
+
+  const [canonicalAsset, , rosterRefs] = await Promise.all([
+    loadCanonicalDraftableAsset(leagueId, assetKey),
+    assertAssetIsFreeAgent(leagueId, assetKey),
+    getAllRosterRefs(leagueId),
+  ]);
+  const identity = canonicalAsset.assetType === 'skater'
+    ? await loadExactRosterActionPlayerTeamIdentity(
+        [canonicalAsset.player.id],
+        actionBoundaryMilliseconds,
+      )
+    : null;
   const fairEffectiveCycle = await getFairEffectiveCycleNumber(
     leagueId,
     canonicalAsset,
     gamesPerCycle,
     requestedCycle,
     actionBoundaryMilliseconds,
+    identity?.byPlayerId,
   );
   const asset = fairEffectiveCycle.asset;
   const effectiveCycleNumber = fairEffectiveCycle.effectiveCycleNumber;
   const effectiveLabel = requestedLabel || `Cycle ${effectiveCycleNumber}`;
-  const queueAtSlotBoundary = await hasStartedFantasyCycle(leagueId);
-  const rosterRefs = await getAllRosterRefs(leagueId);
   const rosterRef = db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`);
   const incomingWaiverRef = db.doc(`leagues/${leagueId}/waivers/${assetKey}`);
+  const cyclesQuery = db.collection(`leagues/${leagueId}/cycles`).limit(1);
 
   return db.runTransaction(async (transaction: any) => {
-    const [rosterSnapshots, incomingWaiverSnapshot] = await Promise.all([
+    const [
+      rosterSnapshots,
+      incomingWaiverSnapshot,
+      cyclesSnapshot,
+      submissionSnapshot,
+    ] = await Promise.all([
       Promise.all(rosterRefs.map((reference) => transaction.get(reference))),
       transaction.get(incomingWaiverRef),
+      transaction.get(cyclesQuery),
+      submissionId ? transaction.get(transactionRef) : Promise.resolve(null),
     ]);
+    if (submissionSnapshot?.exists) {
+      const replay = resolveSecureAddReplayResult(
+        submissionSnapshot.data(),
+        submissionId,
+        requestFingerprint,
+      );
+      if (replay) {
+        return replay;
+      }
+    }
+    const queueAtSlotBoundary = !cyclesSnapshot.empty;
     if (incomingWaiverSnapshot.exists && incomingWaiverSnapshot.data()?.['status'] === 'active') {
       throw new HttpsError(
         'failed-precondition',
@@ -479,6 +618,16 @@ async function executeAddAction(options: {
       }
 
       const droppedAsset = benchSlot.asset;
+      if (
+        action === 'add-drop' &&
+        expectedOutgoingAssetKey &&
+        getAssetKey(droppedAsset) !== expectedOutgoingAssetKey
+      ) {
+        throw new HttpsError(
+          'aborted',
+          'The selected bench player changed before the move was saved. Refresh and review the add/drop again.',
+        );
+      }
       if (droppedAsset && isBenchSlotReserved(roster, benchSlot.slotId)) {
         throw new HttpsError(
           'failed-precondition',
@@ -497,7 +646,12 @@ async function executeAddAction(options: {
           buildWaiverPayload(droppedAsset, ownerId, effectiveCycleNumber, effectiveLabel),
         );
       }
-      transaction.set(db.collection(`leagues/${leagueId}/transactions`).doc(), {
+      const result = actionResult(
+        'ownership-only',
+        effectiveCycleNumber,
+        'Bench roster move applied.',
+      );
+      transaction.set(transactionRef, {
         type: action === 'add-drop' ? 'add-drop' : 'add-open-slot',
         ownerId,
         addedAsset: asset,
@@ -511,9 +665,20 @@ async function executeAddAction(options: {
         effectiveCycleNumber,
         effectiveLabel,
         authority: 'cloud-function',
+        ...(identity
+          ? {
+              nhlPlayerTeamIdentityHash: identity.identityHash,
+              nhlPlayerTeamIdentityGeneratedAt: identity.generatedAt,
+            }
+          : {}),
+        ...buildRosterActionSubmissionEvidence({
+          submissionId,
+          requestFingerprint,
+          result: { ...result },
+        }),
         createdAt: FieldValue.serverTimestamp(),
       });
-      return actionResult('ownership-only', effectiveCycleNumber, 'Bench roster move applied.');
+      return result;
     }
 
     const activeIndex = roster.activeSlots.findIndex((slot) => slot.slotId === slotId);
@@ -538,6 +703,16 @@ async function executeAddAction(options: {
     }
 
     const droppedAsset = activeSlot.asset;
+    if (
+      action === 'add-drop' &&
+      expectedOutgoingAssetKey &&
+      getAssetKey(droppedAsset) !== expectedOutgoingAssetKey
+    ) {
+      throw new HttpsError(
+        'aborted',
+        'The selected active player changed before the move was saved. Refresh and review the add/drop again.',
+      );
+    }
     if (queueAtSlotBoundary) {
       const pendingMove = createPendingRosterMove(
         action === 'add-drop' ? 'add-drop' : 'add-open-slot',
@@ -551,7 +726,12 @@ async function executeAddAction(options: {
       );
       roster.activeSlots[activeIndex] = { ...activeSlot, pendingMove };
       transaction.set(rosterRef, rosterWrite(roster), { merge: true });
-      transaction.set(db.collection(`leagues/${leagueId}/transactions`).doc(), {
+      const result = actionResult(
+        'queued',
+        effectiveCycleNumber,
+        'Roster move queued for the slot boundary.',
+      );
+      transaction.set(transactionRef, {
         type: action === 'add-drop' ? 'queue-add-drop' : 'queue-add-open-slot',
         ownerId,
         addedAsset: asset,
@@ -563,9 +743,20 @@ async function executeAddAction(options: {
         effectiveCycleNumber,
         effectiveLabel,
         authority: 'cloud-function',
+        ...(identity
+          ? {
+              nhlPlayerTeamIdentityHash: identity.identityHash,
+              nhlPlayerTeamIdentityGeneratedAt: identity.generatedAt,
+            }
+          : {}),
+        ...buildRosterActionSubmissionEvidence({
+          submissionId,
+          requestFingerprint,
+          result: { ...result },
+        }),
         createdAt: FieldValue.serverTimestamp(),
       });
-      return actionResult('queued', effectiveCycleNumber, 'Roster move queued for the slot boundary.');
+      return result;
     }
 
     roster.activeSlots[activeIndex] = {
@@ -581,7 +772,8 @@ async function executeAddAction(options: {
         buildWaiverPayload(droppedAsset, ownerId, effectiveCycleNumber, effectiveLabel),
       );
     }
-    transaction.set(db.collection(`leagues/${leagueId}/transactions`).doc(), {
+    const result = actionResult('immediate', effectiveCycleNumber, 'Roster move applied.');
+    transaction.set(transactionRef, {
       type: action === 'add-drop' ? 'add-drop' : 'add-open-slot',
       ownerId,
       addedAsset: asset,
@@ -593,9 +785,20 @@ async function executeAddAction(options: {
       effectiveCycleNumber,
       effectiveLabel,
       authority: 'cloud-function',
+      ...(identity
+        ? {
+            nhlPlayerTeamIdentityHash: identity.identityHash,
+            nhlPlayerTeamIdentityGeneratedAt: identity.generatedAt,
+          }
+        : {}),
+      ...buildRosterActionSubmissionEvidence({
+        submissionId,
+        requestFingerprint,
+        result: { ...result },
+      }),
       createdAt: FieldValue.serverTimestamp(),
     });
-    return actionResult('immediate', effectiveCycleNumber, 'Roster move applied.');
+    return result;
   });
 }
 
@@ -1631,11 +1834,20 @@ export const executeSecureRosterAction = onCall(
 
     if (action === 'add-drop' || action === 'add-open-slot') {
       const assetKey = requireRosterAssetKey(input.assetKey);
+      const submissionId = asString(input.submissionId) || null;
+      const expectedOutgoingAssetKey =
+        asString(input.expectedOutgoingAssetKey) || null;
       const slotId = action === 'add-drop'
         ? asString(input.dropSlotId)
         : asString(input.targetSlotId);
       if (!assetKey || !slotId) {
         throw new HttpsError('invalid-argument', 'Asset and roster slot are required.');
+      }
+      if (action === 'add-drop' && submissionId && !expectedOutgoingAssetKey) {
+        throw new HttpsError(
+          'invalid-argument',
+          'The player selected to be dropped is required. Refresh and review the transaction again.',
+        );
       }
       return executeAddAction({
         leagueId, ownerId, action, assetKey, slotId,
@@ -1643,6 +1855,8 @@ export const executeSecureRosterAction = onCall(
         requestedLabel: asString(input.effectiveLabel) || null,
         gamesPerCycle,
         actionBoundaryMilliseconds,
+        expectedOutgoingAssetKey,
+        submissionId,
       });
     }
 

@@ -426,6 +426,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'roster-authority.ts',
 
     'roster-moves.ts',
+    // B2A adds the private deterministic add/drop receipt contract.
+    'shared/core/team/roster-action-idempotency.util.ts',
 
     // B1V adds exact mixed-player injury windows and expands the roster bench.
     'shared/core/cycle/injury-replacement-window.util.ts',

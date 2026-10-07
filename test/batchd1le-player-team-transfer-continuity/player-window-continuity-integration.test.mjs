@@ -128,7 +128,10 @@ test('an immediate roster removal deletes its snapshot and an immediate incoming
     'const transactionType = moveType ===',
   );
 
-  assert.match(immediateMove, /const transactionRef = db\.collection\(`leagues\/\$\{leagueId\}\/transactions`\)\.doc\(\)/);
+  assert.match(
+    immediateMove,
+    /const transactionRef = submissionId && isImmediateAdd[\s\S]*?createRosterActionTransactionId\(\{[\s\S]*?namespace: 'roster-add'/,
+  );
   assert.match(immediateMove, /if \(removesActiveAssignment\)[\s\S]*?transaction\.delete\(rosterPickRef\)/);
   assert.match(
     immediateMove,

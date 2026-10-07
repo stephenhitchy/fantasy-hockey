@@ -2,6 +2,7 @@ import { monitorFirestoreListener } from '../observability/firestore-listener-mo
 import {
   doc,
   getDoc,
+  getDocFromServer,
   onSnapshot
 } from 'firebase/firestore';
 
@@ -141,6 +142,19 @@ export async function getFantasyRosterOnce(
   ownerId: string
 ): Promise<FantasyRoster | null> {
   const snapshot = await getDoc(getFantasyRosterRef(leagueId, ownerId));
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return normalizeFantasyRoster(snapshot.data() as Partial<FantasyRoster>);
+}
+
+export async function getFantasyRosterFromServer(
+  leagueId: string,
+  ownerId: string
+): Promise<FantasyRoster | null> {
+  const snapshot = await getDocFromServer(getFantasyRosterRef(leagueId, ownerId));
 
   if (!snapshot.exists()) {
     return null;
