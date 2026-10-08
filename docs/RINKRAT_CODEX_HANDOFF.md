@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-10-06
+Last updated: 2026-10-08
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -92,6 +92,15 @@ server-roster evidence through the full Function envelope instead of showing a
 false error at 20 seconds. Read
 `docs/RINKRAT_PRODUCT_B2A_ADD_DROP_TRANSACTION_RECOVERY.md` before changing
 add/drop transport, receipts, exact player identity, or roster confirmation.
+
+B2B is the current Hosting-only matchup presentation candidate layered after
+B2A. Matchup already reused the B1Z split-score evidence on desktop and mobile;
+B2B makes the shared component respond to its actual card width so narrow
+head-to-head half-cards stack player contributions without squeezing names,
+points, or owned-game ranges. It adds no read, listener, scoring logic, or
+competitive write. Read
+`docs/RINKRAT_PRODUCT_B2B_MATCHUP_INJURY_PRESENTATION.md` before changing this
+responsive contract.
 
 The 2026-10-06 scoring incident was caused by a clean broad Functions release
 from older source `412c3b8b`, which replaced the D1L-F five-attempt/jittered NHL

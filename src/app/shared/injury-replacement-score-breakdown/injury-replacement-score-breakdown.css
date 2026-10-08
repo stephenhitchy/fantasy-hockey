@@ -1,6 +1,7 @@
 :host {
   display: block;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .injury-score-breakdown {
@@ -129,7 +130,9 @@
   grid-column: 1 / -1;
 }
 
-@media (max-width: 420px) {
+/* Matchup cards can be half the viewport width. Let the component respond to
+   its actual card width so the split stays readable without widening rows. */
+@container (max-width: 260px) {
   .injury-score-segments {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
