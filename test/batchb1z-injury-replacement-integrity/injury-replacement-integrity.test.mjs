@@ -1071,7 +1071,7 @@ describe('injury-replacement server authority contracts', () => {
     );
     const transactionInjuryReplacement = section(
       rosterMoves,
-      "} else if (moveType === 'injury-replacement') {",
+      '} else if (isBenchSourcedInjuryMove(moveType)) {',
       "} else if (moveType === 'active-bench-swap') {",
     );
 
@@ -1079,7 +1079,7 @@ describe('injury-replacement server authority contracts', () => {
       preflightBench,
       /isBenchSlotReserved\(preflightRoster,\s*(?:benchSlotId|preflightBenchSlot\.slotId)\)/,
     );
-    assert.match(preflightBench, /getQueuedBenchSwapInjuryPromotionFingerprint/);
+    assert.match(preflightBench, /getQueuedInjuryPromotionFingerprint/);
     assert.match(preflightBench, /isExclusiveQueuedBenchSwapReservation/);
     assert.match(preflightBench, /!queuedMovePromotionIsExclusive/);
     assert.match(
@@ -1106,7 +1106,7 @@ describe('injury-replacement server authority contracts', () => {
     );
     const transactionInjuryReplacement = section(
       rosterMoves,
-      "} else if (moveType === 'injury-replacement') {",
+      '} else if (isBenchSourcedInjuryMove(moveType)) {',
       "} else if (moveType === 'active-bench-swap') {",
     );
 
@@ -1119,7 +1119,10 @@ describe('injury-replacement server authority contracts', () => {
       transactionAvailability,
       /resolveAuthoritativeAvailabilityStatus\([\s\S]*transactionMoveToIrAvailabilityStatus/,
     );
-    assert.match(transactionAvailability, /IR_ELIGIBLE_STATUSES\.has/);
+    assert.match(
+      transactionAvailability,
+      /getEligibleStatusesForInjuryMove\(moveType\)\.has/,
+    );
     assert.doesNotMatch(
       transactionInjuryReplacement,
       /IR_ELIGIBLE_STATUSES\.has\(preflightMoveToIrAvailabilityStatus\)/,
@@ -1197,8 +1200,8 @@ describe('injury-replacement server authority contracts', () => {
     );
     const injuryPreflight = section(
       rosterMoves,
-      "if (moveType === 'injury-replacement') {",
-      '    return db.runTransaction',
+      '    if (isMixedPlayerInjuryMove(moveType)) {',
+      '    const incomingWaiverRef =',
     );
 
     assert.match(scheduleLoader, /getNhlTeamSeasonSchedule\(/);
@@ -1265,13 +1268,13 @@ describe('injury-replacement server authority contracts', () => {
     );
     const injuryPreflight = section(
       rosterMoves,
-      "if (moveType === 'injury-replacement') {",
-      '    return db.runTransaction',
+      '    if (isMixedPlayerInjuryMove(moveType)) {',
+      '    const incomingWaiverRef =',
     );
     const transactionInjuryReplacement = section(
       rosterMoves,
-      "} else if (moveType === 'injury-replacement') {",
-      "} else if (moveType === 'active-bench-swap') {",
+      '      const windowIndex = windows.findIndex(',
+      '      let incomingAsset: DraftableAsset | null = null;',
     );
 
     assert.match(copySelector, /presentCopies\.length > 0/);

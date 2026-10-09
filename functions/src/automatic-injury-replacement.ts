@@ -11,10 +11,10 @@ import {
   AUTOMATIC_INJURY_AVAILABILITY_MAX_AGE_MILLISECONDS,
   applyAutomaticQueuedInjuryReplacement,
   getQueuedBenchSwapInjuryPromotionFingerprint,
+  getQueuedFreeAgentInjuryPromotionFingerprint,
   resolveTrustedCommissionerAvailabilityStatus,
 } from './roster-moves';
 import { db } from './shared/core/firebase';
-import { IR_SLOT_COUNT } from './shared/core/team/roster-config';
 import type { PendingRosterSlotMove } from './shared/core/team/roster.models';
 import { resolveSafeFirestoreDocumentId } from './shared/security/firestore-document-id.util';
 import {
@@ -26,6 +26,7 @@ const FUNCTION_REGION = 'us-central1';
 const AUTOMATION_HEALTH_ROOT_PATH =
   'appData/automaticInjuryReplacementAutomation';
 const ELIGIBLE_INJURY_STATUSES = new Set([
+  'day-to-day',
   'out',
   'injured-reserve',
   'long-term-injured-reserve',
@@ -52,7 +53,9 @@ export interface AutomaticInjuryReplacementCandidate {
   leagueId: string;
   ownerId: string;
   activeSlotId: string;
-  benchSlotId: string;
+  moveType: 'injury-active-bench-swap' | 'injury-add-drop-active';
+  benchSlotId: string | null;
+  incomingAssetKey: string;
   pendingMoveId: string;
   pendingMoveFingerprint: string;
   outgoingPlayerId: number;
@@ -80,7 +83,9 @@ export function getAutomaticInjuryReplacementCandidateKey(
       leagueId: candidate.leagueId,
       ownerId: candidate.ownerId,
       activeSlotId: candidate.activeSlotId,
+      moveType: candidate.moveType,
       benchSlotId: candidate.benchSlotId,
+      incomingAssetKey: candidate.incomingAssetKey,
       pendingMoveId: candidate.pendingMoveId,
       pendingMoveFingerprint: candidate.pendingMoveFingerprint,
       outgoingPlayerId: candidate.outgoingPlayerId,
@@ -225,7 +230,7 @@ function getSkaterPlayerId(value: unknown): number {
 }
 
 /**
- * Finds only a manager's already-authorized same-slot bench swaps. It never
+ * Finds only a manager's already-authorized injury transaction. It never
  * chooses a replacement player and fails closed on any ambiguous reservation.
  */
 export function findAutomaticQueuedInjuryReplacementCandidates(input: {
@@ -244,15 +249,8 @@ export function findAutomaticQueuedInjuryReplacementCandidates(input: {
   const roster = asRecord(input.rosterData);
   const activeSlots = asArray(roster['activeSlots']).map(asRecord);
   const benchSlots = asArray(roster['benchSlots']).map(asRecord);
-  const irSlots = asArray(roster['irSlots']).map(asRecord);
 
-  if (
-    activeSlots.length > MAX_ACTIVE_SLOTS_PER_ROSTER ||
-    !(
-      irSlots.length < IR_SLOT_COUNT ||
-      irSlots.slice(0, IR_SLOT_COUNT).some((slot) => slot['asset'] === null)
-    )
-  ) {
+  if (activeSlots.length > MAX_ACTIVE_SLOTS_PER_ROSTER) {
     return [];
   }
 
@@ -282,8 +280,6 @@ export function findAutomaticQueuedInjuryReplacementCandidates(input: {
       asString(pendingMove['queuedByOwnerId']) !== ownerId ||
       asString(pendingMove['outgoingAssetKey']) !== outgoingAssetKey ||
       pendingMove['sourceWaiverId'] !== null ||
-      pendingMove['outgoingDestination'] !== 'bench' ||
-      !sourceBenchSlotId ||
       pendingIncomingAsset['assetType'] !== 'skater' ||
       !incomingAssetKey ||
       asString(pendingIncomingAsset['position']) !== activePosition
@@ -291,29 +287,38 @@ export function findAutomaticQueuedInjuryReplacementCandidates(input: {
       continue;
     }
 
-    const matchingBenchSlots = benchSlots.filter(
-      (slot) => asString(slot['slotId']) === sourceBenchSlotId,
-    );
-    const selectedBenchAsset = asRecord(matchingBenchSlots[0]?.['asset']);
-
-    if (
-      matchingBenchSlots.length !== 1 ||
-      selectedBenchAsset['assetType'] !== 'skater' ||
-      getRosterAssetKey(selectedBenchAsset) !== incomingAssetKey ||
-      asString(selectedBenchAsset['position']) !== activePosition
-    ) {
-      continue;
-    }
-
-    const matchingReservations = activeSlots.filter((slot) =>
-      asString(asRecord(slot['pendingMove'])['sourceBenchSlotId']) ===
-        sourceBenchSlotId,
-    );
     const matchingPendingMoveIds = activeSlots.filter(
       (slot) => asString(asRecord(slot['pendingMove'])['id']) === pendingMoveId,
     );
-    const pendingMoveFingerprint =
-      getQueuedBenchSwapInjuryPromotionFingerprint({
+    let moveType: AutomaticInjuryReplacementCandidate['moveType'];
+    let benchSlotId: string | null;
+    let pendingMoveFingerprint: string | null;
+
+    if (sourceBenchSlotId) {
+      const matchingBenchSlots = benchSlots.filter(
+        (slot) => asString(slot['slotId']) === sourceBenchSlotId,
+      );
+      const selectedBenchAsset = asRecord(matchingBenchSlots[0]?.['asset']);
+      const matchingReservations = activeSlots.filter((slot) =>
+        asString(asRecord(slot['pendingMove'])['sourceBenchSlotId']) ===
+          sourceBenchSlotId,
+      );
+
+      if (
+        pendingMove['outgoingDestination'] !== 'bench' ||
+        matchingBenchSlots.length !== 1 ||
+        selectedBenchAsset['assetType'] !== 'skater' ||
+        getRosterAssetKey(selectedBenchAsset) !== incomingAssetKey ||
+        asString(selectedBenchAsset['position']) !== activePosition ||
+        matchingReservations.length !== 1 ||
+        asString(matchingReservations[0]['slotId']) !== activeSlotId
+      ) {
+        continue;
+      }
+
+      moveType = 'injury-active-bench-swap';
+      benchSlotId = sourceBenchSlotId;
+      pendingMoveFingerprint = getQueuedBenchSwapInjuryPromotionFingerprint({
         pendingMove: pendingMove as unknown as PendingRosterSlotMove,
         ownerId,
         activeSlotId,
@@ -321,13 +326,42 @@ export function findAutomaticQueuedInjuryReplacementCandidates(input: {
         outgoingAssetKey,
         incomingAssetKey,
       });
+    } else {
+      const matchingIncomingReservations = activeSlots.filter(
+        (slot) => getRosterAssetKey(
+          asRecord(asRecord(slot['pendingMove'])['incomingAsset']),
+        ) === incomingAssetKey,
+      );
+      const currentAssets = [
+        ...activeSlots.map((slot) => slot['asset']),
+        ...benchSlots.map((slot) => slot['asset']),
+        ...asArray(roster['irSlots']).map((slot) => asRecord(slot)['asset']),
+      ];
 
-    if (
-      matchingReservations.length !== 1 ||
-      asString(matchingReservations[0]['slotId']) !== activeSlotId ||
-      matchingPendingMoveIds.length !== 1 ||
-      !pendingMoveFingerprint
-    ) {
+      if (
+        pendingMove['sourceBenchSlotId'] !== null ||
+        pendingMove['outgoingDestination'] !== 'waivers' ||
+        matchingIncomingReservations.length !== 1 ||
+        asString(matchingIncomingReservations[0]['slotId']) !== activeSlotId ||
+        currentAssets.some(
+          (asset) => getRosterAssetKey(asset) === incomingAssetKey,
+        )
+      ) {
+        continue;
+      }
+
+      moveType = 'injury-add-drop-active';
+      benchSlotId = null;
+      pendingMoveFingerprint = getQueuedFreeAgentInjuryPromotionFingerprint({
+        pendingMove: pendingMove as unknown as PendingRosterSlotMove,
+        ownerId,
+        activeSlotId,
+        outgoingAssetKey,
+        incomingAssetKey,
+      });
+    }
+
+    if (matchingPendingMoveIds.length !== 1 || !pendingMoveFingerprint) {
       continue;
     }
 
@@ -335,7 +369,9 @@ export function findAutomaticQueuedInjuryReplacementCandidates(input: {
       leagueId,
       ownerId,
       activeSlotId,
-      benchSlotId: sourceBenchSlotId,
+      moveType,
+      benchSlotId,
+      incomingAssetKey,
       pendingMoveId,
       pendingMoveFingerprint,
       outgoingPlayerId,
@@ -439,7 +475,9 @@ async function processCandidates(
         leagueId: candidate.leagueId,
         ownerId: candidate.ownerId,
         activeSlotId: candidate.activeSlotId,
+        moveType: candidate.moveType,
         benchSlotId: candidate.benchSlotId,
+        incomingAssetKey: candidate.incomingAssetKey,
         expectedPendingMoveId: candidate.pendingMoveId,
         expectedPendingMoveFingerprint: candidate.pendingMoveFingerprint,
         source,

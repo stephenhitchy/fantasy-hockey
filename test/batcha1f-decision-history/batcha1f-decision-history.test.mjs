@@ -61,7 +61,13 @@ function skater(assetKey, name, team = 'EDM', position = 'C') {
 }
 
 test('Decision History includes completed manager choices and excludes unresolved operations', () => {
-  for (const type of ['add-drop', 'add-open-slot', 'waiver-award', 'slot-move-activated']) {
+  for (const type of [
+    'add-drop',
+    'add-open-slot',
+    'waiver-award',
+    'slot-move-activated',
+    'injury-add-drop-active',
+  ]) {
     assert.equal(isCompletedManagerDecisionType(type), true, type);
   }
 
@@ -75,6 +81,27 @@ test('Decision History includes completed manager choices and excludes unresolve
   ]) {
     assert.equal(isCompletedManagerDecisionType(type), false, type);
   }
+});
+
+test('an immediate injury add/drop is shown as the completed add/drop decision it represents', () => {
+  const rows = buildManagerDecisionHistoryRows([
+    {
+      id: 'injury-add-drop-1',
+      type: 'injury-add-drop-active',
+      ownerId: 'owner-a',
+      addedAsset: skater('skater-11', 'Replacement Player'),
+      droppedAsset: skater('skater-12', 'Injured Starter', 'BOS', 'C'),
+      effectiveCycleNumber: 4,
+      effectiveLabel: 'Matchup 4',
+      createdAt: new Date('2026-11-02T12:00:00Z'),
+    },
+  ], []);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].type, 'add-drop');
+  assert.equal(rows[0].label, 'Add / Drop');
+  assert.equal(rows[0].added.name, 'Replacement Player');
+  assert.equal(rows[0].dropped?.name, 'Injured Starter');
 });
 
 test('completed add/drop history joins recorded assets to current Player Board metrics', () => {

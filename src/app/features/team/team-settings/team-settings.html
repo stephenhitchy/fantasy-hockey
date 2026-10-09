@@ -1183,7 +1183,7 @@
       [description]="
         isActiveBenchPickerInjuryReplacement()
           ? 'Choose the compatible bench player who should take only this slot’s remaining future games. All games and points already started stay protected.'
-          : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary. A scheduled swap can activate automatically if the starter is later confirmed Out, IR, or LTIR and an IR spot is open.'
+          : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary. A current Day-to-Day, Out, IR, or LTIR report can qualify the pairing for the protected immediate-injury route.'
       "
       [busy]="isRosterOperationPending()"
       closeLabel="Close bench player choices"
@@ -1603,8 +1603,9 @@
                 <h2 id="bench-swap-title">Start {{ getRosterAssetName(benchSwapAsset) }}</h2>
                 <p>
                   Choose a matching active slot. Normal swaps follow six-game timing. Only players
-                  listed as Out, Injured Reserve, or Long-Term Injured Reserve can be replaced
-                  immediately.
+                  listed as Day-to-Day, Out, Injured Reserve, or Long-Term Injured Reserve can be
+                  replaced immediately. The server verifies that status again before changing the
+                  roster.
                 </p>
               </div>
               <button
@@ -1681,8 +1682,7 @@
                             ? getRosterAssetTeamLabel(targetSlot.asset) +
                               ' · ' +
                               targetSlot.position +
-                              ' · moves to ' +
-                              (isPendingBenchSwapInjuryReplacement() ? 'Injured Reserve' : 'Bench')
+                              ' · moves to Bench'
                             : 'Start ' +
                               getRosterAssetName(benchSwapAsset) +
                               ' here when you confirm.'

@@ -1,6 +1,6 @@
 # RinkRat Codebase Guide
 
-Last verified against source: 2026-10-06
+Last verified against source: 2026-10-09
 
 ## Purpose
 
@@ -55,9 +55,14 @@ These are product contracts, not implementation suggestions:
 - An injury-replacement slot may contain several player segments. Every game
   is scored against its exact saved segment asset; empty outgoing segments are
   retained for audit, and only the current segment advances at rollover.
-- Automatic injury replacement may only promote an exact bench swap already
-  authorized by the manager. It must never choose a replacement or trust a
-  stale roster-cached injury status.
+- Automatic injury replacement may promote only an exact active/bench swap or
+  free-agent add/drop already authorized by the manager and bound to its saved
+  pending fingerprint. It must never choose a replacement or trust a stale
+  roster-cached injury status.
+- A Day-to-day, Out, IR, or LTIR active skater may be replaced immediately,
+  but every started game and earned point stays with its saved player segment.
+  Only future unstarted positions transfer; the outgoing player goes to the
+  bench for an active/bench swap and to waivers for a free-agent add/drop.
 
 Changing any item above requires an explicitly scoped task, dedicated
 compatibility tests, a rollback path, and exact deployment evidence.
@@ -360,14 +365,21 @@ recovery, deployment, and rollback details.
    NHL team, puck-drop timing, league rules, and transaction boundaries. The
    interactive identity path checks only the involved skaters; scoring retains
    its shared full-catalog authority.
-6. The committed roster, waiver, and transaction documents drive UI success.
+6. Bench free-agent ownership changes remain immediate. An exact manager-
+   authorized Day-to-day/Out/IR/LTIR active replacement may also apply
+   immediately through a mixed-player ownership plan; a healthy/available
+   active replacement remains queued for the next legal matchup window.
+7. The committed roster, waiver, and transaction documents drive UI success.
    Ambiguous transport failures remain pending while the existing listener and
    bounded server-source roster reads reconcile the exact slot; a local timeout
    never implies that the server rolled back.
 
 See `docs/RINKRAT_PRODUCT_B2A_ADD_DROP_TRANSACTION_RECOVERY.md` before changing
 add/drop receipt identity, expected-outgoing validation, exact-player identity,
-or browser recovery timing.
+or browser recovery timing. Read
+`docs/RINKRAT_PRODUCT_B2F_INSTANT_INJURY_TRANSACTIONS.md` before changing
+injury timing, outgoing destinations, pending-intent promotion, or mixed-player
+ownership preservation.
 
 Roster sheets use the shared viewport portal and focus trap. A portaled node no
 longer has its route-component ancestor, so styles for projected sheet content

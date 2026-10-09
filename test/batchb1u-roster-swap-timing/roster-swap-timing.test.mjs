@@ -24,6 +24,7 @@ async function sha256(relativePath) {
 
 function timingInput(overrides = {}) {
   return {
+    activeSlotOccupied: true,
     activeCycleNumber: 3,
     activeFinalGames: 0,
     activeLiveGames: 0,
@@ -42,15 +43,27 @@ function timingInput(overrides = {}) {
   };
 }
 
-test('an untouched active slot and bench block report an immediate exact matchup', () => {
+test('a healthy starter waits for the next matchup even when its current window is untouched', () => {
   const preview = resolveActiveBenchSwapTimingPreview(timingInput());
   const message = buildActiveBenchSwapTimingMessage(preview, 'Active Player', 'Bench Player');
+
+  assert.equal(preview.mode, 'queued');
+  assert.equal(preview.effectiveCycleNumber, 4);
+  assert.equal(preview.delaySource, 'roster-boundary');
+  assert.match(message.headline, /scheduled for Matchup 4/);
+  assert.match(message.detail, /next legal matchup boundary/);
+});
+
+test('a bench player may still fill a genuinely open untouched active slot now', () => {
+  const preview = resolveActiveBenchSwapTimingPreview(timingInput({
+    activeSlotOccupied: false,
+  }));
+  const message = buildActiveBenchSwapTimingMessage(preview, 'Open Slot', 'Bench Player');
 
   assert.equal(preview.mode, 'immediate');
   assert.equal(preview.effectiveCycleNumber, 3);
   assert.equal(preview.delaySource, 'none');
   assert.match(message.headline, /happen now in Matchup 3/);
-  assert.match(message.detail, /Neither Active Player's active assignment nor Bench Player's/);
 });
 
 test('the bench player is named when its NHL block is farther ahead', () => {
@@ -131,6 +144,14 @@ test('the confirmation sheet loads, retries, and requires selection-specific tim
   assert.match(component, /previewActiveBenchSwapTiming\(\{/);
   assert.match(component, /generation === this\.benchSwapTimingGeneration/);
   assert.match(component, /this\.benchSwapTimingPreview\(\)/);
+  assert.match(
+    component,
+    /effectiveCycleNumber: healthySwapTimingPreview\?\.effectiveCycleNumber \?\? null/,
+  );
+  assert.match(
+    component,
+    /effectiveLabel: healthySwapTimingPreview[\s\S]*?Matchup \$\{healthySwapTimingPreview\.effectiveCycleNumber\}/,
+  );
   assert.match(template, /Checking both players/);
   assert.match(template, /Retry timing check/);
   assert.match(template, /timingMessage\.matchupLabel/);

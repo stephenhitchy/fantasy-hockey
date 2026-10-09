@@ -103,7 +103,9 @@ test('selects the exact already-authorized same-slot Barkov-to-Aho shape', () =>
     leagueId: 'league-a',
     ownerId: 'owner-a',
     activeSlotId: 'C-3',
+    moveType: 'injury-active-bench-swap',
     benchSlotId: 'B-1',
+    incomingAssetKey: 'skater-2',
     pendingMoveId: 'owner-a__C-3__queued',
     pendingMoveFingerprint: '<fingerprint>',
     outgoingPlayerId: 1,
@@ -116,7 +118,7 @@ test('requires the outgoing player to be in the caller-provided eligible set', (
   assert.deepEqual(candidates(exactRoster(), new Set([2])), []);
 });
 
-test('fails closed for non-exact, waiver-backed, occupied-IR, and ambiguous reservations', () => {
+test('fails closed for non-exact, waiver-backed, and ambiguous bench reservations', () => {
   const mutations = [
     (roster) => { roster.activeSlots[0].pendingMove.moveType = 'waiver-award'; },
     (roster) => { roster.activeSlots[0].pendingMove.queuedByOwnerId = 'owner-b'; },
@@ -127,13 +129,6 @@ test('fails closed for non-exact, waiver-backed, occupied-IR, and ambiguous rese
     (roster) => { roster.activeSlots[0].pendingMove.incomingAsset = skater(3, 'C'); },
     (roster) => { roster.benchSlots[0].asset = skater(3, 'C'); },
     (roster) => { roster.benchSlots[0].asset = skater(2, 'RW'); },
-    (roster) => {
-      roster.irSlots = [
-        { slotId: 'IR-1', slotNumber: 1, asset: skater(4, 'C') },
-        { slotId: 'IR-2', slotNumber: 2, asset: skater(5, 'C') },
-        { slotId: 'IR-3', slotNumber: 3, asset: skater(6, 'C') },
-      ];
-    },
     (roster) => {
       roster.activeSlots.push({
         slotId: 'C-4',
@@ -170,6 +165,20 @@ test('fails closed for non-exact, waiver-backed, occupied-IR, and ambiguous rese
     mutate(roster);
     assert.deepEqual(candidates(roster), []);
   }
+});
+
+test('a destination-preserving injury bench swap does not require an open IR slot', () => {
+  const roster = exactRoster();
+  roster.irSlots = [
+    { slotId: 'IR-1', slotNumber: 1, asset: skater(4, 'C') },
+    { slotId: 'IR-2', slotNumber: 2, asset: skater(5, 'C') },
+    { slotId: 'IR-3', slotNumber: 3, asset: skater(6, 'C') },
+  ];
+
+  const [candidate] = candidates(roster);
+
+  assert.equal(candidate.moveType, 'injury-active-bench-swap');
+  assert.equal(candidate.benchSlotId, 'B-1');
 });
 
 test('requires explicit no-waiver evidence rather than accepting a missing field', () => {
@@ -479,14 +488,14 @@ test('source contracts keep automation bounded, retryable, and independent of sc
 
   assert.match(
     automation,
-    /const ELIGIBLE_INJURY_STATUSES = new Set\(\[\s*'out',\s*'injured-reserve',\s*'long-term-injured-reserve',\s*\]\)/,
+    /const ELIGIBLE_INJURY_STATUSES = new Set\(\[\s*'day-to-day',\s*'out',\s*'injured-reserve',\s*'long-term-injured-reserve',\s*\]\)/,
   );
   assert.doesNotMatch(
     automation.slice(
       automation.indexOf('const ELIGIBLE_INJURY_STATUSES'),
       automation.indexOf('// Each trigger'),
     ),
-    /day-to-day|suspended|personal-leave/,
+    /suspended|personal-leave/,
   );
   assert.match(automation, /document: 'appData\/playerAvailability'/);
   assert.match(
@@ -561,7 +570,7 @@ test('source contracts keep automation bounded, retryable, and independent of sc
   );
   assert.match(
     rosterMoves,
-    /if \(automaticInjuryReplacement\) \{[\s\S]*?getReachedAutomaticInjuryReplacementOwnershipBoundaryGameIds\(\{[\s\S]*?observedAtMilliseconds: Date\.now\(\)/,
+    /automaticInjuryReplacement \|\|[\s\S]*?requiresFreshInjuryAvailabilityAuthority\(moveType\)[\s\S]*?getReachedAutomaticInjuryReplacementOwnershipBoundaryGameIds\(\{[\s\S]*?observedAtMilliseconds: Date\.now\(\)/,
   );
   assert.match(
     rosterMoves,
@@ -569,10 +578,10 @@ test('source contracts keep automation bounded, retryable, and independent of sc
   );
   assert.match(
     teamSource,
-    /this exact swap activates automatically while all started games and points stay protected/i,
+    /protected immediate-injury route while every started game and point stays preserved/i,
   );
   assert.match(
     teamTemplate,
-    /scheduled swap can activate automatically if the starter is later confirmed Out, IR, or LTIR/i,
+    /Day-to-Day,[\s\S]*?Out,[\s\S]*?Injured Reserve,[\s\S]*?Long-Term Injured Reserve can be[\s\S]*?replaced immediately/i,
   );
 });

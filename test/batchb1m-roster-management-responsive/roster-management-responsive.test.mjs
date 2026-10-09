@@ -209,7 +209,7 @@ test('the reviewed roster transport, scoring, Projection V11, Rules, and indexes
     ],
     [
       'src/app/core/draft/draft.service.ts',
-      'e4c2124fae2eab762e0297c29908972712085ef3034a6d27ce67d72a1661af57',
+      '17aea9ecfcdcbfb42b3690d38014695de6b60eb4d8928d22016c5b8a26f78d29',
     ],
     [
       'src/app/core/scoring/scoring-rules.ts',

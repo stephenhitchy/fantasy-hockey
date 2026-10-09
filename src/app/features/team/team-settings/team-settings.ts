@@ -91,6 +91,9 @@ import {
   shouldDisplayPlayerAvailability,
   startPlayerAvailabilityListenerForLeague,
 } from '../../../core/player/player-availability.service';
+import {
+  isImmediateInjuryMoveStatus,
+} from '../../../core/player/player-injury-move-eligibility.util';
 
 import { getOrCreateFantasyRoster, listenToFantasyRoster } from '../../../core/team/roster.service';
 import { getUserProfile, UserProfile } from '../../../core/user/user.service';
@@ -117,6 +120,9 @@ import {
   buildFreeAgentRosterTargetQuery,
   buildRosterManagementActions,
   isExactQueuedBenchSwapPromotion,
+  isImmediateActiveBenchSwapObserved,
+  type ActiveBenchSwapRosterObservation,
+  type ImmediateActiveBenchSwapExpectation,
   type RosterManagementAction,
   type RosterManagementActionId,
   type RosterManagementArea,
@@ -1877,11 +1883,14 @@ export class TeamSettings implements OnDestroy {
   }
 
   private isActiveSlotEligibleForImmediateInjuryReplacement(slot: ActiveRosterSlot): boolean {
+    const availability = slot.asset?.assetType === 'skater'
+      ? this.getPlayerAvailability(slot.asset)
+      : null;
+
     return Boolean(
       this.isOwnTeam() &&
       slot.asset?.assetType === 'skater' &&
-      this.isPlayerIrEligible(slot.asset) &&
-      this.getOpenIrSlotCount() > 0,
+      isImmediateInjuryMoveStatus(availability?.status),
     );
   }
 
@@ -2180,12 +2189,15 @@ export class TeamSettings implements OnDestroy {
     const targetAsset = targetSlot.asset;
     const injuryReplacement =
       targetAsset?.assetType === 'skater' &&
-      this.isPlayerIrEligible(targetAsset) &&
+      isImmediateInjuryMoveStatus(this.getPlayerAvailability(targetAsset)?.status) &&
       benchSlot.asset.assetType === 'skater' &&
-      targetAsset.position === benchSlot.asset.position &&
-      this.getOpenIrSlotCount() > 0;
+      targetAsset.position === benchSlot.asset.position;
 
-    if (!injuryReplacement && !this.benchSwapTimingPreview()) {
+    const healthySwapTimingPreview = injuryReplacement
+      ? null
+      : this.benchSwapTimingPreview();
+
+    if (!injuryReplacement && !healthySwapTimingPreview) {
       this.benchSwapTimingError.set(
         'RinkRat must verify the exact matchup timing before this swap can be confirmed.',
       );
@@ -2193,6 +2205,15 @@ export class TeamSettings implements OnDestroy {
     }
 
     const incomingName = this.getRosterAssetName(benchSlot.asset);
+    const injurySwapExpectation: ImmediateActiveBenchSwapExpectation | null =
+      injuryReplacement && targetAsset
+        ? {
+            activeSlotId: targetSlot.slotId,
+            benchSlotId: benchSlot.slotId,
+            incomingAssetKey: this.getRosterAssetKey(benchSlot.asset),
+            outgoingAssetKey: this.getRosterAssetKey(targetAsset),
+          }
+        : null;
     const actionHandle = this.actionMonitor.begin('lineup-swap');
     let actionOutcome: 'success' | 'error' | 'uncertain' = 'error';
     const operationGeneration = ++this.rosterOperationGeneration;
@@ -2220,11 +2241,21 @@ export class TeamSettings implements OnDestroy {
             ownerId: this.userId,
             activeSlotId: targetSlot.slotId,
             benchSlotId: benchSlot.slotId,
+            effectiveCycleNumber: healthySwapTimingPreview?.effectiveCycleNumber ?? null,
+            effectiveLabel: healthySwapTimingPreview
+              ? `Matchup ${healthySwapTimingPreview.effectiveCycleNumber}`
+              : null,
           });
       const execution = await this.awaitRosterMutationConfirmation(
         request,
         previousRosterFingerprint,
         operationGeneration,
+        injurySwapExpectation
+          ? () => isImmediateActiveBenchSwapObserved(
+              injurySwapExpectation,
+              this.getActiveBenchSwapRosterObservation(),
+            )
+          : undefined,
       );
       const effectiveCycleNumber =
         execution?.effectiveCycleNumber ??
@@ -2243,10 +2274,10 @@ export class TeamSettings implements OnDestroy {
 
       this.rosterMoveMessage.set(
         injuryReplacement
-          ? `${incomingName} replaced the injured starter immediately in ${targetSlot.position} Slot ${targetSlot.slotNumber}. The starter moved to Injured Reserve, all already-started points remain, and only the slot’s remaining future games belong to ${incomingName}.`
+          ? `${incomingName} replaced the injured starter immediately in ${targetSlot.position} Slot ${targetSlot.slotNumber}. The starter moved to the bench, every already-started game and earned point remains with that player, and only the slot’s remaining future games belong to ${incomingName}.`
           : mode === 'immediate'
           ? `${incomingName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither six-game count had started, so the swap applies to Matchup ${effectiveCycleNumber}.`
-          : `${incomingName} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${effectiveCycleNumber}. If the starter is confirmed Out, IR, or LTIR first and an IR spot is open, this exact swap activates automatically while all started games and points stay protected.`,
+          : `${incomingName} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${effectiveCycleNumber}. A current Day-to-Day, Out, IR, or LTIR report can make this exact pairing eligible for the protected immediate-injury route while every started game and point stays preserved.`,
       );
       actionOutcome = 'success';
     } catch (error: unknown) {
@@ -3543,6 +3574,8 @@ export class TeamSettings implements OnDestroy {
       'slot-move-activated',
       'active-bench-swap-activated',
       'injury-replacement',
+      'injury-active-bench-swap',
+      'injury-add-drop-active',
     ].includes(transaction.type);
   }
 
@@ -3555,7 +3588,10 @@ export class TeamSettings implements OnDestroy {
       return transaction.addedAsset ?? transaction.movedAsset ?? null;
     }
 
-    if (transaction.type === 'injury-replacement') {
+    if (
+      transaction.type === 'injury-replacement' ||
+      transaction.type === 'injury-active-bench-swap'
+    ) {
       return transaction.activatedAsset ?? null;
     }
 
@@ -3563,7 +3599,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   getTransactionDroppedAsset(transaction: FantasyTransaction): RosterAsset | null {
-    if (transaction.type === 'injury-replacement') {
+    if (
+      transaction.type === 'injury-replacement' ||
+      transaction.type === 'injury-active-bench-swap'
+    ) {
       return transaction.movedAsset ?? null;
     }
 
@@ -3571,7 +3610,11 @@ export class TeamSettings implements OnDestroy {
   }
 
   getTransactionAddedLabel(transaction: FantasyTransaction): string {
-    return ['active-bench-swap-activated', 'injury-replacement'].includes(transaction.type)
+    return [
+      'active-bench-swap-activated',
+      'injury-replacement',
+      'injury-active-bench-swap',
+    ].includes(transaction.type)
       ? 'Started'
       : 'Added';
   }
@@ -3579,6 +3622,14 @@ export class TeamSettings implements OnDestroy {
   getTransactionDroppedLabel(transaction: FantasyTransaction): string {
     if (transaction.type === 'injury-replacement') {
       return 'Moved to IR';
+    }
+
+    if (transaction.type === 'injury-active-bench-swap') {
+      return 'Benched';
+    }
+
+    if (transaction.type === 'injury-add-drop-active') {
+      return 'Waived';
     }
 
     return transaction.type === 'active-bench-swap-activated' ? 'Benched' : 'Dropped';
@@ -3598,7 +3649,11 @@ export class TeamSettings implements OnDestroy {
       return 'Previous starter';
     }
 
-    if (transaction.type === 'injury-replacement') {
+    if (
+      transaction.type === 'injury-replacement' ||
+      transaction.type === 'injury-active-bench-swap' ||
+      transaction.type === 'injury-add-drop-active'
+    ) {
       return 'Injured starter';
     }
 
@@ -3669,6 +3724,12 @@ export class TeamSettings implements OnDestroy {
 
       case 'injury-replacement':
         return `Replaced injured ${this.getTransactionAssetName(transaction.movedAsset)}`;
+
+      case 'injury-active-bench-swap':
+        return `Replaced injured ${this.getTransactionAssetName(transaction.movedAsset)}`;
+
+      case 'injury-add-drop-active':
+        return `Added ${this.getTransactionAssetName(transaction.addedAsset)} for an injured starter`;
 
       case 'move-bench-to-ir':
         return `Moved ${this.getTransactionAssetName(transaction.movedAsset)} from bench to Injured Reserve`;
@@ -3748,6 +3809,12 @@ export class TeamSettings implements OnDestroy {
 
       case 'injury-replacement':
         return `${this.getTransactionAssetName(transaction.movedAsset)} moved to Injured Reserve and kept every already-started game and point. ${this.getTransactionAssetName(transaction.activatedAsset)} receives only the remaining future games in that same six-game slot.`;
+
+      case 'injury-active-bench-swap':
+        return `${this.getTransactionAssetName(transaction.movedAsset)} moved to the bench and kept every already-started game and earned point. ${this.getTransactionAssetName(transaction.activatedAsset)} receives only the remaining future games in that same six-game slot.`;
+
+      case 'injury-add-drop-active':
+        return `${this.getTransactionAssetName(transaction.droppedAsset)} was placed on waivers and keeps every already-started game and earned point. ${this.getTransactionAssetName(transaction.addedAsset)} receives only the remaining future games in that same six-game slot.`;
 
       case 'move-bench-to-ir':
         return `${this.getTransactionAssetName(transaction.movedAsset)} moved from the bench to Injured Reserve (IR) and opened a flexible bench spot.`;
@@ -3839,10 +3906,27 @@ export class TeamSettings implements OnDestroy {
     return JSON.stringify({ active, bench, injuredReserve });
   }
 
+  private getActiveBenchSwapRosterObservation(): ActiveBenchSwapRosterObservation {
+    const roster = this.roster();
+
+    return {
+      activeSlots: (roster?.activeSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+        hasPendingMove: Boolean(slot.pendingMove),
+      })),
+      benchSlots: (roster?.benchSlots ?? []).map((slot) => ({
+        slotId: slot.slotId,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+      })),
+    };
+  }
+
   private async awaitRosterMutationConfirmation<T>(
     actionPromise: Promise<T>,
     previousRosterFingerprint: string,
     generation: number,
+    isExpectedMutationObserved?: () => boolean,
   ): Promise<T | null> {
     let settled = false;
     let rejected = false;
@@ -3863,12 +3947,12 @@ export class TeamSettings implements OnDestroy {
       },
     );
 
-    const rosterChanged = (): boolean =>
-      this.getRosterOperationFingerprint() !== previousRosterFingerprint;
+    const confirmationObserved = isExpectedMutationObserved ?? (() =>
+      this.getRosterOperationFingerprint() !== previousRosterFingerprint);
     const deadline = Date.now() + 20_000;
 
     while (this.rosterOperationGeneration === generation && Date.now() <= deadline) {
-      if (rosterChanged()) {
+      if (confirmationObserved()) {
         return settled && !rejected ? settledValue : null;
       }
 
@@ -3877,7 +3961,7 @@ export class TeamSettings implements OnDestroy {
           return settledValue;
         }
 
-        if (await waitForOperationCondition(rosterChanged, 2_500, 120)) {
+        if (await waitForOperationCondition(confirmationObserved, 2_500, 120)) {
           return null;
         }
 
@@ -3887,7 +3971,7 @@ export class TeamSettings implements OnDestroy {
       await waitForOperationDelay(120);
     }
 
-    if (rosterChanged()) {
+    if (confirmationObserved()) {
       return settled && !rejected ? settledValue : null;
     }
 

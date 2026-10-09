@@ -1,5 +1,11 @@
 # RinkRat B2D — Automatic Promotion of Authorized Injury Replacements
 
+> **Historical scope:** This document records the narrower B2D release.
+> B2F supersedes the current-runtime limits that excluded Day-to-day players
+> and allowed automatic promotion only for an exact queued bench swap. Read
+> `docs/RINKRAT_PRODUCT_B2F_INSTANT_INJURY_TRANSACTIONS.md` for current
+> behavior; the B2D details below remain the historical baseline.
+
 ## Purpose
 
 B2D automatically promotes an exact bench swap that the manager already

@@ -45,6 +45,9 @@ import {
   getPlayerAvailabilityStatusClass,
   shouldDisplayPlayerAvailability,
 } from '../../core/player/player-availability.service';
+import {
+  isImmediateInjuryMoveStatus,
+} from '../../core/player/player-injury-move-eligibility.util';
 
 import {
   getPlayerWatchlist,
@@ -180,6 +183,7 @@ interface DropCandidate {
   effectiveCycleNumber: number;
   currentWindowUntouched: boolean;
   canApplyImmediately: boolean;
+  canApplyInjuryImmediately: boolean;
 }
 
 function waitForAuthUser(): Promise<User | null> {
@@ -611,15 +615,25 @@ export class FreeAgents implements OnDestroy {
         this.isWindowUntouched(currentWindow) ||
         openFromCurrentCycle ||
         (!currentWindow && this.isAwaitingInitialWindowSync());
-      const slotNextCycleNumber = openFromCurrentCycle
-        ? slot.openFromCycleNumber!
-        : this.getSlotNextCycleNumber(currentWindow);
+      const slotNextCycleNumber = asset && this.hasStartedCycleWindows()
+        ? currentWindow
+          ? currentWindow.cycleNumber + 1
+          : this.getFallbackNextCycleNumber()
+        : openFromCurrentCycle
+          ? slot.openFromCycleNumber!
+          : this.getSlotNextCycleNumber(currentWindow);
       const effectiveCycleNumber = Math.max(
         slotNextCycleNumber,
         eligibility?.earliestEligibleCycleNumber ?? slotNextCycleNumber,
       );
       const canApplyImmediately = Boolean(
-        currentWindowUntouched && effectiveCycleNumber === slotNextCycleNumber,
+        asset === null &&
+        currentWindowUntouched &&
+        effectiveCycleNumber === slotNextCycleNumber,
+      );
+      const canApplyInjuryImmediately = Boolean(
+        asset?.assetType === 'skater' &&
+        isImmediateInjuryMoveStatus(getPlayerAvailabilityForPlayer(asset.player).status),
       );
 
       return {
@@ -634,6 +648,7 @@ export class FreeAgents implements OnDestroy {
         effectiveCycleNumber,
         currentWindowUntouched,
         canApplyImmediately,
+        canApplyInjuryImmediately,
       };
     };
 
@@ -656,6 +671,7 @@ export class FreeAgents implements OnDestroy {
         effectiveCycleNumber: eligibleCycle,
         currentWindowUntouched: false,
         canApplyImmediately: false,
+        canApplyInjuryImmediately: false,
       };
     };
 
@@ -1720,6 +1736,13 @@ export class FreeAgents implements OnDestroy {
         );
       }
 
+      const immediateInjuryReplacementIntent = Boolean(
+        !waiver &&
+        dropCandidate.rosterArea === 'active' &&
+        dropCandidate.moveType === 'drop' &&
+        dropCandidate.canApplyInjuryImmediately,
+      );
+
       const effectiveCycleNumber = dropCandidate.effectiveCycleNumber;
       const effectiveLabel = `Cycle ${effectiveCycleNumber}`;
       const leagueOwnerIds = this.teams().map((team) => team.ownerId);
@@ -1734,6 +1757,9 @@ export class FreeAgents implements OnDestroy {
             rosterArea: dropCandidate.rosterArea,
             slotId: dropCandidate.slotId,
             incomingAssetKey: addAsset.assetKey,
+            ...(immediateInjuryReplacementIntent
+              ? { requiredMode: 'immediate' as const }
+              : {}),
           };
 
       if (waiver) {
@@ -1801,14 +1827,18 @@ export class FreeAgents implements OnDestroy {
           throw new Error('The selected drop option is missing a roster player or goalie unit.');
         }
 
+        const immediateInjuryReplacement = immediateInjuryReplacementIntent;
+        const confirmedEffectiveCycleNumber = immediateInjuryReplacement
+          ? (dropCandidate.currentWindow?.cycleNumber ?? dropCandidate.slotNextCycleNumber)
+          : effectiveCycleNumber;
         const fallbackExecution = {
           mode:
             dropCandidate.rosterArea === 'bench'
               ? ('ownership-only' as const)
-              : dropCandidate.canApplyImmediately
+              : immediateInjuryReplacement || dropCandidate.canApplyImmediately
                 ? ('immediate' as const)
                 : ('queued' as const),
-          effectiveCycleNumber,
+          effectiveCycleNumber: confirmedEffectiveCycleNumber,
         };
         const request = addDropRosterAsset({
           leagueId: this.leagueId,
@@ -1818,7 +1848,7 @@ export class FreeAgents implements OnDestroy {
           effectiveCycleNumber,
           effectiveLabel,
           leagueOwnerIds,
-          preferImmediateCurrentCycle: dropCandidate.canApplyImmediately,
+          preferImmediateInjuryReplacement: immediateInjuryReplacement,
           submissionId: submissionId!,
           expectedOutgoingAssetKey: this.getRosterAssetKey(dropCandidate.asset),
         });
@@ -1832,6 +1862,8 @@ export class FreeAgents implements OnDestroy {
         this.successMessage.set(
           dropCandidate.rosterArea === 'bench'
             ? `Added ${this.getAssetName(addAsset)} to ${dropCandidate.slotId} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers. The incoming player cannot enter an active scoring slot before Matchup ${execution.effectiveCycleNumber ?? effectiveCycleNumber}.`
+            : immediateInjuryReplacement
+              ? `Added ${this.getAssetName(addAsset)} and placed ${this.getRosterAssetName(dropCandidate.asset)} on waivers immediately. Every already-started game and earned point stays with ${this.getRosterAssetName(dropCandidate.asset)}; ${this.getAssetName(addAsset)} owns only the slot’s remaining future games in Matchup ${execution.effectiveCycleNumber ?? confirmedEffectiveCycleNumber}.`
             : execution.mode === 'immediate'
               ? `Added ${this.getAssetName(addAsset)} and dropped ${this.getRosterAssetName(dropCandidate.asset)} immediately. Both six-game counts were untouched, so the change applies to Matchup ${execution.effectiveCycleNumber}.`
               : this.hasStartedCycleWindows()
@@ -2498,6 +2530,10 @@ export class FreeAgents implements OnDestroy {
       return `owned now · first active eligibility Matchup ${candidate.effectiveCycleNumber}`;
     }
 
+    if (candidate && this.isImmediateInjuryAddDrop(candidate)) {
+      return `now in Matchup ${this.getImmediateInjuryCycleNumber(candidate)}`;
+    }
+
     return candidate
       ? `in Matchup ${candidate.effectiveCycleNumber}`
       : 'after the selected slot finishes its current six games';
@@ -2601,6 +2637,10 @@ export class FreeAgents implements OnDestroy {
         : 'Owned immediately';
     }
 
+    if (this.isImmediateInjuryAddDrop(candidate)) {
+      return `Applies now · Matchup ${this.getImmediateInjuryCycleNumber(candidate)}`;
+    }
+
     if (candidate.canApplyImmediately) {
       return `Applies now · Matchup ${candidate.effectiveCycleNumber}`;
     }
@@ -2619,6 +2659,10 @@ export class FreeAgents implements OnDestroy {
 
     if (candidate.rosterArea === 'bench') {
       return `The add or replacement happens immediately on your bench. This player or goalie unit cannot move into an active scoring slot before Matchup ${candidate.effectiveCycleNumber}, so already-played games are never backfilled.`;
+    }
+
+    if (this.isImmediateInjuryAddDrop(candidate)) {
+      return `The injured player keeps every already-started game and earned point. The replacement owns only this slot’s remaining future games in Matchup ${this.getImmediateInjuryCycleNumber(candidate)}. The server rechecks the current injury report and exact scoring window before applying the move.`;
     }
 
     if (candidate.canApplyImmediately) {
@@ -2785,6 +2829,10 @@ export class FreeAgents implements OnDestroy {
       isWaiver: Boolean(this.selectedWaiver()),
       seasonHasStarted: this.hasStartedCycleWindows(),
       canApplyImmediately: candidate.canApplyImmediately,
+      canApplyInjuryImmediately: this.isImmediateInjuryAddDrop(candidate),
+      injuryReplacementCycleNumber: this.isImmediateInjuryAddDrop(candidate)
+        ? this.getImmediateInjuryCycleNumber(candidate)
+        : null,
       effectiveCycleNumber: candidate.effectiveCycleNumber,
       slotNextCycleNumber: candidate.slotNextCycleNumber,
       outgoingCycleNumber:
@@ -3121,6 +3169,10 @@ export class FreeAgents implements OnDestroy {
   getIncomingStartWindowTitle(): string {
     const candidate = this.selectedDropCandidate();
 
+    if (candidate && this.isImmediateInjuryAddDrop(candidate)) {
+      return `Remaining future games · Matchup ${this.getImmediateInjuryCycleNumber(candidate)}`;
+    }
+
     return candidate
       ? `First legal start · Matchup ${candidate.effectiveCycleNumber}`
       : 'First legal start';
@@ -3132,6 +3184,10 @@ export class FreeAgents implements OnDestroy {
 
     if (!candidate || !addAsset) {
       return 'Choose a roster spot to calculate the incoming player’s first legal six-game window.';
+    }
+
+    if (this.isImmediateInjuryAddDrop(candidate)) {
+      return `RinkRat preserves every game already started by the injured player. When you confirm, the server rebuilds the exact Matchup ${this.getImmediateInjuryCycleNumber(candidate)} ownership plan and gives ${this.getAssetName(addAsset)} only the future games that remain.`;
     }
 
     const scheduledGames = this.incomingStartComparisonGames().filter(
@@ -3193,6 +3249,10 @@ export class FreeAgents implements OnDestroy {
         : `Owned now · active eligibility Matchup ${candidate.effectiveCycleNumber}`;
     }
 
+    if (this.isImmediateInjuryAddDrop(candidate)) {
+      return `Injury replacement applies now · Matchup ${this.getImmediateInjuryCycleNumber(candidate)}`;
+    }
+
     return candidate.canApplyImmediately
       ? `Applies now in Matchup ${candidate.effectiveCycleNumber}`
       : `Scheduled for Matchup ${candidate.effectiveCycleNumber}`;
@@ -3210,6 +3270,19 @@ export class FreeAgents implements OnDestroy {
     }
 
     return this.getCandidateActivationDetail(candidate);
+  }
+
+  private isImmediateInjuryAddDrop(candidate: DropCandidate): boolean {
+    return Boolean(
+      !this.selectedWaiver() &&
+      candidate.rosterArea === 'active' &&
+      candidate.moveType === 'drop' &&
+      candidate.canApplyInjuryImmediately,
+    );
+  }
+
+  private getImmediateInjuryCycleNumber(candidate: DropCandidate): number {
+    return candidate.currentWindow?.cycleNumber ?? candidate.slotNextCycleNumber;
   }
 
   isCommissioner(): boolean {

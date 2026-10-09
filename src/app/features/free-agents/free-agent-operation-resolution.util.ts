@@ -4,6 +4,7 @@ export type FreeAgentOperationExpectation =
       rosterArea: 'active' | 'bench';
       slotId: string;
       incomingAssetKey: string;
+      requiredMode?: 'immediate' | 'queued' | 'ownership-only';
     }
   | {
       kind: 'waiver-claim';
@@ -109,17 +110,7 @@ export function isFreeAgentOperationObserved(
     return Boolean(waiver?.hasOwnerClaim);
   }
 
-  const slots = expectation.rosterArea === 'active'
-    ? observation.activeSlots
-    : observation.benchSlots;
-  const slot = slots.find((candidate) => candidate.slotId === expectation.slotId);
-
-  if (!slot) {
-    return false;
-  }
-
-  return slot.assetKey === expectation.incomingAssetKey ||
-    slot.pendingIncomingAssetKey === expectation.incomingAssetKey;
+  return resolveObservedFreeAgentRosterMove(expectation, observation) !== null;
 }
 
 export function resolveObservedFreeAgentRosterMove(
@@ -140,6 +131,10 @@ export function resolveObservedFreeAgentRosterMove(
   }
 
   if (slot.pendingIncomingAssetKey === expectation.incomingAssetKey) {
+    if (expectation.requiredMode && expectation.requiredMode !== 'queued') {
+      return null;
+    }
+
     return {
       mode: 'queued',
       effectiveCycleNumber: slot.pendingEffectiveCycleNumber ?? null,
@@ -150,8 +145,14 @@ export function resolveObservedFreeAgentRosterMove(
     return null;
   }
 
+  const mode = expectation.rosterArea === 'bench' ? 'ownership-only' : 'immediate';
+
+  if (expectation.requiredMode && expectation.requiredMode !== mode) {
+    return null;
+  }
+
   return {
-    mode: expectation.rosterArea === 'bench' ? 'ownership-only' : 'immediate',
+    mode,
     effectiveCycleNumber: slot.assetEligibleFromCycleNumber ?? null,
   };
 }

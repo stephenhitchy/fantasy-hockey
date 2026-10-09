@@ -144,7 +144,14 @@ test('the eligible injury path bypasses ordinary timing and dispatches the immed
     confirm,
     /const request = injuryReplacement[\s\S]*replaceInjuredRosterAsset\([\s\S]*:[\s\S]*queueActiveBenchSwap\(/,
   );
-  assert.match(confirm, /if \(!injuryReplacement && !this\.benchSwapTimingPreview\(\)\)/);
+  assert.match(
+    confirm,
+    /const healthySwapTimingPreview = injuryReplacement[\s\S]*?: this\.benchSwapTimingPreview\(\);[\s\S]*?if \(!injuryReplacement && !healthySwapTimingPreview\)/,
+  );
+  assert.match(
+    confirm,
+    /effectiveCycleNumber: healthySwapTimingPreview\?\.effectiveCycleNumber \?\? null[\s\S]*?effectiveLabel: healthySwapTimingPreview/,
+  );
   assert.match(action, /case 'replace-injured-now':[\s\S]*beginActiveBenchSwapPicker\(slotId\)/);
   assert.match(template, /isActiveBenchPickerInjuryReplacement\(\)[\s\S]*Replace Injured Player Now/);
   assert.match(template, /remaining future games[\s\S]*games and points already started stay protected/i);

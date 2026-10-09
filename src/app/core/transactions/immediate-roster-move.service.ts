@@ -7,8 +7,10 @@ import {
 
 export type ImmediateRosterMoveType =
   | 'add-drop-active'
+  | 'injury-add-drop-active'
   | 'add-open-active'
   | 'active-bench-swap'
+  | 'injury-active-bench-swap'
   | 'activate-ir-active'
   | 'move-active-to-ir'
   | 'injury-replacement'
@@ -45,7 +47,11 @@ export async function applyImmediateRosterMove(
 ): Promise<ImmediateRosterMoveResult> {
   const invoke = () => applyImmediateRosterMoveCallable(request);
   const response = request.submissionId &&
-      (request.moveType === 'add-drop-active' || request.moveType === 'add-open-active')
+      (
+        request.moveType === 'add-drop-active' ||
+        request.moveType === 'injury-add-drop-active' ||
+        request.moveType === 'add-open-active'
+      )
     ? await executeIdempotentRosterActionWithQuickRetry(invoke)
     : await invoke();
 

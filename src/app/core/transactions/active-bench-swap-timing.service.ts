@@ -213,6 +213,7 @@ export async function previewActiveBenchSwapTiming({
   );
 
   return resolveActiveBenchSwapTimingPreview({
+    activeSlotOccupied: Boolean(activeSlot.asset),
     activeCycleNumber: currentWindow?.cycleNumber ?? activeSlot.openFromCycleNumber ?? null,
     activeFinalGames: currentWindow?.gamesPlayed ?? 0,
     activeLiveGames: currentWindow?.liveGameIds.length ?? 0,

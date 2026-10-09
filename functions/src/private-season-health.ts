@@ -65,6 +65,9 @@ const ROSTER_ACTION_TYPES = new Set([
   'activate-ir-to-bench',
   'active-bench-swap',
   'active-bench-swap-activated',
+  'injury-replacement',
+  'injury-active-bench-swap',
+  'injury-add-drop-active',
   'slot-move-activated',
 ]);
 

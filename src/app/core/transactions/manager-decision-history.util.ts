@@ -55,12 +55,25 @@ export interface ManagerDecisionHistoryRow {
   currentNextSixDifference: number | null;
 }
 
-const COMPLETED_DECISION_TYPES = new Set<ManagerDecisionHistoryType>([
+const COMPLETED_DECISION_TYPES = new Set<string>([
   'add-drop',
   'add-open-slot',
   'waiver-award',
   'slot-move-activated',
+  'injury-add-drop-active',
 ]);
+
+function normalizeCompletedManagerDecisionType(
+  value: string,
+): ManagerDecisionHistoryType | null {
+  if (value === 'injury-add-drop-active') {
+    return 'add-drop';
+  }
+
+  return COMPLETED_DECISION_TYPES.has(value)
+    ? value as ManagerDecisionHistoryType
+    : null;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -228,8 +241,8 @@ function difference(
 
 export function isCompletedManagerDecisionType(
   value: string,
-): value is ManagerDecisionHistoryType {
-  return COMPLETED_DECISION_TYPES.has(value as ManagerDecisionHistoryType);
+): boolean {
+  return normalizeCompletedManagerDecisionType(value) !== null;
 }
 
 export function buildManagerDecisionHistoryRows(
@@ -251,7 +264,11 @@ export function buildManagerDecisionHistoryRows(
       }
 
       const dropped = buildHistoryAsset(transaction.droppedAsset, rowsByAssetKey);
-      const type = transaction.type as ManagerDecisionHistoryType;
+      const type = normalizeCompletedManagerDecisionType(transaction.type);
+
+      if (!type) {
+        return null;
+      }
 
       return {
         id: transaction.id,

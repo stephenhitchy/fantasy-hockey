@@ -43,6 +43,54 @@ export interface QueuedBenchSwapPromotionContext {
   benchPosition: DraftPosition;
 }
 
+export interface ImmediateActiveBenchSwapExpectation {
+  activeSlotId: string;
+  benchSlotId: string;
+  incomingAssetKey: string;
+  outgoingAssetKey: string;
+}
+
+export interface ActiveBenchSwapRosterObservation {
+  activeSlots: Array<{
+    slotId: string;
+    assetKey: string | null;
+    hasPendingMove: boolean;
+  }>;
+  benchSlots: Array<{
+    slotId: string;
+    assetKey: string | null;
+  }>;
+}
+
+/**
+ * A lost callable response may be recovered only from the exact post-swap
+ * roster state. An unrelated roster listener update must not confirm this
+ * operation, and a still-pending move is not an immediate injury swap.
+ */
+export function isImmediateActiveBenchSwapObserved(
+  expectation: ImmediateActiveBenchSwapExpectation,
+  observation: ActiveBenchSwapRosterObservation,
+): boolean {
+  if (!expectation.incomingAssetKey || !expectation.outgoingAssetKey) {
+    return false;
+  }
+
+  const activeSlot = observation.activeSlots.find(
+    (slot) => slot.slotId === expectation.activeSlotId,
+  );
+  const benchSlot = observation.benchSlots.find(
+    (slot) => slot.slotId === expectation.benchSlotId,
+  );
+
+  return Boolean(
+    activeSlot &&
+    benchSlot &&
+    activeSlot.assetKey === expectation.incomingAssetKey &&
+    benchSlot.assetKey === expectation.outgoingAssetKey &&
+    !activeSlot.hasPendingMove,
+  );
+}
+
 /**
  * A scheduled move may be promoted into an immediate injury replacement only
  * when it is the exact active-to-bench pairing the manager already approved.
@@ -145,7 +193,7 @@ export function buildRosterManagementActions(
           action(
             'replace-injured-now',
             'Replace Injured Player Now',
-            'Promote the exact bench player already reserved for this slot. Started games and points stay with the injured player; only remaining future games move.',
+            'Promote the exact bench player already reserved for this slot and move the injured starter to that bench spot. Started games and points stay with the injured player; only remaining future games move.',
             'primary',
             !locked,
             'Wait for the current roster action to finish.',
@@ -172,7 +220,7 @@ export function buildRosterManagementActions(
         ? action(
             'replace-injured-now',
             'Replace Injured Player Now',
-            'Choose a compatible bench player. The replacement takes effect immediately while every game and point already started stays with the injured player.',
+            'Choose a compatible bench player. The replacement takes effect immediately, the injured starter moves to that bench spot, and every game and point already started stays with the injured player.',
             'primary',
             !locked,
             'Wait for the current roster action to finish.',

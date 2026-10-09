@@ -93,6 +93,8 @@ export interface FreeAgentTransactionTimingInput {
   isWaiver: boolean;
   seasonHasStarted: boolean;
   canApplyImmediately: boolean;
+  canApplyInjuryImmediately: boolean;
+  injuryReplacementCycleNumber: number | null;
   effectiveCycleNumber: number;
   slotNextCycleNumber: number;
   outgoingCycleNumber: number | null;
@@ -393,6 +395,21 @@ export function resolveFreeAgentTransactionTiming(
       relationship,
       relationshipLabel,
     );
+  }
+
+  if (input.canApplyInjuryImmediately && !input.isWaiver) {
+    const injuryCycleNumber =
+      input.injuryReplacementCycleNumber ?? input.outgoingCycleNumber ?? input.effectiveCycleNumber;
+
+    return {
+      delaySource: 'none',
+      relationship,
+      tone: 'ready',
+      headline: `Injury replacement applies now in Matchup ${injuryCycleNumber}`,
+      detail: `${outgoingName} keeps every already-started game and earned point. ${input.incomingName} receives only this slot’s remaining future games; RinkRat rechecks the injury report, both players, and the exact scoring window before changing the roster.`,
+      relationshipLabel,
+      startLabel: `Applies now · Matchup ${injuryCycleNumber}`,
+    };
   }
 
   if (input.canApplyImmediately) {

@@ -24,6 +24,7 @@ export interface ActiveBenchSwapTimingPreview {
 }
 
 export interface ActiveBenchSwapTimingInput {
+  activeSlotOccupied: boolean;
   activeCycleNumber: number | null;
   activeFinalGames: number;
   activeLiveGames: number;
@@ -41,14 +42,15 @@ export interface ActiveBenchSwapTimingInput {
 }
 
 /**
- * Mirrors the existing immediate-versus-queued browser preview without
- * authorizing a roster write. Server roster authority repeats every fact when
- * the manager confirms the swap.
+ * Previews the next legal healthy-player boundary without authorizing a roster
+ * write. Injury-specific swaps use their separate mixed-player path. Server
+ * roster authority repeats every fact when the manager confirms the swap.
  */
 export function resolveActiveBenchSwapTimingPreview(
   input: ActiveBenchSwapTimingInput,
 ): ActiveBenchSwapTimingPreview {
   const canApplyImmediately = Boolean(
+    !input.activeSlotOccupied &&
     input.activeAssignmentUntouched &&
     input.immediateCycleNumber !== null &&
     input.benchEarliestCycleNumber <= input.immediateCycleNumber
@@ -71,6 +73,13 @@ export function resolveActiveBenchSwapTimingPreview(
 
   if (canApplyImmediately) {
     delaySource = 'none';
+  } else if (
+    input.activeSlotOccupied &&
+    input.activeAssignmentUntouched &&
+    input.activeCycleNumber !== null &&
+    input.benchEarliestCycleNumber <= activeEarliestCycleNumber
+  ) {
+    delaySource = 'roster-boundary';
   } else if (input.benchEarliestCycleNumber > activeEarliestCycleNumber) {
     delaySource = 'bench-player';
   } else if (activeEarliestCycleNumber > input.benchEarliestCycleNumber) {

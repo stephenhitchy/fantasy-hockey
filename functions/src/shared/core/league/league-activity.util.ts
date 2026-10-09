@@ -151,6 +151,9 @@ const PUBLIC_TRANSACTION_TYPES = new Set<LeagueActivityEventType>([
 
 const TRANSACTION_TYPE_ALIASES = new Map<string, LeagueActivityEventType>([
   ['queue-waiver-award', 'waiver-award'],
+  ['injury-replacement', 'move-to-ir'],
+  ['injury-active-bench-swap', 'active-bench-swap-activated'],
+  ['injury-add-drop-active', 'add-drop'],
 ]);
 
 const SUPPORTED_POSITIONS = new Set(['LW', 'C', 'RW', 'D', 'G']);
@@ -549,8 +552,16 @@ export function buildTransactionLeagueActivity(
       break;
 
     case 'active-bench-swap-activated':
-      activity.primaryAsset = sanitizeAsset(source['addedAsset'] ?? source['movedAsset']);
-      activity.secondaryAsset = sanitizeAsset(source['droppedAsset']);
+      activity.primaryAsset = sanitizeAsset(
+        rawType === 'injury-active-bench-swap'
+          ? source['activatedAsset']
+          : source['addedAsset'] ?? source['movedAsset'],
+      );
+      activity.secondaryAsset = sanitizeAsset(
+        rawType === 'injury-active-bench-swap'
+          ? source['movedAsset']
+          : source['droppedAsset'],
+      );
       break;
 
     case 'move-to-ir':
@@ -1290,6 +1301,9 @@ export type PrivateTransactionType =
   | 'cancel-queued-move'
   | 'queue-active-bench-swap'
   | 'active-bench-swap-activated'
+  | 'injury-replacement'
+  | 'injury-active-bench-swap'
+  | 'injury-add-drop-active'
   | 'move-bench-to-ir'
   | 'activate-ir-to-bench';
 
@@ -1375,6 +1389,9 @@ const PRIVATE_TRANSACTION_TYPES = new Set<PrivateTransactionType>([
   'cancel-queued-move',
   'queue-active-bench-swap',
   'active-bench-swap-activated',
+  'injury-replacement',
+  'injury-active-bench-swap',
+  'injury-add-drop-active',
   'move-bench-to-ir',
   'activate-ir-to-bench',
 ]);
@@ -1585,9 +1602,15 @@ export function buildPublicTransactionResultProjection(
 
     case 'active-bench-swap-activated':
       primaryAsset = sanitizeTransactionPrivacyAsset(
-        source['addedAsset'] ?? source['movedAsset'],
+        source['type'] === 'injury-active-bench-swap'
+          ? source['activatedAsset']
+          : source['addedAsset'] ?? source['movedAsset'],
       );
-      secondaryAsset = sanitizeTransactionPrivacyAsset(source['droppedAsset']);
+      secondaryAsset = sanitizeTransactionPrivacyAsset(
+        source['type'] === 'injury-active-bench-swap'
+          ? source['movedAsset']
+          : source['droppedAsset'],
+      );
       break;
 
     case 'move-to-ir':

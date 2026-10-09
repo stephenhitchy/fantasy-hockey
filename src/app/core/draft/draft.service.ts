@@ -127,6 +127,8 @@ export type FantasyTransactionType =
   | 'queue-active-bench-swap'
   | 'active-bench-swap-activated'
   | 'injury-replacement'
+  | 'injury-active-bench-swap'
+  | 'injury-add-drop-active'
   | 'move-bench-to-ir'
   | 'activate-ir-to-bench';
 
@@ -206,7 +208,7 @@ export interface AddDropRosterAssetInput {
   effectiveCycleNumber?: number | null;
   effectiveLabel?: string | null;
   leagueOwnerIds?: string[];
-  preferImmediateCurrentCycle?: boolean;
+  preferImmediateInjuryReplacement?: boolean;
   submissionId?: string;
   expectedOutgoingAssetKey?: string;
 }
@@ -1848,14 +1850,14 @@ export async function addDropRosterAsset({
   effectiveCycleNumber = null,
   effectiveLabel = null,
   leagueOwnerIds: _leagueOwnerIds = [],
-  preferImmediateCurrentCycle = false,
+  preferImmediateInjuryReplacement = false,
   submissionId,
   expectedOutgoingAssetKey,
 }: AddDropRosterAssetInput): Promise<RosterMoveExecutionResult> {
-  if (preferImmediateCurrentCycle) {
+  if (preferImmediateInjuryReplacement) {
     const result = await applyImmediateRosterMove({
       leagueId,
-      moveType: 'add-drop-active',
+      moveType: 'injury-add-drop-active',
       activeSlotId: dropSlotId,
       addAssetKey: addAsset.assetKey,
       submissionId,
@@ -2136,37 +2138,48 @@ export async function queueActiveBenchSwap({
     throw new Error('The selected active or bench slot was not found.');
   }
 
-  const requiredGamesPerCycle = await getLeagueRequiredGamesPerCycle(leagueId);
-  const benchEligibility = await resolveRosterMoveAssetCycleEligibility(
-    rosterAssetToDraftableAsset(benchAsset),
-    requiredGamesPerCycle,
-  );
-  const currentWindow = await getLatestRosterSlotWindow(leagueId, ownerId, activeSlotId);
-  const immediateCycleNumber = currentWindow?.cycleNumber ?? activeSlot.openFromCycleNumber ?? null;
-  const activeAssignmentUntouched =
-    isUntouchedRosterWindow(currentWindow) ||
-    (!currentWindow && !activeSlot.asset && typeof activeSlot.openFromCycleNumber === 'number');
-  const incomingEarliestCycleNumber = Math.max(
-    benchAsset.eligibleFromCycleNumber ?? 1,
-    benchEligibility.earliestEligibleCycleNumber,
-  );
-
-  if (
-    activeAssignmentUntouched &&
-    immediateCycleNumber !== null &&
-    incomingEarliestCycleNumber <= immediateCycleNumber
-  ) {
-    const result = await applyImmediateRosterMove({
+  // Filling a genuinely open active slot is not a healthy-player replacement,
+  // so preserve the established immediate path when the current window and
+  // incoming player are both still eligible. Occupied active slots always go
+  // through server scheduling unless the explicit injury route is used.
+  if (!activeSlot.asset) {
+    const requiredGamesPerCycle = await getLeagueRequiredGamesPerCycle(leagueId);
+    const benchEligibility = await resolveRosterMoveAssetCycleEligibility(
+      rosterAssetToDraftableAsset(benchAsset),
+      requiredGamesPerCycle,
+    );
+    const currentWindow = await getLatestRosterSlotWindow(
       leagueId,
-      moveType: 'active-bench-swap',
+      ownerId,
       activeSlotId,
-      benchSlotId,
-    });
+    );
+    const immediateCycleNumber =
+      currentWindow?.cycleNumber ?? activeSlot.openFromCycleNumber ?? null;
+    const activeAssignmentUntouched =
+      isUntouchedRosterWindow(currentWindow) ||
+      (!currentWindow && typeof activeSlot.openFromCycleNumber === 'number');
+    const incomingEarliestCycleNumber = Math.max(
+      benchAsset.eligibleFromCycleNumber ?? 1,
+      benchEligibility.earliestEligibleCycleNumber,
+    );
 
-    return {
-      mode: 'immediate',
-      effectiveCycleNumber: result.cycleNumber,
-    };
+    if (
+      activeAssignmentUntouched &&
+      immediateCycleNumber !== null &&
+      incomingEarliestCycleNumber <= immediateCycleNumber
+    ) {
+      const result = await applyImmediateRosterMove({
+        leagueId,
+        moveType: 'active-bench-swap',
+        activeSlotId,
+        benchSlotId,
+      });
+
+      return {
+        mode: 'immediate',
+        effectiveCycleNumber: result.cycleNumber,
+      };
+    }
   }
 
   const result = await executeSecureRosterAction({
@@ -2196,7 +2209,7 @@ export async function replaceInjuredRosterAsset({
 
   const result = await applyImmediateRosterMove({
     leagueId,
-    moveType: 'injury-replacement',
+    moveType: 'injury-active-bench-swap',
     activeSlotId,
     benchSlotId,
   });

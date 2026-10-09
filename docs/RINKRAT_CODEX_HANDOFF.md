@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-10-08
+Last updated: 2026-10-09
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -80,16 +80,13 @@ and exact ownership on the six game dots. Read
 `docs/RINKRAT_PRODUCT_B1Z_INJURY_REPLACEMENT_INTEGRITY.md` before changing the
 roster-move, cycle-scoring, rollover, playoff-bank, or mixed-player UI paths.
 
-B2D extends only the exact manager-authorized same-slot bench-swap case. A
-fresh Out/IR/LTIR update or the bounded recovery sweep may promote that saved
-move automatically, but neither path chooses a player. The transaction binds
-the pending-move fingerprint, rereads availability, verifies the active cycle,
-and rechecks transaction-fresh cycle/playoff protected games before preserving
-every started game and point. Unattended attempts also abort when any
-ownership-changing outgoing or incoming game crosses puck drop during slow
-verification, before scoring evidence necessarily catches up. Read
-`docs/RINKRAT_PRODUCT_B2D_AUTOMATIC_INJURY_REPLACEMENT.md` before changing its
-availability triggers, reconciliation cursor, receipts, or roster authority.
+B2D established automatic promotion for an exact manager-authorized same-slot
+bench swap after a fresh Out/IR/LTIR update or bounded recovery sweep. That is
+the historical baseline; B2F now supersedes B2D's bench-only limit and its
+exclusion of Day-to-day players. Neither generation chooses a player. Both
+bind exact saved intent, reread availability, verify the active cycle, and
+recheck transaction-fresh protected games and puck-drop boundaries before
+preserving every started game and point.
 
 B2E is the read-loop hardening candidate layered after B2D. Projection
 recovery now transactionally revalidates exact stale ownership and removes the
@@ -102,6 +99,22 @@ The minute Cycle-1 recovery and scoring dispatcher cadence remain unchanged;
 they still provide liveness and health evidence for valid leagues. Read
 `docs/RINKRAT_OPERATIONS_B2E_READ_LOOP_HARDENING.md` before changing projection
 recovery leases, orphan-schedule cleanup, league deletion, or Cycle-1 recovery.
+
+B2F is the instant injury-transaction candidate layered after B2E. Bench
+free-agent add/drop remains immediate ownership-only. A Day-to-day, Out, IR,
+or LTIR active skater may now be replaced immediately by an exact selected
+bench player or free agent: every started game and earned point stays with the
+outgoing player, while only future unstarted positions transfer. Active/bench
+swaps leave the outgoing player on the bench; free-agent add/drops send the
+outgoing player to waivers. Healthy/available active replacements still queue
+to the next legal matchup window. Exact pending fingerprints, authoritative
+status and schedule evidence, and puck-drop guards make event triggers and the
+bounded recovery sweep idempotent. The already queued Genitalman transaction
+is an exact active/bench swap from C-1 Celebrini to B-1 and B-1 Leo Carlsson
+to C-1; it is eligible for self-promotion after deployment if its exact saved
+evidence still passes. Read
+`docs/RINKRAT_PRODUCT_B2F_INSTANT_INJURY_TRANSACTIONS.md` before changing this
+timing, destination, or recovery contract.
 
 B2A is the current clean-source add/drop reliability candidate and is not yet
 deployed. It replaces the interactive 32-club identity refresh with exact

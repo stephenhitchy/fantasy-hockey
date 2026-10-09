@@ -776,6 +776,11 @@
     "preverify:batchb2e": "npm run security:sync-repository-automation",
     "verify:batchb2e:core": "npm run verify:batchb2d:core && npm run test:batchb2e:run && npm run validate:release-manifest",
     "verify:batchb2e": "npm run toolchain:verify && npm run verify:batchb2e:core && npm run security:dependency-audit",
+    "test:batchb2f:run": "npm --prefix functions run build && node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb2f-instant-injury-add-drop/*.test.mjs",
+    "test:batchb2f": "firebase emulators:exec --project demo-rinkrat-b2f --only firestore \"npm run test:batchb2f:run\"",
+    "preverify:batchb2f": "npm run security:sync-repository-automation",
+    "verify:batchb2f:core": "npm run verify:batchb2e:core && npm run test:batchb2f && npm run validate:release-manifest",
+    "verify:batchb2f": "npm run toolchain:verify && npm run verify:batchb2f:core && npm run security:dependency-audit",
     "operations:orphan-schedule-cleanup": "node scripts/operations/cleanup-orphan-league-automation-schedules.mjs --project=nhl-fantasy-app-ab673",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs && node scripts/release/verify-protected-live-scoring-runtime-contract.mjs"
   },
