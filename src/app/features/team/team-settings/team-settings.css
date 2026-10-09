@@ -2191,10 +2191,10 @@
 
 .transaction-ledger-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .transaction-ledger-heading h2 {
@@ -2211,6 +2211,7 @@
 
 .transaction-ledger {
   display: grid;
+  gap: 7px;
 }
 
 .transaction-ledger-row {
@@ -2219,12 +2220,9 @@
   gap: 10px;
   align-items: center;
   min-height: 48px;
-  padding: 8px 4px;
-  border-top: 1px solid rgba(162, 187, 215, 0.13);
-}
-
-.transaction-ledger-row:first-child {
-  border-top: 0;
+  padding: 8px 10px;
+  border-color: rgba(162, 187, 215, 0.16);
+  border-radius: 10px;
 }
 
 .transaction-ledger-row time {
@@ -2532,6 +2530,7 @@
   .transaction-ledger-row {
     grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr);
     gap: 6px;
+    padding-inline: 8px;
   }
 
   .transaction-player {

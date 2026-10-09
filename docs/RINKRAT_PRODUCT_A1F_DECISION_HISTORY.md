@@ -47,8 +47,14 @@ Decision History is reachable from:
 
 ```text
 Add / Drop header
-Team Settings → Recent Transactions
+My Team → Latest Moves → Decision history
 ```
+
+My Team intentionally shows only the three latest completed moves so a long
+manager history cannot overtake the roster page. Managers can reveal up to the
+next seven recent moves on demand, collapse back to the latest three, or open
+the separate Decision History route for search and deeper current-player
+comparisons. The expanded inline view remains capped at ten moves.
 
 Selecting either player opens the existing league-aware Player Intel page. The Player Intel back link returns to Decision History when it was opened from that route.
 

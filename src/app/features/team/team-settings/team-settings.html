@@ -166,50 +166,99 @@
 
     @if (isOwnTeam()) {
       <section class="transaction-ledger-card rr-card rr-card--padded">
-      <div class="transaction-ledger-heading rr-section-heading">
-        <div>
-          <span class="eyebrow">Roster Moves</span>
-          <h2>Recent Transactions</h2>
+        <div class="transaction-ledger-heading rr-section-heading">
+          <div class="transaction-ledger-heading-copy">
+            <span class="eyebrow">Roster Moves</span>
+            <h2>Latest Moves</h2>
+            <small [hidden]="recentTransactions().length === 0">
+              {{ transactionHistorySummary() }}
+            </small>
+          </div>
+          <a
+            class="transaction-decision-link rr-button rr-button--quiet"
+            [routerLink]="['/leagues', leagueId, 'decision-history']"
+          >
+            Decision history
+          </a>
         </div>
-        <a
-          class="rr-button rr-button--quiet"
-          [routerLink]="['/leagues', leagueId, 'decision-history']"
-        >
-          Decision history
-        </a>
-      </div>
 
-      @if (recentTransactions().length === 0) {
-        <div class="transaction-empty-state">No completed add or drop transactions yet.</div>
-      } @else {
-        <div class="transaction-ledger">
-          @for (transaction of recentTransactions(); track transaction.id) {
-            <article class="transaction-ledger-row rr-list-row">
-              <time>{{ getTransactionDateLabel(transaction.createdAt) }}</time>
+        <div class="transaction-empty-state" role="status" [hidden]="!transactionsLoading()">
+          Loading recent moves…
+        </div>
+        <div
+          class="transaction-empty-state transaction-error-state"
+          role="alert"
+          [hidden]="!transactionsUnavailable()"
+        >
+          <span>Recent moves are unavailable.</span>
+          <button type="button" class="rr-button rr-button--quiet" (click)="loadTeam()">
+            Retry
+          </button>
+        </div>
+        <div
+          class="transaction-empty-state"
+          [hidden]="
+            transactionsLoading() || transactionsUnavailable() || recentTransactions().length > 0
+          "
+        >
+          No completed roster moves yet.
+        </div>
+
+        <div
+          id="my-team-transaction-ledger"
+          class="transaction-ledger"
+          role="list"
+          [hidden]="
+            transactionsLoading() || transactionsUnavailable() || recentTransactions().length === 0
+          "
+        >
+          @for (transaction of displayedTransactions(); track transaction.id) {
+            <article
+              class="transaction-ledger-row rr-list-row"
+              role="listitem"
+              [attr.aria-label]="
+                getTransactionDateLabel(transaction.createdAt) +
+                ': ' +
+                getTransactionTitle(transaction)
+              "
+            >
+              <time [attr.datetime]="getTransactionDateTime(transaction.createdAt)">
+                {{ getTransactionDateLabel(transaction.createdAt) }}
+              </time>
 
               <div class="transaction-player transaction-added">
-                <span>Added</span>
-                @if (getTransactionAddedAsset(transaction); as addedAsset) {
-                  <strong>{{ getTransactionAssetName(addedAsset) }}</strong>
-                  <small>{{ getTransactionAssetMeta(addedAsset) }}</small>
-                } @else {
-                  <strong>—</strong>
-                }
+                <span>{{ getTransactionAddedLabel(transaction) }}</span>
+                <strong>{{ getTransactionAddedName(transaction) }}</strong>
+                <small [hidden]="!getTransactionAddedAsset(transaction)">
+                  {{ getTransactionAssetMeta(getTransactionAddedAsset(transaction)) }}
+                </small>
               </div>
 
               <div class="transaction-player transaction-dropped">
-                <span>Dropped</span>
-                @if (getTransactionDroppedAsset(transaction); as droppedAsset) {
-                  <strong>{{ getTransactionAssetName(droppedAsset) }}</strong>
-                  <small>{{ getTransactionAssetMeta(droppedAsset) }}</small>
-                } @else {
-                  <strong>—</strong>
-                }
+                <span>{{ getTransactionDroppedLabel(transaction) }}</span>
+                <strong>{{ getTransactionDroppedName(transaction) }}</strong>
+                <small [hidden]="!getTransactionDroppedAsset(transaction)">
+                  {{ getTransactionAssetMeta(getTransactionDroppedAsset(transaction)) }}
+                </small>
               </div>
             </article>
           }
         </div>
-      }
+
+        <button
+          type="button"
+          class="transaction-ledger-toggle rr-button rr-button--quiet"
+          [hidden]="
+            transactionsLoading() ||
+            transactionsUnavailable() ||
+            hiddenRecentTransactionCount() === 0
+          "
+          [attr.aria-expanded]="transactionHistoryExpanded()"
+          aria-controls="my-team-transaction-ledger"
+          (click)="toggleTransactionHistory()"
+        >
+          {{ transactionHistoryToggleLabel() }}
+        </button>
       </section>
 
       <section class="team-name-card rr-card rr-card--padded">

@@ -7,6 +7,11 @@ import {
   buildManagerDecisionHistoryRows,
   isCompletedManagerDecisionType,
 } from '../../src/app/core/transactions/manager-decision-history.util.ts';
+import {
+  buildTransactionLedgerPreview,
+  TEAM_TRANSACTION_EXPANDED_LIMIT,
+  TEAM_TRANSACTION_PREVIEW_LIMIT,
+} from '../../src/app/features/team/team-settings/transaction-ledger-preview.util.ts';
 import { PROTECTED_SOURCE_HASHES } from '../shared/protected-source-hashes.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
@@ -151,6 +156,72 @@ test('Decision History is a guarded, secondary route linked from Add Drop and Te
   assert.match(routes, /features\/free-agents\/decision-history\/decision-history/);
   assert.match(addDrop, /\['\/leagues', leagueId, 'decision-history'\]/);
   assert.match(teamSettings, /\['\/leagues', leagueId, 'decision-history'\]/);
+});
+
+test('My Team keeps roster history to a compact three-move preview', async () => {
+  const transactions = Array.from({ length: 8 }, (_, index) => ({ id: `move-${index + 1}` }));
+  const preview = buildTransactionLedgerPreview(transactions);
+  const expandedPreview = buildTransactionLedgerPreview(
+    Array.from({ length: 15 }, (_, index) => ({ id: `expanded-${index + 1}` })),
+    TEAM_TRANSACTION_EXPANDED_LIMIT,
+  );
+
+  assert.equal(TEAM_TRANSACTION_PREVIEW_LIMIT, 3);
+  assert.equal(TEAM_TRANSACTION_EXPANDED_LIMIT, 10);
+  assert.deepEqual(preview.visible.map((transaction) => transaction.id), [
+    'move-1',
+    'move-2',
+    'move-3',
+  ]);
+  assert.equal(preview.hiddenCount, 5);
+  assert.equal(transactions.length, 8);
+  assert.equal(expandedPreview.visible.length, 10);
+  assert.equal(expandedPreview.hiddenCount, 5);
+
+  const [component, template, styles, globalStyles] = await Promise.all([
+    read('src/app/features/team/team-settings/team-settings.ts'),
+    read('src/app/features/team/team-settings/team-settings.html'),
+    read('src/app/features/team/team-settings/team-settings.css'),
+    read('src/styles.css'),
+  ]);
+
+  assert.match(component, /buildTransactionLedgerPreview\(this\.completedTransactions\(\)\)/);
+  assert.match(
+    component,
+    /transaction\.type === 'injury-replacement'[\s\S]*?transaction\.activatedAsset/,
+  );
+  assert.match(
+    component,
+    /getTransactionDroppedAsset[\s\S]*?transaction\.type === 'injury-replacement'[\s\S]*?transaction\.movedAsset/,
+  );
+  assert.match(
+    component,
+    /transaction\.type === 'active-bench-swap-activated'[\s\S]*?transaction\.addedAsset \?\? transaction\.movedAsset/,
+  );
+  assert.match(component, /active-bench-swap-activated'[\s\S]*?'Previous starter'/);
+  assert.match(template, />Latest Moves</);
+  assert.match(template, /role="list"/);
+  assert.match(template, /role="listitem"/);
+  assert.match(template, /\[attr\.datetime\]="getTransactionDateTime\(transaction\.createdAt\)"/);
+  assert.match(template, /transactionsLoading\(\)[\s\S]*?role="status"/);
+  assert.match(
+    template,
+    /role="alert"[\s\S]*?\[hidden\]="!transactionsUnavailable\(\)"[\s\S]*?Retry/,
+  );
+  assert.match(template, /hiddenRecentTransactionCount\(\)/);
+  assert.match(template, /aria-controls="my-team-transaction-ledger"/);
+  assert.match(template, /\[attr\.aria-expanded\]="transactionHistoryExpanded\(\)"/);
+  assert.match(styles, /\.transaction-ledger\s*\{[\s\S]*?gap:\s*7px/);
+  assert.match(styles, /\.transaction-ledger-row\s*\{[\s\S]*?border-radius:\s*10px/);
+  assert.doesNotMatch(styles, /\.transaction-ledger--expanded[\s\S]*?overflow-y:\s*auto/);
+  assert.match(
+    globalStyles,
+    /\.transaction-ledger-card \[hidden\][\s\S]*?display:\s*none/,
+  );
+  assert.match(globalStyles, /light-ice[\s\S]*?\.transaction-added\s*\{[\s\S]*?color:\s*#17633a/);
+  assert.match(globalStyles, /light-ice[\s\S]*?\.transaction-dropped\s*\{[\s\S]*?color:\s*#8f2435/);
+  assert.match(globalStyles, /@media \(max-width: 420px\)[\s\S]*?grid-template-columns:\s*repeat\(2/);
+  assert.match(globalStyles, /@media \(max-width: 420px\)[\s\S]*?white-space:\s*normal/);
 });
 
 test('the page remains bounded, current-data honest, and mobile-first', async () => {

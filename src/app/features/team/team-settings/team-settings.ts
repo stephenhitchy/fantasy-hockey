@@ -127,6 +127,10 @@ import {
   type RosterRemovalObservation,
 } from './roster-operation-confirmation.util';
 import {
+  buildTransactionLedgerPreview,
+  TEAM_TRANSACTION_EXPANDED_LIMIT,
+} from './transaction-ledger-preview.util';
+import {
   buildActiveBenchSwapTimingMessage,
   type ActiveBenchSwapTimingMessage,
 } from './active-bench-swap-timing.util';
@@ -220,6 +224,9 @@ export class TeamSettings implements OnDestroy {
   liveDataWarnings = signal<string[]>([]);
   scoringLoading = signal(false);
   scoringError = signal('');
+  transactionsLoading = signal(true);
+  transactionsUnavailable = signal(false);
+  transactionHistoryExpanded = signal(false);
   rosterMoveLoading = signal(false);
   rosterMoveMessage = signal('');
   rosterMoveError = signal('');
@@ -341,10 +348,39 @@ export class TeamSettings implements OnDestroy {
     return rankIndex >= 0 ? rankIndex + 1 : null;
   });
 
-  readonly recentTransactions = computed(() =>
-    this.transactions()
-      .filter((transaction) => this.shouldShowTransactionInLedger(transaction))
-      .slice(0, 10),
+  readonly completedTransactions = computed(() =>
+    this.transactions().filter((transaction) => this.shouldShowTransactionInLedger(transaction)),
+  );
+
+  readonly recentTransactionPreview = computed(() =>
+    buildTransactionLedgerPreview(this.completedTransactions()),
+  );
+
+  readonly recentTransactions = computed(() => this.recentTransactionPreview().visible);
+
+  readonly expandedTransactionPreview = computed(() =>
+    buildTransactionLedgerPreview(this.completedTransactions(), TEAM_TRANSACTION_EXPANDED_LIMIT),
+  );
+
+  readonly hiddenRecentTransactionCount = computed(
+    () => this.expandedTransactionPreview().visible.length - this.recentTransactions().length,
+  );
+
+  readonly displayedTransactions = computed(() =>
+    this.transactionHistoryExpanded()
+      ? this.expandedTransactionPreview().visible
+      : this.recentTransactions(),
+  );
+
+  readonly transactionHistorySummary = computed(() => {
+    const count = this.displayedTransactions().length;
+    return count === 1 ? 'Latest completed move' : `${count} latest completed moves`;
+  });
+
+  readonly transactionHistoryToggleLabel = computed(() =>
+    this.transactionHistoryExpanded()
+      ? 'Show latest 3 moves'
+      : `Show ${this.hiddenRecentTransactionCount()} more moves`,
   );
 
   readonly rosterManagerOpen = computed(() =>
@@ -582,6 +618,9 @@ export class TeamSettings implements OnDestroy {
     this.roster.set(null);
     this.picks.set([]);
     this.transactions.set([]);
+    this.transactionsLoading.set(true);
+    this.transactionsUnavailable.set(false);
+    this.transactionHistoryExpanded.set(false);
     this.latestCycle.set(null);
     this.latestMatchups.set([]);
     this.currentNavigationMatchup.set(null);
@@ -759,10 +798,14 @@ export class TeamSettings implements OnDestroy {
         (transactions) => {
           if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
           this.clearLiveDataWarning('Transactions');
+          this.transactionsLoading.set(false);
+          this.transactionsUnavailable.set(false);
           this.transactions.set(transactions);
         },
         (error) => {
           if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
+          this.transactionsLoading.set(false);
+          this.transactionsUnavailable.set(true);
           this.recordLiveDataWarning('Transactions', error);
         },
       );
@@ -3508,11 +3551,71 @@ export class TeamSettings implements OnDestroy {
       return transaction.waiverAsset ?? null;
     }
 
+    if (transaction.type === 'active-bench-swap-activated') {
+      return transaction.addedAsset ?? transaction.movedAsset ?? null;
+    }
+
+    if (transaction.type === 'injury-replacement') {
+      return transaction.activatedAsset ?? null;
+    }
+
     return transaction.addedAsset ?? null;
   }
 
   getTransactionDroppedAsset(transaction: FantasyTransaction): RosterAsset | null {
+    if (transaction.type === 'injury-replacement') {
+      return transaction.movedAsset ?? null;
+    }
+
     return transaction.droppedAsset ?? null;
+  }
+
+  getTransactionAddedLabel(transaction: FantasyTransaction): string {
+    return ['active-bench-swap-activated', 'injury-replacement'].includes(transaction.type)
+      ? 'Started'
+      : 'Added';
+  }
+
+  getTransactionDroppedLabel(transaction: FantasyTransaction): string {
+    if (transaction.type === 'injury-replacement') {
+      return 'Moved to IR';
+    }
+
+    return transaction.type === 'active-bench-swap-activated' ? 'Benched' : 'Dropped';
+  }
+
+  getTransactionAddedFallback(transaction: FantasyTransaction): string {
+    return transaction.type === 'drop-to-waivers' ? 'No addition' : '—';
+  }
+
+  getTransactionAddedName(transaction: FantasyTransaction): string {
+    const asset = this.getTransactionAddedAsset(transaction);
+    return asset ? this.getTransactionAssetName(asset) : this.getTransactionAddedFallback(transaction);
+  }
+
+  getTransactionDroppedFallback(transaction: FantasyTransaction): string {
+    if (transaction.type === 'active-bench-swap-activated') {
+      return 'Previous starter';
+    }
+
+    if (transaction.type === 'injury-replacement') {
+      return 'Injured starter';
+    }
+
+    return ['add-open-slot', 'waiver-award', 'slot-move-activated'].includes(transaction.type)
+      ? 'Open slot'
+      : '—';
+  }
+
+  getTransactionDroppedName(transaction: FantasyTransaction): string {
+    const asset = this.getTransactionDroppedAsset(transaction);
+    return asset
+      ? this.getTransactionAssetName(asset)
+      : this.getTransactionDroppedFallback(transaction);
+  }
+
+  toggleTransactionHistory(): void {
+    this.transactionHistoryExpanded.update((expanded) => !expanded);
   }
 
   getTransactionAssetMeta(asset: DraftableAsset | RosterAsset | null): string {
@@ -3562,7 +3665,7 @@ export class TeamSettings implements OnDestroy {
         return `Scheduled ${this.getTransactionAssetName(transaction.movedAsset)} to start`;
 
       case 'active-bench-swap-activated':
-        return `Started ${this.getTransactionAssetName(transaction.addedAsset)}`;
+        return `Started ${this.getTransactionAssetName(this.getTransactionAddedAsset(transaction))}`;
 
       case 'injury-replacement':
         return `Replaced injured ${this.getTransactionAssetName(transaction.movedAsset)}`;
@@ -3687,6 +3790,12 @@ export class TeamSettings implements OnDestroy {
       day: 'numeric',
       year: 'numeric',
     });
+  }
+
+  getTransactionDateTime(value: unknown): string | null {
+    const date = this.getDateFromUnknown(value);
+
+    return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
   }
 
   private async loadPlayerPoolForProjectionFallback(): Promise<void> {
