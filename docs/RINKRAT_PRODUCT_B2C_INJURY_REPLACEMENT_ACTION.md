@@ -36,6 +36,10 @@ Any free-agent reservation, awarded waiver, different bench reservation,
 changed asset, or other queued move remains review/cancel-only. The Function
 must repeat these checks transactionally before clearing the queued move.
 
+B2D extends this exact saved-intent contract with automatic promotion after a
+confirmed Out, IR, or LTIR status. The manager-triggered action remains the
+fallback when automatic reconciliation has not run yet.
+
 ## Release and rollback
 
 The client portion requires Hosting. It is paired with the narrowly scoped

@@ -24,11 +24,19 @@ async function sha256FunctionsIndexBeforeD1M() {
   const source = await read('functions/src/index.ts');
   const d1mExport = '  getFinalScoreReconciliationPage,\n';
   const l1bExport = '  updateLeagueCapacitySecure,\n';
+  const b2dExports = [
+    "export {\n",
+    "  processGlobalAutomaticInjuryReplacements,\n",
+    "  processLeagueAutomaticInjuryReplacement,\n",
+    "  reconcileAutomaticInjuryReplacements,\n",
+    "} from './automatic-injury-replacement';\n\n",
+  ].join('');
 
   assert.equal(source.split(d1mExport).length - 1, 1);
   assert.equal(source.split(l1bExport).length - 1, 1);
+  assert.equal(source.split(b2dExports).length - 1, 1);
   return createHash('sha256')
-    .update(source.replace(d1mExport, '').replace(l1bExport, ''))
+    .update(source.replace(d1mExport, '').replace(l1bExport, '').replace(b2dExports, ''))
     .digest('hex');
 }
 

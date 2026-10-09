@@ -1134,7 +1134,7 @@
       [description]="
         isActiveBenchPickerInjuryReplacement()
           ? 'Choose the compatible bench player who should take only this slot’s remaining future games. All games and points already started stay protected.'
-          : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary before you confirm.'
+          : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary. A scheduled swap can activate automatically if the starter is later confirmed Out, IR, or LTIR and an IR spot is open.'
       "
       [busy]="isRosterOperationPending()"
       closeLabel="Close bench player choices"

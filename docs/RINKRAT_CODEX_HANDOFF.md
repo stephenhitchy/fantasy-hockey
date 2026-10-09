@@ -80,6 +80,17 @@ and exact ownership on the six game dots. Read
 `docs/RINKRAT_PRODUCT_B1Z_INJURY_REPLACEMENT_INTEGRITY.md` before changing the
 roster-move, cycle-scoring, rollover, playoff-bank, or mixed-player UI paths.
 
+B2D extends only the exact manager-authorized same-slot bench-swap case. A
+fresh Out/IR/LTIR update or the bounded recovery sweep may promote that saved
+move automatically, but neither path chooses a player. The transaction binds
+the pending-move fingerprint, rereads availability, verifies the active cycle,
+and rechecks transaction-fresh cycle/playoff protected games before preserving
+every started game and point. Unattended attempts also abort when any
+ownership-changing outgoing or incoming game crosses puck drop during slow
+verification, before scoring evidence necessarily catches up. Read
+`docs/RINKRAT_PRODUCT_B2D_AUTOMATIC_INJURY_REPLACEMENT.md` before changing its
+availability triggers, reconciliation cursor, receipts, or roster authority.
+
 B2A is the current clean-source add/drop reliability candidate and is not yet
 deployed. It replaces the interactive 32-club identity refresh with exact
 post-boundary player lookups, runs incoming/outgoing schedule checks in

@@ -55,6 +55,9 @@ These are product contracts, not implementation suggestions:
 - An injury-replacement slot may contain several player segments. Every game
   is scored against its exact saved segment asset; empty outgoing segments are
   retained for audit, and only the current segment advances at rollover.
+- Automatic injury replacement may only promote an exact bench swap already
+  authorized by the manager. It must never choose a replacement or trust a
+  stale roster-cached injury status.
 
 Changing any item above requires an explicitly scoped task, dedicated
 compatibility tests, a rollback path, and exact deployment evidence.

@@ -2203,7 +2203,7 @@ export class TeamSettings implements OnDestroy {
           ? `${incomingName} replaced the injured starter immediately in ${targetSlot.position} Slot ${targetSlot.slotNumber}. The starter moved to Injured Reserve, all already-started points remain, and only the slot’s remaining future games belong to ${incomingName}.`
           : mode === 'immediate'
           ? `${incomingName} moved into ${targetSlot.position} Slot ${targetSlot.slotNumber} immediately. Neither six-game count had started, so the swap applies to Matchup ${effectiveCycleNumber}.`
-          : `${incomingName} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${effectiveCycleNumber}.`,
+          : `${incomingName} is scheduled for ${targetSlot.position} Slot ${targetSlot.slotNumber}. At least one six-game count has started, so the swap begins in Matchup ${effectiveCycleNumber}. If the starter is confirmed Out, IR, or LTIR first and an IR spot is open, this exact swap activates automatically while all started games and points stay protected.`,
       );
       actionOutcome = 'success';
     } catch (error: unknown) {

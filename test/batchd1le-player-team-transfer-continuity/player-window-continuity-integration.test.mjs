@@ -124,13 +124,13 @@ test('an immediate roster removal deletes its snapshot and an immediate incoming
   const rosterMoveSource = await source('functions/src/roster-moves.ts');
   const immediateMove = section(
     rosterMoveSource,
-    'export const applyImmediateRosterMove = onCall',
-    'const transactionType = moveType ===',
+    'async function executeImmediateRosterMove(',
+    'export async function applyAutomaticQueuedInjuryReplacement(',
   );
 
   assert.match(
     immediateMove,
-    /const transactionRef = submissionId && isImmediateAdd[\s\S]*?createRosterActionTransactionId\(\{[\s\S]*?namespace: 'roster-add'/,
+    /const transactionRef = replaySubmissionId[\s\S]*?automaticReceiptIdentity\?\.transactionId \?\?[\s\S]*?createRosterActionTransactionId\(\{[\s\S]*?namespace: 'roster-add'/,
   );
   assert.match(immediateMove, /if \(removesActiveAssignment\)[\s\S]*?transaction\.delete\(rosterPickRef\)/);
   assert.match(

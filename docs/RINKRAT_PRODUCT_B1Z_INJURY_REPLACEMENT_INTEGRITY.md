@@ -48,10 +48,24 @@ segments, but the saved server plan remains the authority.
   reread inside the committing transaction. The injury mutation clears the
   pending roster move atomically and its audit record stores the superseded
   queued-move ID; a changed fingerprint aborts without moving either player.
+- B2D automation may promote that saved move without another manager action,
+  but only from fresh server availability evidence. Its deterministic receipt
+  binds the exact pending-move fingerprint, and the transaction rechecks that
+  the same matchup is still active before changing the roster.
 - Promotion changes only the pending move's timing. Started games remain with
   the injured player, the replacement receives only the still-unstarted
   positions in the same six-game window, and a window with no remaining games
   is not rewritten.
+- Immediately before the roster write, transaction-fresh cycle and playoff
+  windows are compared with the preflight plan. A game that became live or
+  final during schedule verification aborts the attempt rather than being
+  filtered from the saved window; a retry rebuilds the plan around that newly
+  protected game.
+- The unattended B2D path additionally rechecks the exact puck-drop times for
+  all outgoing and incoming games whose ownership would change. If any crosses
+  its boundary before the transaction attempt, automation aborts even when the
+  scorer has not yet written live evidence. The manager-triggered path retains
+  the established server action-start boundary.
 - Out/IR/LTIR eligibility is reread inside the Firestore transaction. A player
   who becomes ineligible while the request is being verified is not moved.
 - Schedule verification uses the saved source team for every owned game, not

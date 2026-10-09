@@ -25,7 +25,7 @@ test('the local Functions inventory is derived from the one authoritative index'
   const names = collectExpectedFirebaseFunctionNames(
     await read('functions/src/index.ts'),
   );
-  assert.equal(names.length, 109);
+  assert.equal(names.length, 112);
   assert.ok(names.includes('updateLeagueCapacitySecure'));
   assert.ok(names.includes('removeLeagueMemberSecure'));
   assert.ok(names.includes('getFinalScoreReconciliationPage'));
@@ -34,6 +34,9 @@ test('the local Functions inventory is derived from the one authoritative index'
   assert.ok(names.includes('refreshLeagueAutomationCapacityEvidence'));
   assert.ok(names.includes('refreshDraftPlayerAvailabilityTask'));
   assert.ok(names.includes('unpinLeagueAnnouncement'));
+  assert.ok(names.includes('processGlobalAutomaticInjuryReplacements'));
+  assert.ok(names.includes('processLeagueAutomaticInjuryReplacement'));
+  assert.ok(names.includes('reconcileAutomaticInjuryReplacements'));
   assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
 });
 

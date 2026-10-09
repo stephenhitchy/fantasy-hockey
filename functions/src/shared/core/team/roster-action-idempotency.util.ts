@@ -39,7 +39,7 @@ export function createRosterActionRequestFingerprint(
 }
 
 export function createRosterActionTransactionId(input: {
-  namespace: 'roster-add';
+  namespace: 'roster-add' | 'automatic-injury-replacement';
   leagueId: string;
   ownerId: string;
   submissionId: string;

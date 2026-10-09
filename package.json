@@ -768,6 +768,10 @@
     "preverify:batchb2c": "npm run security:sync-repository-automation",
     "verify:batchb2c:core": "npm run verify:batchb2b:core && npm run test:batchb2c:run && npm run validate:release-manifest",
     "verify:batchb2c": "npm run toolchain:verify && npm run verify:batchb2c:core && npm run security:dependency-audit",
+    "test:batchb2d:run": "npm --prefix functions run build && node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb2d-automatic-injury-replacement/*.test.mjs",
+    "preverify:batchb2d": "npm run security:sync-repository-automation",
+    "verify:batchb2d:core": "npm run verify:batchb2c:core && npm run test:batchb2d:run && npm run validate:release-manifest",
+    "verify:batchb2d": "npm run toolchain:verify && npm run verify:batchb2d:core && npm run security:dependency-audit",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs && node scripts/release/verify-protected-live-scoring-runtime-contract.mjs"
   },
   "private": true,

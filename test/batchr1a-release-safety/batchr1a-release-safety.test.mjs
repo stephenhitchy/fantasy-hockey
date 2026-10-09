@@ -349,6 +349,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/roster-authority.ts',
 
         'src/roster-moves.ts',
+        // B2D isolates exact manager-authorized automatic injury promotion.
+        'src/automatic-injury-replacement.ts',
 
         // B2A adds isolated add/drop submission receipt and fingerprint helpers.
         'src/shared/core/team/roster-action-idempotency.util.ts',

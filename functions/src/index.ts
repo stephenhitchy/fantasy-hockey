@@ -4500,6 +4500,12 @@ export {
 export { applyImmediateRosterMove } from './roster-moves';
 
 export {
+  processGlobalAutomaticInjuryReplacements,
+  processLeagueAutomaticInjuryReplacement,
+  reconcileAutomaticInjuryReplacements,
+} from './automatic-injury-replacement';
+
+export {
   ensureFantasyRoster,
   executeSecureRosterAction,
 } from './roster-authority';

@@ -426,6 +426,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'roster-authority.ts',
 
     'roster-moves.ts',
+    // B2D isolates exact manager-authorized automatic injury promotion.
+    'automatic-injury-replacement.ts',
     // B2A adds the private deterministic add/drop receipt contract.
     'shared/core/team/roster-action-idempotency.util.ts',
 

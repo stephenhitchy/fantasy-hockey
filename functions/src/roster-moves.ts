@@ -66,6 +66,8 @@ import {
 
 const FUNCTION_REGION = 'us-central1';
 const DEFAULT_GAMES_PER_CYCLE = 6;
+export const AUTOMATIC_INJURY_AVAILABILITY_MAX_AGE_MILLISECONDS =
+  12 * 60 * 60 * 1000;
 
 type ImmediateRosterMoveType =
   | 'add-drop-active'
@@ -86,6 +88,49 @@ interface ImmediateRosterMoveRequest {
   addAsset?: unknown;
   expectedOutgoingAssetKey?: unknown;
   submissionId?: unknown;
+}
+
+export type AutomaticInjuryReplacementSource =
+  | 'global-availability-refresh'
+  | 'league-availability-override'
+  | 'scheduled-backstop';
+
+export interface AutomaticQueuedInjuryReplacementRequest {
+  leagueId: string;
+  ownerId: string;
+  activeSlotId: string;
+  benchSlotId: string;
+  expectedPendingMoveId: string;
+  expectedPendingMoveFingerprint: string;
+  source: AutomaticInjuryReplacementSource;
+}
+
+export interface AutomaticInjuryReplacementReceiptIdentity {
+  submissionId: string;
+  requestFingerprint: string;
+  transactionId: string;
+}
+
+interface ImmediateRosterMoveCallableRequest {
+  auth?: {
+    uid?: string;
+    token?: Record<string, unknown>;
+  } | null;
+  app?: {
+    appId?: string;
+  } | null;
+  data?: unknown;
+}
+
+interface ImmediateRosterMoveExecutionOptions {
+  authenticatedOwnerId: unknown;
+  input: unknown;
+  callableRequest?: ImmediateRosterMoveCallableRequest;
+  automaticInjuryReplacement?: {
+    expectedPendingMoveId: string;
+    expectedPendingMoveFingerprint: string;
+    source: AutomaticInjuryReplacementSource;
+  };
 }
 
 interface SlotWindowContext {
@@ -484,6 +529,50 @@ function assertWindowPreservesSelectedInjuryReplacementPlan(input: {
   }
 }
 
+function assertInjuryReplacementPlanPreservesTransactionProtectedGames(input: {
+  window: Record<string, unknown> | null;
+  previousPlan: InjuryReplacementWindowPlan | null;
+  nextPlan: InjuryReplacementWindowPlan;
+  context: string;
+}): void {
+  const protectedGameIds = getInjuryReplacementProtectedGameIds({
+    completedGameIds: asArray(input.window?.['completedGameIds']) as number[],
+    liveGameIds: asArray(input.window?.['liveGameIds']) as number[],
+    incompleteFinalGameIds: asArray(
+      input.window?.['incompleteFinalGameIds'],
+    ) as number[],
+    appearanceGameIds: asArray(
+      input.window?.['appearanceGameIds'],
+    ) as number[],
+    gameStates: asRecord(input.window?.['gameStates']),
+  });
+
+  if (protectedGameIds.length === 0) {
+    return;
+  }
+
+  if (
+    !hasPreservedInjuryReplacementProtectedGameOwnership({
+      previousPlan: input.previousPlan,
+      nextPlan: input.nextPlan,
+      protectedGameIds,
+      previousAssetKey: asString(input.window?.['assetKey']),
+      previousScheduleTeamAbbreviation: asString(
+        input.window?.['scheduleTeamAbbreviation'],
+      ),
+      previousSourceTeamAbbreviationByGameId: asRecord(
+        input.window?.['sourceTeamAbbreviationByGameId'],
+      ) as Record<string, string>,
+    })
+  ) {
+    throw new HttpsError(
+      'aborted',
+      `${input.context} gained a protected live or final game while the injury replacement was being checked. ` +
+        'No roster move was applied; retry with the latest scoring window.',
+    );
+  }
+}
+
 function rosterContainsAsset(roster: FantasyRoster, assetKey: string): boolean {
   const activeAssets = roster.activeSlots.flatMap((slot) => [
     slot.asset,
@@ -560,6 +649,40 @@ export function getQueuedBenchSwapInjuryPromotionFingerprint(input: {
       incomingAssetKey: getAssetKey(pendingMove.incomingAsset),
     }))
     .digest('hex');
+}
+
+export function createAutomaticInjuryReplacementReceiptIdentity(input: {
+  leagueId: string;
+  ownerId: string;
+  activeSlotId: string;
+  benchSlotId: string;
+  pendingMoveId: string;
+  pendingMoveFingerprint: string;
+}): AutomaticInjuryReplacementReceiptIdentity {
+  const submissionId = `auto_injury_${createHash('sha256')
+    .update(
+      `${input.leagueId}:${input.ownerId}:${input.activeSlotId}:${input.pendingMoveId}`,
+    )
+    .digest('hex')
+    .slice(0, 48)}`;
+  const requestFingerprint = createRosterActionRequestFingerprint({
+    activeSlotId: input.activeSlotId,
+    benchSlotId: input.benchSlotId,
+    expectedPendingMoveId: input.pendingMoveId,
+    expectedPendingMoveFingerprint: input.pendingMoveFingerprint,
+    moveType: 'injury-replacement',
+  });
+
+  return {
+    submissionId,
+    requestFingerprint,
+    transactionId: createRosterActionTransactionId({
+      namespace: 'automatic-injury-replacement',
+      leagueId: input.leagueId,
+      ownerId: input.ownerId,
+      submissionId,
+    }),
+  };
 }
 
 function isExclusiveQueuedBenchSwapReservation(input: {
@@ -692,6 +815,107 @@ export function resolveAuthoritativeAvailabilityStatus(
   return globalStatus || asString(asset.availabilityStatus);
 }
 
+function getTimestampMilliseconds(value: unknown): number | null {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.getTime() : null;
+  }
+
+  const timestamp = value as {
+    toMillis?: () => number;
+    toDate?: () => Date;
+  } | null;
+
+  if (typeof timestamp?.toMillis === 'function') {
+    const milliseconds = timestamp.toMillis();
+
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  if (typeof timestamp?.toDate === 'function') {
+    const milliseconds = timestamp.toDate().getTime();
+
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+
+  const textMilliseconds = typeof value === 'string'
+    ? new Date(value).getTime()
+    : Number.NaN;
+
+  return Number.isFinite(textMilliseconds) ? textMilliseconds : null;
+}
+
+/**
+ * Unattended roster writes require fresh positive authority. Unlike the
+ * manager-triggered compatibility path, automation never trusts a cached
+ * roster asset status when the shared injury report is missing or stale.
+ */
+export function resolveAutomaticInjuryAvailabilityStatus(
+  asset: RosterAsset,
+  leagueOverrideData: unknown,
+  globalAvailabilityData: unknown,
+  nowMilliseconds = Date.now(),
+  expectedLeagueId: string | null = null,
+): string {
+  if (asset.assetType !== 'skater') {
+    return '';
+  }
+
+  const leagueOverrideStatus =
+    resolveTrustedCommissionerAvailabilityStatus(
+      leagueOverrideData,
+      expectedLeagueId,
+      asset.player.id,
+    );
+
+  if (leagueOverrideStatus) {
+    return leagueOverrideStatus;
+  }
+
+  const globalData = asRecord(globalAvailabilityData);
+  const lastSuccessfulMilliseconds = getTimestampMilliseconds(
+    globalData['lastSuccessfulSyncAt'],
+  );
+  const reportIsFresh =
+    lastSuccessfulMilliseconds !== null &&
+    lastSuccessfulMilliseconds <= nowMilliseconds + 5 * 60 * 1000 &&
+    nowMilliseconds - lastSuccessfulMilliseconds <=
+      AUTOMATIC_INJURY_AVAILABILITY_MAX_AGE_MILLISECONDS;
+
+  if (
+    asString(globalData['status']) !== 'success' ||
+    asString(globalData['source']).toUpperCase() !== 'ESPN' ||
+    globalData['draftReadinessSourceComplete'] !== true ||
+    !reportIsFresh
+  ) {
+    return '';
+  }
+
+  const globalRecord = asArray(globalData['records'])
+    .map(asRecord)
+    .find((record) => asNumber(record['playerId'], -1) === asset.player.id);
+
+  return asString(globalRecord?.['status']);
+}
+
+export function resolveTrustedCommissionerAvailabilityStatus(
+  value: unknown,
+  expectedLeagueId: string | null,
+  expectedPlayerId: number,
+): string {
+  const record = asRecord(value);
+
+  if (
+    record['source'] !== 'commissioner' ||
+    asNumber(record['playerId'], -1) !== expectedPlayerId ||
+    (expectedLeagueId !== null &&
+      asString(record['leagueId']) !== expectedLeagueId)
+  ) {
+    return '';
+  }
+
+  return asString(record['status']);
+}
+
 export async function getAuthoritativeAvailabilityStatus(
   leagueId: string,
   asset: RosterAsset,
@@ -709,6 +933,28 @@ export async function getAuthoritativeAvailabilityStatus(
     asset,
     leagueOverrideSnapshot.data(),
     globalAvailabilitySnapshot.data(),
+  );
+}
+
+async function getAutomaticInjuryAvailabilityStatus(
+  leagueId: string,
+  asset: RosterAsset,
+): Promise<string> {
+  if (asset.assetType !== 'skater') {
+    return '';
+  }
+
+  const [leagueOverrideSnapshot, globalAvailabilitySnapshot] = await Promise.all([
+    db.doc(`leagues/${leagueId}/playerAvailability/${asset.player.id}`).get(),
+    db.doc('appData/playerAvailability').get(),
+  ]);
+
+  return resolveAutomaticInjuryAvailabilityStatus(
+    asset,
+    leagueOverrideSnapshot.data(),
+    globalAvailabilitySnapshot.data(),
+    Date.now(),
+    leagueId,
   );
 }
 
@@ -760,6 +1006,30 @@ function getScheduleGameStartMilliseconds(game: NhlScheduleGame): number | null 
 
   const milliseconds = Date.parse(startTimeUTC);
   return Number.isFinite(milliseconds) ? milliseconds : null;
+}
+
+export function getReachedAutomaticInjuryReplacementOwnershipBoundaryGameIds(
+  input: {
+    startMillisecondsByGameId: Readonly<Record<string, number>>;
+    observedAtMilliseconds: number;
+  },
+): number[] {
+  if (!Number.isFinite(input.observedAtMilliseconds)) {
+    return [];
+  }
+
+  return Object.entries(input.startMillisecondsByGameId)
+    .flatMap(([gameIdValue, startMilliseconds]) => {
+      const gameId = Number(gameIdValue);
+
+      return Number.isSafeInteger(gameId) &&
+          gameId > 0 &&
+          Number.isFinite(startMilliseconds) &&
+          startMilliseconds <= input.observedAtMilliseconds
+        ? [gameId]
+        : [];
+    })
+    .sort((left, right) => left - right);
 }
 
 async function loadRosterMoveScheduleForTeam(
@@ -1495,15 +1765,10 @@ function resolveImmediateAddReplayResult(
   };
 }
 
-export const applyImmediateRosterMove = onCall(
-  {
-    region: FUNCTION_REGION,
-    timeoutSeconds: 60,
-    memory: '512MiB',
-    cors: TRUSTED_WEB_ORIGINS,
-  },
-  async (request) => {
-    const authenticatedOwnerId = request.auth?.uid;
+async function executeImmediateRosterMove(
+  options: ImmediateRosterMoveExecutionOptions,
+) {
+    const authenticatedOwnerId = options.authenticatedOwnerId;
     if (!authenticatedOwnerId) {
       throw new HttpsError('unauthenticated', 'You must be signed in to change your roster.');
     }
@@ -1513,17 +1778,19 @@ export const applyImmediateRosterMove = onCall(
       'manager ID',
       { maxBytes: 128 },
     );
-    const input = asRecord(request.data) as unknown as ImmediateRosterMoveRequest;
+    const input = asRecord(options.input) as unknown as ImmediateRosterMoveRequest;
     const leagueId = requireFirestoreDocumentId(input.leagueId, 'league ID', {
       minimumLength: 6,
       maxBytes: 128,
       pattern: /^[A-Za-z0-9_-]+$/,
     });
-    await enforceAppCheckCallableCanaryForLeague(
-      request,
-      'applyImmediateRosterMove',
-      leagueId,
-    );
+    if (options.callableRequest) {
+      await enforceAppCheckCallableCanaryForLeague(
+        options.callableRequest,
+        'applyImmediateRosterMove',
+        leagueId,
+      );
+    }
     const moveType = asString(input.moveType) as ImmediateRosterMoveType;
     const activeSlotId = requireFirestoreDocumentId(
       input.activeSlotId,
@@ -1568,10 +1835,40 @@ export const applyImmediateRosterMove = onCall(
       : '';
     const isImmediateAdd =
       moveType === 'add-drop-active' || moveType === 'add-open-active';
+    const automaticInjuryReplacement = options.automaticInjuryReplacement;
+    const expectedAutomaticPendingMoveId = automaticInjuryReplacement
+      ? requireFirestoreDocumentId(
+          automaticInjuryReplacement.expectedPendingMoveId,
+          'queued roster move ID',
+          {
+            minimumLength: 1,
+            maxBytes: 320,
+          },
+        )
+      : null;
+    const expectedAutomaticPendingMoveFingerprint = automaticInjuryReplacement
+      ? asString(automaticInjuryReplacement.expectedPendingMoveFingerprint)
+      : '';
     const canTargetOpenSlot =
       moveType === 'add-open-active' ||
       moveType === 'active-bench-swap' ||
       moveType === 'activate-ir-active';
+
+    if (automaticInjuryReplacement && moveType !== 'injury-replacement') {
+      throw new HttpsError(
+        'invalid-argument',
+        'Automatic injury automation can only promote an exact queued injury replacement.',
+      );
+    }
+    if (
+      automaticInjuryReplacement &&
+      !/^[a-f0-9]{64}$/.test(expectedAutomaticPendingMoveFingerprint)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Automatic injury automation requires an exact queued-move fingerprint.',
+      );
+    }
 
     if (isImmediateAdd && !requestedAssetKey) {
       throw new HttpsError('invalid-argument', 'The incoming player is required.');
@@ -1595,22 +1892,40 @@ export const applyImmediateRosterMove = onCall(
       throw new HttpsError('invalid-argument', 'The IR slot is required.');
     }
 
-    const requestFingerprint = submissionId && isImmediateAdd
-      ? createRosterActionRequestFingerprint({
-          activeSlotId,
-          addAssetKey: requestedAssetKey,
-          expectedOutgoingAssetKey,
-          moveType,
-        })
-      : null;
-    const transactionRef = submissionId && isImmediateAdd
-      ? db.doc(
-          `leagues/${leagueId}/transactions/${createRosterActionTransactionId({
-            namespace: 'roster-add',
+    const automaticReceiptIdentity =
+      automaticInjuryReplacement && expectedAutomaticPendingMoveId
+        ? createAutomaticInjuryReplacementReceiptIdentity({
             leagueId,
             ownerId,
-            submissionId,
-          })}`,
+            activeSlotId,
+            benchSlotId,
+            pendingMoveId: expectedAutomaticPendingMoveId,
+            pendingMoveFingerprint:
+              expectedAutomaticPendingMoveFingerprint,
+          })
+        : null;
+    const replaySubmissionId = automaticReceiptIdentity?.submissionId ??
+      (submissionId && isImmediateAdd ? submissionId : null);
+    const requestFingerprint = automaticReceiptIdentity?.requestFingerprint ??
+      (replaySubmissionId
+        ? createRosterActionRequestFingerprint({
+            activeSlotId,
+            addAssetKey: requestedAssetKey,
+            expectedOutgoingAssetKey,
+            moveType,
+          })
+        : null);
+    const transactionRef = replaySubmissionId
+      ? db.doc(
+          `leagues/${leagueId}/transactions/${
+            automaticReceiptIdentity?.transactionId ??
+            createRosterActionTransactionId({
+              namespace: 'roster-add',
+              leagueId,
+              ownerId,
+              submissionId: replaySubmissionId,
+            })
+          }`,
         )
       : db.collection(`leagues/${leagueId}/transactions`).doc();
     const [
@@ -1624,7 +1939,7 @@ export const applyImmediateRosterMove = onCall(
       db.doc(`leagues/${leagueId}/members/${ownerId}`).get(),
       db.doc(`leagues/${leagueId}/draft/current`).get(),
       db.collection(`leagues/${leagueId}/teams`).get(),
-      submissionId && isImmediateAdd
+      replaySubmissionId
         ? transactionRef.get()
         : Promise.resolve(null),
     ]);
@@ -1640,7 +1955,7 @@ export const applyImmediateRosterMove = onCall(
     if (replaySnapshot?.exists) {
       const replay = resolveImmediateAddReplayResult(
         replaySnapshot.data(),
-        submissionId,
+        replaySubmissionId,
         requestFingerprint,
       );
       if (replay) {
@@ -1725,6 +2040,16 @@ export const applyImmediateRosterMove = onCall(
       throw new HttpsError('failed-precondition', 'The current active-slot assignment is unavailable.');
     }
 
+    if (
+      expectedAutomaticPendingMoveId &&
+      preflightActiveSlot.pendingMove?.id !== expectedAutomaticPendingMoveId
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The queued bench swap changed before automatic injury replacement began. No move was applied.',
+      );
+    }
+
     if (!preflightActiveSlot.asset && canTargetOpenSlot) {
       if (preflightActiveSlot.openFromCycleNumber !== context.cycleNumber) {
         throw new HttpsError(
@@ -1787,6 +2112,32 @@ export const applyImmediateRosterMove = onCall(
     }
 
     const preflightOutgoingAssetKey = getAssetKey(preflightRosterPickAsset);
+    if (automaticInjuryReplacement) {
+      const preflightBenchAssetKey = getAssetKey(
+        preflightRoster.benchSlots.find(
+          (slot) => slot.slotId === benchSlotId,
+        )?.asset,
+      );
+      const observedPendingMoveFingerprint =
+        getQueuedBenchSwapInjuryPromotionFingerprint({
+          pendingMove: preflightActiveSlot.pendingMove,
+          ownerId,
+          activeSlotId,
+          benchSlotId,
+          outgoingAssetKey: preflightOutgoingAssetKey,
+          incomingAssetKey: preflightBenchAssetKey,
+        });
+
+      if (
+        observedPendingMoveFingerprint !==
+        expectedAutomaticPendingMoveFingerprint
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The queued bench swap changed before automatic injury replacement began. No move was applied.',
+        );
+      }
+    }
     if (
       moveType === 'add-drop-active' &&
       expectedOutgoingAssetKey &&
@@ -1916,10 +2267,15 @@ export const applyImmediateRosterMove = onCall(
         throw new HttpsError('failed-precondition', 'Only skaters can be moved to IR.');
       }
 
-      preflightMoveToIrAvailabilityStatus = await getAuthoritativeAvailabilityStatus(
-        leagueId,
-        preflightActiveAsset,
-      );
+      preflightMoveToIrAvailabilityStatus = automaticInjuryReplacement
+        ? await getAutomaticInjuryAvailabilityStatus(
+            leagueId,
+            preflightActiveAsset,
+          )
+        : await getAuthoritativeAvailabilityStatus(
+            leagueId,
+            preflightActiveAsset,
+          );
 
       if (!IR_ELIGIBLE_STATUSES.has(preflightMoveToIrAvailabilityStatus)) {
         throw new HttpsError(
@@ -2115,6 +2471,10 @@ export const applyImmediateRosterMove = onCall(
     let preflightCurrentSegmentGameIds: number[] = [];
     let preflightInjuryGameDateById: Record<string, string> = {};
     let preflightInjuryGameLabelById: Record<string, string> = {};
+    let preflightInjuryOwnershipChangeStartMillisecondsByGameId: Record<
+      string,
+      number
+    > = {};
 
     if (moveType === 'injury-replacement') {
       if (rosterMoveReplayContext.mode !== 'live') {
@@ -2299,6 +2659,34 @@ export const applyImmediateRosterMove = onCall(
         boundaryMilliseconds: actionBoundaryMilliseconds,
         count: remainingGames,
       });
+      const ownershipChangingGames = [
+        ...currentScheduledGameIds
+          .filter((gameId) => !startedCurrentGameIds.has(gameId))
+          .map((gameId) => outgoingSchedule.find((game) => game.id === gameId)),
+        ...incomingGames,
+      ];
+      preflightInjuryOwnershipChangeStartMillisecondsByGameId =
+        Object.fromEntries(
+          ownershipChangingGames.map((game) => {
+            const gameId = game?.id;
+            const startMilliseconds = game
+              ? getScheduleGameStartMilliseconds(game)
+              : null;
+
+            if (
+              typeof gameId !== 'number' ||
+              !Number.isSafeInteger(gameId) ||
+              startMilliseconds === null
+            ) {
+              throw new HttpsError(
+                'failed-precondition',
+                'An ownership-changing NHL game is missing its exact puck-drop evidence. No roster move was applied.',
+              );
+            }
+
+            return [String(gameId), startMilliseconds];
+          }),
+        );
       const incomingContinuity = createPlayerWindowContinuity({
         ownerId,
         rosterSlotId: activeSlotId,
@@ -2412,7 +2800,7 @@ export const applyImmediateRosterMove = onCall(
         ...allRosterSnapshots
       ] =
         await Promise.all([
-          submissionId && isImmediateAdd
+          replaySubmissionId
             ? transaction.get(transactionRef)
             : Promise.resolve(null),
           transaction.get(rosterRef),
@@ -2431,7 +2819,7 @@ export const applyImmediateRosterMove = onCall(
       if (submissionSnapshot?.exists) {
         const replay = resolveImmediateAddReplayResult(
           submissionSnapshot.data(),
-          submissionId,
+          replaySubmissionId,
           requestFingerprint,
         );
         if (replay) {
@@ -2446,6 +2834,17 @@ export const applyImmediateRosterMove = onCall(
         (playoffBankRef && !playoffBankSnapshot?.exists)
       ) {
         throw new HttpsError('failed-precondition', 'The current roster assignment is unavailable.');
+      }
+
+      const transactionCycleData = cycleSnapshot.data() ?? {};
+      if (
+        asString(transactionCycleData['status']) !== 'active' ||
+        asNumber(transactionCycleData['cycleNumber']) !== context.cycleNumber
+      ) {
+        throw new HttpsError(
+          'aborted',
+          'The active matchup changed while the roster move was being checked. No move was applied.',
+        );
       }
 
       const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
@@ -2547,7 +2946,10 @@ export const applyImmediateRosterMove = onCall(
         }
       }
 
-      if (canTargetOpenSlot && asString(teamWindowsData['status']) === 'complete') {
+      if (
+        (canTargetOpenSlot || moveType === 'injury-replacement') &&
+        asString(teamWindowsData['status']) === 'complete'
+      ) {
         throw new HttpsError(
           'failed-precondition',
           `Cycle ${context.cycleNumber} is already complete for this team. The move must begin in the next cycle.`,
@@ -2601,12 +3003,19 @@ export const applyImmediateRosterMove = onCall(
             ),
             transaction.get(db.doc('appData/playerAvailability')),
           ]);
-        transactionMoveToIrAvailabilityStatus =
-          resolveAuthoritativeAvailabilityStatus(
-            outgoingAsset,
-            leagueOverrideSnapshot.data(),
-            globalAvailabilitySnapshot.data(),
-          );
+        transactionMoveToIrAvailabilityStatus = automaticInjuryReplacement
+          ? resolveAutomaticInjuryAvailabilityStatus(
+              outgoingAsset,
+              leagueOverrideSnapshot.data(),
+              globalAvailabilitySnapshot.data(),
+              Date.now(),
+              leagueId,
+            )
+          : resolveAuthoritativeAvailabilityStatus(
+              outgoingAsset,
+              leagueOverrideSnapshot.data(),
+              globalAvailabilitySnapshot.data(),
+            );
 
         if (!IR_ELIGIBLE_STATUSES.has(transactionMoveToIrAvailabilityStatus)) {
           throw new HttpsError(
@@ -2900,6 +3309,38 @@ export const applyImmediateRosterMove = onCall(
             'aborted',
             'The scoring window changed while the injury replacement was being checked. Please try again.',
           );
+        }
+
+        if (automaticInjuryReplacement) {
+          const crossedPuckDropGameIds =
+            getReachedAutomaticInjuryReplacementOwnershipBoundaryGameIds({
+              startMillisecondsByGameId:
+                preflightInjuryOwnershipChangeStartMillisecondsByGameId,
+              observedAtMilliseconds: Date.now(),
+            });
+
+          if (crossedPuckDropGameIds.length > 0) {
+            throw new HttpsError(
+              'aborted',
+              `NHL game ${crossedPuckDropGameIds.join(', ')} reached puck drop while the automatic injury replacement was being checked. ` +
+                'No roster move was applied; the next retry will use fresh game ownership.',
+            );
+          }
+        }
+
+        assertInjuryReplacementPlanPreservesTransactionProtectedGames({
+          window: savedWindow,
+          previousPlan: savedExistingPlan,
+          nextPlan: preflightInjuryPlan,
+          context: 'The current cycle window',
+        });
+        if (playoffBankData) {
+          assertInjuryReplacementPlanPreservesTransactionProtectedGames({
+            window: savedBankWindow,
+            previousPlan: savedExistingPlan,
+            nextPlan: preflightInjuryPlan,
+            context: 'The assigned playoff bank window',
+          });
         }
 
         const openIrSlotIndex = roster.irSlots.findIndex((slot) => slot.asset === null);
@@ -3577,6 +4018,15 @@ export const applyImmediateRosterMove = onCall(
         ...(supersededQueuedMoveId
           ? { supersededQueuedMoveId }
           : {}),
+        ...(automaticInjuryReplacement
+          ? {
+              actorType: 'availability-automation',
+              automaticInjuryReplacementSource:
+                automaticInjuryReplacement.source,
+              automaticInjuryReplacementPendingMoveId:
+                expectedAutomaticPendingMoveId,
+            }
+          : {}),
         ...(rosterMoveIdentity
           ? {
               nhlPlayerTeamIdentityHash: rosterMoveIdentity.identityHash,
@@ -3585,8 +4035,8 @@ export const applyImmediateRosterMove = onCall(
             }
           : {}),
         ...buildRosterActionSubmissionEvidence({
-          submissionId: isImmediateAdd ? submissionId : null,
-          requestFingerprint: isImmediateAdd ? requestFingerprint : null,
+          submissionId: replaySubmissionId,
+          requestFingerprint,
           result: { ...result },
         }),
         createdAt: FieldValue.serverTimestamp(),
@@ -3594,5 +4044,37 @@ export const applyImmediateRosterMove = onCall(
 
       return result;
     });
+}
+
+export async function applyAutomaticQueuedInjuryReplacement(
+  input: AutomaticQueuedInjuryReplacementRequest,
+) {
+  return executeImmediateRosterMove({
+    authenticatedOwnerId: input.ownerId,
+    input: {
+      leagueId: input.leagueId,
+      moveType: 'injury-replacement',
+      activeSlotId: input.activeSlotId,
+      benchSlotId: input.benchSlotId,
+    },
+    automaticInjuryReplacement: {
+      expectedPendingMoveId: input.expectedPendingMoveId,
+      expectedPendingMoveFingerprint: input.expectedPendingMoveFingerprint,
+      source: input.source,
+    },
+  });
+}
+
+export const applyImmediateRosterMove = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 60,
+    memory: '512MiB',
+    cors: TRUSTED_WEB_ORIGINS,
   },
+  async (request) => executeImmediateRosterMove({
+    authenticatedOwnerId: request.auth?.uid,
+    input: request.data,
+    callableRequest: request,
+  }),
 );

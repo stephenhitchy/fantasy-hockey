@@ -27,8 +27,8 @@ test('roster-move timing refreshes stable-id team identity and persists provenan
   );
   const callable = section(
     text,
-    'export const applyImmediateRosterMove = onCall',
-    'const transactionType = moveType ===',
+    'async function executeImmediateRosterMove(',
+    'export async function applyAutomaticQueuedInjuryReplacement(',
   );
 
   assert.match(callable, /loadCurrentNhlPlayerTeamIdentity\(\{/);
@@ -287,8 +287,8 @@ test('immediate playoff moves synchronize the bank and replace outgoing frozen i
   ]);
   const callable = section(
     moves,
-    'export const applyImmediateRosterMove = onCall',
-    'const transactionType = moveType ===',
+    'async function executeImmediateRosterMove(',
+    'export async function applyAutomaticQueuedInjuryReplacement(',
   );
   const bankSync = section(
     playoffs,

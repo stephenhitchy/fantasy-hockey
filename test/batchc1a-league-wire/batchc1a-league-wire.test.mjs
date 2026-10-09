@@ -322,7 +322,7 @@ test('active integrity tests share one approved current Firestore Rules baseline
   assert.deepEqual(staleHistoricalHashes, []);
 });
 
-test('legacy release and Functions-tree guards recognize approved C1A through D1L additions', async () => {
+test('legacy release and Functions-tree guards recognize approved C1A through B2D additions', async () => {
   const executableTests = await listExecutableTests();
   const missingFunctionTreeExclusions = [];
   const staleReleaseFamilyAllowlists = [];
@@ -347,7 +347,10 @@ test('legacy release and Functions-tree guards recognize approved C1A through D1
         !source.includes("'src/shared/core/cycle/cycle.models.ts'") ||
         !source.includes("'src/shared/core/nhl/nhl-canonical-publication-outbox.service.ts'") ||
         !source.includes("'src/shared/core/nhl/nhl-final-input-completeness.util.ts'") ||
-        !source.includes("'src/shared/core/playoffs/playoff-window-bank.service.ts'"))
+        !source.includes("'src/shared/core/playoffs/playoff-window-bank.service.ts'") ||
+        !source.includes("'src/automatic-injury-replacement.ts'") ||
+        !source.includes("'src/roster-moves.ts'") ||
+        !source.includes("'src/shared/core/team/roster-action-idempotency.util.ts'"))
     ) {
       missingFunctionTreeExclusions.push(relativePath);
     }
@@ -361,7 +364,10 @@ test('legacy release and Functions-tree guards recognize approved C1A through D1
         !source.includes("'shared/core/cycle/cycle.models.ts'") ||
         !source.includes("'shared/core/nhl/nhl-canonical-publication-outbox.service.ts'") ||
         !source.includes("'shared/core/nhl/nhl-final-input-completeness.util.ts'") ||
-        !source.includes("'shared/core/playoffs/playoff-window-bank.service.ts'"))
+        !source.includes("'shared/core/playoffs/playoff-window-bank.service.ts'") ||
+        !source.includes("'automatic-injury-replacement.ts'") ||
+        !source.includes("'roster-moves.ts'") ||
+        !source.includes("'shared/core/team/roster-action-idempotency.util.ts'"))
     ) {
       missingFunctionTreeExclusions.push(relativePath);
     }
