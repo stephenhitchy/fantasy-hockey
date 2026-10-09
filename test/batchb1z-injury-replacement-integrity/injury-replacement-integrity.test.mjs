@@ -62,6 +62,9 @@ const {
 } = require(
   '../../functions/lib/shared/core/cycle/injury-replacement-window.util.js',
 );
+const {
+  getQueuedBenchSwapInjuryPromotionFingerprint,
+} = require('../../functions/lib/roster-moves.js');
 const cycleScoring = require(
   '../../functions/lib/shared/core/cycle/cycle-scoring.service.js',
 );
@@ -147,6 +150,35 @@ function scoreSource(plan, input = {}) {
 }
 
 describe('injury-replacement ownership integrity', () => {
+  test('four started games stay with the injured player and only the final two belong to the replacement', () => {
+    const plan = firstReplacementPlan(new Set([101, 102, 103, 104]));
+    const normalized = normalizeInjuryReplacementWindowPlan(plan);
+
+    assert.ok(normalized);
+    assert.deepEqual(
+      normalized.segments.map((segment) => ({
+        assetKey: segment.assetKey,
+        gameIds: segment.scheduledGameIds,
+      })),
+      [
+        { assetKey: 'skater-1', gameIds: [101, 102, 103, 104] },
+        { assetKey: 'skater-2', gameIds: [201, 202] },
+      ],
+    );
+    assert.equal(getInjuryReplacementGameIds(normalized).length, 6);
+    assert.deepEqual(
+      getInjuryReplacementAssetKeyByGameId(normalized),
+      {
+        101: 'skater-1',
+        102: 'skater-1',
+        103: 'skater-1',
+        104: 'skater-1',
+        201: 'skater-2',
+        202: 'skater-2',
+      },
+    );
+  });
+
   test('a replacement before game one retains the outgoing player as an empty audit segment', () => {
     const plan = firstReplacementPlan(new Set());
     const normalized = normalizeInjuryReplacementWindowPlan(plan);
@@ -948,7 +980,76 @@ describe('injury-replacement score presentation', () => {
 });
 
 describe('injury-replacement server authority contracts', () => {
-  test('rejects a reserved incoming bench player both before slow work and again in the transaction', async () => {
+  test('fingerprints only the exact same-slot queued bench swap and detects any later change', () => {
+    const pendingMove = {
+      id: 'owner-a__C-1__queued',
+      moveType: 'add-drop',
+      incomingAsset: firstReplacement,
+      outgoingAssetKey: injuredStarter.assetKey,
+      sourceWaiverId: null,
+      queuedByOwnerId: 'owner-a',
+      queuedAt: '2026-10-09T12:00:00.000Z',
+      requestedEffectiveCycleNumber: 2,
+      requestedEffectiveLabel: 'Cycle 2',
+      sourceBenchSlotId: 'B-1',
+      outgoingDestination: 'bench',
+    };
+    const exact = {
+      pendingMove,
+      ownerId: 'owner-a',
+      activeSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      outgoingAssetKey: injuredStarter.assetKey,
+      incomingAssetKey: firstReplacement.assetKey,
+    };
+    const fingerprint = getQueuedBenchSwapInjuryPromotionFingerprint(exact);
+
+    assert.match(fingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(
+      getQueuedBenchSwapInjuryPromotionFingerprint(structuredClone(exact)),
+      fingerprint,
+    );
+    assert.notEqual(
+      getQueuedBenchSwapInjuryPromotionFingerprint({
+        ...exact,
+        pendingMove: {
+          ...pendingMove,
+          queuedAt: '2026-10-09T12:00:01.000Z',
+        },
+      }),
+      fingerprint,
+    );
+    assert.notEqual(
+      getQueuedBenchSwapInjuryPromotionFingerprint({
+        ...exact,
+        activeSlotId: 'C-2',
+      }),
+      fingerprint,
+    );
+
+    const invalidPendingMoves = [
+      { ...pendingMove, id: '' },
+      { ...pendingMove, moveType: 'waiver-award' },
+      { ...pendingMove, queuedByOwnerId: 'owner-b' },
+      { ...pendingMove, sourceBenchSlotId: 'B-2' },
+      { ...pendingMove, sourceWaiverId: 'waiver-1' },
+      { ...pendingMove, outgoingDestination: 'waivers' },
+      { ...pendingMove, outgoingAssetKey: 'skater-999' },
+      { ...pendingMove, incomingAsset: secondReplacement },
+    ];
+
+    for (const candidate of invalidPendingMoves) {
+      assert.equal(
+        getQueuedBenchSwapInjuryPromotionFingerprint({
+          ...exact,
+          pendingMove: candidate,
+        }),
+        null,
+      );
+    }
+  });
+
+  test('promotes only an exact reserved bench swap and rechecks it atomically with audit evidence', async () => {
     const rosterMoves = await source('functions/src/roster-moves.ts');
     const preflightBench = section(
       rosterMoves,
@@ -965,12 +1066,22 @@ describe('injury-replacement server authority contracts', () => {
       preflightBench,
       /isBenchSlotReserved\(preflightRoster,\s*(?:benchSlotId|preflightBenchSlot\.slotId)\)/,
     );
+    assert.match(preflightBench, /getQueuedBenchSwapInjuryPromotionFingerprint/);
+    assert.match(preflightBench, /isExclusiveQueuedBenchSwapReservation/);
+    assert.match(preflightBench, /!queuedMovePromotionIsExclusive/);
     assert.match(
       transactionInjuryReplacement,
       /isBenchSlotReserved\(roster,\s*(?:benchSlotId|benchSlot\.slotId)\)/,
     );
+    assert.match(
+      transactionInjuryReplacement,
+      /queuedMovePromotionFingerprint\s*!==\s*preflightSupersededQueuedMoveFingerprint/,
+    );
+    assert.match(transactionInjuryReplacement, /!queuedMovePromotionIsExclusive/);
+    assert.match(transactionInjuryReplacement, /supersededQueuedMoveId/);
     assert.match(preflightBench, /reserved for another scheduled lineup move/i);
     assert.match(transactionInjuryReplacement, /reserved for another scheduled lineup move/i);
+    assert.match(rosterMoves, /\{ supersededQueuedMoveId \}/);
   });
 
   test('rereads authoritative injury eligibility inside the Firestore transaction', async () => {

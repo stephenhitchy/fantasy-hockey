@@ -34,6 +34,7 @@ import {
 } from './shared/core/draft/draft.models';
 import {
   FantasyRoster,
+  PendingRosterSlotMove,
   RosterAsset,
 } from './shared/core/team/roster.models';
 import { normalizeFantasyRoster } from './shared/core/team/roster.service';
@@ -505,6 +506,78 @@ function isBenchSlotReserved(roster: FantasyRoster, benchSlotId: string): boolea
     slot.pendingMove?.sourceBenchSlotId === benchSlotId &&
     getAssetKey(slot.pendingMove.incomingAsset) === assetKey,
   );
+}
+
+export function getQueuedBenchSwapInjuryPromotionFingerprint(input: {
+  pendingMove: PendingRosterSlotMove | null | undefined;
+  ownerId: string;
+  activeSlotId: string;
+  benchSlotId: string;
+  outgoingAssetKey: string;
+  incomingAssetKey: string;
+}): string | null {
+  const pendingMove = input.pendingMove;
+  const pendingMoveId = asString(pendingMove?.id);
+  const ownerId = asString(input.ownerId);
+  const activeSlotId = asString(input.activeSlotId);
+  const benchSlotId = asString(input.benchSlotId);
+  const outgoingAssetKey = asString(input.outgoingAssetKey);
+  const incomingAssetKey = asString(input.incomingAssetKey);
+
+  if (
+    !pendingMove ||
+    !pendingMoveId ||
+    !ownerId ||
+    !activeSlotId ||
+    !benchSlotId ||
+    !outgoingAssetKey ||
+    !incomingAssetKey ||
+    pendingMove.moveType !== 'add-drop' ||
+    pendingMove.queuedByOwnerId !== ownerId ||
+    pendingMove.sourceBenchSlotId !== benchSlotId ||
+    pendingMove.sourceWaiverId !== null ||
+    pendingMove.outgoingDestination !== 'bench' ||
+    pendingMove.outgoingAssetKey !== outgoingAssetKey ||
+    getAssetKey(pendingMove.incomingAsset) !== incomingAssetKey
+  ) {
+    return null;
+  }
+
+  return createHash('sha256')
+    .update(JSON.stringify({
+      activeSlotId,
+      pendingMoveId,
+      moveType: pendingMove.moveType,
+      queuedByOwnerId: pendingMove.queuedByOwnerId,
+      queuedAt: pendingMove.queuedAt,
+      requestedEffectiveCycleNumber:
+        pendingMove.requestedEffectiveCycleNumber,
+      requestedEffectiveLabel: pendingMove.requestedEffectiveLabel,
+      sourceBenchSlotId: pendingMove.sourceBenchSlotId,
+      sourceWaiverId: pendingMove.sourceWaiverId,
+      outgoingDestination: pendingMove.outgoingDestination,
+      outgoingAssetKey: pendingMove.outgoingAssetKey,
+      incomingAssetKey: getAssetKey(pendingMove.incomingAsset),
+    }))
+    .digest('hex');
+}
+
+function isExclusiveQueuedBenchSwapReservation(input: {
+  roster: FantasyRoster;
+  activeSlotId: string;
+  benchSlotId: string;
+  pendingMoveId: string;
+  incomingAssetKey: string;
+}): boolean {
+  const reservations = input.roster.activeSlots.filter(
+    (slot) => slot.pendingMove?.sourceBenchSlotId === input.benchSlotId,
+  );
+
+  return reservations.length === 1 &&
+    reservations[0].slotId === input.activeSlotId &&
+    reservations[0].pendingMove?.id === input.pendingMoveId &&
+    getAssetKey(reservations[0].pendingMove?.incomingAsset) ===
+      input.incomingAssetKey;
 }
 
 function createRosterAsset(asset: DraftableAsset, cycleNumber: number, status: 'new' | 'active' | 'benched'): RosterAsset {
@@ -1858,6 +1931,8 @@ export const applyImmediateRosterMove = onCall(
 
     let preflightBenchAssetKey = '';
     let preflightBenchEligibilityCycle: number | null = null;
+    let preflightSupersededQueuedMoveId = '';
+    let preflightSupersededQueuedMoveFingerprint = '';
     let preflightIrAssetKey = '';
     let preflightIrEligibilityCycle: number | null = null;
     let preflightIrBenchSlotId = '';
@@ -1883,14 +1958,61 @@ export const applyImmediateRosterMove = onCall(
           throw new HttpsError('failed-precondition', 'The selected bench player is unavailable.');
         }
 
-        if (isBenchSlotReserved(preflightRoster, benchSlotId)) {
+        preflightBenchAssetKey = getAssetKey(preflightBenchAsset);
+        const queuedMovePromotionFingerprint =
+          moveType === 'injury-replacement'
+            ? getQueuedBenchSwapInjuryPromotionFingerprint({
+                pendingMove: preflightActiveSlot.pendingMove,
+                ownerId,
+                activeSlotId,
+                benchSlotId,
+                outgoingAssetKey: preflightOutgoingAssetKey,
+                incomingAssetKey: preflightBenchAssetKey,
+              })
+            : null;
+        const queuedMovePromotionIsExclusive = Boolean(
+          queuedMovePromotionFingerprint &&
+          preflightActiveSlot.pendingMove &&
+          isExclusiveQueuedBenchSwapReservation({
+            roster: preflightRoster,
+            activeSlotId,
+            benchSlotId,
+            pendingMoveId: preflightActiveSlot.pendingMove.id,
+            incomingAssetKey: preflightBenchAssetKey,
+          }),
+        );
+
+        if (
+          moveType === 'injury-replacement' &&
+          preflightActiveSlot.pendingMove &&
+          !queuedMovePromotionIsExclusive
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'That active slot already has a different queued move. Cancel it before replacing the injured player.',
+          );
+        }
+
+        if (
+          isBenchSlotReserved(preflightRoster, benchSlotId) &&
+          !queuedMovePromotionIsExclusive
+        ) {
           throw new HttpsError(
             'failed-precondition',
             'That bench player is reserved for another scheduled lineup move.',
           );
         }
 
-        preflightBenchAssetKey = getAssetKey(preflightBenchAsset);
+        if (
+          queuedMovePromotionIsExclusive &&
+          preflightActiveSlot.pendingMove &&
+          queuedMovePromotionFingerprint
+        ) {
+          preflightSupersededQueuedMoveId = preflightActiveSlot.pendingMove.id;
+          preflightSupersededQueuedMoveFingerprint =
+            queuedMovePromotionFingerprint;
+        }
+
         if (moveType === 'active-bench-swap') {
           preflightBenchEligibilityCycle = Math.max(
             preflightBenchAsset.eligibleFromCycleNumber ?? 1,
@@ -2333,7 +2455,10 @@ export const applyImmediateRosterMove = onCall(
       }
 
       const activeSlot = roster.activeSlots[activeSlotIndex];
-      if (activeSlot.pendingMove) {
+      // Injury replacement reaches its branch so the transaction can promote
+      // one exact same-slot bench reservation. Every other pending move still
+      // fails closed during the fingerprint and exclusivity checks below.
+      if (activeSlot.pendingMove && moveType !== 'injury-replacement') {
         throw new HttpsError('failed-precondition', 'That active slot already has a queued move.');
       }
 
@@ -2457,6 +2582,7 @@ export const applyImmediateRosterMove = onCall(
         : outgoingAsset;
       let benchSlotIdForTransaction: string | null = null;
       let irSlotIdForTransaction: string | null = null;
+      let supersededQueuedMoveId: string | null = null;
       const removesActiveAssignment =
         moveType === 'move-active-to-ir' || moveType === 'drop-active';
 
@@ -2646,7 +2772,54 @@ export const applyImmediateRosterMove = onCall(
             'The injured player or selected bench replacement is no longer available.',
           );
         }
-        if (isBenchSlotReserved(roster, benchSlotId)) {
+
+        const queuedMovePromotionFingerprint =
+          getQueuedBenchSwapInjuryPromotionFingerprint({
+            pendingMove: activeSlot.pendingMove,
+            ownerId,
+            activeSlotId,
+            benchSlotId,
+            outgoingAssetKey: getAssetKey(outgoingAsset),
+            incomingAssetKey: getAssetKey(benchAsset),
+          });
+        const queuedMovePromotionIsExclusive = Boolean(
+          queuedMovePromotionFingerprint &&
+          activeSlot.pendingMove &&
+          isExclusiveQueuedBenchSwapReservation({
+            roster,
+            activeSlotId,
+            benchSlotId,
+            pendingMoveId: activeSlot.pendingMove.id,
+            incomingAssetKey: getAssetKey(benchAsset),
+          }),
+        );
+
+        if (preflightSupersededQueuedMoveId) {
+          if (
+            !activeSlot.pendingMove ||
+            activeSlot.pendingMove.id !== preflightSupersededQueuedMoveId ||
+            queuedMovePromotionFingerprint !==
+              preflightSupersededQueuedMoveFingerprint ||
+            !queuedMovePromotionIsExclusive
+          ) {
+            throw new HttpsError(
+              'aborted',
+              'The queued bench swap changed while the injury replacement was being checked. Please try again.',
+            );
+          }
+
+          supersededQueuedMoveId = preflightSupersededQueuedMoveId;
+        } else if (activeSlot.pendingMove) {
+          throw new HttpsError(
+            'aborted',
+            'A queued move was added to this active slot while the injury replacement was being checked. Please try again.',
+          );
+        }
+
+        if (
+          isBenchSlotReserved(roster, benchSlotId) &&
+          !supersededQueuedMoveId
+        ) {
           throw new HttpsError(
             'failed-precondition',
             'That bench player is reserved for another scheduled lineup move.',
@@ -3401,6 +3574,9 @@ export const applyImmediateRosterMove = onCall(
         availabilityStatus: moveType === 'injury-replacement'
           ? transactionMoveToIrAvailabilityStatus
           : null,
+        ...(supersededQueuedMoveId
+          ? { supersededQueuedMoveId }
+          : {}),
         ...(rosterMoveIdentity
           ? {
               nhlPlayerTeamIdentityHash: rosterMoveIdentity.identityHash,

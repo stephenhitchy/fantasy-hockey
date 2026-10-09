@@ -116,6 +116,7 @@ import { CompetitiveActionMonitorService } from '../../../core/observability/com
 import {
   buildFreeAgentRosterTargetQuery,
   buildRosterManagementActions,
+  isExactQueuedBenchSwapPromotion,
   type RosterManagementAction,
   type RosterManagementActionId,
   type RosterManagementArea,
@@ -444,6 +445,9 @@ export class TeamSettings implements OnDestroy {
     const benchStartTargets = benchSlot?.asset
       ? this.getPositionSlots(benchSlot.asset.position).filter((slot) => !slot.pendingMove)
       : [];
+    const canReplaceInjuredPlayerNow = Boolean(
+      activeSlot && this.getImmediateInjuryReplacementBenchSlots(activeSlot).length > 0,
+    );
     const irBenchTargets = irSlot?.asset
       ? this.getIrBenchActivationTargets().filter(
           (slot) => !this.isBenchSlotReservedForActiveSwap(slot),
@@ -471,6 +475,7 @@ export class TeamSettings implements OnDestroy {
           ? this.canMoveBenchSlotToIr(benchSlot)
           : false,
       moveToIrDisabledReason,
+      canReplaceInjuredPlayerNow,
       canStartFromBench: benchStartTargets.length > 0,
       startDisabledReason:
         benchSlot?.asset && benchStartTargets.length === 0
@@ -1070,6 +1075,7 @@ export class TeamSettings implements OnDestroy {
         return;
 
       case 'swap-with-bench':
+      case 'replace-injured-now':
         this.closeRosterManager();
         this.beginActiveBenchSwapPicker(slotId);
         return;
@@ -1764,10 +1770,14 @@ export class TeamSettings implements OnDestroy {
       (slot) => slot.slotId === activeSlotId,
     );
 
-    if (!activeSlot?.asset || activeSlot.pendingMove) {
+    const promotableQueuedBenchSlot = activeSlot
+      ? this.getPromotableQueuedBenchSwapSlot(activeSlot)
+      : null;
+
+    if (!activeSlot?.asset || (activeSlot.pendingMove && !promotableQueuedBenchSlot)) {
       this.rosterMoveError.set(
         activeSlot?.pendingMove
-          ? 'That active roster slot already has a scheduled move.'
+          ? 'That active roster slot has a different scheduled move. Review or cancel it before choosing an injury replacement.'
           : 'That active roster slot is empty.',
       );
       return;
@@ -1796,6 +1806,14 @@ export class TeamSettings implements OnDestroy {
     return this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null;
   }
 
+  isActiveBenchPickerInjuryReplacement(): boolean {
+    const activeSlot = this.getPendingActiveBenchSwapSlot();
+
+    return Boolean(
+      activeSlot && this.getImmediateInjuryReplacementBenchSlots(activeSlot).length > 0,
+    );
+  }
+
   getActiveBenchSwapCandidates(): BenchRosterSlot[] {
     const activeSlot = this.getPendingActiveBenchSwapSlot();
 
@@ -1803,9 +1821,87 @@ export class TeamSettings implements OnDestroy {
       return [];
     }
 
+    if (activeSlot.pendingMove) {
+      const queuedBenchSlot = this.getPromotableQueuedBenchSwapSlot(activeSlot);
+      return queuedBenchSlot ? [queuedBenchSlot] : [];
+    }
+
     return this.getBenchSlots().filter(
       (slot) =>
         slot.asset?.position === activeSlot.position &&
+        !this.isBenchSlotReservedForActiveSwap(slot),
+    );
+  }
+
+  private isActiveSlotEligibleForImmediateInjuryReplacement(slot: ActiveRosterSlot): boolean {
+    return Boolean(
+      this.isOwnTeam() &&
+      slot.asset?.assetType === 'skater' &&
+      this.isPlayerIrEligible(slot.asset) &&
+      this.getOpenIrSlotCount() > 0,
+    );
+  }
+
+  private isExactPromotableQueuedBenchSwap(
+    activeSlot: ActiveRosterSlot,
+    benchSlot: BenchRosterSlot | null,
+  ): boolean {
+    const pendingMove = activeSlot.pendingMove;
+
+    if (
+      !pendingMove ||
+      !benchSlot?.asset ||
+      !activeSlot.asset ||
+      !this.isActiveSlotEligibleForImmediateInjuryReplacement(activeSlot)
+    ) {
+      return false;
+    }
+
+    const activeAssetKey = this.getRosterAssetKey(activeSlot.asset);
+    const benchAssetKey = this.getRosterAssetKey(benchSlot.asset);
+
+    return isExactQueuedBenchSwapPromotion({
+      managerId: this.userId,
+      activeAssetKey,
+      activePosition: activeSlot.position,
+      pendingMove: {
+        moveType: pendingMove.moveType,
+        incomingAssetKey: this.getRosterAssetKey(pendingMove.incomingAsset),
+        outgoingAssetKey: pendingMove.outgoingAssetKey,
+        sourceWaiverId: pendingMove.sourceWaiverId,
+        queuedByOwnerId: pendingMove.queuedByOwnerId,
+        sourceBenchSlotId: pendingMove.sourceBenchSlotId,
+        outgoingDestination: pendingMove.outgoingDestination,
+      },
+      benchSlotId: benchSlot.slotId,
+      benchAssetKey,
+      benchPosition: benchSlot.asset.position,
+    });
+  }
+
+  private getPromotableQueuedBenchSwapSlot(activeSlot: ActiveRosterSlot): BenchRosterSlot | null {
+    const sourceBenchSlotId = activeSlot.pendingMove?.sourceBenchSlotId ?? '';
+    const benchSlot = sourceBenchSlotId
+      ? (this.getBenchSlots().find((slot) => slot.slotId === sourceBenchSlotId) ?? null)
+      : null;
+
+    return this.isExactPromotableQueuedBenchSwap(activeSlot, benchSlot) ? benchSlot : null;
+  }
+
+  private getImmediateInjuryReplacementBenchSlots(activeSlot: ActiveRosterSlot): BenchRosterSlot[] {
+    if (!this.isActiveSlotEligibleForImmediateInjuryReplacement(activeSlot)) {
+      return [];
+    }
+
+    if (activeSlot.pendingMove) {
+      const queuedBenchSlot = this.getPromotableQueuedBenchSwapSlot(activeSlot);
+      return queuedBenchSlot ? [queuedBenchSlot] : [];
+    }
+
+    return this.getBenchSlots().filter(
+      (slot) =>
+        slot.asset?.assetType === 'skater' &&
+        slot.asset.position === activeSlot.position &&
         !this.isBenchSlotReservedForActiveSwap(slot),
     );
   }
@@ -1842,7 +1938,7 @@ export class TeamSettings implements OnDestroy {
     }
 
     const targets = this.getPositionSlots(benchSlot.asset.position).filter(
-      (slot) => !slot.pendingMove,
+      (slot) => !slot.pendingMove || this.isExactPromotableQueuedBenchSwap(slot, benchSlot),
     );
     if (targets.length === 0) {
       this.rosterMoveError.set(
@@ -1912,7 +2008,9 @@ export class TeamSettings implements OnDestroy {
   getBenchSwapTargetSlots(): ActiveRosterSlot[] {
     const benchSlot = this.getPendingBenchSwapSlot();
     const targets = benchSlot?.asset
-      ? this.getPositionSlots(benchSlot.asset.position).filter((slot) => !slot.pendingMove)
+      ? this.getPositionSlots(benchSlot.asset.position).filter(
+          (slot) => !slot.pendingMove || this.isExactPromotableQueuedBenchSwap(slot, benchSlot),
+        )
       : [];
     const restrictedTargetSlotId = this.benchSwapRestrictedTargetSlotId();
 
@@ -2012,7 +2110,9 @@ export class TeamSettings implements OnDestroy {
       benchAsset?.assetType === 'skater' &&
       targetSlot?.asset?.assetType === 'skater' &&
       targetSlot.asset.position === benchAsset.position &&
-      this.canMoveSlotToIr(targetSlot),
+      this.isActiveSlotEligibleForImmediateInjuryReplacement(targetSlot) &&
+      (!targetSlot.pendingMove ||
+        this.isExactPromotableQueuedBenchSwap(targetSlot, this.getPendingBenchSwapSlot())),
     );
   }
 

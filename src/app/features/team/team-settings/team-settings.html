@@ -1121,9 +1121,21 @@
 
     <app-action-sheet
       [open]="isOwnTeam() && activeBenchPickerOpen()"
-      title="Swap with Bench"
-      eyebrow="Active Lineup Change"
-      description="Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary before you confirm."
+      [title]="
+        isActiveBenchPickerInjuryReplacement()
+          ? 'Replace Injured Player Now'
+          : 'Swap with Bench'
+      "
+      [eyebrow]="
+        isActiveBenchPickerInjuryReplacement()
+          ? 'Immediate Injury Replacement'
+          : 'Active Lineup Change'
+      "
+      [description]="
+        isActiveBenchPickerInjuryReplacement()
+          ? 'Choose the compatible bench player who should take only this slot’s remaining future games. All games and points already started stay protected.'
+          : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary before you confirm.'
+      "
       [busy]="isRosterOperationPending()"
       closeLabel="Close bench player choices"
       dialogId="active-bench-picker-title"

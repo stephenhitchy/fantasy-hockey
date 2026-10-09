@@ -39,9 +39,19 @@ segments, but the saved server plan remains the authority.
   are protected evidence. A compatible trade refresh may replace only
   unstarted current-segment IDs; it cannot drop, reassign, or change the source
   club of a protected game.
-- A selected bench player reserved by a queued lineup move is ineligible for
-  an immediate replacement. This is checked before expensive NHL work and
-  again inside the committing transaction.
+- A selected bench player reserved by an unrelated queued lineup move remains
+  ineligible for an immediate replacement. The one allowed promotion is the
+  exact ordinary bench swap already queued for the same active slot, outgoing
+  player, bench slot, incoming player, and manager. Waiver-backed moves and
+  any different or duplicate reservation fail closed.
+- That exact queued swap is fingerprinted before expensive NHL work and
+  reread inside the committing transaction. The injury mutation clears the
+  pending roster move atomically and its audit record stores the superseded
+  queued-move ID; a changed fingerprint aborts without moving either player.
+- Promotion changes only the pending move's timing. Started games remain with
+  the injured player, the replacement receives only the still-unstarted
+  positions in the same six-game window, and a window with no remaining games
+  is not rewritten.
 - Out/IR/LTIR eligibility is reread inside the Firestore transaction. A player
   who becomes ineligible while the request is being verified is not moved.
 - Schedule verification uses the saved source team for every owned game, not

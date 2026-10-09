@@ -6,6 +6,7 @@ export type RosterManagementActionId =
   | 'view'
   | 'find-player'
   | 'review-scheduled'
+  | 'replace-injured-now'
   | 'swap-with-bench'
   | 'start'
   | 'move-to-ir'
@@ -24,6 +25,48 @@ export interface RosterManagementAction {
   disabledReason: string | null;
 }
 
+export interface QueuedBenchSwapPromotionContext {
+  managerId: string;
+  activeAssetKey: string;
+  activePosition: DraftPosition;
+  pendingMove: {
+    moveType: string;
+    incomingAssetKey: string;
+    outgoingAssetKey: string | null;
+    sourceWaiverId: string | null;
+    queuedByOwnerId: string;
+    sourceBenchSlotId?: string | null;
+    outgoingDestination?: 'waivers' | 'bench';
+  } | null;
+  benchSlotId: string;
+  benchAssetKey: string;
+  benchPosition: DraftPosition;
+}
+
+/**
+ * A scheduled move may be promoted into an immediate injury replacement only
+ * when it is the exact active-to-bench pairing the manager already approved.
+ * Free-agent, waiver, mismatched, and stale reservations keep their existing
+ * review/cancel flow instead of being silently replaced in the browser.
+ */
+export function isExactQueuedBenchSwapPromotion(context: QueuedBenchSwapPromotionContext): boolean {
+  const pendingMove = context.pendingMove;
+
+  return Boolean(
+    context.managerId &&
+    context.activeAssetKey &&
+    context.benchAssetKey &&
+    pendingMove?.moveType === 'add-drop' &&
+    pendingMove.sourceWaiverId === null &&
+    pendingMove.sourceBenchSlotId === context.benchSlotId &&
+    pendingMove.outgoingDestination === 'bench' &&
+    pendingMove.queuedByOwnerId === context.managerId &&
+    pendingMove.outgoingAssetKey === context.activeAssetKey &&
+    pendingMove.incomingAssetKey === context.benchAssetKey &&
+    context.benchPosition === context.activePosition,
+  );
+}
+
 export interface RosterManagementContext {
   area: RosterManagementArea;
   hasAsset: boolean;
@@ -33,6 +76,7 @@ export interface RosterManagementContext {
   showMoveToIr: boolean;
   canMoveToIr: boolean;
   moveToIrDisabledReason?: string | null;
+  canReplaceInjuredPlayerNow: boolean;
   canStartFromBench: boolean;
   startDisabledReason?: string | null;
   canActivateFromIr: boolean;
@@ -96,6 +140,19 @@ export function buildRosterManagementActions(
 
   if (context.area === 'active') {
     if (context.hasPendingMove) {
+      if (context.canReplaceInjuredPlayerNow) {
+        actions.push(
+          action(
+            'replace-injured-now',
+            'Replace Injured Player Now',
+            'Promote the exact bench player already reserved for this slot. Started games and points stay with the injured player; only remaining future games move.',
+            'primary',
+            !locked,
+            'Wait for the current roster action to finish.',
+          ),
+        );
+      }
+
       actions.push(
         action(
           'review-scheduled',
@@ -111,14 +168,23 @@ export function buildRosterManagementActions(
     }
 
     actions.push(
-      action(
-        'swap-with-bench',
-        'Swap with a Bench Player',
-        'Choose a matching player from your bench. If none are eligible, the next screen will explain what is missing.',
-        'primary',
-        !locked,
-        'Wait for the current roster action to finish.',
-      ),
+      context.canReplaceInjuredPlayerNow
+        ? action(
+            'replace-injured-now',
+            'Replace Injured Player Now',
+            'Choose a compatible bench player. The replacement takes effect immediately while every game and point already started stays with the injured player.',
+            'primary',
+            !locked,
+            'Wait for the current roster action to finish.',
+          )
+        : action(
+            'swap-with-bench',
+            'Swap with a Bench Player',
+            'Choose a matching player from your bench. If none are eligible, the next screen will explain what is missing.',
+            'primary',
+            !locked,
+            'Wait for the current roster action to finish.',
+          ),
       action(
         'find-player',
         'Find a Replacement',
@@ -133,13 +199,14 @@ export function buildRosterManagementActions(
       actions.push(
         action(
           'move-to-ir',
-          'Move to Injured Reserve',
-          'The player leaves the active roster. A six-game count that has already started remains protected until its fair boundary.',
-          'warning',
+          'Move to IR Without a Replacement',
+          'This does not start a bench player now. An already-started six-game assignment stays in place until its fair matchup boundary.',
+          'secondary',
           !locked && context.canMoveToIr,
           locked
             ? 'Wait for the current roster action to finish.'
-            : context.moveToIrDisabledReason || 'This player is not currently eligible for Injured Reserve.',
+            : context.moveToIrDisabledReason ||
+                'This player is not currently eligible for Injured Reserve.',
         ),
       );
     }
@@ -205,7 +272,8 @@ export function buildRosterManagementActions(
           !locked && context.canMoveToIr,
           locked
             ? 'Wait for the current roster action to finish.'
-            : context.moveToIrDisabledReason || 'This player is not currently eligible for Injured Reserve.',
+            : context.moveToIrDisabledReason ||
+                'This player is not currently eligible for Injured Reserve.',
         ),
       );
     }

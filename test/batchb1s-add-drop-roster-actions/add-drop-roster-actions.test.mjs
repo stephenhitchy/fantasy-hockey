@@ -33,6 +33,7 @@ function activeRosterContext(overrides = {}) {
     showMoveToIr: false,
     canMoveToIr: false,
     moveToIrDisabledReason: null,
+    canReplaceInjuredPlayerNow: false,
     canStartFromBench: false,
     startDisabledReason: null,
     canActivateFromIr: false,
@@ -107,7 +108,7 @@ test('the active-first swap sheet shows compatible bench choices or a truthful e
   assert.match(source, /!this\.isBenchSlotReservedForActiveSwap\(slot\)/);
   assert.match(source, /this\.beginBenchSwap\(candidate\.slotId, activeSlot\.slotId\)/);
   assert.match(source, /benchSwapRestrictedTargetSlotId/);
-  assert.match(template, /title="Swap with Bench"/);
+  assert.match(template, /\[title\]="[\s\S]*?'Swap with Bench'/);
   assert.match(template, /No matching bench player is available/);
   assert.match(template, /The active player[\s\S]*has not been changed/);
   assert.match(styles, /\.active-bench-picker-option\s*\{/);
