@@ -42,12 +42,14 @@ export function resolveCycleAssetScoreSummary(
 
 export function buildCycleAssetSnapshotGames(
   summary: CycleAssetScoreSummary,
+  ownedGameIds: readonly number[] = summary.scheduledGameIds,
 ): CycleAssetSnapshotGame[] {
   const completedGameIds = new Set(summary.completedGameIds);
   const appearanceGameIds = new Set(summary.appearanceGameIds);
 
-  return summary.scheduledGameIds.map((gameId, index) => {
+  return ownedGameIds.map((gameId) => {
     const gameIdKey = String(gameId);
+    const summaryIndex = summary.scheduledGameIds.indexOf(gameId);
     const recordedState = summary.gameStates[gameIdKey];
     const state: CycleGameRuntimeState =
       recordedState === 'live' || recordedState === 'final'
@@ -57,8 +59,12 @@ export function buildCycleAssetSnapshotGames(
 
     return {
       gameId,
-      gameDate: summary.scheduledGameDates[index] ?? '',
-      scheduleLabel: summary.scheduledGameLabels[index] ?? 'NHL team game',
+      gameDate:
+        summaryIndex >= 0 ? summary.scheduledGameDates[summaryIndex] ?? '' : '',
+      scheduleLabel:
+        summaryIndex >= 0
+          ? summary.scheduledGameLabels[summaryIndex] ?? 'NHL team game'
+          : 'NHL team game',
       state,
       fantasyPoints:
         state === 'scheduled' || typeof score !== 'number'

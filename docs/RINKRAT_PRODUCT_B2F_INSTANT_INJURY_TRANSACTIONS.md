@@ -22,6 +22,7 @@ document remains the historical record of that narrower release.
 | Bench player fills a genuinely open active slot | Immediate when the open window and incoming player remain eligible | Not applicable |
 | Bench player replaces a Day-to-day/Out/IR/LTIR active skater | Immediate mixed-player window | Bench |
 | Free agent replaces a Day-to-day/Out/IR/LTIR active skater | Immediate mixed-player window | Waivers |
+| Free agent fills the exact active slot just vacated by a saved move-to-IR action | Immediate mixed-player window | The injured starter remains in the exact saved IR slot |
 | Bench player or free agent replaces a healthy/available active skater | Queued for the next legal matchup window | The manager's selected bench/waiver destination at that boundary |
 
 An injury does not create extra games or erase a result. Every NHL game that
@@ -33,7 +34,11 @@ continues to identify the exact player and source team for every owned game.
 The destination is part of the manager's intent. An active/bench swap moves
 the injured starter to the selected bench slot; it does not silently consume
 an IR slot. A direct free-agent add/drop sends the injured starter to waivers;
-it does not retain that player on the roster.
+it does not retain that player on the roster. The legacy two-step flow is a
+separate explicit case: when the manager first moved the starter to IR and
+then queued an add into that exact vacancy, recovery preserves the starter in
+that IR slot. The queue's structural `outgoingDestination: waivers` default
+does not override the manager's already-committed IR destination.
 
 ## Server authority and retry safety
 
@@ -51,6 +56,30 @@ free-agent queues use distinct exact shapes. Deterministic private receipts
 make global-status triggers, league-override triggers, the scheduled recovery
 sweep, browser retries, and ambiguous transport recovery idempotent. No path
 may select a replacement for the manager or promote a different reservation.
+
+The legacy move-to-IR/add-open bridge is intentionally narrower than a generic
+open-slot add. Before it performs even a history lookup, the roster must show
+one exact owner-authored add-open reservation in a null active slot, no
+`openFromCycleNumber`, one same-position IR skater, and no duplicate ownership
+or reservation. Discovery then requires exactly one immutable
+`queue-add-open-slot` transaction and exactly one matching `move-to-ir`
+transaction in the preceding five minutes. Their owner, active and IR slots,
+players, positions, pending ID, effective cycle and label, null drop, saved IR
+status, and timestamps are bound into the deterministic receipt. The queue
+timestamp may trail the pending timestamp by at most 60 seconds. A capped or
+ambiguous history query fails closed.
+
+The committing transaction rereads both exact history documents and proves
+that the current IR occupant, active-slot reservation, regular-cycle roster
+pick, scoring window, and any saved continuity ID still identify the injured
+starter. A legacy pick may omit `rosterArea`; any nonempty value other than
+`active` is rejected. Fresh IR-eligible availability plus exact incoming
+ownership, waiver, NHL identity, schedule, and puck-drop evidence are still
+required. The commit fills only the vacated active slot, leaves the IR slot
+untouched, preserves all started-game ownership and points, and transfers only
+unstarted positions. A generic open active slot cannot enter this path. The
+compatibility bridge is regular-season-only and fails closed when an assigned
+playoff bank owns the slot.
 
 Read-only Production evidence identified the held Genitalman transaction as
 the exact queued active/bench swap from C-1 Celebrini to B-1 and B-1 Leo
@@ -99,6 +128,12 @@ Genitalman transaction. Hosting is separate because My Team and Free Agents
 must send and explain the new injury-specific intent only after the server can
 accept it. `executeSecureRosterAction` is not in the selector because B2F does
 not change that export.
+
+The legacy move-to-IR/add-open compatibility bridge is server-only and adds no
+Function export, Rule, index, TTL, or Hosting dependency. When deploying that
+follow-up onto an otherwise current B2F release, deploy only the same four
+roster/automation Functions above together. The single-field transaction
+history lookups use existing automatic Firestore indexes.
 
 For rollback, restore the preceding Hosting release first so browsers stop
 sending B2F-only intent, then restore the prior revisions of the four mutation

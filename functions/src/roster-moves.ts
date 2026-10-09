@@ -51,7 +51,10 @@ import {
 import {
   buildSourceNhlTargetGameIdsByTeam,
 } from './shared/core/cycle/cycle-window-selection.util';
-import { createPlayerWindowContinuity } from './shared/core/cycle/player-window-continuity.util';
+import {
+  createPlayerWindowContinuity,
+  normalizePlayerWindowContinuity,
+} from './shared/core/cycle/player-window-continuity.util';
 import {
   buildInjuryReplacementWindowPlan,
   getInjuryReplacementProtectedGameIds,
@@ -78,6 +81,7 @@ type ImmediateRosterMoveType =
   | 'injury-replacement'
   | 'injury-active-bench-swap'
   | 'injury-add-drop-active'
+  | 'injury-add-open-active'
   | 'drop-active';
 
 interface ImmediateRosterMoveRequest {
@@ -101,11 +105,17 @@ export interface AutomaticQueuedInjuryReplacementRequest {
   leagueId: string;
   ownerId: string;
   activeSlotId: string;
-  moveType: 'injury-active-bench-swap' | 'injury-add-drop-active';
+  moveType:
+    | 'injury-active-bench-swap'
+    | 'injury-add-drop-active'
+    | 'injury-add-open-active';
   benchSlotId: string | null;
   incomingAssetKey: string;
   expectedPendingMoveId: string;
   expectedPendingMoveFingerprint: string;
+  expectedQueueTransactionId?: string | null;
+  expectedMoveToIrTransactionId?: string | null;
+  expectedIrSlotId?: string | null;
   source: AutomaticInjuryReplacementSource;
 }
 
@@ -118,7 +128,8 @@ export interface AutomaticInjuryReplacementReceiptIdentity {
 type MixedPlayerInjuryMoveType =
   | 'injury-replacement'
   | 'injury-active-bench-swap'
-  | 'injury-add-drop-active';
+  | 'injury-add-drop-active'
+  | 'injury-add-open-active';
 
 interface ImmediateRosterMoveCallableRequest {
   auth?: {
@@ -138,6 +149,9 @@ interface ImmediateRosterMoveExecutionOptions {
   automaticInjuryReplacement?: {
     expectedPendingMoveId: string;
     expectedPendingMoveFingerprint: string;
+    expectedQueueTransactionId?: string | null;
+    expectedMoveToIrTransactionId?: string | null;
+    expectedIrSlotId?: string | null;
     source: AutomaticInjuryReplacementSource;
   };
 }
@@ -175,6 +189,44 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function isActiveOrLegacyMissingRosterArea(value: unknown): boolean {
+  return value === undefined || value === null || value === 'active';
+}
+
+function hasExactPlayerWindowContinuityCopies(input: {
+  first: unknown;
+  second: unknown;
+  ownerId: string;
+  activeSlotId: string;
+  assetKey: string;
+}): boolean {
+  const firstMissing = input.first === undefined || input.first === null;
+  const secondMissing = input.second === undefined || input.second === null;
+
+  if (firstMissing || secondMissing) {
+    return firstMissing && secondMissing;
+  }
+
+  try {
+    const first = normalizePlayerWindowContinuity(input.first);
+    const second = normalizePlayerWindowContinuity(input.second);
+
+    return Boolean(
+      first &&
+      second &&
+      first.ownerId === input.ownerId &&
+      second.ownerId === input.ownerId &&
+      first.rosterSlotId === input.activeSlotId &&
+      second.rosterSlotId === input.activeSlotId &&
+      first.assetKey === input.assetKey &&
+      second.assetKey === input.assetKey &&
+      JSON.stringify(first) === JSON.stringify(second),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function asNumber(value: unknown, fallback = 0): number {
@@ -711,6 +763,151 @@ export function getQueuedFreeAgentInjuryPromotionFingerprint(input: {
     .digest('hex');
 }
 
+export function getQueuedIrAddOpenInjuryPromotionFingerprint(input: {
+  pendingMove: PendingRosterSlotMove | null | undefined;
+  ownerId: string;
+  activeSlotId: string;
+  activePosition: string;
+  incomingAssetKey: string;
+  irSlotId: string;
+  irAsset: RosterAsset | null | undefined;
+  queueTransactionId: string;
+  queueTransaction: unknown;
+  moveToIrTransactionId: string;
+  moveToIrTransaction: unknown;
+}): string | null {
+  const pendingMove = input.pendingMove;
+  const pendingMoveId = asString(pendingMove?.id);
+  const ownerId = asString(input.ownerId);
+  const activeSlotId = asString(input.activeSlotId);
+  const activePosition = asString(input.activePosition);
+  const incomingAssetKey = asString(input.incomingAssetKey);
+  const irSlotId = asString(input.irSlotId);
+  const irAssetKey = getAssetKey(input.irAsset);
+  const queueTransactionId = asString(input.queueTransactionId);
+  const queueTransaction = asRecord(input.queueTransaction);
+  const moveToIrTransactionId = asString(input.moveToIrTransactionId);
+  const moveToIrTransaction = asRecord(input.moveToIrTransaction);
+  const pendingIncomingAssetKey = getAssetKey(pendingMove?.incomingAsset);
+  const pendingIncomingPosition = asString(pendingMove?.incomingAsset?.position);
+  const irPosition = asString(input.irAsset?.position);
+  const movedAssetKey = getAssetKey(moveToIrTransaction['movedAsset']);
+  const movedPosition = asString(asRecord(moveToIrTransaction['movedAsset'])['position']);
+  const queueAddedAssetKey = getAssetKey(queueTransaction['addedAsset']);
+  const queueAddedPosition = asString(asRecord(queueTransaction['addedAsset'])['position']);
+  const pendingQueuedAtMilliseconds = pendingMove
+    ? Date.parse(asString(pendingMove.queuedAt))
+    : Number.NaN;
+  const queueCreatedAtMilliseconds = getTimestampMilliseconds(
+    queueTransaction['createdAt'],
+  );
+  const moveToIrCreatedAtMilliseconds = getTimestampMilliseconds(
+    moveToIrTransaction['createdAt'],
+  );
+  const requestedEffectiveCycleNumber =
+    pendingMove?.requestedEffectiveCycleNumber ?? null;
+  const queueEffectiveCycleNumber =
+    typeof queueTransaction['effectiveCycleNumber'] === 'number'
+      ? queueTransaction['effectiveCycleNumber']
+      : null;
+  const requestedEffectiveLabel = pendingMove?.requestedEffectiveLabel ?? null;
+  const queueEffectiveLabel = typeof queueTransaction['effectiveLabel'] === 'string'
+    ? queueTransaction['effectiveLabel']
+    : null;
+  const moveToIrEffectiveCycleNumber =
+    typeof moveToIrTransaction['effectiveCycleNumber'] === 'number'
+      ? moveToIrTransaction['effectiveCycleNumber']
+      : null;
+  const moveToIrEffectiveLabel =
+    typeof moveToIrTransaction['effectiveLabel'] === 'string'
+      ? moveToIrTransaction['effectiveLabel']
+      : null;
+
+  if (
+    !pendingMove ||
+    !pendingMoveId ||
+    !ownerId ||
+    !activeSlotId ||
+    !activePosition ||
+    !incomingAssetKey ||
+    !irSlotId ||
+    !irAssetKey ||
+    !queueTransactionId ||
+    !moveToIrTransactionId ||
+    !Number.isSafeInteger(requestedEffectiveCycleNumber) ||
+    (requestedEffectiveCycleNumber ?? 0) <= 0 ||
+    !asString(requestedEffectiveLabel) ||
+    pendingMove.moveType !== 'add-open-slot' ||
+    pendingMove.queuedByOwnerId !== ownerId ||
+    pendingMove.outgoingAssetKey !== null ||
+    pendingMove.sourceBenchSlotId !== null ||
+    pendingMove.sourceWaiverId !== null ||
+    pendingMove.outgoingDestination !== 'waivers' ||
+    pendingIncomingAssetKey !== incomingAssetKey ||
+    pendingIncomingPosition !== activePosition ||
+    input.irAsset?.assetType !== 'skater' ||
+    irPosition !== activePosition ||
+    queueTransaction['type'] !== 'queue-add-open-slot' ||
+    queueTransaction['authority'] !== 'cloud-function' ||
+    asString(queueTransaction['ownerId']) !== ownerId ||
+    asString(queueTransaction['targetSlotId']) !== activeSlotId ||
+    asString(queueTransaction['rosterSlotId']) !== activeSlotId ||
+    asString(queueTransaction['queuedMoveId']) !== pendingMoveId ||
+    queueAddedAssetKey !== incomingAssetKey ||
+    queueAddedPosition !== activePosition ||
+    queueTransaction['droppedAsset'] !== null ||
+    queueEffectiveCycleNumber !== requestedEffectiveCycleNumber ||
+    queueEffectiveLabel !== requestedEffectiveLabel ||
+    moveToIrTransaction['type'] !== 'move-to-ir' ||
+    moveToIrTransaction['authority'] !== 'cloud-function' ||
+    asString(moveToIrTransaction['ownerId']) !== ownerId ||
+    asString(moveToIrTransaction['activeSlotId']) !== activeSlotId ||
+    asString(moveToIrTransaction['irSlotId']) !== irSlotId ||
+    movedAssetKey !== irAssetKey ||
+    movedPosition !== activePosition ||
+    !IR_ELIGIBLE_STATUSES.has(asString(moveToIrTransaction['availabilityStatus'])) ||
+    moveToIrEffectiveCycleNumber !== requestedEffectiveCycleNumber ||
+    moveToIrEffectiveLabel !== requestedEffectiveLabel ||
+    !Number.isFinite(pendingQueuedAtMilliseconds) ||
+    queueCreatedAtMilliseconds === null ||
+    moveToIrCreatedAtMilliseconds === null ||
+    queueCreatedAtMilliseconds < pendingQueuedAtMilliseconds ||
+    queueCreatedAtMilliseconds - pendingQueuedAtMilliseconds > 60 * 1000 ||
+    moveToIrCreatedAtMilliseconds > pendingQueuedAtMilliseconds ||
+    moveToIrCreatedAtMilliseconds > queueCreatedAtMilliseconds ||
+    queueCreatedAtMilliseconds - moveToIrCreatedAtMilliseconds > 5 * 60 * 1000
+  ) {
+    return null;
+  }
+
+  return createHash('sha256')
+    .update(JSON.stringify({
+      activePosition,
+      activeSlotId,
+      incomingAssetKey,
+      irAssetKey,
+      irSlotId,
+      moveToIrCreatedAtMilliseconds,
+      moveToIrTransactionId,
+      moveToIrAvailabilityStatus:
+        asString(moveToIrTransaction['availabilityStatus']),
+      moveToIrEffectiveCycleNumber,
+      moveToIrEffectiveLabel,
+      pendingMoveId,
+      pendingMoveType: pendingMove.moveType,
+      pendingQueuedAt: pendingMove.queuedAt,
+      queueCreatedAtMilliseconds,
+      queuedByOwnerId: pendingMove.queuedByOwnerId,
+      queueTransactionId,
+      requestedEffectiveCycleNumber,
+      requestedEffectiveLabel,
+      sourceBenchSlotId: pendingMove.sourceBenchSlotId,
+      sourceWaiverId: pendingMove.sourceWaiverId,
+      outgoingDestination: pendingMove.outgoingDestination,
+    }))
+    .digest('hex');
+}
+
 function getQueuedInjuryPromotionFingerprint(input: {
   moveType: ImmediateRosterMoveType;
   pendingMove: PendingRosterSlotMove | null | undefined;
@@ -753,6 +950,9 @@ export function createAutomaticInjuryReplacementReceiptIdentity(input: {
   incomingAssetKey?: string | null;
   pendingMoveId: string;
   pendingMoveFingerprint: string;
+  queueTransactionId?: string | null;
+  moveToIrTransactionId?: string | null;
+  irSlotId?: string | null;
 }): AutomaticInjuryReplacementReceiptIdentity {
   const moveType = input.moveType ?? 'injury-replacement';
   const submissionId = `auto_injury_${createHash('sha256')
@@ -767,6 +967,9 @@ export function createAutomaticInjuryReplacementReceiptIdentity(input: {
     incomingAssetKey: input.incomingAssetKey ?? null,
     expectedPendingMoveId: input.pendingMoveId,
     expectedPendingMoveFingerprint: input.pendingMoveFingerprint,
+    expectedQueueTransactionId: input.queueTransactionId ?? null,
+    expectedMoveToIrTransactionId: input.moveToIrTransactionId ?? null,
+    expectedIrSlotId: input.irSlotId ?? null,
     moveType,
   });
 
@@ -920,7 +1123,8 @@ function isMixedPlayerInjuryMove(
 ): moveType is MixedPlayerInjuryMoveType {
   return moveType === 'injury-replacement' ||
     moveType === 'injury-active-bench-swap' ||
-    moveType === 'injury-add-drop-active';
+    moveType === 'injury-add-drop-active' ||
+    moveType === 'injury-add-open-active';
 }
 
 function isBenchSourcedInjuryMove(
@@ -933,7 +1137,9 @@ function isBenchSourcedInjuryMove(
 function getEligibleStatusesForInjuryMove(
   moveType: ImmediateRosterMoveType,
 ): ReadonlySet<string> {
-  return moveType === 'injury-replacement' || moveType === 'move-active-to-ir'
+  return moveType === 'injury-replacement' ||
+      moveType === 'injury-add-open-active' ||
+      moveType === 'move-active-to-ir'
     ? IR_ELIGIBLE_STATUSES
     : INJURY_LINEUP_ELIGIBLE_STATUSES;
 }
@@ -942,7 +1148,8 @@ function requiresFreshInjuryAvailabilityAuthority(
   moveType: ImmediateRosterMoveType,
 ): boolean {
   return moveType === 'injury-active-bench-swap' ||
-    moveType === 'injury-add-drop-active';
+    moveType === 'injury-add-drop-active' ||
+    moveType === 'injury-add-open-active';
 }
 
 export function resolveAuthoritativeAvailabilityStatus(
@@ -1986,6 +2193,7 @@ async function executeImmediateRosterMove(
       'injury-replacement',
       'injury-active-bench-swap',
       'injury-add-drop-active',
+      'injury-add-open-active',
       'drop-active',
     ].includes(moveType)) {
       throw new HttpsError('invalid-argument', 'That immediate roster move type is not supported.');
@@ -2001,7 +2209,8 @@ async function executeImmediateRosterMove(
     const isImmediateAdd =
       moveType === 'add-drop-active' ||
       moveType === 'add-open-active' ||
-      moveType === 'injury-add-drop-active';
+      moveType === 'injury-add-drop-active' ||
+      moveType === 'injury-add-open-active';
     const automaticInjuryReplacement = options.automaticInjuryReplacement;
     const expectedAutomaticPendingMoveId = automaticInjuryReplacement
       ? requireFirestoreDocumentId(
@@ -2016,6 +2225,27 @@ async function executeImmediateRosterMove(
     const expectedAutomaticPendingMoveFingerprint = automaticInjuryReplacement
       ? asString(automaticInjuryReplacement.expectedPendingMoveFingerprint)
       : '';
+    const expectedAutomaticQueueTransactionId = automaticInjuryReplacement?.expectedQueueTransactionId
+      ? requireFirestoreDocumentId(
+          automaticInjuryReplacement.expectedQueueTransactionId,
+          'queued add-open transaction ID',
+          { minimumLength: 1, maxBytes: 320 },
+        )
+      : null;
+    const expectedAutomaticMoveToIrTransactionId = automaticInjuryReplacement?.expectedMoveToIrTransactionId
+      ? requireFirestoreDocumentId(
+          automaticInjuryReplacement.expectedMoveToIrTransactionId,
+          'move-to-IR transaction ID',
+          { minimumLength: 1, maxBytes: 320 },
+        )
+      : null;
+    const expectedAutomaticIrSlotId = automaticInjuryReplacement?.expectedIrSlotId
+      ? requireFirestoreDocumentId(
+          automaticInjuryReplacement.expectedIrSlotId,
+          'injured reserve slot ID',
+          { maxBytes: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]*$/ },
+        )
+      : null;
     const canTargetOpenSlot =
       moveType === 'add-open-active' ||
       moveType === 'active-bench-swap' ||
@@ -2025,6 +2255,25 @@ async function executeImmediateRosterMove(
       throw new HttpsError(
         'invalid-argument',
         'Automatic injury automation can only promote an exact queued injury transaction.',
+      );
+    }
+    if (moveType === 'injury-add-open-active' && !automaticInjuryReplacement) {
+      throw new HttpsError(
+        'invalid-argument',
+        'An injury add-open recovery requires exact server-saved transaction evidence.',
+      );
+    }
+    if (
+      moveType === 'injury-add-open-active' &&
+      (
+        !expectedAutomaticQueueTransactionId ||
+        !expectedAutomaticMoveToIrTransactionId ||
+        !expectedAutomaticIrSlotId
+      )
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        'An injury add-open recovery requires exact IR and transaction history.',
       );
     }
     if (
@@ -2076,6 +2325,9 @@ async function executeImmediateRosterMove(
             pendingMoveId: expectedAutomaticPendingMoveId,
             pendingMoveFingerprint:
               expectedAutomaticPendingMoveFingerprint,
+            queueTransactionId: expectedAutomaticQueueTransactionId,
+            moveToIrTransactionId: expectedAutomaticMoveToIrTransactionId,
+            irSlotId: expectedAutomaticIrSlotId,
           })
         : null;
     const replaySubmissionId = automaticReceiptIdentity?.submissionId ??
@@ -2149,6 +2401,15 @@ async function executeImmediateRosterMove(
         'The current slot window is not ready yet. Refresh and try again.',
       );
     }
+    if (
+      moveType === 'injury-add-open-active' &&
+      context.playoffBankRefPath
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Legacy IR vacancy recovery is limited to an exact regular-season scoring window.',
+      );
+    }
     const actionBoundaryMilliseconds = Date.now();
 
     const scoringRules = asRecord(leagueSnapshot.data()?.['scoringRules']);
@@ -2174,18 +2435,36 @@ async function executeImmediateRosterMove(
       .map((team) =>
         db.doc(`leagues/${leagueId}/teams/${team.id}/roster/current`),
       );
+    const sourceQueueTransactionRef = expectedAutomaticQueueTransactionId
+      ? db.doc(
+          `leagues/${leagueId}/transactions/${expectedAutomaticQueueTransactionId}`,
+        )
+      : null;
+    const sourceMoveToIrTransactionRef = expectedAutomaticMoveToIrTransactionId
+      ? db.doc(
+          `leagues/${leagueId}/transactions/${expectedAutomaticMoveToIrTransactionId}`,
+        )
+      : null;
 
     const [
       preflightRosterSnapshot,
       preflightRosterPickSnapshot,
       preflightTeamWindowsSnapshot,
       preflightPlayoffBankSnapshot,
+      preflightSourceQueueTransactionSnapshot,
+      preflightSourceMoveToIrTransactionSnapshot,
     ] = await Promise.all([
       rosterRef.get(),
       rosterPickRef.get(),
       teamWindowsRef.get(),
       playoffBankRef
         ? playoffBankRef.get()
+        : Promise.resolve(null),
+      sourceQueueTransactionRef
+        ? sourceQueueTransactionRef.get()
+        : Promise.resolve(null),
+      sourceMoveToIrTransactionRef
+        ? sourceMoveToIrTransactionRef.get()
         : Promise.resolve(null),
     ]);
 
@@ -2199,9 +2478,10 @@ async function executeImmediateRosterMove(
     const preflightRoster = normalizeFantasyRoster(
       preflightRosterSnapshot.data() as Partial<FantasyRoster>,
     );
-    const preflightActiveSlot = preflightRoster.activeSlots.find(
+    const preflightMatchingActiveSlots = preflightRoster.activeSlots.filter(
       (slot) => slot.slotId === activeSlotId,
     );
+    const preflightActiveSlot = preflightMatchingActiveSlots[0];
     const preflightRosterPickAsset = preflightRosterPickSnapshot.data()?.['asset'] as
       | DraftableAsset
       | undefined;
@@ -2211,7 +2491,13 @@ async function executeImmediateRosterMove(
     let preflightBankPick: Record<string, unknown> | null = null;
     let preflightBankWindow: Record<string, unknown> | null = null;
 
-    if (!preflightActiveSlot) {
+    if (
+      !preflightActiveSlot ||
+      (
+        moveType === 'injury-add-open-active' &&
+        preflightMatchingActiveSlots.length !== 1
+      )
+    ) {
       throw new HttpsError('failed-precondition', 'The current active-slot assignment is unavailable.');
     }
 
@@ -2287,32 +2573,85 @@ async function executeImmediateRosterMove(
     }
 
     const preflightOutgoingAssetKey = getAssetKey(preflightRosterPickAsset);
+    const preflightMatchingLegacyIrSlots =
+      moveType === 'injury-add-open-active'
+        ? preflightRoster.irSlots.filter(
+            (slot) => slot.slotId === expectedAutomaticIrSlotId,
+          )
+        : [];
+    const preflightLegacyIrSlot =
+      preflightMatchingLegacyIrSlots.length === 1
+        ? preflightMatchingLegacyIrSlots[0]
+        : null;
+    const preflightLegacyIrAsset = preflightLegacyIrSlot?.asset ?? null;
     if (automaticInjuryReplacement) {
-      const preflightIncomingAssetKey = moveType === 'injury-add-drop-active'
+      const preflightIncomingAssetKey =
+        moveType === 'injury-add-drop-active' ||
+        moveType === 'injury-add-open-active'
         ? getAssetKey(preflightActiveSlot.pendingMove?.incomingAsset)
         : getAssetKey(
             preflightRoster.benchSlots.find(
               (slot) => slot.slotId === benchSlotId,
             )?.asset,
           );
-      const observedPendingMoveFingerprint =
-        getQueuedInjuryPromotionFingerprint({
-          moveType,
-          pendingMove: preflightActiveSlot.pendingMove,
-          ownerId,
-          activeSlotId,
-          benchSlotId,
-          outgoingAssetKey: preflightOutgoingAssetKey,
-          incomingAssetKey: preflightIncomingAssetKey,
-        });
+      const observedPendingMoveFingerprint = moveType === 'injury-add-open-active'
+        ? getQueuedIrAddOpenInjuryPromotionFingerprint({
+            pendingMove: preflightActiveSlot.pendingMove,
+            ownerId,
+            activeSlotId,
+            activePosition: preflightActiveSlot.position,
+            incomingAssetKey: preflightIncomingAssetKey,
+            irSlotId: expectedAutomaticIrSlotId ?? '',
+            irAsset: preflightLegacyIrAsset,
+            queueTransactionId: expectedAutomaticQueueTransactionId ?? '',
+            queueTransaction:
+              preflightSourceQueueTransactionSnapshot?.data(),
+            moveToIrTransactionId:
+              expectedAutomaticMoveToIrTransactionId ?? '',
+            moveToIrTransaction:
+              preflightSourceMoveToIrTransactionSnapshot?.data(),
+          })
+        : getQueuedInjuryPromotionFingerprint({
+            moveType,
+            pendingMove: preflightActiveSlot.pendingMove,
+            ownerId,
+            activeSlotId,
+            benchSlotId,
+            outgoingAssetKey: preflightOutgoingAssetKey,
+            incomingAssetKey: preflightIncomingAssetKey,
+          });
+      const legacyReservationIsExclusive =
+        moveType !== 'injury-add-open-active' ||
+        Boolean(
+          preflightActiveSlot.asset === null &&
+          preflightActiveSlot.openFromCycleNumber === null &&
+          preflightActiveSlot.pendingMove &&
+          preflightMatchingLegacyIrSlots.length === 1 &&
+          preflightLegacyIrAsset &&
+          getAssetKey(preflightLegacyIrAsset) === preflightOutgoingAssetKey &&
+          preflightRoster.activeSlots.filter(
+            (slot) =>
+              slot.pendingMove?.id === preflightActiveSlot.pendingMove?.id,
+          ).length === 1 &&
+          preflightRoster.irSlots.filter(
+            (slot) => getAssetKey(slot.asset) === preflightOutgoingAssetKey,
+          ).length === 1 &&
+          isExclusiveQueuedFreeAgentReservation({
+            roster: preflightRoster,
+            activeSlotId,
+            pendingMoveId: preflightActiveSlot.pendingMove.id,
+            incomingAssetKey: preflightIncomingAssetKey,
+          }),
+        );
 
       if (
         observedPendingMoveFingerprint !==
-        expectedAutomaticPendingMoveFingerprint
+          expectedAutomaticPendingMoveFingerprint ||
+        !legacyReservationIsExclusive
       ) {
         throw new HttpsError(
           'failed-precondition',
-          'The queued bench swap changed before automatic injury replacement began. No move was applied.',
+          'The queued injury transaction changed before automatic replacement began. No move was applied.',
         );
       }
     }
@@ -2356,6 +2695,7 @@ async function executeImmediateRosterMove(
         : null;
     const requiredIdentityPlayerIds = getSkaterPlayerIds([
       preflightActiveSlot.asset,
+      preflightLegacyIrAsset,
       addAsset,
       preflightSelectedIncomingAsset,
     ]);
@@ -2377,9 +2717,11 @@ async function executeImmediateRosterMove(
     }
 
     const currentTeamAbbreviationByPlayerId = rosterMoveIdentity?.byPlayerId;
-    const preflightActiveAsset = preflightActiveSlot.asset
+    const preflightActiveAssetSource = preflightActiveSlot.asset ??
+      (moveType === 'injury-add-open-active' ? preflightLegacyIrAsset : null);
+    const preflightActiveAsset = preflightActiveAssetSource
       ? applyCurrentNhlTeamIdentity(
-          preflightActiveSlot.asset,
+          preflightActiveAssetSource,
           currentTeamAbbreviationByPlayerId,
         )
       : null;
@@ -2399,7 +2741,10 @@ async function executeImmediateRosterMove(
           'The active roster and current cycle assignment are out of sync. Refresh and try again.',
         );
       }
-    } else if (!canTargetOpenSlot) {
+    } else if (
+      !canTargetOpenSlot &&
+      moveType !== 'injury-add-open-active'
+    ) {
       throw new HttpsError('failed-precondition', 'The active roster slot is already empty.');
     }
 
@@ -2673,6 +3018,14 @@ async function executeImmediateRosterMove(
       preflightSupersededQueuedMoveId = preflightActiveSlot.pendingMove.id;
       preflightSupersededQueuedMoveFingerprint = pendingMoveFingerprint;
     }
+    if (
+      moveType === 'injury-add-open-active' &&
+      preflightActiveSlot.pendingMove
+    ) {
+      preflightSupersededQueuedMoveId = preflightActiveSlot.pendingMove.id;
+      preflightSupersededQueuedMoveFingerprint =
+        expectedAutomaticPendingMoveFingerprint;
+    }
 
     const rawPreflightIncomingAsset =
       moveType === 'active-bench-swap' || isBenchSourcedInjuryMove(moveType)
@@ -2749,10 +3102,46 @@ async function executeImmediateRosterMove(
       const preflightWindows = preflightTeamWindowsSnapshot.exists
         ? asArray(preflightTeamWindowsSnapshot.data()?.['windows']).map(asRecord)
         : [];
-      const preflightWindow = preflightWindows.find(
+      const preflightMatchingWindows = preflightWindows.filter(
         (window) => asString(window['rosterSlotId']) === activeSlotId,
-      ) ?? null;
+      );
+      const preflightWindow =
+        moveType === 'injury-add-open-active'
+          ? preflightMatchingWindows.length === 1
+            ? preflightMatchingWindows[0]
+            : null
+          : preflightMatchingWindows[0] ?? null;
       const pickData = preflightRosterPickSnapshot.data() ?? {};
+      if (moveType === 'injury-add-open-active') {
+        const continuityIsExact = hasExactPlayerWindowContinuityCopies({
+          first: pickData['playerWindowContinuity'],
+          second: preflightWindow?.['playerWindowContinuity'],
+          ownerId,
+          activeSlotId,
+          assetKey: preflightOutgoingAssetKey,
+        });
+
+        if (
+          !preflightWindow ||
+          asString(preflightWindow['ownerId']) !== ownerId ||
+          asString(preflightWindow['rosterSlotId']) !== activeSlotId ||
+          asString(preflightWindow['assetKey']) !== preflightOutgoingAssetKey ||
+          getAssetKey(preflightWindow['asset']) !== preflightOutgoingAssetKey ||
+          asString(preflightWindow['position']) !== preflightActiveAsset.position ||
+          asString(pickData['ownerId']) !== ownerId ||
+          asString(pickData['rosterSlotId']) !== activeSlotId ||
+          !isActiveOrLegacyMissingRosterArea(pickData['rosterArea']) ||
+          getAssetKey(pickData['asset']) !== preflightOutgoingAssetKey ||
+          asString(asRecord(pickData['asset'])['position']) !==
+            preflightActiveAsset.position ||
+          !continuityIsExact
+        ) {
+          throw new HttpsError(
+            'failed-precondition',
+            'The IR vacancy no longer matches its exact active scoring window. No move was applied.',
+          );
+        }
+      }
       const previousPlan = preflightPlayoffBankData
         ? selectCurrentInjuryReplacementPlanFromCopies([
             {
@@ -3036,6 +3425,8 @@ async function executeImmediateRosterMove(
         rosterPickSnapshot,
         playoffBankSnapshot,
         incomingWaiverSnapshot,
+        sourceQueueTransactionSnapshot,
+        sourceMoveToIrTransactionSnapshot,
         ...allRosterSnapshots
       ] =
         await Promise.all([
@@ -3051,6 +3442,12 @@ async function executeImmediateRosterMove(
             : Promise.resolve(null),
           incomingWaiverRef
             ? transaction.get(incomingWaiverRef)
+            : Promise.resolve(null),
+          sourceQueueTransactionRef
+            ? transaction.get(sourceQueueTransactionRef)
+            : Promise.resolve(null),
+          sourceMoveToIrTransactionRef
+            ? transaction.get(sourceMoveToIrTransactionRef)
             : Promise.resolve(null),
           ...rosterRefs.map((reference) => transaction.get(reference)),
         ]);
@@ -3087,8 +3484,17 @@ async function executeImmediateRosterMove(
       }
 
       const roster = normalizeFantasyRoster(rosterSnapshot.data() as Partial<FantasyRoster>);
-      const activeSlotIndex = roster.activeSlots.findIndex((slot) => slot.slotId === activeSlotId);
-      if (activeSlotIndex < 0) {
+      const matchingActiveSlotIndexes = roster.activeSlots.flatMap(
+        (slot, index) => slot.slotId === activeSlotId ? [index] : [],
+      );
+      const activeSlotIndex = matchingActiveSlotIndexes[0] ?? -1;
+      if (
+        activeSlotIndex < 0 ||
+        (
+          moveType === 'injury-add-open-active' &&
+          matchingActiveSlotIndexes.length !== 1
+        )
+      ) {
         throw new HttpsError('not-found', 'The selected active roster slot was not found.');
       }
 
@@ -3134,6 +3540,67 @@ async function executeImmediateRosterMove(
           'aborted',
           'The active-slot assignment changed while the move was being checked. Please try again.',
         );
+      }
+      const transactionMatchingLegacyIrSlots =
+        moveType === 'injury-add-open-active'
+          ? roster.irSlots.filter(
+              (slot) => slot.slotId === expectedAutomaticIrSlotId,
+            )
+          : [];
+      const transactionLegacyIrSlot =
+        transactionMatchingLegacyIrSlots.length === 1
+          ? transactionMatchingLegacyIrSlots[0]
+          : null;
+      const transactionLegacyIrAsset = transactionLegacyIrSlot?.asset ?? null;
+      if (moveType === 'injury-add-open-active') {
+        const incomingKey = getAssetKey(activeSlot.pendingMove?.incomingAsset);
+        const observedFingerprint =
+          getQueuedIrAddOpenInjuryPromotionFingerprint({
+            pendingMove: activeSlot.pendingMove,
+            ownerId,
+            activeSlotId,
+            activePosition: activeSlot.position,
+            incomingAssetKey: incomingKey,
+            irSlotId: expectedAutomaticIrSlotId ?? '',
+            irAsset: transactionLegacyIrAsset,
+            queueTransactionId: expectedAutomaticQueueTransactionId ?? '',
+            queueTransaction: sourceQueueTransactionSnapshot?.data(),
+            moveToIrTransactionId:
+              expectedAutomaticMoveToIrTransactionId ?? '',
+            moveToIrTransaction: sourceMoveToIrTransactionSnapshot?.data(),
+          });
+        const exactReservationStillExists = Boolean(
+          activeSlot.asset === null &&
+          activeSlot.openFromCycleNumber === null &&
+          activeSlot.pendingMove &&
+          transactionMatchingLegacyIrSlots.length === 1 &&
+          getAssetKey(transactionPickAsset) === preflightOutgoingAssetKey &&
+          getAssetKey(transactionLegacyIrAsset) === preflightOutgoingAssetKey &&
+          roster.activeSlots.filter(
+            (slot) => slot.pendingMove?.id === activeSlot.pendingMove?.id,
+          ).length === 1 &&
+          roster.irSlots.filter(
+            (slot) => getAssetKey(slot.asset) === preflightOutgoingAssetKey,
+          ).length === 1 &&
+          isExclusiveQueuedFreeAgentReservation({
+            roster,
+            activeSlotId,
+            pendingMoveId: activeSlot.pendingMove.id,
+            incomingAssetKey: incomingKey,
+          }),
+        );
+
+        if (
+          observedFingerprint !== expectedAutomaticPendingMoveFingerprint ||
+          observedFingerprint !== preflightSupersededQueuedMoveFingerprint ||
+          activeSlot.pendingMove?.id !== preflightSupersededQueuedMoveId ||
+          !exactReservationStillExists
+        ) {
+          throw new HttpsError(
+            'aborted',
+            'The IR vacancy or queued add-open transaction changed while the injury replacement was being checked.',
+          );
+        }
       }
 
       const teamWindowsData = teamWindowsSnapshot.exists
@@ -3206,9 +3673,15 @@ async function executeImmediateRosterMove(
       }
 
       const windows = asArray(teamWindowsData['windows']).map(asRecord);
-      const windowIndex = windows.findIndex(
-        (window) => asString(window['rosterSlotId']) === activeSlotId,
+      const matchingWindowIndexes = windows.flatMap(
+        (window, index) =>
+          asString(window['rosterSlotId']) === activeSlotId ? [index] : [],
       );
+      const windowIndex =
+        moveType === 'injury-add-open-active' &&
+        matchingWindowIndexes.length !== 1
+          ? -1
+          : matchingWindowIndexes[0] ?? -1;
 
       if (
         !isMixedPlayerInjuryMove(moveType) &&
@@ -3231,6 +3704,36 @@ async function executeImmediateRosterMove(
 
         const savedPickData = rosterPickSnapshot.data() ?? {};
         const savedWindow = windowIndex >= 0 ? windows[windowIndex] : null;
+        if (moveType === 'injury-add-open-active') {
+          const continuityIsExact = hasExactPlayerWindowContinuityCopies({
+            first: savedPickData['playerWindowContinuity'],
+            second: savedWindow?.['playerWindowContinuity'],
+            ownerId,
+            activeSlotId,
+            assetKey: preflightOutgoingAssetKey,
+          });
+
+          if (
+            !savedWindow ||
+            asString(savedWindow['ownerId']) !== ownerId ||
+            asString(savedWindow['rosterSlotId']) !== activeSlotId ||
+            asString(savedWindow['assetKey']) !== preflightOutgoingAssetKey ||
+            getAssetKey(savedWindow['asset']) !== preflightOutgoingAssetKey ||
+            asString(savedWindow['position']) !== preflightActiveAsset?.position ||
+            asString(savedPickData['ownerId']) !== ownerId ||
+            asString(savedPickData['rosterSlotId']) !== activeSlotId ||
+            !isActiveOrLegacyMissingRosterArea(savedPickData['rosterArea']) ||
+            getAssetKey(savedPickData['asset']) !== preflightOutgoingAssetKey ||
+            asString(asRecord(savedPickData['asset'])['position']) !==
+              preflightActiveAsset?.position ||
+            !continuityIsExact
+          ) {
+            throw new HttpsError(
+              'aborted',
+              'The IR vacancy scoring identity changed while the injury replacement was being checked.',
+            );
+          }
+        }
         const savedExistingPlan = playoffBankData
           ? selectCurrentInjuryReplacementPlanFromCopies([
               {
@@ -3328,13 +3831,19 @@ async function executeImmediateRosterMove(
       }
 
       let incomingAsset: DraftableAsset | null = null;
-      const outgoingAsset = activeSlot.asset
+      const outgoingAssetSource = activeSlot.asset ??
+        (moveType === 'injury-add-open-active'
+          ? transactionLegacyIrAsset
+          : null);
+      const outgoingAsset = outgoingAssetSource
         ? applyCurrentNhlTeamIdentity(
-            activeSlot.asset,
+            outgoingAssetSource,
             currentTeamAbbreviationByPlayerId,
           )
         : null;
-      let droppedAsset: RosterAsset | null = moveType === 'activate-ir-active'
+      let droppedAsset: RosterAsset | null =
+        moveType === 'activate-ir-active' ||
+        moveType === 'injury-add-open-active'
         ? null
         : outgoingAsset;
       let benchSlotIdForTransaction: string | null = null;
@@ -3342,6 +3851,10 @@ async function executeImmediateRosterMove(
       let supersededQueuedMoveId: string | null = null;
       const removesActiveAssignment =
         moveType === 'move-active-to-ir' || moveType === 'drop-active';
+
+      if (moveType === 'injury-add-open-active') {
+        irSlotIdForTransaction = expectedAutomaticIrSlotId;
+      }
 
       let transactionMoveToIrAvailabilityStatus = '';
       if (moveType === 'move-active-to-ir' || isMixedPlayerInjuryMove(moveType)) {
@@ -3788,6 +4301,9 @@ async function executeImmediateRosterMove(
             );
           }
 
+          supersededQueuedMoveId = preflightSupersededQueuedMoveId;
+        }
+        if (moveType === 'injury-add-open-active') {
           supersededQueuedMoveId = preflightSupersededQueuedMoveId;
         }
 
@@ -4296,6 +4812,8 @@ async function executeImmediateRosterMove(
           ? 'injury-active-bench-swap'
         : moveType === 'injury-add-drop-active'
           ? 'injury-add-drop-active'
+        : moveType === 'injury-add-open-active'
+          ? 'add-open-slot'
         : moveType === 'activate-ir-active'
           ? 'activate-from-ir'
           : moveType === 'move-active-to-ir'
@@ -4319,7 +4837,8 @@ async function executeImmediateRosterMove(
         addedAsset:
           moveType === 'add-drop-active' ||
           moveType === 'add-open-active' ||
-          moveType === 'injury-add-drop-active'
+          moveType === 'injury-add-drop-active' ||
+          moveType === 'injury-add-open-active'
             ? incomingAsset
             : null,
         movedAsset: moveType === 'active-bench-swap'
@@ -4350,7 +4869,11 @@ async function executeImmediateRosterMove(
           moveType === 'drop-active' || moveType === 'injury-add-drop-active'
             ? 'active'
             : null,
-        targetSlotId: moveType === 'add-open-active' ? activeSlotId : null,
+        targetSlotId:
+          moveType === 'add-open-active' ||
+          moveType === 'injury-add-open-active'
+            ? activeSlotId
+            : null,
         dropSlotId:
           moveType === 'add-drop-active' ||
           moveType === 'injury-add-drop-active' ||
@@ -4371,6 +4894,8 @@ async function executeImmediateRosterMove(
           ? 'bench'
           : moveType === 'injury-add-drop-active'
             ? 'waivers'
+          : moveType === 'injury-add-open-active'
+            ? 'injured-reserve'
             : moveType === 'injury-replacement'
               ? 'injured-reserve'
               : null,
@@ -4384,6 +4909,15 @@ async function executeImmediateRosterMove(
                 automaticInjuryReplacement.source,
               automaticInjuryReplacementPendingMoveId:
                 expectedAutomaticPendingMoveId,
+            }
+          : {}),
+        ...(moveType === 'injury-add-open-active'
+          ? {
+              sourceQueueAddOpenTransactionId:
+                expectedAutomaticQueueTransactionId,
+              sourceMoveToIrTransactionId:
+                expectedAutomaticMoveToIrTransactionId,
+              preservedIrSlotId: expectedAutomaticIrSlotId,
             }
           : {}),
         ...(rosterMoveIdentity
@@ -4416,13 +4950,18 @@ export async function applyAutomaticQueuedInjuryReplacement(
       activeSlotId: input.activeSlotId,
       benchSlotId: input.benchSlotId,
       addAssetKey:
-        input.moveType === 'injury-add-drop-active'
+        input.moveType === 'injury-add-drop-active' ||
+        input.moveType === 'injury-add-open-active'
           ? input.incomingAssetKey
           : null,
     },
     automaticInjuryReplacement: {
       expectedPendingMoveId: input.expectedPendingMoveId,
       expectedPendingMoveFingerprint: input.expectedPendingMoveFingerprint,
+      expectedQueueTransactionId: input.expectedQueueTransactionId ?? null,
+      expectedMoveToIrTransactionId:
+        input.expectedMoveToIrTransactionId ?? null,
+      expectedIrSlotId: input.expectedIrSlotId ?? null,
       source: input.source,
     },
   });

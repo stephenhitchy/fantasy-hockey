@@ -6,17 +6,39 @@ import type {
   CycleAssetScoreSummary,
   CycleScoringResult,
 } from './cycle-scoring.service';
-import { normalizeInjuryReplacementWindowPlan } from './injury-replacement-window.util';
+import {
+  getInjuryReplacementAssetKeyByGameId,
+  getInjuryReplacementGameIds,
+  getInjuryReplacementProtectedGameIds,
+  hasPreservedInjuryReplacementProtectedGameOwnership,
+  normalizeInjuryReplacementWindowPlan,
+  resolveConsistentInjuryReplacementWindowPlan,
+} from './injury-replacement-window.util';
 
 export interface InjuryReplacementScoreSource {
+  assetKey?: string;
+  ownerId?: string;
+  rosterSlotId?: string;
   currentScore?: number;
   fantasyPoints?: number;
   scheduledGameIds: readonly number[];
   completedGameIds: readonly number[];
+  liveGameIds?: readonly number[];
+  appearanceGameIds?: readonly number[];
   gameScores: Readonly<Record<string, number>>;
   gameStates: Readonly<Record<string, 'scheduled' | 'live' | 'final'>>;
+  scheduleTeamAbbreviation?: string;
+  sourceTeamAbbreviationByGameId?: Readonly<Record<string, string>>;
   injuryReplacementWindow?: InjuryReplacementWindowPlan;
   scoringAssetKeyByGameId?: Readonly<Record<string, string>>;
+}
+
+export interface ReconciledInjuryReplacementPresentationInput {
+  source: InjuryReplacementScoreSource | null | undefined;
+  ownerId: string;
+  rosterSlotId?: string | null;
+  currentAssetKey: string;
+  injuryReplacementWindows: readonly unknown[];
 }
 
 export interface InjuryReplacementSegmentPresentation {
@@ -209,6 +231,98 @@ export function buildInjuryReplacementPresentation(
     gameOwnership,
     accessibleLabel: `Injury replacement slot total ${roundedTotal.toFixed(1)} points. ${segmentLabels}.`,
   };
+}
+
+/**
+ * Reconciles a just-committed roster-pick/window ownership plan with the last
+ * published slot score. Roster transactions and shared scoring snapshots are
+ * separate documents, so the current player can arrive before the scorer has
+ * republished the same mixed-player plan. Only the ownership envelope is
+ * advanced here; every point still comes from the saved score source.
+ */
+export function buildReconciledInjuryReplacementPresentation(
+  input: ReconciledInjuryReplacementPresentationInput,
+): InjuryReplacementPresentation | null {
+  const source = input.source;
+
+  if (
+    !source ||
+    !input.ownerId ||
+    !input.currentAssetKey ||
+    source.ownerId !== input.ownerId ||
+    (input.rosterSlotId && source.rosterSlotId !== input.rosterSlotId) ||
+    !source.assetKey
+  ) {
+    return null;
+  }
+
+  let plan: InjuryReplacementWindowPlan | null;
+
+  try {
+    plan = resolveConsistentInjuryReplacementWindowPlan({
+      values: input.injuryReplacementWindows,
+      context: `Injury-replacement presentation ${input.ownerId}/${input.rosterSlotId ?? ''}`,
+    });
+  } catch {
+    return null;
+  }
+
+  if (
+    !plan ||
+    plan.segments.at(-1)?.assetKey !== input.currentAssetKey ||
+    plan.segments.some((segment) => {
+      const continuity = segment.playerWindowContinuity;
+
+      return Boolean(
+        continuity &&
+        (continuity.ownerId !== input.ownerId ||
+          (input.rosterSlotId && continuity.rosterSlotId !== input.rosterSlotId)),
+      );
+    })
+  ) {
+    return null;
+  }
+
+  const previousPlan = source.injuryReplacementWindow
+    ? normalizeInjuryReplacementWindowPlan(source.injuryReplacementWindow)
+    : null;
+
+  if (source.injuryReplacementWindow && !previousPlan) {
+    return null;
+  }
+
+  const protectedGameIds = getInjuryReplacementProtectedGameIds({
+    completedGameIds: source.completedGameIds,
+    liveGameIds: source.liveGameIds,
+    appearanceGameIds: source.appearanceGameIds,
+    gameStates: source.gameStates,
+  });
+  const nextAssetKeyByGameId = getInjuryReplacementAssetKeyByGameId(plan);
+
+  if (
+    protectedGameIds.some((gameId) => {
+      const savedAssetKey = source.scoringAssetKeyByGameId?.[String(gameId)];
+      return savedAssetKey !== undefined && savedAssetKey !== nextAssetKeyByGameId[String(gameId)];
+    }) ||
+    !hasPreservedInjuryReplacementProtectedGameOwnership({
+      previousPlan,
+      nextPlan: plan,
+      protectedGameIds,
+      previousAssetKey: source.assetKey,
+      previousScheduleTeamAbbreviation: source.scheduleTeamAbbreviation,
+      previousSourceTeamAbbreviationByGameId:
+        source.sourceTeamAbbreviationByGameId,
+    })
+  ) {
+    return null;
+  }
+
+  return buildInjuryReplacementPresentation({
+    ...source,
+    scheduledGameIds: getInjuryReplacementGameIds(plan),
+    injuryReplacementWindow: plan,
+    scoringAssetKeyByGameId: nextAssetKeyByGameId,
+  });
 }
 
 function isExactIdentityMatch(

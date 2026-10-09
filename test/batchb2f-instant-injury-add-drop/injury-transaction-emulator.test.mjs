@@ -12,6 +12,9 @@ process.env.GCLOUD_PROJECT = projectId;
 process.env.GOOGLE_CLOUD_PROJECT = projectId;
 
 const rosterMoves = requireFunctions('./lib/roster-moves.js');
+const automaticInjuryReplacement = requireFunctions(
+  './lib/automatic-injury-replacement.js',
+);
 const nhlApi = requireFunctions('./lib/shared/core/nhl/nhl-api.service.js');
 const nhlIdentity = requireFunctions(
   './lib/shared/core/nhl/nhl-player-team-identity.service.js',
@@ -27,9 +30,12 @@ const leagueId = 'league-b2f-emulator';
 const ownerId = 'owner-b2f';
 const activeSlotId = 'C-1';
 const benchSlotId = 'B-1';
+const irSlotId = 'IR-1';
 const cycleId = 'cycle-4';
 const cycleNumber = 4;
 const playoffBankId = 'window-1';
+const legacyQueueTransactionId = 'legacy-queue-add-open';
+const legacyMoveToIrTransactionId = 'legacy-move-to-ir';
 const outgoingGameIds = [101, 102, 103, 104, 105, 106];
 const retainedGameIds = outgoingGameIds.slice(0, 4);
 
@@ -306,6 +312,77 @@ function buildFixture(kind) {
   };
 }
 
+function buildIrAddOpenFixture() {
+  const fixture = buildFixture('free-agent');
+  const outgoing = {
+    ...fixture.outgoing,
+    availabilityStatus: 'out',
+    rosterStatus: 'injured',
+  };
+  const queuedAtMilliseconds = fixture.nowMilliseconds - 60_000;
+  const pendingMove = {
+    ...fixture.pendingMove,
+    id: 'pending-ir-add-open-cycle-5',
+    moveType: 'add-open-slot',
+    outgoingAssetKey: null,
+    sourceWaiverId: null,
+    queuedAt: new Date(queuedAtMilliseconds).toISOString(),
+    sourceBenchSlotId: null,
+    outgoingDestination: 'waivers',
+  };
+  const queueTransaction = {
+    type: 'queue-add-open-slot',
+    authority: 'cloud-function',
+    ownerId,
+    targetSlotId: activeSlotId,
+    rosterSlotId: activeSlotId,
+    queuedMoveId: pendingMove.id,
+    addedAsset: structuredClone(fixture.incoming),
+    droppedAsset: null,
+    effectiveCycleNumber: pendingMove.requestedEffectiveCycleNumber,
+    effectiveLabel: pendingMove.requestedEffectiveLabel,
+    createdAt: new Date(queuedAtMilliseconds + 500),
+  };
+  const moveToIrTransaction = {
+    type: 'move-to-ir',
+    authority: 'cloud-function',
+    ownerId,
+    movedAsset: {
+      ...outgoing,
+      rosterStatus: 'active',
+    },
+    activeSlotId,
+    irSlotId,
+    availabilityStatus: 'out',
+    effectiveCycleNumber: pendingMove.requestedEffectiveCycleNumber,
+    effectiveLabel: pendingMove.requestedEffectiveLabel,
+    createdAt: new Date(queuedAtMilliseconds - 106_234),
+  };
+
+  fixture.kind = 'ir-add-open';
+  fixture.outgoing = outgoing;
+  fixture.pendingMove = pendingMove;
+  fixture.pendingMoveId = pendingMove.id;
+  fixture.roster.activeSlots[0] = {
+    ...fixture.roster.activeSlots[0],
+    asset: null,
+    pendingMove,
+    openFromCycleNumber: null,
+  };
+  fixture.roster.irSlots = [{
+    slotId: irSlotId,
+    slotNumber: 1,
+    asset: outgoing,
+  }];
+  fixture.window.asset = draftableAsset(outgoing);
+  fixture.queueTransactionId = legacyQueueTransactionId;
+  fixture.queueTransaction = queueTransaction;
+  fixture.moveToIrTransactionId = legacyMoveToIrTransactionId;
+  fixture.moveToIrTransaction = moveToIrTransaction;
+
+  return fixture;
+}
+
 async function seedFixture(fixture) {
   const batch = db.batch();
   const cyclePath = `leagues/${leagueId}/cycles/${cycleId}`;
@@ -315,7 +392,7 @@ async function seedFixture(fixture) {
     pickInRound: 1,
     ownerId,
     asset: draftableAsset(fixture.outgoing),
-    rosterArea: 'active',
+    ...(fixture.kind === 'ir-add-open' ? {} : { rosterArea: 'active' }),
     rosterSlotId: activeSlotId,
     cycleWindowId: fixture.window.id,
     snapshotCycleNumber: cycleNumber,
@@ -359,7 +436,7 @@ async function seedFixture(fixture) {
     lastSuccessfulSyncAt: new Date(fixture.nowMilliseconds - 60_000),
     records: [{
       playerId: fixture.outgoing.player.id,
-      status: 'day-to-day',
+      status: fixture.outgoing.availabilityStatus,
     }],
   });
   batch.set(db.doc(cyclePath), {
@@ -418,6 +495,20 @@ async function seedFixture(fixture) {
         ),
         updatedAt: new Date(fixture.nowMilliseconds - 60_000),
       },
+    );
+  }
+  if (fixture.kind === 'ir-add-open') {
+    batch.set(
+      db.doc(
+        `leagues/${leagueId}/transactions/${fixture.queueTransactionId}`,
+      ),
+      fixture.queueTransaction,
+    );
+    batch.set(
+      db.doc(
+        `leagues/${leagueId}/transactions/${fixture.moveToIrTransactionId}`,
+      ),
+      fixture.moveToIrTransaction,
     );
   }
 
@@ -496,7 +587,9 @@ function installExternalEvidenceMocks(t, fixture) {
 function buildAutomaticRequest(fixture) {
   const moveType = fixture.kind === 'bench'
     ? 'injury-active-bench-swap'
-    : 'injury-add-drop-active';
+    : fixture.kind === 'ir-add-open'
+      ? 'injury-add-open-active'
+      : 'injury-add-drop-active';
   const pendingMoveFingerprint = fixture.kind === 'bench'
     ? rosterMoves.getQueuedBenchSwapInjuryPromotionFingerprint({
         pendingMove: fixture.pendingMove,
@@ -506,7 +599,21 @@ function buildAutomaticRequest(fixture) {
         outgoingAssetKey: fixture.outgoing.assetKey,
         incomingAssetKey: fixture.incoming.assetKey,
       })
-    : rosterMoves.getQueuedFreeAgentInjuryPromotionFingerprint({
+    : fixture.kind === 'ir-add-open'
+      ? rosterMoves.getQueuedIrAddOpenInjuryPromotionFingerprint({
+          pendingMove: fixture.pendingMove,
+          ownerId,
+          activeSlotId,
+          activePosition: 'C',
+          incomingAssetKey: fixture.incoming.assetKey,
+          irSlotId,
+          irAsset: fixture.outgoing,
+          queueTransactionId: fixture.queueTransactionId,
+          queueTransaction: fixture.queueTransaction,
+          moveToIrTransactionId: fixture.moveToIrTransactionId,
+          moveToIrTransaction: fixture.moveToIrTransaction,
+        })
+      : rosterMoves.getQueuedFreeAgentInjuryPromotionFingerprint({
         pendingMove: fixture.pendingMove,
         ownerId,
         activeSlotId,
@@ -525,6 +632,13 @@ function buildAutomaticRequest(fixture) {
     incomingAssetKey: fixture.incoming.assetKey,
     expectedPendingMoveId: fixture.pendingMoveId,
     expectedPendingMoveFingerprint: pendingMoveFingerprint,
+    ...(fixture.kind === 'ir-add-open'
+      ? {
+          expectedQueueTransactionId: fixture.queueTransactionId,
+          expectedMoveToIrTransactionId: fixture.moveToIrTransactionId,
+          expectedIrSlotId: irSlotId,
+        }
+      : {}),
     source: 'scheduled-backstop',
   };
   const receipt = rosterMoves.createAutomaticInjuryReplacementReceiptIdentity({
@@ -534,9 +648,12 @@ function buildAutomaticRequest(fixture) {
     moveType,
     benchSlotId: fixture.kind === 'bench' ? benchSlotId : '',
     incomingAssetKey:
-      fixture.kind === 'free-agent' ? fixture.incoming.assetKey : null,
+      fixture.kind === 'bench' ? null : fixture.incoming.assetKey,
     pendingMoveId: fixture.pendingMoveId,
     pendingMoveFingerprint,
+    queueTransactionId: fixture.queueTransactionId ?? null,
+    moveToIrTransactionId: fixture.moveToIrTransactionId ?? null,
+    irSlotId: fixture.kind === 'ir-add-open' ? irSlotId : null,
   });
 
   return { request, receipt };
@@ -696,7 +813,10 @@ function assertSharedAtomicGraph(graph, fixture, receipt) {
   }
   assert.equal(graph.transaction.effectiveCycleNumber, cycleNumber);
   assert.equal(graph.transaction.activeSlotId, activeSlotId);
-  assert.equal(graph.transaction.availabilityStatus, 'day-to-day');
+  assert.equal(
+    graph.transaction.availabilityStatus,
+    fixture.outgoing.availabilityStatus,
+  );
   assert.equal(graph.transaction.supersededQueuedMoveId, fixture.pendingMoveId);
   assert.equal(
     graph.transaction.injuryReplacementWindow.latestTransactionId,
@@ -710,7 +830,10 @@ function assertSharedAtomicGraph(graph, fixture, receipt) {
     graph.transaction.rosterActionSubmission.requestFingerprint,
     receipt.requestFingerprint,
   );
-  assert.equal(graph.transactionCollection.size, 1);
+  assert.equal(
+    graph.transactionCollection.size,
+    fixture.kind === 'ir-add-open' ? 3 : 1,
+  );
   assert.equal(graph.incomingWaiverSnapshot.exists, false);
 }
 
@@ -855,4 +978,294 @@ test('real queued injury add/drop survives a concurrent duplicate transaction re
   assert.equal(graph.transaction.droppedAsset.assetKey, fixture.outgoing.assetKey);
   assert.equal(graph.transaction.activatedAsset.assetKey, fixture.incoming.assetKey);
   assert.equal(graph.transaction.waiverId, fixture.outgoing.assetKey);
+});
+
+test('legacy discovery uses a trusted IR-eligible league override before history lookup', async () => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  await db.doc(
+    `leagues/${leagueId}/playerAvailability/${fixture.outgoing.player.id}`,
+  ).set({
+    source: 'commissioner',
+    leagueId,
+    playerId: fixture.outgoing.player.id,
+    status: 'out',
+  });
+
+  const candidates = await automaticInjuryReplacement
+    .loadAutomaticQueuedIrAddOpenCandidates({
+      leagueId,
+      ownerId,
+      rosterData: fixture.roster,
+      eligiblePlayerIds: new Set(),
+      includeTrustedLeagueOverrideEligibility: true,
+      globalAvailabilityTrusted: true,
+    });
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].moveType, 'injury-add-open-active');
+  assert.equal(candidates[0].outgoingPlayerId, fixture.outgoing.player.id);
+  assert.equal(candidates[0].queueTransactionId, fixture.queueTransactionId);
+});
+
+test('legacy discovery performs no history query when a trusted league override removes IR eligibility', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  await db.doc(
+    `leagues/${leagueId}/playerAvailability/${fixture.outgoing.player.id}`,
+  ).set({
+    source: 'commissioner',
+    leagueId,
+    playerId: fixture.outgoing.player.id,
+    status: 'day-to-day',
+  });
+  const originalCollection = runtimeFirebase.db.collection.bind(
+    runtimeFirebase.db,
+  );
+  let transactionCollectionAccessCount = 0;
+  t.mock.method(runtimeFirebase.db, 'collection', function collection(path) {
+    if (path === `leagues/${leagueId}/transactions`) {
+      transactionCollectionAccessCount += 1;
+    }
+    return originalCollection(path);
+  });
+
+  const candidates = await automaticInjuryReplacement
+    .loadAutomaticQueuedIrAddOpenCandidates({
+      leagueId,
+      ownerId,
+      rosterData: fixture.roster,
+      eligiblePlayerIds: new Set([fixture.outgoing.player.id]),
+      includeTrustedLeagueOverrideEligibility: true,
+      globalAvailabilityTrusted: true,
+    });
+  const untrustedGlobalCandidates = await automaticInjuryReplacement
+    .loadAutomaticQueuedIrAddOpenCandidates({
+      leagueId,
+      ownerId,
+      rosterData: fixture.roster,
+      eligiblePlayerIds: new Set([fixture.outgoing.player.id]),
+      includeTrustedLeagueOverrideEligibility: true,
+      globalAvailabilityTrusted: false,
+    });
+
+  assert.deepEqual(candidates, []);
+  assert.deepEqual(untrustedGlobalCandidates, []);
+  assert.equal(transactionCollectionAccessCount, 0);
+});
+
+test('legacy move-to-IR plus queued add-open promotes once, preserves IR and started scoring, and replays one receipt', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+
+  const first = await rosterMoves.applyAutomaticQueuedInjuryReplacement(request);
+  const replay = await rosterMoves.applyAutomaticQueuedInjuryReplacement(request);
+  const graph = await readCommittedGraph(receipt.transactionId, fixture);
+  const irSlot = graph.roster.irSlots.find((slot) => slot.slotId === irSlotId);
+  const [queueSnapshot, moveToIrSnapshot] = await Promise.all([
+    db.doc(
+      `leagues/${leagueId}/transactions/${fixture.queueTransactionId}`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/transactions/${fixture.moveToIrTransactionId}`,
+    ).get(),
+  ]);
+
+  assert.deepEqual(replay, first);
+  assert.deepEqual(first, {
+    applied: true,
+    cycleNumber,
+    activeSlotId,
+    message: 'Injury transaction applied to the remaining games in Cycle 4.',
+  });
+  assertSharedAtomicGraph(graph, fixture, receipt);
+  assert.equal(irSlot.asset.assetKey, fixture.outgoing.assetKey);
+  assert.equal(irSlot.asset.rosterStatus, 'injured');
+  assert.equal(irSlot.asset.cycleScore.gamesCounted, 4);
+  assert.equal(irSlot.asset.cycleScore.fantasyPoints, 41.9);
+  assert.equal(graph.outgoingWaiverSnapshot.exists, false);
+  assert.equal(graph.transaction.type, 'add-open-slot');
+  assert.equal(graph.transaction.outgoingDestination, 'injured-reserve');
+  assert.equal(graph.transaction.targetSlotId, activeSlotId);
+  assert.equal(graph.transaction.irSlotId, irSlotId);
+  assert.equal(graph.transaction.preservedIrSlotId, irSlotId);
+  assert.equal(
+    graph.transaction.sourceQueueAddOpenTransactionId,
+    fixture.queueTransactionId,
+  );
+  assert.equal(
+    graph.transaction.sourceMoveToIrTransactionId,
+    fixture.moveToIrTransactionId,
+  );
+  assert.equal(graph.transaction.addedAsset.assetKey, fixture.incoming.assetKey);
+  assert.equal(
+    graph.transaction.activatedAsset.assetKey,
+    fixture.incoming.assetKey,
+  );
+  assert.equal(graph.transaction.movedAsset, null);
+  assert.equal(graph.transaction.droppedAsset, null);
+  assert.equal(graph.transaction.waiverId, null);
+  assert.equal(queueSnapshot.exists, true);
+  assert.equal(queueSnapshot.data().type, 'queue-add-open-slot');
+  assert.equal(queueSnapshot.data().queuedMoveId, fixture.pendingMoveId);
+  assert.equal(moveToIrSnapshot.exists, true);
+  assert.equal(moveToIrSnapshot.data().type, 'move-to-ir');
+  assert.equal(
+    moveToIrSnapshot.data().movedAsset.assetKey,
+    fixture.outgoing.assetKey,
+  );
+});
+
+async function assertIrAddOpenRecoveryFailedClosed(fixture, receipt) {
+  const [rosterSnapshot, receiptSnapshot, transactionCollection] =
+    await Promise.all([
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+      db.doc(
+        `leagues/${leagueId}/transactions/${receipt.transactionId}`,
+      ).get(),
+      db.collection(`leagues/${leagueId}/transactions`).get(),
+    ]);
+  const roster = rosterSnapshot.data();
+  const activeSlot = roster.activeSlots.find(
+    (slot) => slot.slotId === activeSlotId,
+  );
+
+  assert.equal(activeSlot.asset, null);
+  assert.equal(activeSlot.openFromCycleNumber, null);
+  assert.equal(activeSlot.pendingMove.id, fixture.pendingMoveId);
+  assert.equal(receiptSnapshot.exists, false);
+  assert.equal(transactionCollection.size, 2);
+}
+
+test('legacy IR add-open fails closed when the saved scoring window no longer owns the injured player', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+  const teamWindowsRef = db.doc(
+    `leagues/${leagueId}/cycles/${cycleId}/teamWindows/${ownerId}`,
+  );
+  const teamWindowsSnapshot = await teamWindowsRef.get();
+  const windows = structuredClone(teamWindowsSnapshot.data().windows);
+  windows[0].assetKey = 'skater-999';
+  await teamWindowsRef.set({ windows }, { merge: true });
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /IR vacancy no longer matches its exact active scoring window/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
+});
+
+test('legacy IR add-open fails closed when full pick/window continuity diverges', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+  const teamWindowsRef = db.doc(
+    `leagues/${leagueId}/cycles/${cycleId}/teamWindows/${ownerId}`,
+  );
+  const teamWindowsSnapshot = await teamWindowsRef.get();
+  const windows = structuredClone(teamWindowsSnapshot.data().windows);
+  windows[0].playerWindowContinuity.priorAssignedGameIds = [999];
+  await teamWindowsRef.set({ windows }, { merge: true });
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /IR vacancy no longer matches its exact active scoring window/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
+});
+
+test('legacy IR add-open fails closed on duplicate regular scoring windows', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+  const teamWindowsRef = db.doc(
+    `leagues/${leagueId}/cycles/${cycleId}/teamWindows/${ownerId}`,
+  );
+  const teamWindowsSnapshot = await teamWindowsRef.get();
+  const windows = structuredClone(teamWindowsSnapshot.data().windows);
+  windows.push(structuredClone(windows[0]));
+  await teamWindowsRef.set({ windows }, { merge: true });
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /IR vacancy no longer matches its exact active scoring window/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
+});
+
+test('legacy IR add-open fails closed when the exact current IR occupant changes', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+  const rosterRef = db.doc(
+    `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+  );
+  const replacementIrAsset = rosterSkater({
+    id: 999,
+    team: 'NYR',
+    availabilityStatus: 'out',
+    rosterStatus: 'injured',
+  });
+  await rosterRef.set({
+    irSlots: [{ slotId: irSlotId, slotNumber: 1, asset: replacementIrAsset }],
+  }, { merge: true });
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /queued injury transaction changed before automatic replacement began/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
+});
+
+test('legacy IR add-open fails closed when the saved queue transaction changes', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+  await db.doc(
+    `leagues/${leagueId}/transactions/${fixture.queueTransactionId}`,
+  ).set({ droppedAsset: fixture.outgoing }, { merge: true });
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /queued injury transaction changed before automatic replacement began/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
+});
+
+test('legacy IR add-open fails closed when the saved move-to-IR transaction changes', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+  await db.doc(
+    `leagues/${leagueId}/transactions/${fixture.moveToIrTransactionId}`,
+  ).set({ effectiveLabel: 'Cycle 999' }, { merge: true });
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /queued injury transaction changed before automatic replacement began/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
+});
+
+test('legacy IR add-open fails closed for an assigned playoff-bank window', async (t) => {
+  const fixture = buildIrAddOpenFixture();
+  fixture.isPlayoff = true;
+  await seedFixture(fixture);
+  installExternalEvidenceMocks(t, fixture);
+  const { request, receipt } = buildAutomaticRequest(fixture);
+
+  await assert.rejects(
+    rosterMoves.applyAutomaticQueuedInjuryReplacement(request),
+    /limited to an exact regular-season scoring window/,
+  );
+  await assertIrAddOpenRecoveryFailedClosed(fixture, receipt);
 });

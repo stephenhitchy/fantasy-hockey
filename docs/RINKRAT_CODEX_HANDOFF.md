@@ -116,6 +116,15 @@ evidence still passes. Read
 `docs/RINKRAT_PRODUCT_B2F_INSTANT_INJURY_TRANSACTIONS.md` before changing this
 timing, destination, or recovery contract.
 
+B2F also has a fail-closed compatibility bridge for the legacy two-step flow
+where a manager moved an injured starter to IR and then queued a free-agent add
+into that exact vacancy. It requires unique immutable queue and move-to-IR
+history, the same owner/slots/players/effective boundary, the current exact IR
+occupant, and matching pick/window/continuity evidence. It leaves the injured
+player in IR and transfers only unstarted positions; ordinary open slots never
+qualify. The bounded recovery sweep supplies liveness without adding a new
+listener or Firestore index.
+
 B2A is the current clean-source add/drop reliability candidate and is not yet
 deployed. It replaces the interactive 32-club identity refresh with exact
 post-boundary player lookups, runs incoming/outgoing schedule checks in

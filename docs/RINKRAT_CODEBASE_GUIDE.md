@@ -368,7 +368,11 @@ recovery, deployment, and rollback details.
 6. Bench free-agent ownership changes remain immediate. An exact manager-
    authorized Day-to-day/Out/IR/LTIR active replacement may also apply
    immediately through a mixed-player ownership plan; a healthy/available
-   active replacement remains queued for the next legal matchup window.
+   active replacement remains queued for the next legal matchup window. The
+   legacy move-to-IR then add-open flow may be recovered only from exact unique
+   saved history plus the current IR, roster-pick, scoring-window, continuity,
+   availability, and puck-drop evidence; it preserves the IR destination and
+   never applies to a generic open slot.
 7. The committed roster, waiver, and transaction documents drive UI success.
    Ambiguous transport failures remain pending while the existing listener and
    bounded server-source roster reads reconcile the exact slot; a local timeout

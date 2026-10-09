@@ -22,7 +22,7 @@ import {
   CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
 import {
-  buildInjuryReplacementPresentation,
+  buildReconciledInjuryReplacementPresentation,
   resolveCycleSlotScoreSummary,
   type InjuryReplacementPresentation,
 } from '../../../core/cycle/injury-replacement-presentation.util';
@@ -3227,17 +3227,21 @@ export class TeamSettings implements OnDestroy {
     return this.cycleScoring()?.assetScores[projectionAsset.assetKey] ?? null;
   }
 
+  private getRosterSlotCyclePick(slot: ActiveRosterSlot): DraftPick | null {
+    return this.cycleRosterPicks().find(
+      (candidate) =>
+        candidate.ownerId === this.viewedOwnerId() &&
+        candidate.rosterSlotId === slot.slotId,
+    ) ?? null;
+  }
+
   getRosterSlotScoreSummary(slot: ActiveRosterSlot): CycleAssetScoreSummary | null {
     if (!slot.asset) {
       return null;
     }
 
     const assetKey = this.getRosterAssetKey(slot.asset);
-    const pick = this.cycleRosterPicks().find(
-      (candidate) =>
-        candidate.ownerId === this.viewedOwnerId() &&
-        candidate.rosterSlotId === slot.slotId,
-    );
+    const pick = this.getRosterSlotCyclePick(slot);
 
     if (!assetKey) {
       return null;
@@ -3254,7 +3258,20 @@ export class TeamSettings implements OnDestroy {
   getRosterSlotInjuryReplacementPresentation(
     slot: ActiveRosterSlot,
   ): InjuryReplacementPresentation | null {
-    return buildInjuryReplacementPresentation(this.getRosterSlotScoreSummary(slot));
+    const summary = this.getRosterSlotScoreSummary(slot);
+    const pick = this.getRosterSlotCyclePick(slot);
+    const currentAssetKey = this.getRosterAssetKey(slot.asset);
+
+    return buildReconciledInjuryReplacementPresentation({
+      source: summary,
+      ownerId: this.viewedOwnerId(),
+      rosterSlotId: slot.slotId,
+      currentAssetKey,
+      injuryReplacementWindows: [
+        summary?.injuryReplacementWindow,
+        pick?.injuryReplacementWindow,
+      ],
+    });
   }
 
   getRosterSlotCurrentCycleScore(slot: ActiveRosterSlot): number | null {
@@ -3292,12 +3309,20 @@ export class TeamSettings implements OnDestroy {
     const requiredGames =
       this.league()?.scoringRules?.requiredGamesPerCycle ??
       defaultScoringRules.requiredGamesPerCycle;
-    const replacement = buildInjuryReplacementPresentation(summary);
+    const replacement = this.getRosterSlotInjuryReplacementPresentation(slot);
 
     return Array.from({ length: requiredGames }, (_, index) => {
-      const gameId = summary.scheduledGameIds[index] ?? null;
-      const gameDate = summary.scheduledGameDates[index] ?? null;
-      const gameLabel = summary.scheduledGameLabels[index] ?? 'Schedule pending';
+      const owner = replacement?.gameOwnership[index] ?? null;
+      const gameId = owner?.gameId ?? summary.scheduledGameIds[index] ?? null;
+      const scheduleIndex = gameId === null
+        ? -1
+        : summary.scheduledGameIds.indexOf(gameId);
+      const gameDate = scheduleIndex >= 0
+        ? summary.scheduledGameDates[scheduleIndex] ?? null
+        : null;
+      const gameLabel = scheduleIndex >= 0
+        ? summary.scheduledGameLabels[scheduleIndex] ?? 'Schedule pending'
+        : 'Schedule pending';
       const state = resolveCycleWindowGameMarkerState({
         gameId,
         completedGameIds: summary.completedGameIds,
@@ -3306,7 +3331,6 @@ export class TeamSettings implements OnDestroy {
         gameStates: summary.gameStates,
         actualGamesPlayed: summary.actualGamesPlayed ?? 0,
       });
-      const owner = replacement?.gameOwnership[index] ?? null;
       const dateLabel = gameDate
         ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
         : 'date pending';

@@ -12,6 +12,7 @@ import {
   applyAutomaticQueuedInjuryReplacement,
   getQueuedBenchSwapInjuryPromotionFingerprint,
   getQueuedFreeAgentInjuryPromotionFingerprint,
+  getQueuedIrAddOpenInjuryPromotionFingerprint,
   resolveTrustedCommissionerAvailabilityStatus,
 } from './roster-moves';
 import { db } from './shared/core/firebase';
@@ -31,6 +32,11 @@ const ELIGIBLE_INJURY_STATUSES = new Set([
   'injured-reserve',
   'long-term-injured-reserve',
 ]);
+const IR_ELIGIBLE_INJURY_STATUSES = new Set([
+  'out',
+  'injured-reserve',
+  'long-term-injured-reserve',
+]);
 
 // Each trigger is intentionally bounded. The scheduled cursor eventually
 // covers any roster omitted by a very large global refresh.
@@ -43,6 +49,9 @@ const BACKSTOP_MAX_CANDIDATE_ATTEMPTS = 100;
 const MAX_ACTIVE_SLOTS_PER_ROSTER = 20;
 const CANDIDATE_CONCURRENCY = 4;
 const GLOBAL_AVAILABILITY_MAX_FUTURE_SKEW_MILLISECONDS = 5 * 60 * 1000;
+const LEGACY_IR_HISTORY_WINDOW_MILLISECONDS = 5 * 60 * 1000;
+const LEGACY_IR_HISTORY_MAX_READS = 20;
+const LEGACY_IR_OVERRIDE_MAX_READS = 6;
 
 export type AutomaticInjuryReplacementSource =
   | 'global-availability-refresh'
@@ -53,12 +62,18 @@ export interface AutomaticInjuryReplacementCandidate {
   leagueId: string;
   ownerId: string;
   activeSlotId: string;
-  moveType: 'injury-active-bench-swap' | 'injury-add-drop-active';
+  moveType:
+    | 'injury-active-bench-swap'
+    | 'injury-add-drop-active'
+    | 'injury-add-open-active';
   benchSlotId: string | null;
   incomingAssetKey: string;
   pendingMoveId: string;
   pendingMoveFingerprint: string;
   outgoingPlayerId: number;
+  queueTransactionId?: string | null;
+  moveToIrTransactionId?: string | null;
+  irSlotId?: string | null;
 }
 
 interface CandidateRunSummary {
@@ -89,6 +104,9 @@ export function getAutomaticInjuryReplacementCandidateKey(
       pendingMoveId: candidate.pendingMoveId,
       pendingMoveFingerprint: candidate.pendingMoveFingerprint,
       outgoingPlayerId: candidate.outgoingPlayerId,
+      queueTransactionId: candidate.queueTransactionId ?? null,
+      moveToIrTransactionId: candidate.moveToIrTransactionId ?? null,
+      irSlotId: candidate.irSlotId ?? null,
     }))
     .digest('hex');
 }
@@ -381,6 +399,268 @@ export function findAutomaticQueuedInjuryReplacementCandidates(input: {
   return candidates;
 }
 
+interface SavedTransactionEvidence {
+  id: string;
+  data: unknown;
+}
+
+interface LegacyIrAddOpenStructuralIntent {
+  activeSlotId: string;
+  activePosition: string;
+  pendingMoveId: string;
+}
+
+function findLegacyIrAddOpenStructuralIntents(
+  rosterData: unknown,
+  ownerIdInput: string,
+  eligiblePlayerIds?: ReadonlySet<number> | null,
+): LegacyIrAddOpenStructuralIntent[] {
+  const roster = asRecord(rosterData);
+  const activeSlots = asArray(roster['activeSlots']).map(asRecord);
+  const benchSlots = asArray(roster['benchSlots']).map(asRecord);
+  const irSlots = asArray(roster['irSlots']).map(asRecord);
+  const ownerId = asString(ownerIdInput);
+
+  if (!ownerId || activeSlots.length > MAX_ACTIVE_SLOTS_PER_ROSTER) {
+    return [];
+  }
+
+  return activeSlots.flatMap((activeSlot) => {
+    const pendingMove = asRecord(activeSlot['pendingMove']);
+    const activeSlotId = asString(activeSlot['slotId']);
+    const activePosition = asString(activeSlot['position']);
+    const pendingMoveId = asString(pendingMove['id']);
+    const pendingQueuedAtMilliseconds = Date.parse(
+      asString(pendingMove['queuedAt']),
+    );
+    const requestedEffectiveCycleNumber =
+      pendingMove['requestedEffectiveCycleNumber'];
+    const incomingAsset = asRecord(pendingMove['incomingAsset']);
+    const incomingAssetKey = getRosterAssetKey(incomingAsset);
+    const matchingPendingMoveIds = activeSlots.filter(
+      (slot) =>
+        asString(asRecord(slot['pendingMove'])['id']) === pendingMoveId,
+    );
+    const matchingActiveSlotIds = activeSlots.filter(
+      (slot) => asString(slot['slotId']) === activeSlotId,
+    );
+    const matchingIncomingReservations = activeSlots.filter(
+      (slot) =>
+        getRosterAssetKey(
+          asRecord(asRecord(slot['pendingMove'])['incomingAsset']),
+        ) === incomingAssetKey,
+    );
+    const currentAssets = [
+      ...activeSlots.map((slot) => slot['asset']),
+      ...benchSlots.map((slot) => slot['asset']),
+      ...irSlots.map((slot) => slot['asset']),
+    ];
+    const hasSamePositionIrSkater = irSlots.some((slot) => {
+      const asset = asRecord(slot['asset']);
+      const playerId = getSkaterPlayerId(asset);
+
+      return asset['assetType'] === 'skater' &&
+        asString(asset['position']) === activePosition &&
+        Boolean(getRosterAssetKey(asset)) &&
+        playerId > 0 &&
+        (!eligiblePlayerIds || eligiblePlayerIds.has(playerId));
+    });
+
+    return activeSlotId &&
+        activePosition &&
+        activeSlot['asset'] === null &&
+        activeSlot['openFromCycleNumber'] === null &&
+        pendingMoveId &&
+        pendingMove['moveType'] === 'add-open-slot' &&
+        asString(pendingMove['queuedByOwnerId']) === ownerId &&
+        pendingMove['outgoingAssetKey'] === null &&
+        pendingMove['sourceBenchSlotId'] === null &&
+        pendingMove['sourceWaiverId'] === null &&
+        pendingMove['outgoingDestination'] === 'waivers' &&
+        Number.isFinite(pendingQueuedAtMilliseconds) &&
+        Number.isSafeInteger(requestedEffectiveCycleNumber) &&
+        (requestedEffectiveCycleNumber as number) > 0 &&
+        Boolean(asString(pendingMove['requestedEffectiveLabel'])) &&
+        incomingAsset['assetType'] === 'skater' &&
+        incomingAssetKey &&
+        asString(incomingAsset['position']) === activePosition &&
+        matchingActiveSlotIds.length === 1 &&
+        matchingPendingMoveIds.length === 1 &&
+        matchingIncomingReservations.length === 1 &&
+        asString(matchingIncomingReservations[0]['slotId']) === activeSlotId &&
+        !currentAssets.some(
+          (asset) => getRosterAssetKey(asset) === incomingAssetKey,
+        ) &&
+        hasSamePositionIrSkater
+      ? [{ activeSlotId, activePosition, pendingMoveId }]
+      : [];
+  });
+}
+
+/**
+ * Reconstructs only the legacy two-step manager intent where the exact starter
+ * was first moved to one IR slot and the exact free agent was then reserved in
+ * that vacated active slot. Generic open slots never satisfy this contract.
+ */
+export function findAutomaticQueuedIrAddOpenInjuryReplacementCandidates(input: {
+  leagueId: string;
+  ownerId: string;
+  rosterData: unknown;
+  queueTransactions: readonly SavedTransactionEvidence[];
+  moveToIrTransactions: readonly SavedTransactionEvidence[];
+  historyTruncated?: boolean;
+  eligiblePlayerIds?: ReadonlySet<number> | null;
+}): AutomaticInjuryReplacementCandidate[] {
+  const leagueId = asString(input.leagueId);
+  const ownerId = asString(input.ownerId);
+
+  if (!leagueId || !ownerId || input.historyTruncated) {
+    return [];
+  }
+
+  const roster = asRecord(input.rosterData);
+  const activeSlots = asArray(roster['activeSlots']).map(asRecord);
+  const benchSlots = asArray(roster['benchSlots']).map(asRecord);
+  const irSlots = asArray(roster['irSlots']).map(asRecord);
+
+  if (activeSlots.length > MAX_ACTIVE_SLOTS_PER_ROSTER) {
+    return [];
+  }
+
+  const candidates: AutomaticInjuryReplacementCandidate[] = [];
+
+  for (const activeSlot of activeSlots) {
+    const activeSlotId = asString(activeSlot['slotId']);
+    const activePosition = asString(activeSlot['position']);
+    const pendingMove = asRecord(activeSlot['pendingMove']);
+    const pendingMoveId = asString(pendingMove['id']);
+    const incomingAsset = asRecord(pendingMove['incomingAsset']);
+    const incomingAssetKey = getRosterAssetKey(incomingAsset);
+
+    if (
+      !activeSlotId ||
+      !activePosition ||
+      activeSlots.filter(
+        (slot) => asString(slot['slotId']) === activeSlotId,
+      ).length !== 1 ||
+      activeSlot['asset'] !== null ||
+      activeSlot['openFromCycleNumber'] !== null ||
+      !pendingMoveId ||
+      pendingMove['moveType'] !== 'add-open-slot' ||
+      asString(pendingMove['queuedByOwnerId']) !== ownerId ||
+      pendingMove['outgoingAssetKey'] !== null ||
+      pendingMove['sourceBenchSlotId'] !== null ||
+      pendingMove['sourceWaiverId'] !== null ||
+      pendingMove['outgoingDestination'] !== 'waivers' ||
+      incomingAsset['assetType'] !== 'skater' ||
+      !incomingAssetKey ||
+      asString(incomingAsset['position']) !== activePosition
+    ) {
+      continue;
+    }
+
+    const matchingPendingMoveIds = activeSlots.filter(
+      (slot) => asString(asRecord(slot['pendingMove'])['id']) === pendingMoveId,
+    );
+    const matchingIncomingReservations = activeSlots.filter(
+      (slot) => getRosterAssetKey(
+        asRecord(asRecord(slot['pendingMove'])['incomingAsset']),
+      ) === incomingAssetKey,
+    );
+    const currentAssets = [
+      ...activeSlots.map((slot) => slot['asset']),
+      ...benchSlots.map((slot) => slot['asset']),
+      ...irSlots.map((slot) => slot['asset']),
+    ];
+
+    if (
+      matchingPendingMoveIds.length !== 1 ||
+      matchingIncomingReservations.length !== 1 ||
+      asString(matchingIncomingReservations[0]['slotId']) !== activeSlotId ||
+      currentAssets.some(
+        (asset) => getRosterAssetKey(asset) === incomingAssetKey,
+      )
+    ) {
+      continue;
+    }
+
+    const queueTransactions = input.queueTransactions.filter((entry) =>
+      asString(asRecord(entry.data)['queuedMoveId']) === pendingMoveId,
+    );
+    if (queueTransactions.length !== 1) {
+      continue;
+    }
+
+    const exactHistory = input.moveToIrTransactions.flatMap((entry) => {
+      const transaction = asRecord(entry.data);
+      const irSlotId = asString(transaction['irSlotId']);
+      const matchingIrSlots = irSlots.filter(
+        (slot) => asString(slot['slotId']) === irSlotId,
+      );
+      const irSlot = matchingIrSlots.length === 1
+        ? matchingIrSlots[0]
+        : undefined;
+      const irAsset = asRecord(irSlot?.['asset']);
+      const outgoingAssetKey = getRosterAssetKey(irAsset);
+      const outgoingPlayerId = getSkaterPlayerId(irAsset);
+      const fingerprint = getQueuedIrAddOpenInjuryPromotionFingerprint({
+        pendingMove: pendingMove as unknown as PendingRosterSlotMove,
+        ownerId,
+        activeSlotId,
+        activePosition,
+        incomingAssetKey,
+        irSlotId,
+        irAsset: irAsset as unknown as PendingRosterSlotMove['incomingAsset'],
+        queueTransactionId: queueTransactions[0].id,
+        queueTransaction: queueTransactions[0].data,
+        moveToIrTransactionId: entry.id,
+        moveToIrTransaction: entry.data,
+      });
+
+      if (
+        !fingerprint ||
+        !outgoingAssetKey ||
+        outgoingPlayerId <= 0 ||
+        (input.eligiblePlayerIds &&
+          !input.eligiblePlayerIds.has(outgoingPlayerId)) ||
+        currentAssets.filter(
+          (asset) => getRosterAssetKey(asset) === outgoingAssetKey,
+        ).length !== 1
+      ) {
+        return [];
+      }
+
+      return [{
+        fingerprint,
+        irSlotId,
+        outgoingPlayerId,
+        moveToIrTransactionId: entry.id,
+      }];
+    });
+
+    if (exactHistory.length !== 1) {
+      continue;
+    }
+
+    candidates.push({
+      leagueId,
+      ownerId,
+      activeSlotId,
+      moveType: 'injury-add-open-active',
+      benchSlotId: null,
+      incomingAssetKey,
+      pendingMoveId,
+      pendingMoveFingerprint: exactHistory[0].fingerprint,
+      outgoingPlayerId: exactHistory[0].outgoingPlayerId,
+      queueTransactionId: queueTransactions[0].id,
+      moveToIrTransactionId: exactHistory[0].moveToIrTransactionId,
+      irSlotId: exactHistory[0].irSlotId,
+    });
+  }
+
+  return candidates;
+}
+
 function getAvailabilityStatusByPlayerId(data: unknown): Map<number, string> {
   const statuses = new Map<number, string>();
 
@@ -421,6 +701,148 @@ function getTimestampMilliseconds(value: unknown): number | null {
   return null;
 }
 
+export async function loadAutomaticQueuedIrAddOpenCandidates(input: {
+  leagueId: string;
+  ownerId: string;
+  rosterData: unknown;
+  eligiblePlayerIds?: ReadonlySet<number> | null;
+  includeTrustedLeagueOverrideEligibility?: boolean;
+  globalAvailabilityTrusted?: boolean;
+}): Promise<AutomaticInjuryReplacementCandidate[]> {
+  const unfilteredIntents = findLegacyIrAddOpenStructuralIntents(
+    input.rosterData,
+    input.ownerId,
+    null,
+  );
+  if (unfilteredIntents.length === 0) {
+    return [];
+  }
+  if (
+    input.includeTrustedLeagueOverrideEligibility &&
+    input.globalAvailabilityTrusted !== true
+  ) {
+    return [];
+  }
+
+  const eligiblePlayerIds = input.eligiblePlayerIds
+    ? new Set(input.eligiblePlayerIds)
+    : input.includeTrustedLeagueOverrideEligibility
+      ? new Set<number>()
+      : input.eligiblePlayerIds;
+  if (input.includeTrustedLeagueOverrideEligibility) {
+    const possiblePositions = new Set(
+      unfilteredIntents.map((intent) => intent.activePosition),
+    );
+    const overridePlayerIds = [...new Set(
+      asArray(asRecord(input.rosterData)['irSlots'])
+        .map((slot) => asRecord(asRecord(slot)['asset']))
+        .filter((asset) =>
+          asset['assetType'] === 'skater' &&
+          possiblePositions.has(asString(asset['position'])),
+        )
+        .map((asset) => getSkaterPlayerId(asset))
+        .filter((playerId) => playerId > 0),
+    )];
+
+    if (overridePlayerIds.length > LEGACY_IR_OVERRIDE_MAX_READS) {
+      return [];
+    }
+
+    const overrideSnapshots = overridePlayerIds.length > 0
+      ? await db.getAll(...overridePlayerIds.map((playerId) =>
+          db.doc(
+            `leagues/${input.leagueId}/playerAvailability/${playerId}`,
+          ),
+        ))
+      : [];
+
+    overrideSnapshots.forEach((snapshot, index) => {
+      const playerId = overridePlayerIds[index] ?? 0;
+      const status = resolveTrustedCommissionerAvailabilityStatus(
+        snapshot.data(),
+        input.leagueId,
+        playerId,
+      ).toLowerCase();
+
+      if (status) {
+        if (IR_ELIGIBLE_INJURY_STATUSES.has(status)) {
+          eligiblePlayerIds?.add(playerId);
+        } else {
+          eligiblePlayerIds?.delete(playerId);
+        }
+      }
+    });
+  }
+
+  const intents = findLegacyIrAddOpenStructuralIntents(
+    input.rosterData,
+    input.ownerId,
+    eligiblePlayerIds,
+  );
+  if (intents.length === 0) {
+    return [];
+  }
+
+  const candidates: AutomaticInjuryReplacementCandidate[] = [];
+  const transactionCollection = db.collection(
+    `leagues/${input.leagueId}/transactions`,
+  );
+
+  for (const intent of intents) {
+    const queueSnapshot = await transactionCollection
+      .where('queuedMoveId', '==', intent.pendingMoveId)
+      .limit(2)
+      .get();
+
+    if (queueSnapshot.size !== 1) {
+      continue;
+    }
+
+    const queueTransaction = queueSnapshot.docs[0];
+    const queueCreatedAtMilliseconds = getTimestampMilliseconds(
+      queueTransaction.data()['createdAt'],
+    );
+
+    if (queueCreatedAtMilliseconds === null) {
+      continue;
+    }
+
+    const historySnapshot = await transactionCollection
+      .where(
+        'createdAt',
+        '>=',
+        new Date(
+          queueCreatedAtMilliseconds - LEGACY_IR_HISTORY_WINDOW_MILLISECONDS,
+        ),
+      )
+      .where('createdAt', '<=', new Date(queueCreatedAtMilliseconds))
+      .orderBy('createdAt', 'desc')
+      .limit(LEGACY_IR_HISTORY_MAX_READS + 1)
+      .get();
+    const historyTruncated =
+      historySnapshot.size > LEGACY_IR_HISTORY_MAX_READS;
+
+    candidates.push(
+      ...findAutomaticQueuedIrAddOpenInjuryReplacementCandidates({
+        leagueId: input.leagueId,
+        ownerId: input.ownerId,
+        rosterData: input.rosterData,
+        queueTransactions: [{
+          id: queueTransaction.id,
+          data: queueTransaction.data(),
+        }],
+        moveToIrTransactions: historySnapshot.docs
+          .slice(0, LEGACY_IR_HISTORY_MAX_READS)
+          .map((snapshot) => ({ id: snapshot.id, data: snapshot.data() })),
+        historyTruncated,
+        eligiblePlayerIds,
+      }).filter((candidate) => candidate.activeSlotId === intent.activeSlotId),
+    );
+  }
+
+  return candidates;
+}
+
 function getTrustedGlobalAvailabilityStatuses(
   data: unknown,
   nowMilliseconds = Date.now(),
@@ -446,10 +868,13 @@ function getTrustedGlobalAvailabilityStatuses(
   return getAvailabilityStatusByPlayerId(record);
 }
 
-function getEligiblePlayerIds(statuses: ReadonlyMap<number, string>): Set<number> {
+function getEligiblePlayerIds(
+  statuses: ReadonlyMap<number, string>,
+  eligibleStatuses: ReadonlySet<string> = ELIGIBLE_INJURY_STATUSES,
+): Set<number> {
   return new Set(
     [...statuses.entries()]
-      .filter(([, status]) => isEligibleInjuryStatus(status))
+      .filter(([, status]) => eligibleStatuses.has(status))
       .map(([playerId]) => playerId),
   );
 }
@@ -480,6 +905,10 @@ async function processCandidates(
         incomingAssetKey: candidate.incomingAssetKey,
         expectedPendingMoveId: candidate.pendingMoveId,
         expectedPendingMoveFingerprint: candidate.pendingMoveFingerprint,
+        expectedQueueTransactionId: candidate.queueTransactionId ?? null,
+        expectedMoveToIrTransactionId:
+          candidate.moveToIrTransactionId ?? null,
+        expectedIrSlotId: candidate.irSlotId ?? null,
         source,
       })),
     );
@@ -521,6 +950,7 @@ async function processCandidates(
 
 async function scanGlobalRosters(
   eligiblePlayerIds: ReadonlySet<number>,
+  irEligiblePlayerIds: ReadonlySet<number>,
 ): Promise<RosterScanResult> {
   const candidates: AutomaticInjuryReplacementCandidate[] = [];
   let rosterReadCount = 0;
@@ -543,6 +973,9 @@ async function scanGlobalRosters(
     const scan = await scanLeagueRosters({
       leagueId: league.id,
       eligiblePlayerIds,
+      irEligiblePlayerIds,
+      includeTrustedLeagueOverrideEligibility: true,
+      globalAvailabilityTrusted: true,
       maxTeamReads: Math.min(
         LEAGUE_MAX_TEAM_READS,
         GLOBAL_MAX_ROSTER_READS - rosterReadCount,
@@ -569,6 +1002,9 @@ async function scanGlobalRosters(
 async function scanLeagueRosters(input: {
   leagueId: string;
   eligiblePlayerIds?: ReadonlySet<number> | null;
+  irEligiblePlayerIds?: ReadonlySet<number> | null;
+  includeTrustedLeagueOverrideEligibility?: boolean;
+  globalAvailabilityTrusted?: boolean;
   maxTeamReads?: number;
   maxCandidateAttempts?: number;
 }): Promise<RosterScanResult> {
@@ -590,16 +1026,38 @@ async function scanLeagueRosters(input: {
         db.doc(`leagues/${input.leagueId}/teams/${team.id}/roster/current`),
       ))
     : [];
-  const candidates = rosterSnapshots.flatMap((snapshot) =>
-    snapshot.exists
-      ? findAutomaticQueuedInjuryReplacementCandidates({
+  const candidates: AutomaticInjuryReplacementCandidate[] = [];
+
+  for (const snapshot of rosterSnapshots) {
+    if (!snapshot.exists || candidates.length >= maxCandidateAttempts) {
+      continue;
+    }
+
+    const ownerId = snapshot.ref.parent.parent?.id ?? '';
+    const rosterData = snapshot.data();
+    candidates.push(
+      ...findAutomaticQueuedInjuryReplacementCandidates({
+        leagueId: input.leagueId,
+        ownerId,
+        rosterData,
+        eligiblePlayerIds: input.eligiblePlayerIds,
+      }),
+    );
+
+    if (candidates.length < maxCandidateAttempts) {
+      candidates.push(
+        ...await loadAutomaticQueuedIrAddOpenCandidates({
           leagueId: input.leagueId,
-          ownerId: snapshot.ref.parent.parent?.id ?? '',
-          rosterData: snapshot.data(),
-          eligiblePlayerIds: input.eligiblePlayerIds,
-        })
-      : [],
-  );
+          ownerId,
+          rosterData,
+          eligiblePlayerIds: input.irEligiblePlayerIds,
+          includeTrustedLeagueOverrideEligibility:
+            input.includeTrustedLeagueOverrideEligibility,
+          globalAvailabilityTrusted: input.globalAvailabilityTrusted,
+        }),
+      );
+    }
+  }
 
   return {
     candidates: candidates.slice(0, maxCandidateAttempts),
@@ -661,7 +1119,9 @@ async function filterCandidatesByEffectiveAvailability(
       globalStatuses.get(candidate.outgoingPlayerId) ||
       '';
 
-    return isEligibleInjuryStatus(effectiveStatus);
+    return candidate.moveType === 'injury-add-open-active'
+      ? IR_ELIGIBLE_INJURY_STATUSES.has(effectiveStatus)
+      : isEligibleInjuryStatus(effectiveStatus);
   });
 }
 
@@ -826,7 +1286,14 @@ export const processGlobalAutomaticInjuryReplacements = onDocumentWritten(
       }
 
       const eligiblePlayerIds = getEligiblePlayerIds(globalStatuses);
-      const scan = await scanGlobalRosters(eligiblePlayerIds);
+      const irEligiblePlayerIds = getEligiblePlayerIds(
+        globalStatuses,
+        IR_ELIGIBLE_INJURY_STATUSES,
+      );
+      const scan = await scanGlobalRosters(
+        eligiblePlayerIds,
+        irEligiblePlayerIds,
+      );
       const effectiveCandidates = await filterCandidatesByEffectiveAvailability(
         scan.candidates,
         globalStatuses,
@@ -924,6 +1391,9 @@ export const processLeagueAutomaticInjuryReplacement = onDocumentWritten(
       const scan = await scanLeagueRosters({
         leagueId,
         eligiblePlayerIds: new Set([playerId]),
+        irEligiblePlayerIds: IR_ELIGIBLE_INJURY_STATUSES.has(effectiveStatus)
+          ? new Set([playerId])
+          : new Set(),
       });
       const summary = await processCandidates(scan.candidates, source);
 
@@ -970,6 +1440,15 @@ export const reconcileAutomaticInjuryReplacements = onSchedule(
         db.doc(getAutomationSourceHealthPath(source)).get(),
         db.doc('appData/playerAvailability').get(),
       ]);
+      const globalStatuses = getTrustedGlobalAvailabilityStatuses(
+        globalAvailabilitySnapshot.data(),
+      );
+      const irEligiblePlayerIds = globalStatuses
+        ? getEligiblePlayerIds(
+            globalStatuses,
+            IR_ELIGIBLE_INJURY_STATUSES,
+          )
+        : new Set<number>();
       const savedLeagueCursorId = asString(
         healthSnapshot.data()?.['backstopLeagueCursorId'],
       );
@@ -1010,6 +1489,9 @@ export const reconcileAutomaticInjuryReplacements = onSchedule(
       for (const league of selectedLeagues) {
         const scan = await scanLeagueRosters({
           leagueId: league.id,
+          irEligiblePlayerIds,
+          includeTrustedLeagueOverrideEligibility: true,
+          globalAvailabilityTrusted: globalStatuses !== null,
           maxCandidateAttempts:
             LEAGUE_MAX_TEAM_READS * MAX_ACTIVE_SLOTS_PER_ROSTER,
         });
@@ -1019,9 +1501,6 @@ export const reconcileAutomaticInjuryReplacements = onSchedule(
         scanTruncated ||= scan.truncated;
       }
 
-      const globalStatuses = getTrustedGlobalAvailabilityStatuses(
-        globalAvailabilitySnapshot.data(),
-      );
       const effectiveCandidates = await filterCandidatesByEffectiveAvailability(
         structuralCandidates,
         globalStatuses ?? new Map<number, string>(),

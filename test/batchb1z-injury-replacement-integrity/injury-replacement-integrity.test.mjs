@@ -38,13 +38,67 @@ async function loadBrowserWindowUtility() {
   );
 }
 
+async function loadCycleAssetSnapshotUtility() {
+  const injuryWindowSource = stripTypeScriptTypes(
+    await readFile(
+      new URL('src/app/core/cycle/injury-replacement-window.util.ts', ROOT),
+      'utf8',
+    ),
+    { mode: 'strip' },
+  );
+  const injuryWindowUrl = `data:text/javascript;base64,${Buffer.from(
+    injuryWindowSource,
+  ).toString('base64')}`;
+  const presentationSource = stripTypeScriptTypes(
+    (
+      await readFile(
+        new URL(
+          'src/app/core/cycle/injury-replacement-presentation.util.ts',
+          ROOT,
+        ),
+        'utf8',
+      )
+    ).replace(
+      /from ['"]\.\/injury-replacement-window\.util(?:\.ts)?['"];/,
+      `from '${injuryWindowUrl}';`,
+    ),
+    { mode: 'strip' },
+  );
+  const presentationUrl = `data:text/javascript;base64,${Buffer.from(
+    presentationSource,
+  ).toString('base64')}`;
+  const snapshotSource = stripTypeScriptTypes(
+    (
+      await readFile(
+        new URL(
+          'src/app/features/cycles/cycle-asset-detail/cycle-asset-detail-snapshot.util.ts',
+          ROOT,
+        ),
+        'utf8',
+      )
+    ).replace(
+      /from ['"]\.\.\/\.\.\/\.\.\/core\/cycle\/injury-replacement-presentation\.util(?:\.ts)?['"];/,
+      `from '${presentationUrl}';`,
+    ),
+    { mode: 'strip' },
+  );
+
+  return import(
+    `data:text/javascript;base64,${Buffer.from(snapshotSource).toString('base64')}`
+  );
+}
+
 const {
   buildInjuryReplacementPresentation,
+  buildReconciledInjuryReplacementPresentation,
   resolveCycleSlotScoreSummary,
 } = await loadPresentationUtility();
 const {
   normalizeInjuryReplacementWindowPlan: normalizeBrowserInjuryReplacementWindowPlan,
 } = await loadBrowserWindowUtility();
+const {
+  buildCycleAssetSnapshotGames,
+} = await loadCycleAssetSnapshotUtility();
 
 const require = createRequire(import.meta.url);
 const {
@@ -108,6 +162,20 @@ function skater(assetKey, playerId, name, position = 'C', team = 'SJS') {
 const injuredStarter = skater('skater-1', 1, 'Will Smith', 'C', 'SJS');
 const firstReplacement = skater('skater-2', 2, 'Sam Bennett', 'C', 'FLA');
 const secondReplacement = skater('skater-3', 3, 'Dylan Larkin', 'C', 'DET');
+const celebrini = skater(
+  'skater-8484801',
+  8484801,
+  'Macklin Celebrini',
+  'C',
+  'SJS',
+);
+const leoCarlsson = skater(
+  'skater-8484166',
+  8484166,
+  'Leo Carlsson',
+  'C',
+  'ANA',
+);
 
 function firstReplacementPlan(startedCurrentGameIds = new Set([101, 102])) {
   const retainedGameCount = startedCurrentGameIds.size;
@@ -146,6 +214,54 @@ function scoreSource(plan, input = {}) {
     injuryReplacementWindow: plan,
     gameScores: input.gameScores ?? {},
     gameStates,
+  };
+}
+
+function celebriniToCarlssonPlan(startedCurrentGameIds = new Set([501, 502, 503, 504])) {
+  return buildInjuryReplacementWindowPlan({
+    currentAsset: celebrini,
+    currentScheduledGameIds: [501, 502, 503, 504, 505, 506],
+    startedCurrentGameIds,
+    currentSourceTeamAbbreviation: 'SJS',
+    incomingAsset: leoCarlsson,
+    incomingScheduledGameIds: [601, 602, 603, 604, 605, 606]
+      .slice(0, 6 - startedCurrentGameIds.size),
+    incomingSourceTeamAbbreviation: 'ANA',
+    transactionId: 'txn-celebrini-carlsson',
+    boundaryMilliseconds: 1_000,
+    requiredGames: 6,
+  });
+}
+
+function staleCelebriniScoreSource() {
+  return {
+    ownerId: 'owner-a',
+    rosterSlotId: 'C-1',
+    windowId: 'owner-a__C-1__cycle-4',
+    assetKey: celebrini.assetKey,
+    currentScore: 41.9,
+    scheduledGameIds: [501, 502, 503, 504, 505, 506],
+    completedGameIds: [501, 502, 503, 504],
+    liveGameIds: [],
+    appearanceGameIds: [501, 502, 503, 504],
+    scheduleTeamAbbreviation: 'SJS',
+    sourceTeamAbbreviationByGameId: Object.fromEntries(
+      [501, 502, 503, 504, 505, 506].map((gameId) => [String(gameId), 'SJS']),
+    ),
+    gameScores: {
+      501: 10,
+      502: 10,
+      503: 10,
+      504: 11.9,
+    },
+    gameStates: {
+      501: 'final',
+      502: 'final',
+      503: 'final',
+      504: 'final',
+      505: 'scheduled',
+      506: 'scheduled',
+    },
   };
 }
 
@@ -764,6 +880,171 @@ describe('injury-replacement ownership integrity', () => {
 });
 
 describe('injury-replacement score presentation', () => {
+  test('reconciles the fresh Celebrini-to-Carlsson plan with the stale 41.9 slot score', () => {
+    const plan = celebriniToCarlssonPlan();
+    const presentation = buildReconciledInjuryReplacementPresentation({
+      source: staleCelebriniScoreSource(),
+      ownerId: 'owner-a',
+      rosterSlotId: 'C-1',
+      currentAssetKey: leoCarlsson.assetKey,
+      injuryReplacementWindows: [undefined, plan],
+    });
+
+    assert.ok(presentation);
+    assert.equal(presentation.totalPoints, 41.9);
+    assert.deepEqual(
+      presentation.segments.map((segment) => ({
+        assetName: segment.assetName,
+        points: segment.points,
+        gameRangeLabel: segment.gameRangeLabel,
+        current: segment.current,
+      })),
+      [
+        {
+          assetName: 'Macklin Celebrini',
+          points: 41.9,
+          gameRangeLabel: 'Games 1–4',
+          current: false,
+        },
+        {
+          assetName: 'Leo Carlsson',
+          points: 0,
+          gameRangeLabel: 'Games 5–6',
+          current: true,
+        },
+      ],
+    );
+    assert.deepEqual(
+      presentation.gameOwnership.map((game) => [game.gameId, game.assetName]),
+      [
+        [501, 'Macklin Celebrini'],
+        [502, 'Macklin Celebrini'],
+        [503, 'Macklin Celebrini'],
+        [504, 'Macklin Celebrini'],
+        [601, 'Leo Carlsson'],
+        [602, 'Leo Carlsson'],
+      ],
+    );
+  });
+
+  test('Game Film rows use reconciled ownership IDs while retaining saved started-game scores', () => {
+    const source = {
+      ...staleCelebriniScoreSource(),
+      scheduledGameDates: [
+        '2026-10-01',
+        '2026-10-03',
+        '2026-10-05',
+        '2026-10-07',
+        '2026-10-09',
+        '2026-10-11',
+      ],
+      scheduledGameLabels: [
+        'vs NYR',
+        '@ VGK',
+        'vs SEA',
+        '@ LAK',
+        'vs ANA',
+        '@ EDM',
+      ],
+    };
+    const presentation = buildReconciledInjuryReplacementPresentation({
+      source,
+      ownerId: 'owner-a',
+      rosterSlotId: 'C-1',
+      currentAssetKey: leoCarlsson.assetKey,
+      injuryReplacementWindows: [celebriniToCarlssonPlan()],
+    });
+
+    assert.ok(presentation);
+
+    const rows = buildCycleAssetSnapshotGames(
+      source,
+      presentation.gameOwnership.map((game) => game.gameId),
+    );
+    const ownershipByGameId = new Map(
+      presentation.gameOwnership.map((game) => [game.gameId, game]),
+    );
+
+    assert.deepEqual(
+      rows.map((row) => ({
+        gameId: row.gameId,
+        owner: ownershipByGameId.get(row.gameId)?.assetName ?? null,
+        state: row.state,
+        points: row.fantasyPoints,
+      })),
+      [
+        { gameId: 501, owner: 'Macklin Celebrini', state: 'final', points: 10 },
+        { gameId: 502, owner: 'Macklin Celebrini', state: 'final', points: 10 },
+        { gameId: 503, owner: 'Macklin Celebrini', state: 'final', points: 10 },
+        { gameId: 504, owner: 'Macklin Celebrini', state: 'final', points: 11.9 },
+        { gameId: 601, owner: 'Leo Carlsson', state: 'scheduled', points: null },
+        { gameId: 602, owner: 'Leo Carlsson', state: 'scheduled', points: null },
+      ],
+    );
+    assert.equal(rows[0].gameDate, '2026-10-01');
+    assert.equal(rows[0].scheduleLabel, 'vs NYR');
+    assert.equal(rows[4].gameDate, '');
+    assert.equal(rows[4].scheduleLabel, 'NHL team game');
+  });
+
+  test('fails closed for malformed plans and plans that move a protected Celebrini game', () => {
+    const source = staleCelebriniScoreSource();
+    const malformedPlan = structuredClone(celebriniToCarlssonPlan());
+    malformedPlan.segments[1].scheduledGameIds[0] = 501;
+    const droppedProtectedGamePlan = celebriniToCarlssonPlan(
+      new Set([501, 502, 503]),
+    );
+    const input = {
+      source,
+      ownerId: 'owner-a',
+      rosterSlotId: 'C-1',
+      currentAssetKey: leoCarlsson.assetKey,
+    };
+
+    assert.equal(
+      buildReconciledInjuryReplacementPresentation({
+        ...input,
+        injuryReplacementWindows: [malformedPlan],
+      }),
+      null,
+    );
+    assert.equal(
+      buildReconciledInjuryReplacementPresentation({
+        ...input,
+        injuryReplacementWindows: [droppedProtectedGamePlan],
+      }),
+      null,
+    );
+  });
+
+  test('fails closed when the current player or a begun-game score does not reconcile', () => {
+    const sourceWithMissingFinalScore = staleCelebriniScoreSource();
+    delete sourceWithMissingFinalScore.gameScores[504];
+    const plan = celebriniToCarlssonPlan();
+    const input = {
+      source: staleCelebriniScoreSource(),
+      ownerId: 'owner-a',
+      rosterSlotId: 'C-1',
+      injuryReplacementWindows: [plan],
+    };
+
+    assert.equal(
+      buildReconciledInjuryReplacementPresentation({
+        ...input,
+        currentAssetKey: celebrini.assetKey,
+      }),
+      null,
+    );
+    assert.equal(
+      buildReconciledInjuryReplacementPresentation({
+        ...input,
+        source: sourceWithMissingFinalScore,
+        currentAssetKey: leoCarlsson.assetKey,
+      }),
+      null,
+    );
+  });
+
   test('labels a retained zero-game audit segment without producing an inverted game range', () => {
     const plan = firstReplacementPlan(new Set());
     const presentation = buildInjuryReplacementPresentation(
@@ -1273,7 +1554,7 @@ describe('injury-replacement server authority contracts', () => {
     );
     const transactionInjuryReplacement = section(
       rosterMoves,
-      '      const windowIndex = windows.findIndex(',
+      '      const matchingWindowIndexes = windows.flatMap(',
       '      let incomingAsset: DraftableAsset | null = null;',
     );
 
@@ -1955,7 +2236,7 @@ describe('injury-replacement presentation integration contracts', () => {
       ),
     ]);
 
-    assert.match(cyclePresenter, /buildInjuryReplacementPresentation/);
+    assert.match(cyclePresenter, /buildReconciledInjuryReplacementPresentation/);
     assert.match(cyclePresenter, /resolveCycleSlotScoreSummary/);
     assert.match(cyclePresenter, /replacementBoundary:\s*ownership\?\.segmentStart/);
     assert.match(cyclePresenter, /ariaLabel:\s*`\$\{ownershipLabel\}/);
@@ -1972,6 +2253,7 @@ describe('injury-replacement presentation integration contracts', () => {
     assert.match(mobileComponent, /marker\.replacementBoundary/);
 
     assert.match(myTeamPresenter, /getRosterSlotInjuryReplacementPresentation/);
+    assert.match(myTeamPresenter, /buildReconciledInjuryReplacementPresentation/);
     assert.match(myTeamPresenter, /resolveCycleSlotScoreSummary/);
     assert.match(myTeamPresenter, /replacementBoundary:\s*owner\?\.segmentStart/);
     assert.match(myTeam, /app-injury-replacement-score-breakdown/);
@@ -2000,10 +2282,44 @@ describe('injury-replacement presentation integration contracts', () => {
       'private async loadSnapshotSkaterGameRows(',
       'private async loadSnapshotGoalieUnitGameRows(',
     );
+    const goalieRows = section(
+      detail,
+      'private async loadSnapshotGoalieUnitGameRows(',
+      'private async loadSkaterGameRows(',
+    );
 
-    assert.match(skaterRows, /buildInjuryReplacementPresentation\(summary\)/);
+    assert.match(detail, /buildReconciledInjuryReplacementPresentation\(/);
+    assert.match(detail, /scoreSummary\.injuryReplacementWindow/);
+    assert.match(detail, /this\.draftPick\(\)\?\.injuryReplacementWindow/);
+    assert.match(detail, /!injuryReplacementPresentation/);
+    assert.match(detail, /Injury-replacement game ownership is still syncing/);
+    assert.match(
+      detail,
+      /injuryReplacementWindows:\s*\[[\s\S]*summary\?\.injuryReplacementWindow,[\s\S]*pick\.injuryReplacementWindow/,
+    );
+    assert.match(
+      skaterRows,
+      /buildCycleAssetSnapshotGames\([\s\S]*replacement\?\.gameOwnership\.map\(\(game\) => game\.gameId\)/,
+    );
+    assert.match(
+      goalieRows,
+      /buildCycleAssetSnapshotGames\([\s\S]*replacement\?\.gameOwnership\.map\(\(game\) => game\.gameId\)/,
+    );
+    assert.match(
+      detail,
+      /injuryReplacementReconciliationRequired[\s\S]*scoreSummary\.assetKey !== pick\.asset\.assetKey/,
+    );
+    assert.match(
+      detail,
+      /injuryReplacementReconciliationRequired\s*&&[\s\S]*!injuryReplacementPresentation[\s\S]*this\.gameRows\.set\(\[\]\)[\s\S]*waiting for consistent injury-replacement ownership/,
+    );
+    assert.doesNotMatch(detail, /buildInjuryReplacementPresentation\(summary\)/);
     assert.match(skaterRows, /replacement\?\.segments\.map/);
     assert.match(skaterRows, /replacement\?\.gameOwnership/);
+    assert.match(skaterRows, /ownershipByGameId\.get\(snapshotGame\.gameId\)/);
+    assert.doesNotMatch(skaterRows, /gameOwnership\[gameIndex\]/);
+    assert.match(goalieRows, /ownershipByGameId\.get\(snapshotGame\.gameId\)/);
+    assert.doesNotMatch(goalieRows, /gameOwnership\[gameIndex\]/);
     assert.match(skaterRows, /segment\.asset/);
     assert.match(skaterRows, /scoringAsset/);
     assert.match(skaterRows, /snapshotGame\.gameId/);

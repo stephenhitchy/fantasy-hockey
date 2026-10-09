@@ -14,7 +14,7 @@ import { FantasyCycle } from '../../../core/cycle/cycle.models';
 
 import { CycleAssetScoreSummary } from '../../../core/cycle/cycle-scoring.service';
 import {
-  buildInjuryReplacementPresentation,
+  buildReconciledInjuryReplacementPresentation,
   type InjuryReplacementPresentation,
 } from '../../../core/cycle/injury-replacement-presentation.util';
 import {
@@ -176,8 +176,26 @@ export class CycleAssetDetail implements OnDestroy {
   );
 
   readonly injuryReplacementPresentation = computed(
-    (): InjuryReplacementPresentation | null =>
-      buildInjuryReplacementPresentation(this.scoreSummary()),
+    (): InjuryReplacementPresentation | null => {
+      const pick = this.draftPick();
+
+      if (!pick) {
+        return null;
+      }
+
+      const summary = this.scoreSummary();
+
+      return buildReconciledInjuryReplacementPresentation({
+        source: summary,
+        ownerId: pick.ownerId,
+        rosterSlotId: pick.rosterSlotId,
+        currentAssetKey: pick.asset.assetKey,
+        injuryReplacementWindows: [
+          summary?.injuryReplacementWindow,
+          pick.injuryReplacementWindow,
+        ],
+      });
+    },
   );
 
   readonly totalFantasyPoints = computed(() => {
@@ -791,14 +809,22 @@ export class CycleAssetDetail implements OnDestroy {
   private async loadAssetDetailsIfReady(): Promise<void> {
     const cycle = this.cycle();
     const league = this.league();
+    const pick = this.draftPick();
     const asset = this.asset();
 
-    if (!cycle || !league || !asset) {
+    if (!cycle || !league || !pick || !asset) {
       return;
     }
 
     const snapshot = this.sharedScoringSnapshot();
     const scoreSummary = this.scoreSummary();
+    const injuryReplacementPresentation =
+      this.injuryReplacementPresentation();
+    const injuryReplacementReconciliationRequired = Boolean(
+      pick.injuryReplacementWindow ||
+      scoreSummary?.injuryReplacementWindow ||
+      (scoreSummary && scoreSummary.assetKey !== pick.asset.assetKey),
+    );
     const season = this.getScoringDataSeason();
     const scoringRules = league.scoringRules ?? defaultScoringRules;
     const requiredGamesPerCycle =
@@ -813,9 +839,16 @@ export class CycleAssetDetail implements OnDestroy {
       requiredGamesPerCycle,
       snapshot?.scoringFingerprint ?? 'no-shared-snapshot',
       scoreSummary?.windowId ?? 'no-window-summary',
+      scoreSummary?.assetKey ?? 'no-summary-asset',
+      injuryReplacementReconciliationRequired
+        ? 'injury-reconciliation-required'
+        : 'ordinary-single-asset-window',
       scoreSummary?.injuryReplacementWindow?.segments
         .map((segment) => `${segment.segmentId}:${segment.assetKey}:${segment.scheduledGameIds.join(',')}`)
         .join('|') ?? 'no-injury-replacement',
+      injuryReplacementPresentation?.gameOwnership
+        .map((game) => `${game.gameId}:${game.assetKey}`)
+        .join('|') ?? 'no-reconciled-injury-replacement',
       scoreSummary
         ? scoreSummary.scheduledGameIds
             .map((gameId) => {
@@ -838,8 +871,31 @@ export class CycleAssetDetail implements OnDestroy {
 
     const requestId = ++this.detailRequestId;
 
+    if (
+      injuryReplacementReconciliationRequired &&
+      !injuryReplacementPresentation
+    ) {
+      this.gameRows.set([]);
+      this.detailError.set(
+        'Game Film is waiting for consistent injury-replacement ownership. Try again after Game Center refreshes.',
+      );
+      this.detailLoading.set(false);
+      return;
+    }
+
     try {
       let rows: CycleAssetGameDetail[];
+
+      if (
+        scoreSummary &&
+        (scoreSummary.injuryReplacementWindow ||
+          this.draftPick()?.injuryReplacementWindow) &&
+        !injuryReplacementPresentation
+      ) {
+        throw new Error(
+          'Injury-replacement game ownership is still syncing. Refresh in a moment so RinkRat can verify each player’s games before showing this breakdown.',
+        );
+      }
 
       if (scoreSummary && scoreSummary.scheduledGameIds.length > 0) {
         rows = await this.loadSnapshotGameRows(
@@ -847,6 +903,7 @@ export class CycleAssetDetail implements OnDestroy {
           scoreSummary,
           season,
           scoringRules,
+          injuryReplacementPresentation,
         );
       } else {
         const schedule = await this.loadRegularSeasonSchedule(
@@ -884,10 +941,22 @@ export class CycleAssetDetail implements OnDestroy {
     summary: CycleAssetScoreSummary,
     season: string,
     scoringRules: ScoringRules,
+    replacement: InjuryReplacementPresentation | null,
   ): Promise<CycleAssetGameDetail[]> {
     return asset.assetType === 'skater'
-      ? this.loadSnapshotSkaterGameRows(asset, summary, season, scoringRules)
-      : this.loadSnapshotGoalieUnitGameRows(asset, summary, scoringRules);
+      ? this.loadSnapshotSkaterGameRows(
+          asset,
+          summary,
+          season,
+          scoringRules,
+          replacement,
+        )
+      : this.loadSnapshotGoalieUnitGameRows(
+          asset,
+          summary,
+          scoringRules,
+          replacement,
+        );
   }
 
   private async loadSnapshotSkaterGameRows(
@@ -895,22 +964,26 @@ export class CycleAssetDetail implements OnDestroy {
     summary: CycleAssetScoreSummary,
     season: string,
     scoringRules: ScoringRules,
+    replacement: InjuryReplacementPresentation | null,
   ): Promise<CycleAssetGameDetail[]> {
     if (asset.assetType !== 'skater') {
       return [];
     }
 
-    const snapshotGames = buildCycleAssetSnapshotGames(summary);
-    const replacement = buildInjuryReplacementPresentation(summary);
+    const snapshotGames = buildCycleAssetSnapshotGames(
+      summary,
+      replacement?.gameOwnership.map((game) => game.gameId),
+    );
     const segmentAssets = new Map(
       replacement?.segments.map((segment) => [segment.assetKey, segment.asset]) ?? [],
+    );
+    const ownershipByGameId = new Map(
+      replacement?.gameOwnership.map((ownership) => [ownership.gameId, ownership]) ?? [],
     );
     const scoringAssets = new Map<string, DraftableAsset>();
 
     for (const snapshotGame of snapshotGames) {
-      const ownership = replacement?.gameOwnership.find(
-        (candidate) => candidate.gameId === snapshotGame.gameId,
-      );
+      const ownership = ownershipByGameId.get(snapshotGame.gameId);
       const scoringAsset = ownership
         ? segmentAssets.get(ownership.assetKey) ?? asset
         : asset;
@@ -952,7 +1025,7 @@ export class CycleAssetDetail implements OnDestroy {
     for (let gameIndex = 0; gameIndex < snapshotGames.length; gameIndex += 1) {
       const snapshotGame = snapshotGames[gameIndex];
       const cycleGameNumber = gameIndex + 1;
-      const ownership = replacement?.gameOwnership[gameIndex] ?? null;
+      const ownership = ownershipByGameId.get(snapshotGame.gameId) ?? null;
       const ownedAsset = ownership
         ? segmentAssets.get(ownership.assetKey) ?? asset
         : asset;
@@ -1125,23 +1198,29 @@ export class CycleAssetDetail implements OnDestroy {
     asset: DraftableAsset,
     summary: CycleAssetScoreSummary,
     scoringRules: ScoringRules,
+    replacement: InjuryReplacementPresentation | null,
   ): Promise<CycleAssetGameDetail[]> {
     if (asset.assetType === 'skater') {
       return [];
     }
 
     const rows: CycleAssetGameDetail[] = [];
-    const snapshotGames = buildCycleAssetSnapshotGames(summary);
-    const replacement = buildInjuryReplacementPresentation(summary);
+    const snapshotGames = buildCycleAssetSnapshotGames(
+      summary,
+      replacement?.gameOwnership.map((game) => game.gameId),
+    );
     const segmentAssets = new Map(
       replacement?.segments.map((segment) => [segment.assetKey, segment.asset]) ?? [],
+    );
+    const ownershipByGameId = new Map(
+      replacement?.gameOwnership.map((ownership) => [ownership.gameId, ownership]) ?? [],
     );
     const replayDetail = this.isHistoricalReplayDetail();
 
     for (let gameIndex = 0; gameIndex < snapshotGames.length; gameIndex += 1) {
       const snapshotGame = snapshotGames[gameIndex];
       const cycleGameNumber = gameIndex + 1;
-      const ownership = replacement?.gameOwnership[gameIndex] ?? null;
+      const ownership = ownershipByGameId.get(snapshotGame.gameId) ?? null;
       const ownedAsset = ownership
         ? segmentAssets.get(ownership.assetKey) ?? asset
         : asset;

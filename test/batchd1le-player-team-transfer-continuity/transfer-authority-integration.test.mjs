@@ -37,7 +37,7 @@ test('roster-move timing refreshes stable-id team identity and persists provenan
   assert.match(callable, /currentTeamAbbreviationByPlayerId/);
   assert.match(
     callable,
-    /const requiredIdentityPlayerIds = getSkaterPlayerIds\(\[\s*preflightActiveSlot\.asset,\s*addAsset,\s*preflightSelectedIncomingAsset,\s*\]\)/,
+    /const requiredIdentityPlayerIds = getSkaterPlayerIds\(\[\s*preflightActiveSlot\.asset,\s*preflightLegacyIrAsset,\s*addAsset,\s*preflightSelectedIncomingAsset,\s*\]\)/,
   );
   assert.match(callable, /requiredPlayerIds: requiredIdentityPlayerIds/);
   assert.doesNotMatch(callable, /getRosterSkaterIds/);

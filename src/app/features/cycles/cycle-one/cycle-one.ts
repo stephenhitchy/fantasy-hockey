@@ -5,7 +5,7 @@ import {
   CycleScoringResult,
 } from '../../../core/cycle/cycle-scoring.service';
 import {
-  buildInjuryReplacementPresentation,
+  buildReconciledInjuryReplacementPresentation,
   resolveCycleSlotScoreSummary,
   type InjuryReplacementPresentation,
 } from '../../../core/cycle/injury-replacement-presentation.util';
@@ -3025,32 +3025,41 @@ export class CycleOne implements OnDestroy {
       ? scoreSummary
       : null;
     const requiredGames = this.league()?.scoringRules?.requiredGamesPerCycle ?? 6;
-    const replacementPresentation = buildInjuryReplacementPresentation(liveSummary ?? window);
+    const replacementPresentation = this.getPickInjuryReplacementPresentation(pick);
 
     return Array.from({ length: requiredGames }, (_, index) => {
-      const gameId = liveSummary?.scheduledGameIds[index] ??
+      const ownership = replacementPresentation?.gameOwnership[index] ?? null;
+      const gameId = ownership?.gameId ??
+        liveSummary?.scheduledGameIds[index] ??
         window?.scheduledGameIds[index] ??
         null;
-      const gameDate = liveSummary?.scheduledGameDates[index] ??
-        window?.scheduledGameDates[index] ??
-        null;
-      const gameLabel = liveSummary?.scheduledGameLabels[index] ??
-        window?.scheduledGameLabels[index] ??
-        'Schedule pending';
+      const scheduleSource = gameId === null
+        ? null
+        : [liveSummary, window].find(
+            (candidate) => candidate?.scheduledGameIds.includes(gameId),
+          ) ?? null;
+      const scheduleIndex = scheduleSource && gameId !== null
+        ? scheduleSource.scheduledGameIds.indexOf(gameId)
+        : -1;
+      const gameDate = scheduleIndex >= 0
+        ? scheduleSource?.scheduledGameDates[scheduleIndex] ?? null
+        : null;
+      const gameLabel = scheduleIndex >= 0
+        ? scheduleSource?.scheduledGameLabels[scheduleIndex] ?? 'Schedule pending'
+        : 'Schedule pending';
+      const runtimeSource = scheduleSource ?? liveSummary ?? window;
       const markerState = resolveCycleWindowGameMarkerState({
         gameId,
-        completedGameIds: liveSummary?.completedGameIds ?? window?.completedGameIds ?? [],
-        appearanceGameIds: liveSummary?.appearanceGameIds ?? window?.appearanceGameIds ?? [],
-        liveGameIds: liveSummary?.liveGameIds ?? window?.liveGameIds ?? [],
-        gameStates: liveSummary?.gameStates ?? window?.gameStates ?? {},
-        actualGamesPlayed:
-          liveSummary?.actualGamesPlayed ?? window?.actualGamesPlayed ?? 0,
+        completedGameIds: runtimeSource?.completedGameIds ?? [],
+        appearanceGameIds: runtimeSource?.appearanceGameIds ?? [],
+        liveGameIds: runtimeSource?.liveGameIds ?? [],
+        gameStates: runtimeSource?.gameStates ?? {},
+        actualGamesPlayed: runtimeSource?.actualGamesPlayed ?? 0,
       });
 
       const dateLabel = gameDate
         ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
         : 'Date pending';
-      const ownership = replacementPresentation?.gameOwnership[index] ?? null;
       const ownershipLabel = ownership ? `${ownership.ariaLabel}. ` : '';
 
       return {
@@ -3673,9 +3682,20 @@ export class CycleOne implements OnDestroy {
   getPickInjuryReplacementPresentation(
     pick: DraftPick,
   ): InjuryReplacementPresentation | null {
-    return buildInjuryReplacementPresentation(
-      this.getPickScoreSummary(pick) ?? this.getWindowForPick(pick),
-    );
+    const summary = this.getPickScoreSummary(pick);
+    const window = this.getWindowForPick(pick);
+
+    return buildReconciledInjuryReplacementPresentation({
+      source: summary ?? window,
+      ownerId: pick.ownerId,
+      rosterSlotId: pick.rosterSlotId,
+      currentAssetKey: pick.asset.assetKey,
+      injuryReplacementWindows: [
+        summary?.injuryReplacementWindow,
+        window?.injuryReplacementWindow,
+        pick.injuryReplacementWindow,
+      ],
+    });
   }
 
   getPickScoreAccessibilityLabel(pick: DraftPick): string {
