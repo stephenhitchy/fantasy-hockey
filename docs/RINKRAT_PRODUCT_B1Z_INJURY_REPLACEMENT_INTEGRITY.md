@@ -98,9 +98,12 @@ state.
 
 Mixed-player cards label the authoritative combined value **Slot total**.
 They separately show each player's owned-game contribution and a persistent
-game-range legend. Labels say “owned games” rather than “points before injury”
-because a retained live game or later NHL stat correction can change after the
-roster transaction.
+game-range legend. Every prior segment carries the established injury-cross
+icon so the split immediately explains why the player changed; the aggregate
+screen-reader label names prior players as injured and the current player as
+the replacement. Labels still say “owned games” rather than “points before
+injury” because a retained live game or later NHL stat correction can change
+after the roster transaction.
 
 Six-game dots retain their played, missed, live, and upcoming fill. Ownership
 is an additional treatment: the first dot in each replacement segment has a

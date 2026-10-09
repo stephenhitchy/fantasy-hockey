@@ -20,7 +20,8 @@
 .injury-score-total,
 .injury-score-segments,
 .injury-score-segment,
-.injury-score-owner {
+.injury-score-owner,
+.injury-score-owner-name {
   display: flex;
   min-width: 0;
 }
@@ -78,7 +79,13 @@
   overflow: hidden;
 }
 
+.injury-score-owner-name {
+  align-items: center;
+  gap: 5px;
+}
+
 .injury-score-owner strong {
+  min-width: 0;
   overflow: hidden;
   color: var(--rr-color-text);
   font-size: 0.72rem;
@@ -86,6 +93,21 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.injury-score-injured-icon {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--rr-color-danger) 72%, var(--rr-color-border));
+  border-radius: 5px;
+  background: var(--rr-color-danger);
+  color: var(--rr-ice-white);
+  font-size: 10px;
+  font-weight: 1000;
+  line-height: 1;
 }
 
 .injury-score-segment > b {

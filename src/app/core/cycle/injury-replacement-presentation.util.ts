@@ -197,7 +197,9 @@ export function buildInjuryReplacementPresentation(
   const segmentLabels = segments
     .map(
       (segment) =>
-        `${segment.gameRangeLabel} ${segment.assetName}, ${segment.points.toFixed(1)} points`,
+        `${segment.assetName}, ${
+          segment.current ? 'replacement player' : 'injured player'
+        }, ${segment.gameRangeLabel}, ${segment.points.toFixed(1)} points`,
     )
     .join('. ');
 

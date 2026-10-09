@@ -22,7 +22,12 @@
           [class.injury-score-segment--current]="segment.current"
         >
           <span class="injury-score-owner">
-            <strong>{{ segment.assetName }}</strong>
+            <span class="injury-score-owner-name">
+              @if (!segment.current) {
+                <span class="injury-score-injured-icon" aria-hidden="true">✚</span>
+              }
+              <strong>{{ segment.assetName }}</strong>
+            </span>
             <small>{{ segment.current ? 'Replacement' : 'Owned games' }}</small>
           </span>
           <b>{{ segment.points.toFixed(1) }}</b>

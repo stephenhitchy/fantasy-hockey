@@ -7,7 +7,9 @@ Date: 2026-10-08
 My Team and Matchup use the same validated mixed-player score presentation.
 Every affected roster slot keeps its authoritative **Slot total**, separately
 shows each player's owned-game contribution and game range, and marks the exact
-replacement boundary on the six game dots.
+replacement boundary on the six game dots. The shared split also marks every
+prior player with the injury cross, while its accessible label identifies the
+injured and replacement players explicitly.
 
 B2B does not add another score model, Firestore read, or listener. Desktop
 Matchup cards and all three mobile paths reuse the B1Z presentation builder and

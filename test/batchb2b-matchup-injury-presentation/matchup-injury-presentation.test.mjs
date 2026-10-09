@@ -108,7 +108,10 @@ describe('B2B matchup injury-replacement presentation', () => {
   });
 
   test('the shared split responds to card width instead of viewport width', async () => {
-    const [styles, mobileStyles, globalStyles] = await Promise.all([
+    const [template, styles, mobileStyles, globalStyles] = await Promise.all([
+      source(
+        'src/app/shared/injury-replacement-score-breakdown/injury-replacement-score-breakdown.html',
+      ),
       source(
         'src/app/shared/injury-replacement-score-breakdown/injury-replacement-score-breakdown.css',
       ),
@@ -126,6 +129,14 @@ describe('B2B matchup injury-replacement presentation', () => {
       /@container[\s\S]*\.injury-score-segments\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
     );
     assert.match(styles, /@container[\s\S]*\.injury-score-plus\s*\{[\s\S]*display:\s*none/);
+    assert.match(
+      template,
+      /@if \(!segment\.current\) \{[\s\S]*?injury-score-injured-icon[\s\S]*?aria-hidden="true"/,
+    );
+    assert.match(
+      styles,
+      /\.injury-score-injured-icon\s*\{[\s\S]*?flex:\s*0\s+0\s+16px;[\s\S]*?background:\s*var\(--rr-color-danger\)/,
+    );
     assert.match(mobileStyles, /'breakdown breakdown'/);
     assert.match(
       mobileStyles,

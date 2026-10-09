@@ -794,6 +794,14 @@ describe('injury-replacement score presentation', () => {
       ],
     );
     assert.doesNotMatch(presentation.accessibleLabel, /Games 1[–-]0/);
+    assert.match(
+      presentation.accessibleLabel,
+      /Will Smith, injured player, No games/i,
+    );
+    assert.match(
+      presentation.accessibleLabel,
+      /Sam Bennett, replacement player, Games 1–6/i,
+    );
   });
 
   test('sums each player segment, preserves an explicit zero, and leaves scheduled missing scores at zero', () => {
@@ -844,6 +852,8 @@ describe('injury-replacement score presentation', () => {
     assert.match(presentation.accessibleLabel, /Will Smith/i);
     assert.match(presentation.accessibleLabel, /Sam Bennett/i);
     assert.match(presentation.accessibleLabel, /34/);
+    assert.match(presentation.accessibleLabel, /Will Smith, injured player/i);
+    assert.match(presentation.accessibleLabel, /Sam Bennett, replacement player/i);
   });
 
   test('fails closed when a begun game is missing score evidence or the segment sum disagrees with the total', () => {
@@ -933,6 +943,9 @@ describe('injury-replacement score presentation', () => {
       presentation.gameOwnership[3].ariaLabel,
       /Game 4.*Dylan Larkin.*replacement/i,
     );
+    assert.match(presentation.accessibleLabel, /Will Smith, injured player/i);
+    assert.match(presentation.accessibleLabel, /Sam Bennett, injured player/i);
+    assert.match(presentation.accessibleLabel, /Dylan Larkin, replacement player/i);
   });
 
   test('resolves a replaced slot by exact window, then owner and slot, before asset fallback', () => {
@@ -1969,6 +1982,10 @@ describe('injury-replacement presentation integration contracts', () => {
     assert.match(sharedBreakdown, /segment\.assetName/);
     assert.match(sharedBreakdown, /segment\.points\.toFixed\(1\)/);
     assert.match(sharedBreakdown, /segment\.gameRangeLabel/);
+    assert.match(
+      sharedBreakdown,
+      /@if \(!segment\.current\) \{[\s\S]*?class="injury-score-injured-icon"[\s\S]*?aria-hidden="true"[\s\S]*?✚/,
+    );
   });
 
   test('Game Film resolves each owned game against its segment player instead of the current replacement', async () => {
