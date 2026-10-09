@@ -91,6 +91,18 @@ verification, before scoring evidence necessarily catches up. Read
 `docs/RINKRAT_PRODUCT_B2D_AUTOMATIC_INJURY_REPLACEMENT.md` before changing its
 availability triggers, reconciliation cursor, receipts, or roster authority.
 
+B2E is the read-loop hardening candidate layered after B2D. Projection
+recovery now transactionally revalidates exact stale ownership and removes the
+obsolete lease from terminal controls, so completed controls leave the
+five-minute query without a new composite index. A separate dry-run-first
+operator tool can remove only missing-root league-automation schedules after a
+15-minute unchanged-evidence period, exact Shadow/revision checks, active-work
+checks, a private rollback artifact, and one update-time-guarded transaction.
+The minute Cycle-1 recovery and scoring dispatcher cadence remain unchanged;
+they still provide liveness and health evidence for valid leagues. Read
+`docs/RINKRAT_OPERATIONS_B2E_READ_LOOP_HARDENING.md` before changing projection
+recovery leases, orphan-schedule cleanup, league deletion, or Cycle-1 recovery.
+
 B2A is the current clean-source add/drop reliability candidate and is not yet
 deployed. It replaces the interactive 32-club identity refresh with exact
 post-boundary player lookups, runs incoming/outgoing schedule checks in

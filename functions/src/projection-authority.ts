@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import {
+  type DocumentData,
+  FieldValue,
+  type QueryDocumentSnapshot,
+  Timestamp,
+} from 'firebase-admin/firestore';
 import { getFunctions } from 'firebase-admin/functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -45,6 +50,11 @@ import {
 } from './shared/core/projection/projection-snapshot-hash.util';
 import { DRAFT_RANKING_MODEL_VERSION } from './shared/core/projection/projection-ranking.util';
 import {
+  getProjectionGenerationRecoveryAction,
+  shouldRecoverProjectionGenerationRequest,
+  type ProjectionGenerationRecoveryState,
+} from './shared/core/projection/projection-generation-recovery.util';
+import {
   isClientProjectionGenerationReason,
   projectionGenerationRequiresCommissioner,
 } from './shared/core/projection/projection-generation-access.util';
@@ -69,6 +79,7 @@ const PROJECTION_REQUEST_LEASE_MILLISECONDS = 12 * 60 * 1000;
 const PROJECTION_REQUEST_STALE_MILLISECONDS = 15 * 60 * 1000;
 const PROJECTION_REQUEST_RETENTION_MILLISECONDS = 7 * 24 * 60 * 60 * 1000;
 const PROJECTION_STALE_SWEEP_LIMIT = 100;
+const PROJECTION_STALE_RECOVERY_CONCURRENCY = 10;
 const DRAFT_PROJECTION_FRESH_MILLISECONDS = 45 * 60 * 1000;
 const WINDOW_PROJECTION_FRESH_MILLISECONDS = 6 * 60 * 60 * 1000;
 const PROJECTION_INTEGRITY_REASON_MIN_LENGTH = 8;
@@ -2258,6 +2269,100 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
   },
 );
 
+function projectionGenerationRecoveryState(
+  data: DocumentData,
+): ProjectionGenerationRecoveryState {
+  return {
+    status: asString(data['status']),
+    leaseExpiresAtMilliseconds: toMilliseconds(data['leaseExpiresAt']),
+    activeRequestId: asString(data['activeRequestId']),
+  };
+}
+
+async function recoverProjectionGenerationCandidate(
+  candidate: QueryDocumentSnapshot<DocumentData>,
+  cutoffMilliseconds: number,
+  recoveredAt: Timestamp,
+): Promise<'skip' | 'cleanup-terminal' | 'recover-active'> {
+  const candidateState = projectionGenerationRecoveryState(candidate.data());
+
+  return db.runTransaction(async (transaction) => {
+    const currentSnapshot = await transaction.get(candidate.ref);
+
+    if (!currentSnapshot.exists) {
+      return 'skip';
+    }
+
+    const current = currentSnapshot.data() ?? {};
+    const currentState = projectionGenerationRecoveryState(current);
+    const action = getProjectionGenerationRecoveryAction({
+      candidate: candidateState,
+      current: currentState,
+      cutoffMilliseconds,
+    });
+
+    if (action === 'skip') {
+      return action;
+    }
+
+    if (action === 'cleanup-terminal') {
+      transaction.update(candidate.ref, {
+        leaseExpiresAt: FieldValue.delete(),
+      });
+      return action;
+    }
+
+    const safeActiveRequestId = resolveSafeFirestoreDocumentId(
+      currentState.activeRequestId,
+      FIRESTORE_REQUEST_ID_OPTIONS,
+    );
+    const requestRef = safeActiveRequestId
+      ? getRequestRef(safeActiveRequestId)
+      : null;
+    const requestSnapshot = requestRef
+      ? await transaction.get(requestRef)
+      : null;
+    const message = 'The projection worker stopped reporting progress. Retry the refresh.';
+
+    transaction.set(candidate.ref, {
+      status: 'error',
+      lastError: message,
+      recoveredAt: FieldValue.serverTimestamp(),
+      leaseExpiresAt: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    if (
+      safeActiveRequestId &&
+      requestRef &&
+      requestSnapshot &&
+      shouldRecoverProjectionGenerationRequest({
+        exists: requestSnapshot.exists,
+        status: requestSnapshot.data()?.['status'],
+        documentRequestId: requestSnapshot.data()?.['requestId'],
+        expectedRequestId: safeActiveRequestId,
+      })
+    ) {
+      transaction.set(requestRef, {
+        status: 'error',
+        message,
+        lastError: message,
+        recoveredAt: FieldValue.serverTimestamp(),
+        leaseExpiresAt: recoveredAt,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    transaction.set(db.doc('appData/projectionGeneration'), {
+      staleRecoveryCount: FieldValue.increment(1),
+      lastRecoveryAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return action;
+  });
+}
+
 export const recoverStaleProjectionGenerationRequests = onSchedule(
   {
     region: FUNCTION_REGION,
@@ -2267,10 +2372,13 @@ export const recoverStaleProjectionGenerationRequests = onSchedule(
     maxInstances: 1,
   },
   async () => {
-    const cutoff = Timestamp.fromMillis(Date.now() - PROJECTION_REQUEST_STALE_MILLISECONDS);
+    const now = Date.now();
+    const cutoffMilliseconds = now - PROJECTION_REQUEST_STALE_MILLISECONDS;
+    const cutoff = Timestamp.fromMillis(cutoffMilliseconds);
     const snapshot = await db
       .collection('projectionGenerationControls')
       .where('leaseExpiresAt', '<=', cutoff)
+      .orderBy('leaseExpiresAt', 'asc')
       .limit(PROJECTION_STALE_SWEEP_LIMIT)
       .get();
 
@@ -2278,54 +2386,20 @@ export const recoverStaleProjectionGenerationRequests = onSchedule(
       return;
     }
 
-    const batch = db.batch();
-    let recovered = 0;
-
-    for (const control of snapshot.docs) {
-      const data = control.data();
-      const status = asString(data['status']);
-
-      if (status !== 'queued' && status !== 'processing') {
-        continue;
-      }
-
-      const activeRequestId = asString(data['activeRequestId']);
-      const message = 'The projection worker stopped reporting progress. Retry the refresh.';
-
-      batch.set(control.ref, {
-        status: 'error',
-        lastError: message,
-        recoveredAt: FieldValue.serverTimestamp(),
-        leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-
-      const safeActiveRequestId = resolveSafeFirestoreDocumentId(
-        activeRequestId,
-        FIRESTORE_REQUEST_ID_OPTIONS,
+    for (
+      let offset = 0;
+      offset < snapshot.docs.length;
+      offset += PROJECTION_STALE_RECOVERY_CONCURRENCY
+    ) {
+      await Promise.all(
+        snapshot.docs
+          .slice(offset, offset + PROJECTION_STALE_RECOVERY_CONCURRENCY)
+          .map((candidate) => recoverProjectionGenerationCandidate(
+            candidate,
+            cutoffMilliseconds,
+            Timestamp.fromMillis(now),
+          )),
       );
-
-      if (safeActiveRequestId) {
-        batch.set(getRequestRef(safeActiveRequestId), {
-          status: 'error',
-          message,
-          lastError: message,
-          recoveredAt: FieldValue.serverTimestamp(),
-          leaseExpiresAt: Timestamp.fromMillis(Date.now()),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
-
-      recovered += 1;
-    }
-
-    if (recovered > 0) {
-      batch.set(db.doc('appData/projectionGeneration'), {
-        staleRecoveryCount: FieldValue.increment(recovered),
-        lastRecoveryAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      await batch.commit();
     }
   },
 );

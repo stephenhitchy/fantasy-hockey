@@ -398,6 +398,8 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'shared/core/player/draft-availability-attestation-write.service.ts',
     'shared/core/draft/draft.models.ts',
     'projection-authority.ts',
+    // B2E isolates stale projection-generation recovery decisions.
+    'shared/core/projection/projection-generation-recovery.util.ts',
     'shared/core/projection/projection-asset-catalog.service.ts',
     'shared/core/projection/projection-asset-catalog.util.ts',
     'shared/core/projection/projection-snapshot.service.ts',
