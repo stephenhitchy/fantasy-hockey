@@ -123,44 +123,280 @@
       }
     </section>
 
-    <section class="current-matchup-card rr-card rr-card--padded">
-      <div class="section-heading rr-section-heading">
-        <div>
-          <span class="eyebrow">Current Matchup</span>
-          <h2>{{ getCycleLabel() }}</h2>
-        </div>
+    <section
+      class="current-matchup-card rr-card rr-card--padded lineup-planner-card"
+      [attr.aria-busy]="futureLineupLoading() || futureLineupSaving()"
+      aria-labelledby="lineup-planner-heading"
+    >
+      <div class="section-heading lineup-planner-heading rr-section-heading">
+        <h2 id="lineup-planner-heading">Lineups</h2>
 
-        @if (currentMatchup(); as statusMatchup) {
-          <span
-            class="status-pill rr-badge"
-            [class.status-complete]="statusMatchup.status === 'complete'"
-            [class.status-active]="statusMatchup.status === 'active'"
-          >
-            {{ statusMatchup.status === 'complete' ? 'Complete' : 'Active' }}
-          </span>
-        }
+        <span
+          class="status-pill lineup-plan-status rr-badge"
+          [class.status-active]="isSelectedFutureLineupCurrent()"
+        >
+          {{ getFutureLineupPlanStatusLabel() }}
+        </span>
       </div>
 
-      <p>{{ getCurrentMatchupStatusText() }}</p>
+      <div class="lineup-matchup-picker team-name-form rr-field-group">
+        <label class="rr-label" for="lineup-matchup-select">Matchup</label>
+        <div class="lineup-matchup-picker-row">
+          <select
+            id="lineup-matchup-select"
+            class="rr-field lineup-matchup-select"
+            [ngModel]="selectedFutureLineupCycleNumber()"
+            (ngModelChange)="selectFutureLineupCycle($event)"
+            [disabled]="
+              futureLineupDirty() ||
+              futureLineupLoading() ||
+              futureLineupSaving() ||
+              getFutureLineupMatchupOptions().length === 0
+            "
+            [attr.aria-describedby]="
+              futureLineupDirty()
+                ? 'lineup-matchup-summary lineup-unsaved-lineup-note'
+                : 'lineup-matchup-summary'
+            "
+          >
+            @for (option of futureLineupMatchupOptions; track option.cycleNumber) {
+              <option [ngValue]="option.cycleNumber">
+                {{ getFutureLineupMatchupOptionLabel(option) }}
+              </option>
+            }
+          </select>
 
-      @if (currentMatchup(); as matchup) {
-        <div class="scoreboard-row">
-          <article class="score-team-card rr-stat-card" [class.my-team-score-card]="true">
-            <span>{{ isOwnTeam() ? 'Your Team' : 'Selected Team' }}</span>
-            <strong>{{ team()?.teamName }}</strong>
-            <em>{{ getDisplayNumber(getMatchupScore(matchup, viewedOwnerId())) }}</em>
-          </article>
-
-          <div class="score-vs">vs</div>
-
-          <article class="score-team-card rr-stat-card">
-            <span>Opponent</span>
-            <strong>{{ getTeamName(currentOpponentOwnerId()) }}</strong>
-            <em>{{ getDisplayNumber(getMatchupScore(matchup, currentOpponentOwnerId())) }}</em>
-          </article>
+          <button
+            type="button"
+            class="lineup-refresh-button rr-button rr-button--quiet"
+            (click)="loadFutureMatchupLineupPlans()"
+            [disabled]="futureLineupDirty() || futureLineupLoading() || futureLineupSaving()"
+            [attr.aria-describedby]="futureLineupDirty() ? 'lineup-unsaved-lineup-note' : null"
+          >
+            {{ futureLineupLoading() ? 'Refreshing…' : 'Refresh' }}
+          </button>
         </div>
-      } @else {
-        <div class="empty-state-card rr-state">No current matchup is available for this team yet.</div>
+      </div>
+
+      <p id="lineup-matchup-summary" class="lineup-matchup-summary" aria-live="polite">
+        {{ getFutureLineupSummaryText() }}
+      </p>
+
+      @if (futureLineupInitialLoadingState) {
+        <div class="lineup-planner-state rr-state" role="status">Loading</div>
+      }
+
+      @if (futureLineupErrorText) {
+        <div
+          class="lineup-planner-state lineup-planner-error rr-notice rr-notice--warning"
+          role="alert"
+        >
+          <span>{{ futureLineupErrorText }}</span>
+          <button
+            type="button"
+            class="rr-button rr-button--quiet"
+            (click)="retryFutureLineupError()"
+            [disabled]="futureLineupLoading() || futureLineupSaving()"
+          >
+            {{ getFutureLineupErrorRetryLabel() }}
+          </button>
+        </div>
+      }
+
+      @if (futureLineupSuccessText) {
+        <div class="lineup-planner-state rr-notice rr-notice--success" role="status">
+          {{ futureLineupSuccessText }}
+        </div>
+      }
+
+      @if (selectedFutureLineupOption) {
+        @if (selectedFutureLineupIsCurrent) {
+          <p class="lineup-current-status">{{ getCurrentMatchupStatusText() }}</p>
+
+          @if (currentFutureLineupMatchup; as matchup) {
+            <div class="scoreboard-row lineup-current-scoreboard">
+              <article class="score-team-card rr-stat-card" [class.my-team-score-card]="true">
+                <span>{{ isOwnTeam() ? 'Your Team' : 'Selected Team' }}</span>
+                <strong>{{ team()?.teamName }}</strong>
+                <em>{{ getDisplayNumber(getMatchupScore(matchup, viewedOwnerId())) }}</em>
+              </article>
+
+              <div class="score-vs">vs</div>
+
+              <article class="score-team-card rr-stat-card">
+                <span>Opponent</span>
+                <strong>{{ getTeamName(currentOpponentOwnerId()) }}</strong>
+                <em>{{ getDisplayNumber(getMatchupScore(matchup, currentOpponentOwnerId())) }}</em>
+              </article>
+            </div>
+          }
+        }
+      }
+
+      @if (futureLineupEditorVisible) {
+        @if (futureLineupTimingLoadingState) {
+          <div class="lineup-planner-state rr-state" role="status">Dates</div>
+        }
+
+        @if (futureLineupTimingErrorText) {
+          <div
+            class="lineup-planner-state lineup-planner-error rr-notice rr-notice--warning"
+            role="alert"
+          >
+            <span>{{ futureLineupTimingErrorText }}</span>
+            <button
+              type="button"
+              class="rr-button rr-button--quiet"
+              (click)="loadFutureLineupTimingEvidence()"
+              [disabled]="futureLineupTimingLoading()"
+            >
+              Retry
+            </button>
+          </div>
+        }
+
+        <div id="lineup-timing-guidance" class="lineup-change-cycle-note rr-notice rr-notice--info">
+          <span>
+            NHL block dates are nominal pre-materialization; exact starts may follow six-game
+            boundaries.
+          </span>
+        </div>
+
+        @if (futureLineupEditBlockText; as editBlockReason) {
+          <div class="lineup-planner-lock-note lineup-change-cycle-note rr-notice rr-notice--info">
+            <strong>{{ isOwnTeam() ? 'Lineup locked' : 'Read-only lineup' }}</strong>
+            <span>{{ editBlockReason }}</span>
+          </div>
+        }
+
+        @if (futureLineupValidationText; as validationMessage) {
+          <div class="lineup-planner-state rr-notice rr-notice--warning" role="alert">
+            {{ validationMessage }}
+          </div>
+        }
+
+        @if (futureLineupRoster) {
+          <div
+            class="lineup-editor-grid fantasy-position-slots defense-slots ir-activation-target-list"
+            role="list"
+            aria-label="Active-slot matchup lineup"
+          >
+            @for (row of futureLineupEditorRows; track row.slot.slotId) {
+              <article
+                class="lineup-editor-slot fantasy-position-group rr-data-panel"
+                [class.lineup-editor-slot--locked]="row.locked"
+                role="listitem"
+              >
+                <div class="lineup-editor-slot-heading section-heading rr-section-heading">
+                  <div>
+                    <span>{{ row.slot.position }}</span>
+                    <strong>{{ row.slot.position }} {{ row.slot.slotNumber }}</strong>
+                  </div>
+
+                  @if (row.startDate; as startDate) {
+                    <div
+                      class="lineup-slot-start rr-badge"
+                      [class.lineup-start--saved]="startDate.confidence === 'saved'"
+                      [class.lineup-start--projected]="startDate.confidence === 'projected'"
+                      [class.lineup-start--pending]="startDate.confidence === 'pending'"
+                      [class.rr-badge--success]="startDate.confidence === 'saved'"
+                      [class.rr-badge--warning]="startDate.confidence === 'projected'"
+                      [class.rr-badge--info]="startDate.confidence === 'pending'"
+                      [attr.aria-label]="getFutureLineupStartAriaLabel(row.slot)"
+                    >
+                      <span>{{ startDate.eyebrow }}</span>
+                      @if (startDate.dateTime) {
+                        <time [attr.datetime]="startDate.dateTime">{{ startDate.label }}</time>
+                      } @else {
+                        <strong>{{ startDate.label }}</strong>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <label class="rr-label" [for]="getFutureLineupSlotSelectId(row.slot)">Start</label>
+                <select
+                  [id]="getFutureLineupSlotSelectId(row.slot)"
+                  class="rr-field lineup-slot-select"
+                  [ngModel]="getFutureLineupAssignment(row.slot.slotId)"
+                  (ngModelChange)="setFutureLineupAssignment(row.slot, $event)"
+                  [disabled]="row.locked || futureLineupLoading() || futureLineupSaving()"
+                  [attr.aria-describedby]="
+                    row.lockReason
+                      ? getFutureLineupSlotSelectId(row.slot) + '-help'
+                      : 'lineup-timing-guidance'
+                  "
+                >
+                  @if (!row.slot.asset) {
+                    <option [ngValue]="''">Open</option>
+                  }
+                  @if (row.showFallback) {
+                    <option [ngValue]="getFutureLineupAssignment(row.slot.slotId)">
+                      {{ getFutureLineupFallbackAssetLabel(row.slot) }}
+                    </option>
+                  }
+                  @for (candidate of row.candidates; track candidate.key) {
+                    <option [ngValue]="candidate.key" [disabled]="candidate.assignedElsewhere">
+                      {{ getRosterAssetName(candidate.asset) }} ·
+                      {{ getRosterAssetTeamLabel(candidate.asset) }}
+                    </option>
+                  }
+                </select>
+
+                @if (row.lockReason) {
+                  <p
+                    [id]="getFutureLineupSlotSelectId(row.slot) + '-help'"
+                    class="lineup-slot-help rr-field-hint"
+                  >
+                    {{ row.lockReason }}
+                  </p>
+                }
+              </article>
+            }
+          </div>
+
+          @if (futureLineupOwned) {
+            @if (futureLineupHasChanges) {
+              <div
+                id="lineup-unsaved-lineup-note"
+                class="lineup-change-cycle-note rr-notice rr-notice--info"
+                role="status"
+                aria-live="polite"
+              >
+                <strong>Save or reset before you switch, refresh, or leave.</strong>
+              </div>
+            }
+
+            <div class="lineup-planner-actions rr-dialog__actions">
+              <button
+                type="button"
+                class="rr-button rr-button--primary"
+                (click)="saveFutureLineup()"
+                [disabled]="!canSaveFutureLineup()"
+              >
+                {{ getFutureLineupSaveLabel() }}
+              </button>
+              <button
+                type="button"
+                class="rr-button rr-button--quiet"
+                (click)="resetFutureLineupDraft()"
+                [disabled]="!canResetFutureLineup()"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                class="rr-button rr-button--quiet lineup-clear-button"
+                (click)="clearFutureLineup()"
+                [disabled]="!canClearFutureLineup()"
+              >
+                {{ getFutureLineupClearLabel() }}
+              </button>
+            </div>
+          }
+        } @else {
+          <div class="lineup-planner-state rr-state" role="status">Loading</div>
+        }
       }
     </section>
 
@@ -262,39 +498,39 @@
       </section>
 
       <section class="team-name-card rr-card rr-card--padded">
-      <div>
-        <span class="eyebrow">Team Settings</span>
-        <h2>Team Name</h2>
-      </div>
-
-      <div class="team-name-form rr-field-group">
-        <label for="team-name">Team Name</label>
         <div>
-          <input
-            id="team-name"
-            class="rr-field"
-            [(ngModel)]="teamName"
-            placeholder="Enter team name"
-          />
-
-          <button
-            type="button"
-            class="rr-button rr-button--primary"
-            (click)="saveTeamName()"
-            [disabled]="saving()"
-          >
-            {{ saving() ? 'Saving...' : 'Save' }}
-          </button>
+          <span class="eyebrow">Team Settings</span>
+          <h2>Team Name</h2>
         </div>
 
-        @if (successMessage()) {
-          <small class="success-message rr-field-hint">{{ successMessage() }}</small>
-        }
+        <div class="team-name-form rr-field-group">
+          <label for="team-name">Team Name</label>
+          <div>
+            <input
+              id="team-name"
+              class="rr-field"
+              [(ngModel)]="teamName"
+              placeholder="Enter team name"
+            />
 
-        @if (errorMessage()) {
-          <small class="error-message rr-field-error">{{ errorMessage() }}</small>
-        }
-      </div>
+            <button
+              type="button"
+              class="rr-button rr-button--primary"
+              (click)="saveTeamName()"
+              [disabled]="saving()"
+            >
+              {{ saving() ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+
+          @if (successMessage()) {
+            <small class="success-message rr-field-hint">{{ successMessage() }}</small>
+          }
+
+          @if (errorMessage()) {
+            <small class="error-message rr-field-error">{{ errorMessage() }}</small>
+          }
+        </div>
       </section>
     }
 
@@ -401,7 +637,10 @@
                           </div>
                         }
 
-                        <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
+                        <app-asset-portrait
+                          class="fantasy-player-logo"
+                          [asset]="getRosterAssetPortrait(asset)"
+                        />
 
                         <div
                           class="fantasy-player-main roster-player-detail-link"
@@ -457,10 +696,7 @@
 
                         @if (slot.gameMarkers; as markers) {
                           @if (markers.length > 0) {
-                            <div
-                              class="roster-window-markers"
-                              [attr.aria-label]="slot.windowLabel"
-                            >
+                            <div class="roster-window-markers" [attr.aria-label]="slot.windowLabel">
                               @for (marker of markers; track marker.index) {
                                 <span
                                   class="roster-window-marker"
@@ -468,13 +704,18 @@
                                   [class.roster-marker-missed]="marker.status === 'missed'"
                                   [class.roster-marker-live]="marker.status === 'live'"
                                   [class.roster-marker-upcoming]="marker.status === 'upcoming'"
-                                  [class.roster-marker-unavailable]="marker.status === 'unavailable'"
-                                  [class.roster-marker-replacement-boundary]="marker.replacementBoundary"
+                                  [class.roster-marker-unavailable]="
+                                    marker.status === 'unavailable'
+                                  "
+                                  [class.roster-marker-replacement-boundary]="
+                                    marker.replacementBoundary
+                                  "
                                   [class.roster-marker-replacement-owner]="marker.currentOwner"
                                   role="img"
                                   [attr.aria-label]="marker.ariaLabel"
                                   [title]="marker.title"
-                                >{{ marker.index }}</span>
+                                  >{{ marker.index }}</span
+                                >
                               }
                             </div>
                           }
@@ -563,7 +804,10 @@
                         </div>
                       }
 
-                      <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
+                      <app-asset-portrait
+                        class="fantasy-player-logo"
+                        [asset]="getRosterAssetPortrait(asset)"
+                      />
 
                       <div
                         class="fantasy-player-main roster-player-detail-link"
@@ -618,10 +862,7 @@
 
                       @if (slot.gameMarkers; as markers) {
                         @if (markers.length > 0) {
-                          <div
-                            class="roster-window-markers"
-                            [attr.aria-label]="slot.windowLabel"
-                          >
+                          <div class="roster-window-markers" [attr.aria-label]="slot.windowLabel">
                             @for (marker of markers; track marker.index) {
                               <span
                                 class="roster-window-marker"
@@ -630,12 +871,15 @@
                                 [class.roster-marker-live]="marker.status === 'live'"
                                 [class.roster-marker-upcoming]="marker.status === 'upcoming'"
                                 [class.roster-marker-unavailable]="marker.status === 'unavailable'"
-                                [class.roster-marker-replacement-boundary]="marker.replacementBoundary"
+                                [class.roster-marker-replacement-boundary]="
+                                  marker.replacementBoundary
+                                "
                                 [class.roster-marker-replacement-owner]="marker.currentOwner"
                                 role="img"
                                 [attr.aria-label]="marker.ariaLabel"
                                 [title]="marker.title"
-                              >{{ marker.index }}</span>
+                                >{{ marker.index }}</span
+                              >
                             }
                           </div>
                         }
@@ -721,7 +965,10 @@
                         </div>
                       }
 
-                      <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
+                      <app-asset-portrait
+                        class="fantasy-player-logo"
+                        [asset]="getRosterAssetPortrait(asset)"
+                      />
 
                       <div
                         class="fantasy-player-main roster-player-detail-link"
@@ -776,10 +1023,7 @@
 
                       @if (slot.gameMarkers; as markers) {
                         @if (markers.length > 0) {
-                          <div
-                            class="roster-window-markers"
-                            [attr.aria-label]="slot.windowLabel"
-                          >
+                          <div class="roster-window-markers" [attr.aria-label]="slot.windowLabel">
                             @for (marker of markers; track marker.index) {
                               <span
                                 class="roster-window-marker"
@@ -788,12 +1032,15 @@
                                 [class.roster-marker-live]="marker.status === 'live'"
                                 [class.roster-marker-upcoming]="marker.status === 'upcoming'"
                                 [class.roster-marker-unavailable]="marker.status === 'unavailable'"
-                                [class.roster-marker-replacement-boundary]="marker.replacementBoundary"
+                                [class.roster-marker-replacement-boundary]="
+                                  marker.replacementBoundary
+                                "
                                 [class.roster-marker-replacement-owner]="marker.currentOwner"
                                 role="img"
                                 [attr.aria-label]="marker.ariaLabel"
                                 [title]="marker.title"
-                              >{{ marker.index }}</span>
+                                >{{ marker.index }}</span
+                              >
                             }
                           </div>
                         }
@@ -900,7 +1147,10 @@
                 </div>
               }
 
-              <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
+              <app-asset-portrait
+                class="fantasy-player-logo"
+                [asset]="getRosterAssetPortrait(asset)"
+              />
 
               <div
                 class="fantasy-player-main roster-player-detail-link"
@@ -940,10 +1190,7 @@
                 </div>
               </div>
 
-              <div
-                class="bench-game-markers"
-                [attr.aria-label]="getBenchCurrentBlockLabel(asset)"
-              >
+              <div class="bench-game-markers" [attr.aria-label]="getBenchCurrentBlockLabel(asset)">
                 @for (marker of getBenchCurrentBlockMarkers(asset); track marker.index) {
                   <span
                     class="bench-game-marker"
@@ -952,7 +1199,8 @@
                     [class.bench-game-marker--upcoming]="marker.status === 'upcoming'"
                     [class.bench-game-marker--unavailable]="marker.status === 'unavailable'"
                     [title]="marker.title"
-                  >{{ marker.index }}</span>
+                    >{{ marker.index }}</span
+                  >
                 }
               </div>
 
@@ -1013,7 +1261,10 @@
               (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset)"
             >
               @if (slot.asset; as asset) {
-                <app-asset-portrait class="fantasy-player-logo" [asset]="getRosterAssetPortrait(asset)" />
+                <app-asset-portrait
+                  class="fantasy-player-logo"
+                  [asset]="getRosterAssetPortrait(asset)"
+                />
 
                 <div
                   class="ir-player-main roster-player-detail-link"
@@ -1097,7 +1348,10 @@
       <section class="roster-manager-summary">
         @if (rosterManagerAsset(); as managerAsset) {
           <div class="roster-manager-identity">
-            <app-asset-portrait class="roster-manager-portrait" [asset]="getRosterAssetPortrait(managerAsset)" />
+            <app-asset-portrait
+              class="roster-manager-portrait"
+              [asset]="getRosterAssetPortrait(managerAsset)"
+            />
 
             <div>
               <strong>{{ getRosterAssetName(managerAsset) }}</strong>
@@ -1171,9 +1425,7 @@
     <app-action-sheet
       [open]="isOwnTeam() && activeBenchPickerOpen()"
       [title]="
-        isActiveBenchPickerInjuryReplacement()
-          ? 'Replace Injured Player Now'
-          : 'Swap with Bench'
+        isActiveBenchPickerInjuryReplacement() ? 'Replace Injured Player Now' : 'Swap with Bench'
       "
       [eyebrow]="
         isActiveBenchPickerInjuryReplacement()
@@ -1218,7 +1470,8 @@
                     <span>
                       <strong>{{ getRosterAssetName(benchAsset) }}</strong>
                       <small>
-                        {{ getRosterAssetTeamLabel(benchAsset) }} · {{ benchAsset.position }} · Bench
+                        {{ getRosterAssetTeamLabel(benchAsset) }} · {{ benchAsset.position }} ·
+                        Bench
                         {{ benchSlot.slotNumber }}
                       </small>
                       <small>Six-game progress: {{ getRosterAssetGameProgress(benchAsset) }}</small>
@@ -1285,7 +1538,10 @@
             </header>
 
             <div class="ir-activation-player-summary">
-              <app-asset-portrait class="ir-activation-player-logo" [asset]="getRosterAssetPortrait(activationAsset)" />
+              <app-asset-portrait
+                class="ir-activation-player-logo"
+                [asset]="getRosterAssetPortrait(activationAsset)"
+              />
 
               <div>
                 <strong>{{ getRosterAssetName(activationAsset) }}</strong>
@@ -1323,7 +1579,10 @@
                     <span class="ir-activation-radio-mark"></span>
 
                     @if (targetSlot.asset; as targetAsset) {
-                      <app-asset-portrait class="ir-activation-target-logo" [asset]="getRosterAssetPortrait(targetAsset)" />
+                      <app-asset-portrait
+                        class="ir-activation-target-logo"
+                        [asset]="getRosterAssetPortrait(targetAsset)"
+                      />
                     } @else {
                       <span class="ir-activation-open-slot-icon">+</span>
                     }
@@ -1620,7 +1879,10 @@
             </header>
 
             <div class="lineup-change-player-summary ir-activation-player-summary">
-              <app-asset-portrait class="ir-activation-player-logo" [asset]="getRosterAssetPortrait(benchSwapAsset)" />
+              <app-asset-portrait
+                class="ir-activation-player-logo"
+                [asset]="getRosterAssetPortrait(benchSwapAsset)"
+              />
               <div>
                 <strong>{{ getRosterAssetName(benchSwapAsset) }}</strong>
                 <span
@@ -1712,7 +1974,9 @@
                 <div>
                   <small>Matchup timing</small>
                   <strong>Checking both players...</strong>
-                  <p>RinkRat is finding the first matchup where this exact swap can happen fairly.</p>
+                  <p>
+                    RinkRat is finding the first matchup where this exact swap can happen fairly.
+                  </p>
                 </div>
               } @else if (benchSwapTimingError()) {
                 <div>
@@ -1766,7 +2030,7 @@
                         ? 'Applying...'
                         : benchSwapTimingLoading() && !isPendingBenchSwapInjuryReplacement()
                           ? 'Checking Matchup...'
-                        : 'Confirm Swap'
+                          : 'Confirm Swap'
                   }}</strong>
                 </span>
               </button>
@@ -1816,7 +2080,10 @@
           </header>
 
           <div class="ir-activation-player-summary roster-drop-player-summary">
-            <app-asset-portrait class="ir-activation-player-logo" [asset]="getRosterAssetPortrait(pendingDrop.asset)" />
+            <app-asset-portrait
+              class="ir-activation-player-logo"
+              [asset]="getRosterAssetPortrait(pendingDrop.asset)"
+            />
 
             <div>
               <strong>{{ getRosterAssetName(pendingDrop.asset) }}</strong>

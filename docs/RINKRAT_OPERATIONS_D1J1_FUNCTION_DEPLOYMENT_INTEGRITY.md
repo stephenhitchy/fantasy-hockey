@@ -4,7 +4,7 @@
 
 ## Why this batch exists
 
-RinkRat currently exports 105 Firebase Functions from `functions/src/index.ts`. Cloud Run functions (2nd gen) permits 60 write operations per minute per project and region. A broad `firebase deploy`, followed immediately by `firebase deploy --only functions`, can therefore exhaust the deployment mutation quota even when application runtime capacity is healthy.
+RinkRat exports more than 60 Firebase Functions from `functions/src/index.ts`. Cloud Run functions (2nd gen) permits 60 write operations per minute per project and region. A broad `firebase deploy`, followed immediately by `firebase deploy --only functions`, can therefore exhaust the deployment mutation quota even when application runtime capacity is healthy. The audit derives the exact current export count from that authoritative index instead of relying on a documentation constant.
 
 A 429 during deployment is a control-plane rate limit. It does not mean live Function invocations exhausted runtime capacity. A failed update leaves that individual Function on its previously deployed revision until a later targeted deployment succeeds.
 
@@ -53,7 +53,7 @@ The audit reports:
 - duplicate names;
 - extension-owned Functions ignored through the `ext-` prefix.
 
-A clean D1J.1 inventory expects 105 project-owned Functions in `us-central1`.
+A clean D1J.1 inventory expects the exact source-derived set of project-owned Functions in `us-central1`.
 
 `functions:list` proves presence, identity, and region. It does not prove that every Function contains the exact newest source revision. Exact revision confidence comes from the complete local release gate plus a successful targeted deployment of the Functions changed by that release.
 

@@ -556,10 +556,23 @@ export function advancePlayerWindowContinuity(input: {
   };
 }
 
-function snapshotStartsNewFantasyStint(snapshotSource: unknown): boolean {
+/**
+ * Returns whether an immutable pick begins a fresh roster-ownership stint.
+ *
+ * Historical move sources intentionally retain their established `move`
+ * naming contract. Future-lineup materialization is an equally fresh
+ * assignment but uses an explicit, stable source value, so recognize that
+ * value exactly rather than broadening the substring convention.
+ */
+export function snapshotSourceStartsFreshRosterAssignment(
+  snapshotSource: unknown,
+): boolean {
   return (
     typeof snapshotSource === 'string' &&
-    snapshotSource.toLowerCase().includes('move')
+    (
+      snapshotSource === 'future-lineup-plan' ||
+      snapshotSource.toLowerCase().includes('move')
+    )
   );
 }
 
@@ -592,7 +605,7 @@ export function reconstructLegacyPlayerWindowContinuity(input: {
     asset: input.currentAsset,
   });
 
-  if (snapshotStartsNewFantasyStint(input.currentSnapshotSource)) {
+  if (snapshotSourceStartsFreshRosterAssignment(input.currentSnapshotSource)) {
     const savedCurrentMove = savedCurrent &&
       continuityStartsWithRosterMove(savedCurrent.continuityId)
       ? savedCurrent
@@ -657,7 +670,7 @@ export function reconstructLegacyPlayerWindowContinuity(input: {
       scheduledGameIds,
     });
 
-    if (snapshotStartsNewFantasyStint(assignment.snapshotSource)) {
+    if (snapshotSourceStartsFreshRosterAssignment(assignment.snapshotSource)) {
       break;
     }
   }
@@ -676,7 +689,7 @@ export function reconstructLegacyPlayerWindowContinuity(input: {
   ];
   const savedHistorical = savedHistoricalContinuities[0];
   const moveBoundaryAssignment = contiguousAssignments.find((assignment) =>
-    snapshotStartsNewFantasyStint(assignment.snapshotSource)
+    snapshotSourceStartsFreshRosterAssignment(assignment.snapshotSource)
   );
   const distinctContinuityIds = new Set(
     savedContinuities.map((continuity) => continuity.continuityId),

@@ -1,6 +1,6 @@
 # RinkRat Codebase Guide
 
-Last verified against source: 2026-10-09
+Last verified against source: 2026-10-12
 
 ## Purpose
 
@@ -307,6 +307,11 @@ The paths below are orientation, not an exhaustive schema:
 - `leagues/{leagueId}/members/{userId}`: membership identity.
 - `leagues/{leagueId}/teams/{ownerId}`: fantasy team identity.
 - `leagues/{leagueId}/teams/{ownerId}/roster/current`: current roster state.
+- `leagues/{leagueId}/teams/{ownerId}/lineupPlans/cycle-{number}` and the
+  sibling `lineupPlanMutationState/cycle-{number}` documents: callable-private,
+  revisioned future regular-season lineup intent plus bounded per-cycle
+  idempotency evidence (at most 64 hashed receipts and a monotonic latest
+  revision). Firestore Rules do not expose either collection to the browser.
 - `leagues/{leagueId}/draft/current`: draft settings and live turn state.
 - `leagues/{leagueId}/draft/current/picks/{pickId}`: committed draft picks.
 - `leagues/{leagueId}/draft/current/queues/{ownerId}`: manager draft queues.
@@ -377,6 +382,20 @@ recovery, deployment, and rollback details.
    Ambiguous transport failures remain pending while the existing listener and
    bounded server-source roster reads reconcile the exact slot; a local timeout
    never implies that the server rolled back.
+8. Future-matchup lineup plans use the separate
+   `manageFutureMatchupLineups` callable. The browser loads bounded schedule
+   context and one owner's selected-cycle windows without a new listener; the
+   server validates one complete lineup and consumes each planned slot only at
+   that slot's real six-game boundary. Materialized slots are immutable,
+   unresolved slots may remain editable while a preceding overlapping cycle can
+   still consume them, and Historical Replay/playoff paths do not consume these
+   plans. Each resolved slot preserves the requested `assetKey` for audit while
+   recording the actual immutable target-window owner in `resolvedAssetKey`.
+   Before materialization, displayed dates are nominal NHL-block timing rather
+   than a promised player start. An absent target cycle is writable only after
+   the transaction proves it is later than the latest valid materialized cycle.
+   Post-preflight plan/roster races abort for a fresh attempt rather than
+   committing an expected slot without its authoritative target pick.
 
 See `docs/RINKRAT_PRODUCT_B2A_ADD_DROP_TRANSACTION_RECOVERY.md` before changing
 add/drop receipt identity, expected-outgoing validation, exact-player identity,
@@ -497,9 +516,10 @@ log.
 ## Verification and deployment boundaries
 
 Use Node.js 22.23.1 and npm 11.17.0 through nvm. Run the smallest focused test
-while developing, then the current inherited release gate from `AGENTS.md`, the
-full build, diff checks, and clean-deploy-source verification before declaring
-the change ready.
+while developing, then the newest source-controlled inherited gate. On the B2G
+source line that gate is `npm run verify:batchb2g`, followed by the full build,
+diff checks, and clean-deploy-source verification before declaring the change
+ready.
 
 Codex prepares and reports deployment selectors but does not deploy Firebase
 resources. A documentation-only change requires no Firebase deployment. A

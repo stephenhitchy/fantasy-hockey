@@ -4801,6 +4801,7 @@ async function persistServerScoring(
   currentTeamConfirmedAtByPlayerId?: ReadonlyMap<number, string>,
   currentTeamIdentityHash?: string,
   currentTeamIdentityGeneratedAt?: string,
+  consumeFutureLineupPlans = true,
 ): Promise<boolean> {
   const matchups = await getCycleMatchupsOnce(
     leagueId,
@@ -4819,27 +4820,33 @@ async function persistServerScoring(
   }
 
   if (cycle.phase === 'regular_season') {
-    const completion =
-      await reconcileRegularSeasonCycleMatchupCompletion(
-        leagueId,
-        cycle.cycleNumber,
-      );
-
+    // Advance every completed player window before the parent cycle can be
+    // marked complete. Active-cycle discovery intentionally excludes completed
+    // parents, so completing first would leave no automatic recovery path if
+    // the worker crashed before materializing the last child-window picks.
+    // Advancing first is safely retryable; a crash before reconciliation leaves
+    // the parent active and the next pass replays the idempotent transaction.
     await advanceCompletedRegularSeasonAssetWindows(
       leagueId,
       teams,
       cycle,
       picks,
       result,
-      { projectionRefreshPolicy },
+      { projectionRefreshPolicy, consumeFutureLineupPlans },
     );
+
+    const completion =
+      await reconcileRegularSeasonCycleMatchupCompletion(
+        leagueId,
+        cycle.cycleNumber,
+      );
 
     if (completion.cycleCompleted) {
       await startNextCycle(
         leagueId,
         teams,
         cycle.cycleNumber,
-        { projectionRefreshPolicy },
+        { projectionRefreshPolicy, consumeFutureLineupPlans },
       ).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : '';
 
@@ -4907,7 +4914,7 @@ async function persistServerScoring(
     leagueId,
     teams,
     cycle.cycleNumber,
-    { projectionRefreshPolicy },
+    { projectionRefreshPolicy, consumeFutureLineupPlans },
   ).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : '';
 
@@ -5453,6 +5460,7 @@ async function runLeagueAutomation(
             livePlayerTeamIdentity?.teamConfirmedAtByPlayerId,
             livePlayerTeamIdentity?.identityHash,
             livePlayerTeamIdentity?.generatedAt,
+            !replayControl,
           ),
         );
         const published = await phaseTimer.measure(
@@ -9270,12 +9278,14 @@ export const openNextCompetitionPeriod = onCall(
       `leagues/${leagueId}/cycles/cycle-${nextCycleNumber}`,
     );
     const existingNextCycle = await nextCycleRef.get();
+    const replayControl = await getHistoricalReplayControl(leagueId);
 
     try {
       const nextCycle = await startNextCycle(
         leagueId,
         teams,
         currentCycleNumber,
+        { consumeFutureLineupPlans: !replayControl },
       );
 
       if (!nextCycle) {

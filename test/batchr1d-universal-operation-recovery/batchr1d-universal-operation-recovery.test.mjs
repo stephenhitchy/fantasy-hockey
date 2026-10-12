@@ -428,6 +428,9 @@ test('scoring, Projection V11, rules, indexes, and unrelated Functions remain un
     'roster-authority.ts',
 
     'roster-moves.ts',
+    // B2G isolates private future-lineup authority and its pure resolver.
+    'future-matchup-lineup.ts',
+    'shared/core/team/future-matchup-lineup.util.ts',
     // B2D isolates exact manager-authorized automatic injury promotion.
     'automatic-injury-replacement.ts',
     // B2A adds the private deterministic add/drop receipt contract.

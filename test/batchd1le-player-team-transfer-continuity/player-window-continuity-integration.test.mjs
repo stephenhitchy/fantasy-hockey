@@ -62,7 +62,11 @@ test('asynchronous regular rollover carries the current replacement segment and 
   assert.match(rollover, /const currentPickBySlotKey = new Map<string, DraftPick>/);
   assert.match(
     rollover,
-    /slot\.pendingMove && pendingMoveReady\s*\? createPlayerWindowContinuity\(\{[\s\S]*?activationKey: `move-\$\{slot\.pendingMove\.id\}`/,
+    /const activationKey = slot\.pendingMove && pendingMoveReady\s*\? `move-\$\{slot\.pendingMove\.id\}`/,
+  );
+  assert.match(
+    rollover,
+    /const playerWindowContinuity = activationKey\s*\? createPlayerWindowContinuity\(\{[\s\S]*?activationKey,[\s\S]*?assignmentNotBefore: Date\.now\(\)/,
   );
   assert.match(
     rollover,

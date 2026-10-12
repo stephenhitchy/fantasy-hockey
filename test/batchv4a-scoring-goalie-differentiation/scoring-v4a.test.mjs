@@ -34,6 +34,73 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function replaceExactOnce(value, expected, replacement, label) {
+  const firstIndex = value.indexOf(expected);
+  assert.notEqual(firstIndex, -1, `${label} is missing`);
+  assert.equal(
+    value.indexOf(expected, firstIndex + expected.length),
+    -1,
+    `${label} must appear exactly once`,
+  );
+  return `${value.slice(0, firstIndex)}${replacement}${value.slice(firstIndex + expected.length)}`;
+}
+
+function normalizeFutureLineupAssignmentCutoff(serverScoring) {
+  let normalized = replaceExactOnce(
+    serverScoring,
+    `import {
+  resolvePlayerWindowContinuity,
+  snapshotSourceStartsFreshRosterAssignment,
+} from './player-window-continuity.util';`,
+    `import { resolvePlayerWindowContinuity } from './player-window-continuity.util';`,
+    'the reviewed future-lineup scoring import seam',
+  );
+
+  normalized = replaceExactOnce(
+    normalized,
+    `  const snapshotStartsFreshRosterAssignment =
+    snapshotSourceStartsFreshRosterAssignment(pick.snapshotSource);
+  const continuityCameFromFreshRosterAssignment = Boolean(
+    playerWindowContinuity?.assignmentNotBeforeMilliseconds !== undefined ||
+    playerWindowContinuity?.continuityId.includes('::move-') ||
+    snapshotStartsFreshRosterAssignment,
+  );
+  const assignmentNotBeforeMilliseconds =
+    playerWindowContinuity?.assignmentNotBeforeMilliseconds ??
+    (snapshotStartsFreshRosterAssignment
+      ? activationMilliseconds ?? undefined
+      : undefined);`,
+    `  const snapshotStartsRosterMove =
+    pick.snapshotSource?.toLowerCase().includes('move') === true;
+  const continuityCameFromRosterMove = Boolean(
+    playerWindowContinuity?.assignmentNotBeforeMilliseconds !== undefined ||
+    playerWindowContinuity?.continuityId.includes('::move-') ||
+    snapshotStartsRosterMove,
+  );
+  const assignmentNotBeforeMilliseconds =
+    playerWindowContinuity?.assignmentNotBeforeMilliseconds ??
+    (snapshotStartsRosterMove ? activationMilliseconds ?? undefined : undefined);`,
+    'the reviewed future-lineup assignment cutoff seam',
+  );
+
+  normalized = replaceExactOnce(
+    normalized,
+    `    continuityCameFromFreshRosterAssignment &&
+    assignmentNotBeforeMilliseconds === undefined
+  ) {
+    throw new Error(
+      \`The original fresh roster-assignment activation time is unavailable for \` +`,
+    `    continuityCameFromRosterMove &&
+    assignmentNotBeforeMilliseconds === undefined
+  ) {
+    throw new Error(
+      \`The original roster-move activation time is unavailable for \` +`,
+    'the reviewed future-lineup fail-closed message seam',
+  );
+
+  return normalized;
+}
+
 function forwardStats(overrides = {}) {
   return {
     position: 'F',
@@ -419,9 +486,14 @@ test('the six-game window remains frozen and server scoring matches the fail-clo
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), '83761b67632cd35838bb3e10a4ce5a64741926ebddb035a28503c67f440862c6');
-  // B1Z preserves the V4 formula while validating exact injury-replacement
-  // ownership, source-team evidence, and protected games inside one window.
-  assert.equal(sha256(serverScoring), '93776816aa925d8586a5905244bf338dd89096a85d67a76863163a276fac29b8');
+  // B2G recognizes a future-lineup snapshot as a fresh roster assignment at
+  // the same fail-closed activation cutoff used by roster moves. Normalize
+  // only that exact reviewed compatibility seam, then keep protecting every
+  // other byte of the Production Scoring V4 server implementation.
+  assert.equal(
+    sha256(normalizeFutureLineupAssignmentCutoff(serverScoring)),
+    '93776816aa925d8586a5905244bf338dd89096a85d67a76863163a276fac29b8',
+  );
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-10-09
+Last updated: 2026-10-12
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -124,6 +124,27 @@ occupant, and matching pick/window/continuity evidence. It leaves the injured
 player in IR and transfers only unstarted positions; ordinary open slots never
 qualify. The bounded recovery sweep supplies liveness without adding a new
 listener or Firestore index.
+
+B2G is the future-matchup lineup candidate layered after B2F. My Team lets a
+manager select any future regular-season matchup, save one complete active
+lineup, and review either an exact materialized first-game date or a clearly
+labelled nominal NHL-block date for each independent roster-slot window. The
+nominal date may precede that slot's real six-game boundary. The authenticated,
+revisioned callable is the only plan read/write authority; plan and bounded
+per-cycle mutation-state documents remain private.
+Each slot applies only at its real six-game boundary, rereads the current
+roster and exact plan inside the materialization transaction, gives an ordinary
+pending roster move precedence, and uses only an exact preflight fallback. A
+post-preflight plan or roster race aborts that boundary transaction for a fresh
+retry instead of committing a missing pick or expected window. Plans are not
+consumed by Historical Replay and do not extend to playoffs. The save authority
+also proves that an absent target is strictly later than the
+latest valid materialized cycle, so a missing past document cannot accept a
+stale reservation. The latest source-controlled
+product gate for this line is `npm run verify:batchb2g`, followed by
+`npm run build:all`. Read
+`docs/RINKRAT_PRODUCT_B2G_FUTURE_MATCHUP_LINEUPS.md` before changing its
+private plan schema, date semantics, or boundary behavior.
 
 B2A is the current clean-source add/drop reliability candidate and is not yet
 deployed. It replaces the interactive 32-club identity refresh with exact
@@ -809,10 +830,11 @@ lock was released.
   them.
 - Verify the live release manifest after Hosting deployment.
 - Preserve targeted rollback commands.
-- FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The current
-  exact-source command is `npm run verify:batchd1ncb`, followed by `npm run build:all`,
-  `git diff --check`, and `npm run release:verify-clean-deploy-source` from a
-  clean commit.
+- FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The retained
+  D1N-C evidence line uses `npm run verify:batchd1ncb`. The latest product gate
+  on the B2G source line is `npm run verify:batchb2g`; follow it with
+  `npm run build:all`, `git diff --check`, and
+  `npm run release:verify-clean-deploy-source` from a clean commit.
 
 ## 2026–27 private-season freeze
 

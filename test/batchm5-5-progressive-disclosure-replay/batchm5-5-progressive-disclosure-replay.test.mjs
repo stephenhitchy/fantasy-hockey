@@ -278,6 +278,9 @@ test('competitive scoring, Projection V11, and Functions unrelated to later repl
         'src/shared/email/verification-continuation.util.ts',
         'src/roster-authority.ts',
         'src/roster-moves.ts',
+        // B2G isolates private future-lineup authority and its pure resolver.
+        'src/future-matchup-lineup.ts',
+        'src/shared/core/team/future-matchup-lineup.util.ts',
         // B2D isolates exact manager-authorized automatic injury promotion.
         'src/automatic-injury-replacement.ts',
         // B2A adds isolated add/drop submission receipt and fingerprint helpers.

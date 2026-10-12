@@ -62,7 +62,10 @@ test('queued moves activate in the same transaction that assigns the next slot w
   );
 
   assert.match(rollover, /savedSlot\.pendingMove/);
-  assert.match(rollover, /snapshotSource: activationPlan \? 'queued-slot-move' : 'slot-window-advance'/);
+  assert.match(
+    rollover,
+    /snapshotSource: activationPlan\s*\? 'queued-slot-move'[\s\S]*?: futureLineupApplied[\s\S]*?: 'slot-window-advance'/,
+  );
   assert.match(rollover, /transaction\.set\(doc\(getTransactionsRef\(leagueId\)\)/);
   assert.match(rollover, /pendingMove: null/);
 });

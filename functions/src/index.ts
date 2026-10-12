@@ -4510,6 +4510,8 @@ export {
   executeSecureRosterAction,
 } from './roster-authority';
 
+export { manageFutureMatchupLineups } from './future-matchup-lineup';
+
 export {
   processQueuedInjuryEmails,
   requestPasswordResetEmail,

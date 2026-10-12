@@ -63,7 +63,10 @@ import {
   resolveLivePlayerTeamWindow,
   type ResolvedLivePlayerWindow,
 } from './live-player-team-window.util';
-import { resolvePlayerWindowContinuity } from './player-window-continuity.util';
+import {
+  resolvePlayerWindowContinuity,
+  snapshotSourceStartsFreshRosterAssignment,
+} from './player-window-continuity.util';
 import {
   getInjuryReplacementProtectedGameIds,
   getInjuryReplacementAssetKeyByGameId,
@@ -1144,16 +1147,18 @@ function getRelevantAssetGames(
   const teamCutoverDetected =
     pick.asset.assetType === 'skater' &&
     priorScheduleTeamAbbreviation !== currentTeamAbbreviation;
-  const snapshotStartsRosterMove =
-    pick.snapshotSource?.toLowerCase().includes('move') === true;
-  const continuityCameFromRosterMove = Boolean(
+  const snapshotStartsFreshRosterAssignment =
+    snapshotSourceStartsFreshRosterAssignment(pick.snapshotSource);
+  const continuityCameFromFreshRosterAssignment = Boolean(
     playerWindowContinuity?.assignmentNotBeforeMilliseconds !== undefined ||
     playerWindowContinuity?.continuityId.includes('::move-') ||
-    snapshotStartsRosterMove,
+    snapshotStartsFreshRosterAssignment,
   );
   const assignmentNotBeforeMilliseconds =
     playerWindowContinuity?.assignmentNotBeforeMilliseconds ??
-    (snapshotStartsRosterMove ? activationMilliseconds ?? undefined : undefined);
+    (snapshotStartsFreshRosterAssignment
+      ? activationMilliseconds ?? undefined
+      : undefined);
   const teamIdentityNotBeforeMilliseconds = teamCutoverDetected
     ? teamConfirmedAtMilliseconds ?? undefined
     : undefined;
@@ -1166,11 +1171,11 @@ function getRelevantAssetGames(
   }
 
   if (
-    continuityCameFromRosterMove &&
+    continuityCameFromFreshRosterAssignment &&
     assignmentNotBeforeMilliseconds === undefined
   ) {
     throw new Error(
-      `The original roster-move activation time is unavailable for ` +
+      `The original fresh roster-assignment activation time is unavailable for ` +
       `${pick.asset.assetKey}. Scoring was left unchanged and will retry.`,
     );
   }

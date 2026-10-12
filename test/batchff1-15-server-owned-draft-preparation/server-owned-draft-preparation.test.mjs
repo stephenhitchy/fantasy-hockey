@@ -784,12 +784,13 @@ test('the source inventory and Draft preflight include the new automatic task', 
   const indexSource = await read('functions/src/index.ts');
   const names = collectExpectedFirebaseFunctionNames(indexSource);
 
-  assert.equal(names.length, 112);
+  assert.equal(names.length, 113);
   assert.ok(names.includes('updateLeagueCapacitySecure'));
   assert.ok(names.includes('refreshDraftPlayerAvailabilityTask'));
   assert.ok(names.includes('processGlobalAutomaticInjuryReplacements'));
   assert.ok(names.includes('processLeagueAutomaticInjuryReplacement'));
   assert.ok(names.includes('reconcileAutomaticInjuryReplacements'));
+  assert.ok(names.includes('manageFutureMatchupLineups'));
   assert.ok(criticalDraftFunctions.includes('refreshDraftPlayerAvailabilityTask'));
 });
 

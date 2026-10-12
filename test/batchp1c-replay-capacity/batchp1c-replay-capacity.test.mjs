@@ -213,6 +213,9 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/roster-authority.ts',
 
     'src/roster-moves.ts',
+    // B2G isolates private future-lineup authority and its pure resolver.
+    'src/future-matchup-lineup.ts',
+    'src/shared/core/team/future-matchup-lineup.util.ts',
     // B2D isolates exact manager-authorized automatic injury promotion.
     'src/automatic-injury-replacement.ts',
 

@@ -415,6 +415,9 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/roster-authority.ts',
 
         'src/roster-moves.ts',
+        // B2G isolates private future-lineup authority and its pure resolver.
+        'src/future-matchup-lineup.ts',
+        'src/shared/core/team/future-matchup-lineup.util.ts',
         // B2D isolates exact manager-authorized automatic injury promotion.
         'src/automatic-injury-replacement.ts',
 

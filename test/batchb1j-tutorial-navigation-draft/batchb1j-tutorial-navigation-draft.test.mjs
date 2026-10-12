@@ -31,12 +31,20 @@ async function sha256FunctionsIndexBeforeD1M() {
     "  reconcileAutomaticInjuryReplacements,\n",
     "} from './automatic-injury-replacement';\n\n",
   ].join('');
+  const b2gExport = "export { manageFutureMatchupLineups } from './future-matchup-lineup';\n\n";
 
   assert.equal(source.split(d1mExport).length - 1, 1);
   assert.equal(source.split(l1bExport).length - 1, 1);
   assert.equal(source.split(b2dExports).length - 1, 1);
+  assert.equal(source.split(b2gExport).length - 1, 1);
   return createHash('sha256')
-    .update(source.replace(d1mExport, '').replace(l1bExport, '').replace(b2dExports, ''))
+    .update(
+      source
+        .replace(d1mExport, '')
+        .replace(l1bExport, '')
+        .replace(b2dExports, '')
+        .replace(b2gExport, ''),
+    )
     .digest('hex');
 }
 
