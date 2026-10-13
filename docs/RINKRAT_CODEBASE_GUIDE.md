@@ -1,6 +1,6 @@
 # RinkRat Codebase Guide
 
-Last verified against source: 2026-10-12
+Last verified against source: 2026-10-13
 
 ## Purpose
 
@@ -385,6 +385,11 @@ recovery, deployment, and rollback details.
 8. Future-matchup lineup plans use the separate
    `manageFutureMatchupLineups` callable. The browser loads bounded schedule
    context and one owner's selected-cycle windows without a new listener; the
+   My Team picker defaults to that owner's earliest unfinished matchup and
+   presents only it, the first unmaterialized matchup, and any non-applied
+   saved-plan recovery exceptions. This presentation filter does not redefine
+   latest-cycle scoring or physical-roster authority; missing earliest-matchup
+   evidence fails closed with an explicit retry. The
    server validates one complete lineup and consumes each planned slot only at
    that slot's real six-game boundary. Materialized slots are immutable,
    unresolved slots may remain editable while a preceding overlapping cycle can

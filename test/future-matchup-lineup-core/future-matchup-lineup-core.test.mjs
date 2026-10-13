@@ -43,6 +43,7 @@ const {
   resolveFutureMatchupSwapEffectiveCycle,
   resolveFutureMatchupSlotDateState,
   resolveSelectedMatchupSlotScoreState,
+  selectFocusedFutureMatchupLineupOptions,
   selectFutureMatchupProjectedGames,
   selectRelevantFutureMatchupAuthorityPlans,
   shouldUseLiveSelectedMatchupScoring,
@@ -285,6 +286,72 @@ test('overlapping open matchups keep the earliest selectable and mark only the l
   assert.equal(options[0].matchupId, 'saved-cycle-1');
   assert.equal(options[0].label, 'Matchup 1 · vs Owls · In progress');
   assert.equal(options[2].label, 'Matchup 3 · vs Owls · Current');
+});
+
+test('the My Team focus keeps the earliest unfinished matchup and only the next unstarted matchup', () => {
+  const option = (cycleNumber, timing, materialized = timing !== 'future') => ({
+    cycleNumber,
+    matchupId: `matchup-${cycleNumber}`,
+    opponentOwnerId: 'owner-b',
+    opponentTeamName: 'Owls',
+    phase: 'regular_season',
+    timing,
+    materialized,
+    isBye: false,
+    sourceNhlBlockNumber: cycleNumber,
+    label: `Matchup ${cycleNumber}`,
+  });
+  const options = [
+    option(1, 'open'),
+    option(2, 'open'),
+    option(3, 'current'),
+    option(4, 'future', false),
+    option(5, 'future', false),
+  ];
+
+  assert.deepEqual(
+    selectFocusedFutureMatchupLineupOptions({
+      options,
+      primaryCycleNumber: 1,
+    }).map((candidate) => candidate.cycleNumber),
+    [1, 4],
+    'materialized overlapping cycles are not mistaken for the next untouched matchup',
+  );
+  assert.deepEqual(
+    selectFocusedFutureMatchupLineupOptions({
+      options,
+      primaryCycleNumber: null,
+    }).map((candidate) => candidate.cycleNumber),
+    [4],
+    'without an unfinished matchup the first unmaterialized matchup becomes the only default',
+  );
+  assert.deepEqual(
+    selectFocusedFutureMatchupLineupOptions({
+      options: [option(2, 'future', false), option(4, 'future', false)],
+      primaryCycleNumber: 3,
+    }).map((candidate) => candidate.cycleNumber),
+    [4],
+    'partial option context never exposes a future matchup before the known primary cycle',
+  );
+  assert.deepEqual(
+    selectFocusedFutureMatchupLineupOptions({
+      options: options.slice(0, 3),
+      primaryCycleNumber: 1,
+    }).map((candidate) => candidate.cycleNumber),
+    [1],
+    'the current matchup remains available when the schedule has no later matchup',
+  );
+  assert.deepEqual(
+    selectFocusedFutureMatchupLineupOptions({
+      options,
+      primaryCycleNumber: 1,
+      recoverableCycleNumbers: [2, 5],
+      selectedCycleNumber: 3,
+      preserveSelected: true,
+    }).map((candidate) => candidate.cycleNumber),
+    [1, 2, 3, 4, 5],
+    'saved plans and an in-flight manual selection remain recoverable exceptions',
+  );
 });
 
 test('current-matchup action authority is isolated to the exact divergent slot', () => {

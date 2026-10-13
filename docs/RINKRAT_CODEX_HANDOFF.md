@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -125,16 +125,26 @@ player in IR and transfers only unstarted positions; ordinary open slots never
 qualify. The bounded recovery sweep supplies liveness without adding a new
 listener or Firestore index.
 
-B2G is the future-matchup lineup candidate layered after B2F. My Team lets a
-manager select the current or any future regular-season matchup and keeps the
-complete roster-board presentation on screen. Future cards show that exact
-matchup's assignment, score, game markers, later planned starter, and either
-an exact materialized first-game date or a clearly labelled nominal NHL-block
-date. The nominal date may precede that slot's real six-game boundary. Future
-Manage / Move actions reuse the current active/bench sheets and save one exact
-choice at a time; add/drop and IR remain current-roster actions. The
-authenticated, revisioned callable is the only plan read/write authority;
-plan and bounded per-cycle mutation-state documents remain private.
+B2G is the future-matchup lineup candidate layered after B2F. My Team defaults
+to the manager's earliest unfinished regular-season matchup and normally shows
+only that matchup plus the first later matchup whose cycle has not
+materialized. This is the bounded no-extra-read proof that the planning
+matchup has no started player window. Existing non-applied saved plans remain
+selectable recovery exceptions, while the full option context stays internal
+for projection composition and authority checks. Presentation labels do not
+redefine the protected latest-cycle `current`, overlapping `open`, or
+unmaterialized `future` authority states. Missing earliest-matchup evidence
+fails closed, and conflicted or partially applied plans retain warning
+precedence until resolved or cleared.
+
+The complete roster-board presentation stays on screen. Future cards show
+that exact matchup's assignment, score, game markers, later planned starter,
+and either an exact materialized first-game date or a clearly labelled nominal
+NHL-block date. The nominal date may precede that slot's real six-game
+boundary. Future Manage / Move actions reuse the current active/bench sheets
+and save one exact choice at a time; add/drop and IR remain current-roster
+actions. The authenticated, revisioned callable is the only plan read/write
+authority; plan and bounded per-cycle mutation-state documents remain private.
 
 Older overlapping matchups use bounded owner-pick and owner-window reads for
 their own cycle instead of borrowing the newest physical roster. Expected

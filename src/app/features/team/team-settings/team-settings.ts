@@ -138,6 +138,7 @@ import {
   resolveSelectedMatchupAssignmentIdentity,
   resolveSelectedMatchupSlotExpectation,
   resolveSelectedMatchupSlotScoreState,
+  selectFocusedFutureMatchupLineupOptions,
   selectFutureMatchupProjectedGames,
   selectRelevantFutureMatchupAuthorityPlans,
   shouldUseLiveSelectedMatchupScoring,
@@ -309,6 +310,8 @@ export class TeamSettings implements OnDestroy {
   latestCycle = signal<FantasyCycle | null>(null);
   latestMatchups = signal<FantasyMatchup[]>([]);
   currentNavigationMatchup = signal<FantasyMatchup | null>(null);
+  currentNavigationMatchupResolved = signal(false);
+  currentNavigationMatchupError = signal('');
   cycleScoring = signal<CycleScoringResult | null>(null);
   futureLineupPlans = signal<FutureMatchupLineupPlanView[]>([]);
   futureLineupOptionDraft = signal<FantasyDraft | null>(null);
@@ -883,6 +886,8 @@ export class TeamSettings implements OnDestroy {
     this.latestCycle.set(null);
     this.latestMatchups.set([]);
     this.currentNavigationMatchup.set(null);
+    this.currentNavigationMatchupResolved.set(false);
+    this.currentNavigationMatchupError.set('');
     this.cycleScoring.set(null);
     this.futureLineupPlans.set([]);
     this.futureLineupOptionDraft.set(null);
@@ -969,7 +974,7 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
-  getFutureLineupMatchupOptions(): FutureMatchupLineupOption[] {
+  private getAllFutureLineupMatchupOptions(): FutureMatchupLineupOption[] {
     const draft = this.futureLineupOptionDraft();
     const options = buildFutureMatchupLineupOptions({
       ownerId: this.viewedOwnerId(),
@@ -985,7 +990,16 @@ export class TeamSettings implements OnDestroy {
     }
 
     const currentMatchup = this.currentMatchup();
-    if (!currentMatchup) {
+    const latestCycle = this.latestCycle();
+    if (
+      !currentMatchup ||
+      !latestCycle ||
+      currentMatchup.status !== 'active' ||
+      currentMatchup.phase !== 'regular_season' ||
+      latestCycle.status !== 'active' ||
+      latestCycle.phase !== 'regular_season' ||
+      currentMatchup.cycleNumber !== latestCycle.cycleNumber
+    ) {
       return [];
     }
 
@@ -1002,8 +1016,7 @@ export class TeamSettings implements OnDestroy {
         timing: 'current',
         materialized: true,
         isBye: opponentOwnerId === null,
-        sourceNhlBlockNumber:
-          this.latestCycle()?.sourceNhlBlockNumber ?? currentMatchup.cycleNumber,
+        sourceNhlBlockNumber: latestCycle.sourceNhlBlockNumber ?? currentMatchup.cycleNumber,
         label: `Matchup ${currentMatchup.cycleNumber} · ${
           opponentTeamName ? `vs ${opponentTeamName}` : 'Bye'
         } · Current`,
@@ -1011,7 +1024,81 @@ export class TeamSettings implements OnDestroy {
     ];
   }
 
+  getFutureLineupMatchupOptions(): FutureMatchupLineupOption[] {
+    if (
+      !this.currentNavigationMatchupResolved() ||
+      Boolean(this.currentNavigationMatchupError())
+    ) {
+      return [];
+    }
+
+    const selectedCycleNumber = this.selectedFutureLineupCycleNumber();
+
+    return selectFocusedFutureMatchupLineupOptions({
+      options: this.getAllFutureLineupMatchupOptions(),
+      primaryCycleNumber: this.getPrimaryDisplayedMatchupCycleNumber(),
+      recoverableCycleNumbers: this.futureLineupPlans()
+        .filter((plan) => plan.status !== 'applied')
+        .map((plan) => plan.cycleNumber),
+      selectedCycleNumber,
+      preserveSelected:
+        this.futureLineupSelectionTouched ||
+        this.futureLineupDirty() ||
+        this.isRosterOperationPending() ||
+        this.hasPendingFutureLineupSwap(),
+    });
+  }
+
+  private getPrimaryDisplayedMatchupCycleNumber(): number | null {
+    const matchup = this.currentNavigationMatchup();
+
+    return matchup?.status === 'active' && matchup.phase === 'regular_season'
+      ? matchup.cycleNumber
+      : null;
+  }
+
+  private isNextUnstartedFutureLineupOption(
+    candidate: FutureMatchupLineupOption,
+  ): boolean {
+    const primaryCycleNumber = this.getPrimaryDisplayedMatchupCycleNumber();
+    const nextOption = this.getAllFutureLineupMatchupOptions().find(
+      (option) =>
+        (primaryCycleNumber === null || option.cycleNumber > primaryCycleNumber) &&
+        option.timing === 'future' &&
+        !option.materialized,
+    );
+
+    return nextOption?.cycleNumber === candidate.cycleNumber;
+  }
+
   getFutureLineupMatchupOptionLabel(option: FutureMatchupLineupOption): string {
+    const opponentLabel = option.opponentTeamName
+      ? `vs ${option.opponentTeamName}`
+      : 'Bye';
+    const savedPlan = this.futureLineupPlans().find(
+      (plan) => plan.cycleNumber === option.cycleNumber && plan.status !== 'applied',
+    );
+
+    if (savedPlan?.status === 'conflicted') {
+      return `Needs attention · Matchup ${option.cycleNumber} · ${opponentLabel}`;
+    }
+
+    if (savedPlan?.status === 'partially-applied') {
+      return `Partially locked · Matchup ${option.cycleNumber} · ${opponentLabel}`;
+    }
+
+    if (option.cycleNumber === this.getPrimaryDisplayedMatchupCycleNumber()) {
+      return `Current · Matchup ${option.cycleNumber} · ${opponentLabel}`;
+    }
+
+    if (this.isNextUnstartedFutureLineupOption(option)) {
+      return `Next · Matchup ${option.cycleNumber} · ${opponentLabel} · Not started`;
+    }
+
+    if (savedPlan) {
+      return `Saved · Matchup ${option.cycleNumber} · ${opponentLabel}`;
+    }
+
     return option.label;
   }
 
@@ -1020,11 +1107,14 @@ export class TeamSettings implements OnDestroy {
   }
 
   get futureLineupInitialLoadingState(): boolean {
-    return this.futureLineupLoading() && this.futureLineupPlans().length === 0;
+    return (
+      (!this.currentNavigationMatchupResolved() && !this.currentNavigationMatchupError()) ||
+      (this.futureLineupLoading() && this.futureLineupPlans().length === 0)
+    );
   }
 
   get futureLineupErrorText(): string {
-    return this.futureLineupError();
+    return this.currentNavigationMatchupError() || this.futureLineupError();
   }
 
   get futureLineupSuccessText(): string {
@@ -1035,8 +1125,8 @@ export class TeamSettings implements OnDestroy {
     return this.getSelectedFutureLineupMatchupOption();
   }
 
-  get selectedFutureLineupIsCurrent(): boolean {
-    return this.isSelectedFutureLineupCurrent();
+  get selectedFutureLineupIsPrimary(): boolean {
+    return this.isSelectedClosestFinalizingMatchup();
   }
 
   get currentFutureLineupMatchup(): FantasyMatchup | null {
@@ -1077,6 +1167,34 @@ export class TeamSettings implements OnDestroy {
 
   get futureLineupValidationText(): string {
     return this.getFutureLineupValidationMessage();
+  }
+
+  get futureLineupSavedPlanNotice(): string {
+    const focusedCycleNumbers = new Set(
+      this.getFutureLineupMatchupOptions()
+        .filter(
+          (option) =>
+            option.cycleNumber === this.getPrimaryDisplayedMatchupCycleNumber() ||
+            this.isNextUnstartedFutureLineupOption(option),
+        )
+        .map((option) => option.cycleNumber),
+    );
+    const recoverablePlanCount = this.futureLineupPlans().filter(
+      (plan) =>
+        plan.status !== 'applied' &&
+        !focusedCycleNumbers.has(plan.cycleNumber) &&
+        this.getAllFutureLineupMatchupOptions().some(
+          (option) => option.cycleNumber === plan.cycleNumber,
+        ),
+    ).length;
+
+    if (recoverablePlanCount === 0) {
+      return '';
+    }
+
+    return recoverablePlanCount === 1
+      ? 'One later saved lineup remains listed so you can review or clear it.'
+      : `${recoverablePlanCount} later saved lineups remain listed so you can review or clear them.`;
   }
 
   get futureLineupRoster(): FantasyRoster | null {
@@ -1131,8 +1249,24 @@ export class TeamSettings implements OnDestroy {
     const selectedOption = this.getSelectedFutureLineupMatchupOption();
     const plan = this.selectedFutureLineupPlan();
 
+    if (this.currentNavigationMatchupError()) {
+      return 'Unavailable';
+    }
+
     if (!selectedCycleNumber) {
       return 'Matchup pending';
+    }
+
+    if (plan?.status === 'conflicted') {
+      return 'Needs attention';
+    }
+
+    if (plan?.status === 'partially-applied') {
+      return 'Partially locked';
+    }
+
+    if (this.isSelectedClosestFinalizingMatchup()) {
+      return 'In progress';
     }
 
     if (selectedOption?.timing === 'current') {
@@ -1148,12 +1282,8 @@ export class TeamSettings implements OnDestroy {
     }
 
     switch (plan.status) {
-      case 'partially-applied':
-        return 'Partially locked';
       case 'applied':
         return 'Lineup locked';
-      case 'conflicted':
-        return 'Needs attention';
       case 'planned':
       default:
         return plan.revision > 0 ? 'Saved plan' : 'Current roster preview';
@@ -1164,24 +1294,61 @@ export class TeamSettings implements OnDestroy {
     return this.getSelectedFutureLineupMatchupOption()?.timing === 'current';
   }
 
+  isSelectedClosestFinalizingMatchup(): boolean {
+    const primaryCycleNumber = this.getPrimaryDisplayedMatchupCycleNumber();
+
+    return Boolean(
+      primaryCycleNumber !== null &&
+      this.selectedFutureLineupCycleNumber() === primaryCycleNumber,
+    );
+  }
+
+  selectedFutureLineupHasCriticalPlanStatus(): boolean {
+    if (this.currentNavigationMatchupError()) {
+      return true;
+    }
+
+    const status = this.selectedFutureLineupPlan()?.status;
+
+    return status === 'conflicted' || status === 'partially-applied';
+  }
+
   getFutureLineupSummaryText(): string {
     const option = this.getSelectedFutureLineupMatchupOption();
 
     if (!option) {
-      return 'Choose a matchup to view its active-slot lineup.';
+      if (this.currentNavigationMatchupError()) {
+        return 'Matchup selection unavailable.';
+      }
+
+      return this.currentNavigationMatchupResolved()
+        ? 'No regular-season lineup matchup is available.'
+        : 'Finding your matchup…';
     }
 
-    const opponentName = option.opponentTeamName ?? 'Bye';
+    const opponentPhrase = option.opponentTeamName
+      ? ` against ${option.opponentTeamName}`
+      : ' with a bye';
 
-    if (option.timing === 'current') {
-      return `Your active lineup for Matchup ${option.cycleNumber} against ${opponentName}. Use the roster board below for legal current-matchup moves.`;
+    if (this.isSelectedClosestFinalizingMatchup()) {
+      const hasNextUnstartedMatchup = this.getFutureLineupMatchupOptions().some(
+        (candidate) => this.isNextUnstartedFutureLineupOption(candidate),
+      );
+
+      return hasNextUnstartedMatchup
+        ? `Matchup ${option.cycleNumber}${opponentPhrase} is closest to finishing. Use Viewing lineup to choose Next before it starts.`
+        : `Matchup ${option.cycleNumber}${opponentPhrase} is closest to finishing. No later unstarted matchup is available yet.`;
     }
 
     if (!this.isOwnTeam()) {
-      return `Read-only preview for Matchup ${option.cycleNumber} against ${opponentName}. Private future changes are not shown before they take effect.`;
+      return `Read-only Matchup ${option.cycleNumber} preview${opponentPhrase}. Private future changes stay hidden until they apply.`;
     }
 
-    return `Manage the active lineup for Matchup ${option.cycleNumber} against ${opponentName}. The server rechecks both players, exact NHL puck-drop times, and every six-game boundary when you confirm a move.`;
+    if (this.isNextUnstartedFutureLineupOption(option)) {
+      return `Set Matchup ${option.cycleNumber}${opponentPhrase} before it starts. Active slots show it; Bench and IR show your current roster.`;
+    }
+
+    return `Review your saved Matchup ${option.cycleNumber} lineup${opponentPhrase}. It stays listed until cleared.`;
   }
 
   selectFutureLineupCycle(value: number | string | null): void {
@@ -1500,7 +1667,7 @@ export class TeamSettings implements OnDestroy {
         roster,
         plan: this.selectedFutureLineupPlan(),
         plans: this.futureLineupPlans(),
-        baseCycleNumber: this.getCurrentFutureLineupCycleNumber(),
+        baseCycleNumber: this.getFutureLineupProjectionBaseCycleNumber(),
         windows: this.futureLineupWindows(),
       }).find((slot) => slot.rosterSlotId === slotId) ?? null
     );
@@ -1714,6 +1881,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   getFutureLineupErrorRetryLabel(): string {
+    if (this.currentNavigationMatchupError()) {
+      return 'Retry matchup';
+    }
+
     if (this.hasPendingFutureLineupSwap() && !this.futureLineupStale()) {
       return 'Retry move';
     }
@@ -1730,6 +1901,11 @@ export class TeamSettings implements OnDestroy {
   }
 
   async retryFutureLineupError(): Promise<void> {
+    if (this.currentNavigationMatchupError()) {
+      await this.loadTeam();
+      return;
+    }
+
     if (this.hasPendingFutureLineupSwap() && !this.futureLineupStale()) {
       await this.retryPendingFutureLineupSwap();
       return;
@@ -1921,6 +2097,12 @@ export class TeamSettings implements OnDestroy {
     if (!plan) {
       return;
     }
+    const selectedOption = this.getSelectedFutureLineupMatchupOption();
+    const clearedRecoveryOnlyOption = Boolean(
+      selectedOption &&
+      selectedOption.cycleNumber !== this.getPrimaryDisplayedMatchupCycleNumber() &&
+      !this.isNextUnstartedFutureLineupOption(selectedOption),
+    );
 
     const pendingMutation = this.pendingFutureLineupMutation;
     const requestId =
@@ -1943,6 +2125,8 @@ export class TeamSettings implements OnDestroy {
     const mutationGeneration = ++this.futureLineupMutationGeneration;
     const actionHandle = this.actionMonitor.begin('lineup-swap');
     let outcome: 'success' | 'error' | 'uncertain' | 'cancelled' = 'error';
+    let clearedAuthorityRefreshConfirmed = false;
+    let returnToDefaultAfterClear = false;
 
     try {
       await this.runBoundedRosterOperation(
@@ -1980,7 +2164,6 @@ export class TeamSettings implements OnDestroy {
         }
 
         this.applyFreshFutureLineupAuthority(refreshedAuthority, false);
-        void this.loadFutureLineupTimingEvidence(true);
       } catch {
         authorityRefreshConfirmed = false;
         this.futureLineupTimingError.set(
@@ -1993,6 +2176,12 @@ export class TeamSettings implements OnDestroy {
           ? `Matchup ${plan.cycleNumber} plan cleared. The latest slot authority was confirmed.`
           : `Matchup ${plan.cycleNumber} plan cleared. Latest timing confirmation is still pending.`,
       );
+      clearedAuthorityRefreshConfirmed = authorityRefreshConfirmed;
+      returnToDefaultAfterClear = clearedRecoveryOnlyOption;
+
+      if (!returnToDefaultAfterClear && authorityRefreshConfirmed) {
+        void this.loadFutureLineupTimingEvidence(true);
+      }
       outcome = 'success';
     } catch (error: unknown) {
       if (mutationGeneration !== this.futureLineupMutationGeneration) {
@@ -2010,6 +2199,16 @@ export class TeamSettings implements OnDestroy {
     } finally {
       if (mutationGeneration === this.futureLineupMutationGeneration) {
         this.futureLineupSaving.set(false);
+        if (outcome === 'success' && returnToDefaultAfterClear) {
+          this.futureLineupSelectionTouched = false;
+          const selectionChanged = this.syncDefaultFutureLineupSelection();
+
+          if (selectionChanged) {
+            void this.loadFutureLineupTimingEvidence();
+          } else if (clearedAuthorityRefreshConfirmed) {
+            void this.loadFutureLineupTimingEvidence(true);
+          }
+        }
       }
       actionHandle.finish(outcome);
     }
@@ -2179,7 +2378,7 @@ export class TeamSettings implements OnDestroy {
     }
   }
 
-  private getCurrentFutureLineupCycleNumber(): number {
+  private getFutureLineupProjectionBaseCycleNumber(): number {
     return this.latestCycle()?.cycleNumber ?? this.currentNavigationMatchup()?.cycleNumber ?? 1;
   }
 
@@ -2198,9 +2397,12 @@ export class TeamSettings implements OnDestroy {
       return false;
     }
 
+    const primaryCycleNumber = this.getPrimaryDisplayedMatchupCycleNumber();
     const defaultCycleNumber =
-      options.find((option) => option.cycleNumber === this.getCurrentFutureLineupCycleNumber())
-        ?.cycleNumber ??
+      options.find((option) => option.cycleNumber === primaryCycleNumber)?.cycleNumber ??
+      options.find(
+        (option) => option.timing === 'future' && !option.materialized,
+      )?.cycleNumber ??
       options[0]?.cycleNumber ??
       null;
 
@@ -2240,7 +2442,7 @@ export class TeamSettings implements OnDestroy {
       roster,
       plan: this.selectedFutureLineupPlan(),
       plans: this.futureLineupPlans(),
-      baseCycleNumber: this.getCurrentFutureLineupCycleNumber(),
+      baseCycleNumber: this.getFutureLineupProjectionBaseCycleNumber(),
       windows: this.futureLineupWindows(),
     });
     const assignments = Object.fromEntries(
@@ -2317,7 +2519,7 @@ export class TeamSettings implements OnDestroy {
     windows: readonly FantasyAssetCycleWindow[],
     cycleNumber: number,
   ): string {
-    const baseCycleNumber = this.getCurrentFutureLineupCycleNumber();
+    const baseCycleNumber = this.getFutureLineupProjectionBaseCycleNumber();
     const relevantPlans = selectRelevantFutureMatchupAuthorityPlans(
       plans,
       baseCycleNumber,
@@ -2686,8 +2888,10 @@ export class TeamSettings implements OnDestroy {
       viewedOwnerId,
       (matchup) => {
         if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
+        if (this.currentNavigationMatchupError()) return;
         this.clearLiveDataWarning('Current matchup navigation');
         this.currentNavigationMatchup.set(matchup);
+        this.currentNavigationMatchupResolved.set(true);
         if (this.syncDefaultFutureLineupSelection()) {
           void this.loadFutureLineupTimingEvidence();
         } else {
@@ -2696,6 +2900,11 @@ export class TeamSettings implements OnDestroy {
       },
       (error) => {
         if (!this.isCurrentTeamContext(leagueId, viewedOwnerId)) return;
+        this.currentNavigationMatchup.set(null);
+        this.currentNavigationMatchupResolved.set(false);
+        this.currentNavigationMatchupError.set(
+          'The closest unfinished matchup could not be confirmed. Retry before managing a lineup.',
+        );
         this.recordLiveDataWarning('Current matchup navigation', error);
       },
     );
@@ -5477,7 +5686,7 @@ export class TeamSettings implements OnDestroy {
         roster,
         plan: this.selectedFutureLineupPlan(),
         plans: this.futureLineupPlans(),
-        baseCycleNumber: this.getCurrentFutureLineupCycleNumber(),
+        baseCycleNumber: this.getFutureLineupProjectionBaseCycleNumber(),
         windows: this.futureLineupWindows(),
       }).map((slot) => [slot.rosterSlotId, slot] as const),
     );

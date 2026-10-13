@@ -156,6 +156,85 @@ export interface BuildFutureMatchupLineupOptionsInput {
   initialNhlBlockNumber: number | null | undefined;
 }
 
+export interface SelectFocusedFutureMatchupLineupOptionsInput {
+  options: readonly FutureMatchupLineupOption[];
+  primaryCycleNumber: number | null;
+  recoverableCycleNumbers?: readonly number[];
+  selectedCycleNumber?: number | null;
+  preserveSelected?: boolean;
+}
+
+/**
+ * Keeps the normal My Team picker focused on the owner's earliest unfinished
+ * matchup and the first matchup whose cycle has not materialized. A missing
+ * cycle is the only bounded option-list evidence that guarantees no roster
+ * window in that matchup has started; league-wide window counters cannot prove
+ * that for one manager. Existing saved plans remain selectable as recovery
+ * exceptions so previously authorized intent is never hidden or stranded.
+ */
+export function selectFocusedFutureMatchupLineupOptions(
+  input: SelectFocusedFutureMatchupLineupOptionsInput,
+): FutureMatchupLineupOption[] {
+  const orderedOptions = [...input.options]
+    .filter(
+      (option) =>
+        option.phase === 'regular_season' &&
+        Number.isSafeInteger(option.cycleNumber) &&
+        option.cycleNumber > 0,
+    )
+    .sort((first, second) => first.cycleNumber - second.cycleNumber);
+  const optionByCycleNumber = new Map<number, FutureMatchupLineupOption>();
+
+  for (const option of orderedOptions) {
+    if (!optionByCycleNumber.has(option.cycleNumber)) {
+      optionByCycleNumber.set(option.cycleNumber, option);
+    }
+  }
+
+  const primaryCycleNumber =
+    input.primaryCycleNumber !== null &&
+    Number.isSafeInteger(input.primaryCycleNumber) &&
+    input.primaryCycleNumber > 0
+      ? input.primaryCycleNumber
+      : null;
+  const primaryOption = primaryCycleNumber === null
+    ? null
+    : optionByCycleNumber.get(primaryCycleNumber) ?? null;
+  const nextUnstartedOption = [...optionByCycleNumber.values()].find(
+    (option) =>
+      (primaryCycleNumber === null || option.cycleNumber > primaryCycleNumber) &&
+      option.timing === 'future' &&
+      !option.materialized,
+  ) ?? null;
+  const visibleCycleNumbers = new Set<number>();
+
+  if (primaryOption) {
+    visibleCycleNumbers.add(primaryOption.cycleNumber);
+  }
+  if (nextUnstartedOption) {
+    visibleCycleNumbers.add(nextUnstartedOption.cycleNumber);
+  }
+
+  for (const cycleNumber of input.recoverableCycleNumbers ?? []) {
+    if (Number.isSafeInteger(cycleNumber) && optionByCycleNumber.has(cycleNumber)) {
+      visibleCycleNumbers.add(cycleNumber);
+    }
+  }
+
+  if (
+    input.preserveSelected === true &&
+    typeof input.selectedCycleNumber === 'number' &&
+    Number.isSafeInteger(input.selectedCycleNumber) &&
+    optionByCycleNumber.has(input.selectedCycleNumber)
+  ) {
+    visibleCycleNumbers.add(input.selectedCycleNumber);
+  }
+
+  return [...optionByCycleNumber.values()].filter((option) =>
+    visibleCycleNumbers.has(option.cycleNumber),
+  );
+}
+
 /**
  * Keep normal current-roster actions available for slots whose selected matchup
  * assignment still matches the physical roster. Only the exact slot (or bench

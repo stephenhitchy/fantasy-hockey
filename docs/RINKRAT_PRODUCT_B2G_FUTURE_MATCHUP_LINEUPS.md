@@ -1,31 +1,60 @@
 # RinkRat B2G — Future Matchup Lineups
 
-Date: 2026-10-12
+Date: 2026-10-13
 
 ## Purpose
 
-B2G lets a manager prepare the active lineup for any future regular-season
-matchup from My Team. This is especially important when independent six-game
-player windows make several fantasy matchups visible at once: the manager can
-select a matchup, review its opponent, set the desired active players, and see
-when each roster slot is expected to begin contributing.
+B2G lets a manager prepare the active lineup for the next completely
+unstarted regular-season matchup from My Team. Independent six-game player
+windows can leave several fantasy matchups open at once, so the page defaults
+to that manager's earliest unfinished matchup: the matchup closest to reaching
+its final result by authoritative cycle order.
 
-The selector keeps the current matchup and each future regular-season matchup
-in one place. The selected matchup uses the same full roster-board cards and
-Manage / Move interaction as the ordinary My Team view. Current-matchup
-actions retain their existing roster authority. Future-matchup actions are
-limited to active/bench lineup choices, and no action may move a started game,
-earned point, or player-window ownership boundary.
+The selector normally keeps only that earliest unfinished matchup and the
+first later schedule matchup whose cycle has not materialized. An absent cycle
+is the bounded evidence that no roster window in that matchup has started;
+league-wide window counters are not used to guess one manager's state. A
+non-applied saved plan remains available as a recovery exception so existing
+authorized intent is never hidden or stranded. The selected matchup uses the
+same full roster-board cards and Manage / Move interaction as the ordinary My
+Team view. Current-matchup actions retain their existing roster authority.
+Future-matchup actions are limited to active/bench lineup choices, and no
+action may move a started game, earned point, or player-window ownership
+boundary.
 
 ## Manager experience
 
-The My Team page adds one matchup selector backed by the deterministic
-regular-season schedule. Selecting a matchup keeps the complete roster board
-on screen instead of replacing it with a compact form. Each active card shows
-the player assigned to that exact matchup, that matchup's score and six-game
-markers, an exact saved start or clearly labelled nominal NHL-block start, and
-any later planned starter. The bench remains explicit about current ownership
-until a planned move actually reaches its server-owned boundary.
+The My Team page adds one focused matchup selector backed by the deterministic
+regular-season schedule. The option labelled **Current** is the manager's
+earliest unfinished matchup even when newer matchup cycles already overlap.
+The option labelled **Next** is the first unmaterialized matchup and is marked
+**Not started**. The existing `current`, `open`, and `future` timing values are
+not redefined by these presentation labels: an older overlapping matchup keeps
+selected-cycle authority and never borrows latest-cycle live scoring or
+physical-roster shortcuts.
+
+Selecting a matchup keeps the complete roster board on screen instead of
+replacing it with a compact form. Each active card shows the player assigned
+to that exact matchup, that matchup's score and six-game markers, an exact
+saved start or clearly labelled nominal NHL-block start, and any later planned
+starter. The bench and IR areas remain explicit about current ownership until
+a planned move actually reaches its server-owned boundary. A manual future
+selection is preserved during edits and pending operations rather than being
+reset by a live refresh; a fresh page visit returns to the earliest unfinished
+matchup. Clearing a saved-plan-only recovery option returns the picker to its
+normal Current or Next choice.
+
+The browser still retains the complete bounded option context for projection
+composition and server-authority checks. It filters only what the selector
+presents. Any non-applied saved or conflicted plan outside the normal two
+choices is listed with a recovery label and concise explanation so the manager
+can review or clear it. Conflicted and partially applied plans keep their
+warning labels ahead of Current or Next presentation labels.
+
+The selector fails closed when the earliest unfinished matchup cannot be
+confirmed and offers an explicit retry instead of guessing from a later cycle.
+Its minimal current-matchup fallback is available only when the navigation
+matchup exactly matches the resolved latest active regular-season cycle.
 
 For an older overlapping matchup, the board uses that cycle's bounded owner
 pick and window reads instead of borrowing the newest physical roster. If the
@@ -308,7 +337,8 @@ It builds Functions, then runs
 `test/future-matchup-lineup-core/*.test.mjs`,
 `test/future-matchup-lineup-authority/*.test.mjs`, and
 `test/future-matchup-lineup-ui/*.test.mjs` inside the Firestore emulator. The
-core coverage protects matchup selection, selected-cycle open-versus-missing
+core coverage protects focused earliest-unfinished/next-unmaterialized
+selection, saved-plan recovery exceptions, selected-cycle open-versus-missing
 slot evidence, slot-bound active and bench
 candidates, immutable windows, full-lineup validation, exact-versus-nominal
 date precedence, stable game IDs, bounded one-owner reads, and the
@@ -319,8 +349,9 @@ fallbacks, post-preflight races in both rollover paths, empty-slot expected-
 window accounting, selected-cycle untouched swaps, stale provider puck-drop
 evidence, nullable-outgoing empty-slot promotions, atomic
 roster/pick/window/plan/audit commits, exact request replay, and regular-season-
-only gating. The UI coverage protects the
-current score view, complete selected-matchup roster-board reuse, future-only
+only gating. The UI coverage protects the earliest-unfinished default without
+changing latest-cycle projection authority, the current score view, complete
+selected-matchup roster-board reuse, future-only
 active/bench actions, labelled native controls, per-slot date semantics,
 eligible-bench schedule evidence, multi-overlap timing reconciliation, mobile
 layout primitives, and complete async states.

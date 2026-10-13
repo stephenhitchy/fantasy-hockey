@@ -125,7 +125,9 @@
 
     <section
       class="current-matchup-card rr-card rr-card--padded lineup-planner-card"
-      [attr.aria-busy]="futureLineupLoading() || futureLineupSaving()"
+      [attr.aria-busy]="
+        futureLineupInitialLoadingState || futureLineupLoading() || futureLineupSaving()
+      "
       aria-labelledby="lineup-planner-heading"
     >
       <div class="section-heading lineup-planner-heading rr-section-heading">
@@ -133,14 +135,18 @@
 
         <span
           class="status-pill lineup-plan-status rr-badge"
-          [class.status-active]="isSelectedFutureLineupCurrent()"
+          [class.status-active]="
+            isSelectedClosestFinalizingMatchup() &&
+            !selectedFutureLineupHasCriticalPlanStatus()
+          "
+          [class.status-warning]="selectedFutureLineupHasCriticalPlanStatus()"
         >
           {{ getFutureLineupPlanStatusLabel() }}
         </span>
       </div>
 
       <div class="lineup-matchup-picker team-name-form rr-field-group">
-        <label class="rr-label" for="lineup-matchup-select">Matchup</label>
+        <label class="rr-label" for="lineup-matchup-select">Viewing lineup</label>
         <div class="lineup-matchup-picker-row">
           <select
             id="lineup-matchup-select"
@@ -188,8 +194,24 @@
         {{ getFutureLineupSummaryText() }}
       </p>
 
+      @if (futureLineupDirty()) {
+        <p id="lineup-unsaved-lineup-note" class="rr-field-hint" role="status">
+          Save or reset to switch or refresh.
+        </p>
+      }
+
+      @if (futureLineupSavedPlanNotice; as savedPlanNotice) {
+        <p class="lineup-saved-plan-note">{{ savedPlanNotice }}</p>
+      }
+
       @if (futureLineupInitialLoadingState) {
-        <div class="lineup-planner-state rr-state" role="status">Loading</div>
+        <div class="lineup-planner-state rr-state" role="status">
+          {{
+            !currentNavigationMatchupResolved()
+              ? 'Finding your matchup…'
+              : 'Loading lineup…'
+          }}
+        </div>
       }
 
       @if (futureLineupErrorText) {
@@ -216,7 +238,7 @@
       }
 
       @if (selectedFutureLineupOption) {
-        @if (selectedFutureLineupIsCurrent) {
+        @if (selectedFutureLineupIsPrimary) {
           <p class="lineup-current-status">{{ getCurrentMatchupStatusText() }}</p>
 
           @if (currentFutureLineupMatchup; as matchup) {
@@ -261,10 +283,6 @@
           </div>
         }
 
-        <div id="lineup-timing-guidance" class="lineup-change-cycle-note rr-notice rr-notice--info">
-          <strong>Manage this matchup below.</strong>
-        </div>
-
         @if (futureLineupEditBlockText; as editBlockReason) {
           <div class="lineup-planner-lock-note lineup-change-cycle-note rr-notice rr-notice--info">
             <strong>{{ isOwnTeam() ? 'Lineup locked' : 'Read-only lineup' }}</strong>
@@ -282,7 +300,6 @@
       <section class="transaction-ledger-card rr-card rr-card--padded">
         <div class="transaction-ledger-heading rr-section-heading">
           <div class="transaction-ledger-heading-copy">
-            <span class="eyebrow">Roster Moves</span>
             <h2>Latest Moves</h2>
             <small [hidden]="recentTransactions().length === 0">
               {{ transactionHistorySummary() }}
@@ -297,14 +314,14 @@
         </div>
 
         <div class="transaction-empty-state" role="status" [hidden]="!transactionsLoading()">
-          Loading recent moves…
+          Loading moves…
         </div>
         <div
           class="transaction-empty-state transaction-error-state"
           role="alert"
           [hidden]="!transactionsUnavailable()"
         >
-          <span>Recent moves are unavailable.</span>
+          <span>Moves are unavailable.</span>
           <button type="button" class="rr-button rr-button--quiet" (click)="loadTeam()">
             Retry
           </button>
@@ -315,7 +332,7 @@
             transactionsLoading() || transactionsUnavailable() || recentTransactions().length > 0
           "
         >
-          No completed roster moves yet.
+          No roster moves yet.
         </div>
 
         <div
@@ -416,11 +433,11 @@
       <div class="section-heading rr-section-heading">
         <div>
           <span class="eyebrow">
-            {{ isSelectedFutureLineupCurrent() ? 'Active Roster' : 'Selected Matchup' }}
+            {{ isSelectedClosestFinalizingMatchup() ? 'Active Roster' : 'Selected Matchup' }}
           </span>
           <h2>
             {{
-              isSelectedFutureLineupCurrent()
+              isSelectedClosestFinalizingMatchup()
                 ? 'Roster Board'
                 : 'Matchup ' + selectedFutureLineupCycleNumber() + ' Roster'
             }}
@@ -465,7 +482,7 @@
       <div class="availability-policy-note rr-notice rr-notice--info">
         <strong>IR:</strong>
         Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve can use IR.
-        Day-to-Day and all other players stay active.
+        Day-to-Day players stay active.
       </div>
 
       @if (rosterMoveMessage()) {

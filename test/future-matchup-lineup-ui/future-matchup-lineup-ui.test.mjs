@@ -31,12 +31,12 @@ test('selecting a future matchup reuses the complete roster board instead of a c
   );
   assert.match(
     template,
-    /Manage this matchup below\.[\s\S]*?href="#selected-matchup-roster"/,
+    /href="#selected-matchup-roster"[\s\S]*?>[\s\S]*?Roster[\s\S]*?<\/a>/,
   );
   assert.match(template, /<section id="selected-matchup-roster" class="roster-section/);
   assert.match(
     template,
-    /isSelectedFutureLineupCurrent\(\)[\s\S]*?'Roster Board'[\s\S]*?'Matchup ' \+ selectedFutureLineupCycleNumber\(\) \+ ' Roster'/,
+    /isSelectedClosestFinalizingMatchup\(\)[\s\S]*?'Roster Board'[\s\S]*?'Matchup ' \+ selectedFutureLineupCycleNumber\(\) \+ ' Roster'/,
   );
   assert.match(template, /@for \(slot of getPositionSlotsForDisplay\(group\.position\)/);
   assert.match(template, /@for \(slot of getPositionSlotsForDisplay\('D'\)/);
@@ -67,6 +67,107 @@ test('selecting a future matchup reuses the complete roster board instead of a c
     component,
     /buildFutureMatchupProjectedLineup\(\{[\s\S]*?cycleNumber,[\s\S]*?plan: this\.selectedFutureLineupPlan\(\),[\s\S]*?plans: this\.futureLineupPlans\(\),[\s\S]*?windows: this\.futureLineupWindows\(\)/,
   );
+});
+
+test('My Team defaults to the earliest unfinished matchup and exposes one unstarted planning matchup', async () => {
+  const [component, template] = await Promise.all([read(componentPath), read(templatePath)]);
+  const allOptions = sourceSection(
+    component,
+    'private getAllFutureLineupMatchupOptions(): FutureMatchupLineupOption[]',
+    '\n\n  getFutureLineupMatchupOptions()',
+  );
+  const focusedOptions = sourceSection(
+    component,
+    'getFutureLineupMatchupOptions(): FutureMatchupLineupOption[]',
+    '\n\n  private getPrimaryDisplayedMatchupCycleNumber(',
+  );
+  const primary = sourceSection(
+    component,
+    'private getPrimaryDisplayedMatchupCycleNumber()',
+    '\n\n  private isNextUnstartedFutureLineupOption(',
+  );
+  const automaticSelection = sourceSection(
+    component,
+    'private syncDefaultFutureLineupSelection()',
+    '\n\n  private resetFutureLineupDraftFromServer(',
+  );
+  const projectionBase = sourceSection(
+    component,
+    'private getFutureLineupProjectionBaseCycleNumber()',
+    '\n\n  private syncDefaultFutureLineupSelection()',
+  );
+
+  assert.match(focusedOptions, /!this\.currentNavigationMatchupResolved\(\)/);
+  assert.match(focusedOptions, /this\.currentNavigationMatchupError\(\)/);
+  assert.match(focusedOptions, /selectFocusedFutureMatchupLineupOptions\(\{/);
+  assert.match(focusedOptions, /primaryCycleNumber: this\.getPrimaryDisplayedMatchupCycleNumber\(\)/);
+  assert.match(focusedOptions, /plan\.status !== 'applied'/);
+  assert.match(
+    focusedOptions,
+    /preserveSelected:[\s\S]*?futureLineupSelectionTouched[\s\S]*?futureLineupDirty\(\)[\s\S]*?isRosterOperationPending\(\)/,
+  );
+  assert.match(primary, /this\.currentNavigationMatchup\(\)/);
+  assert.match(primary, /matchup\?\.status === 'active'/);
+  assert.match(primary, /matchup\.phase === 'regular_season'/);
+  assert.match(allOptions, /currentMatchup\.cycleNumber !== latestCycle\.cycleNumber/);
+  assert.match(allOptions, /latestCycle\.status !== 'active'/);
+  assert.match(
+    component,
+    /listenToEarliestUnfinishedOwnerMatchup\([\s\S]*?currentNavigationMatchup\.set\(matchup\)[\s\S]*?currentNavigationMatchupResolved\.set\(true\)/,
+  );
+  assert.match(
+    component,
+    /currentNavigationMatchup\.set\(null\)[\s\S]*?currentNavigationMatchupResolved\.set\(false\)[\s\S]*?closest unfinished matchup could not be confirmed/,
+  );
+  assert.match(projectionBase, /this\.latestCycle\(\)\?\.cycleNumber/);
+  assert.match(
+    automaticSelection,
+    /getPrimaryDisplayedMatchupCycleNumber\(\)[\s\S]*?option\.timing === 'future' && !option\.materialized/,
+  );
+  assert.match(component, /Current · Matchup \$\{option\.cycleNumber\}/);
+  assert.match(component, /Next · Matchup \$\{option\.cycleNumber\}[\s\S]*?Not started/);
+  assert.match(component, /hasNextUnstartedMatchup[\s\S]*?No later unstarted matchup is available yet/);
+  assert.match(template, /@if \(selectedFutureLineupIsPrimary\)/);
+  assert.match(template, /futureLineupSavedPlanNotice/);
+  assert.match(template, /isSelectedClosestFinalizingMatchup\(\) \? 'Active Roster'/);
+});
+
+test('focused matchup recovery keeps warnings visible and returns cleared exceptions to the default', async () => {
+  const [component, template] = await Promise.all([read(componentPath), read(templatePath)]);
+  const optionLabel = sourceSection(
+    component,
+    'getFutureLineupMatchupOptionLabel(option: FutureMatchupLineupOption): string',
+    '\n\n  get futureLineupMatchupOptions',
+  );
+  const statusLabel = sourceSection(
+    component,
+    'getFutureLineupPlanStatusLabel(): string',
+    '\n\n  isSelectedFutureLineupCurrent()',
+  );
+  const clearPlan = sourceSection(
+    component,
+    'async clearFutureLineup(): Promise<void>',
+    '\n\n  async loadFutureLineupTimingEvidence',
+  );
+
+  assert.match(optionLabel, /savedPlan\?\.status === 'conflicted'[\s\S]*?Needs attention/);
+  assert.match(optionLabel, /savedPlan\?\.status === 'partially-applied'[\s\S]*?Partially locked/);
+  assert.match(statusLabel, /plan\?\.status === 'conflicted'[\s\S]*?Needs attention/);
+  assert.match(statusLabel, /plan\?\.status === 'partially-applied'[\s\S]*?Partially locked/);
+  assert.match(statusLabel, /currentNavigationMatchupError\(\)[\s\S]*?Unavailable/);
+  assert.match(clearPlan, /clearedRecoveryOnlyOption/);
+  assert.match(
+    clearPlan,
+    /futureLineupSelectionTouched = false;[\s\S]*?syncDefaultFutureLineupSelection\(\)/,
+  );
+  assert.notEqual(clearPlan.indexOf('this.futureLineupSaving.set(false)'), -1);
+  assert.notEqual(clearPlan.indexOf('this.futureLineupSelectionTouched = false'), -1);
+  assert.ok(
+    clearPlan.indexOf('this.futureLineupSaving.set(false)') <
+      clearPlan.indexOf('this.futureLineupSelectionTouched = false'),
+    'a confirmed clear must release the pending guard before resyncing the default selection',
+  );
+  assert.match(template, /\[class\.status-warning\]="selectedFutureLineupHasCriticalPlanStatus\(\)"/);
 });
 
 test('the selected roster board shows exact matchup progress, start evidence, and later planned starts', async () => {
@@ -136,7 +237,7 @@ test('every selected cycle keeps its own assignments while exact current slots r
   const timingLoad = sourceSection(
     component,
     'async loadFutureLineupTimingEvidence(',
-    '\n\n  private getCurrentFutureLineupCycleNumber(',
+    '\n\n  private getFutureLineupProjectionBaseCycleNumber(',
   );
   const display = sourceSection(
     component,
@@ -525,7 +626,7 @@ test('future timing loads every eligible roster-team schedule before offering a 
   const timingLoad = sourceSection(
     component,
     'async loadFutureLineupTimingEvidence(',
-    '\n\n  private getCurrentFutureLineupCycleNumber(',
+    '\n\n  private getFutureLineupProjectionBaseCycleNumber(',
   );
 
   assert.match(
@@ -730,7 +831,10 @@ test('future lineup reads remain bounded and every asynchronous swap state is ex
   assert.match(component, /futureLineupSaving\.set\(true\)/);
   assert.match(component, /futureLineupSaving\.set\(false\)/);
   assert.match(component, /this\.futureLineupStale\.set\(isFutureMatchupLineupRevisionConflict\(error\)\)/);
-  assert.match(template, /\[attr\.aria-busy\]="futureLineupLoading\(\) \|\| futureLineupSaving\(\)"/);
+  assert.match(
+    template,
+    /\[attr\.aria-busy\]="[\s\S]*?futureLineupInitialLoadingState[\s\S]*?futureLineupLoading\(\)[\s\S]*?futureLineupSaving\(\)[\s\S]*?"/,
+  );
   assert.match(template, /aria-live="polite"/);
   assert.match(template, /Retry timing check/);
   assert.match(template, /\[disabled\]="!canConfirmBenchSwap\(\)"/);
@@ -760,7 +864,10 @@ test('matchup selection and dialogs preserve mobile and keyboard-accessible prim
     read('src/rinkrat-design-tokens.css'),
   ]);
 
-  assert.match(template, /<label class="rr-label" for="lineup-matchup-select">Matchup<\/label>/);
+  assert.match(template, /<label class="rr-label" for="lineup-matchup-select">Viewing lineup<\/label>/);
+  assert.match(template, /id="lineup-unsaved-lineup-note"/);
+  assert.match(template, /Save or reset to switch or refresh\./);
+  assert.match(template, /futureLineupInitialLoadingState \|\| futureLineupLoading\(\)/);
   assert.match(template, /appDialogFocusTrap/);
   assert.match(template, /\(dialogEscape\)="cancelBenchSwap\(\)"/);
   assert.match(template, /role="dialog"/);
@@ -772,6 +879,10 @@ test('matchup selection and dialogs preserve mobile and keyboard-accessible prim
   assert.match(
     sharedStyles,
     /@media \(max-width: 640px\)[\s\S]*?\.rr-dialog__actions[\s\S]*?flex-direction: column-reverse/,
+  );
+  assert.match(
+    componentStyles,
+    /@media \(max-width: 640px\)[\s\S]*?\.team-name-form > div[\s\S]*?flex-direction: column/,
   );
   assert.match(tokens, /--rr-control-min-height: 44px/);
   assert.match(tokens, /--rr-touch-target: 44px/);
