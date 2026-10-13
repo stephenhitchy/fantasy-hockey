@@ -151,6 +151,7 @@
               futureLineupDirty() ||
               futureLineupLoading() ||
               futureLineupSaving() ||
+              hasPendingFutureLineupSwap() ||
               getFutureLineupMatchupOptions().length === 0
             "
             [attr.aria-describedby]="
@@ -170,7 +171,12 @@
             type="button"
             class="lineup-refresh-button rr-button rr-button--quiet"
             (click)="loadFutureMatchupLineupPlans()"
-            [disabled]="futureLineupDirty() || futureLineupLoading() || futureLineupSaving()"
+            [disabled]="
+              futureLineupDirty() ||
+              futureLineupLoading() ||
+              futureLineupSaving() ||
+              hasPendingFutureLineupSwap()
+            "
             [attr.aria-describedby]="futureLineupDirty() ? 'lineup-unsaved-lineup-note' : null"
           >
             {{ futureLineupLoading() ? 'Refreshing…' : 'Refresh' }}
@@ -225,8 +231,8 @@
 
               <article class="score-team-card rr-stat-card">
                 <span>Opponent</span>
-                <strong>{{ getTeamName(currentOpponentOwnerId()) }}</strong>
-                <em>{{ getDisplayNumber(getMatchupScore(matchup, currentOpponentOwnerId())) }}</em>
+                <strong>{{ getTeamName(selectedFutureLineupOpponentOwnerId) }}</strong>
+                <em>{{ getDisplayNumber(getMatchupScore(matchup, selectedFutureLineupOpponentOwnerId)) }}</em>
               </article>
             </div>
           }
@@ -256,10 +262,7 @@
         }
 
         <div id="lineup-timing-guidance" class="lineup-change-cycle-note rr-notice rr-notice--info">
-          <span>
-            NHL block dates are nominal pre-materialization; exact starts may follow six-game
-            boundaries.
-          </span>
+          <strong>Manage this matchup below.</strong>
         </div>
 
         @if (futureLineupEditBlockText; as editBlockReason) {
@@ -269,134 +272,9 @@
           </div>
         }
 
-        @if (futureLineupValidationText; as validationMessage) {
-          <div class="lineup-planner-state rr-notice rr-notice--warning" role="alert">
-            {{ validationMessage }}
-          </div>
-        }
-
-        @if (futureLineupRoster) {
-          <div
-            class="lineup-editor-grid fantasy-position-slots defense-slots ir-activation-target-list"
-            role="list"
-            aria-label="Active-slot matchup lineup"
-          >
-            @for (row of futureLineupEditorRows; track row.slot.slotId) {
-              <article
-                class="lineup-editor-slot fantasy-position-group rr-data-panel"
-                [class.lineup-editor-slot--locked]="row.locked"
-                role="listitem"
-              >
-                <div class="lineup-editor-slot-heading section-heading rr-section-heading">
-                  <div>
-                    <span>{{ row.slot.position }}</span>
-                    <strong>{{ row.slot.position }} {{ row.slot.slotNumber }}</strong>
-                  </div>
-
-                  @if (row.startDate; as startDate) {
-                    <div
-                      class="lineup-slot-start rr-badge"
-                      [class.lineup-start--saved]="startDate.confidence === 'saved'"
-                      [class.lineup-start--projected]="startDate.confidence === 'projected'"
-                      [class.lineup-start--pending]="startDate.confidence === 'pending'"
-                      [class.rr-badge--success]="startDate.confidence === 'saved'"
-                      [class.rr-badge--warning]="startDate.confidence === 'projected'"
-                      [class.rr-badge--info]="startDate.confidence === 'pending'"
-                      [attr.aria-label]="getFutureLineupStartAriaLabel(row.slot)"
-                    >
-                      <span>{{ startDate.eyebrow }}</span>
-                      @if (startDate.dateTime) {
-                        <time [attr.datetime]="startDate.dateTime">{{ startDate.label }}</time>
-                      } @else {
-                        <strong>{{ startDate.label }}</strong>
-                      }
-                    </div>
-                  }
-                </div>
-
-                <label class="rr-label" [for]="getFutureLineupSlotSelectId(row.slot)">Start</label>
-                <select
-                  [id]="getFutureLineupSlotSelectId(row.slot)"
-                  class="rr-field lineup-slot-select"
-                  [ngModel]="getFutureLineupAssignment(row.slot.slotId)"
-                  (ngModelChange)="setFutureLineupAssignment(row.slot, $event)"
-                  [disabled]="row.locked || futureLineupLoading() || futureLineupSaving()"
-                  [attr.aria-describedby]="
-                    row.lockReason
-                      ? getFutureLineupSlotSelectId(row.slot) + '-help'
-                      : 'lineup-timing-guidance'
-                  "
-                >
-                  @if (!row.slot.asset) {
-                    <option [ngValue]="''">Open</option>
-                  }
-                  @if (row.showFallback) {
-                    <option [ngValue]="getFutureLineupAssignment(row.slot.slotId)">
-                      {{ getFutureLineupFallbackAssetLabel(row.slot) }}
-                    </option>
-                  }
-                  @for (candidate of row.candidates; track candidate.key) {
-                    <option [ngValue]="candidate.key" [disabled]="candidate.assignedElsewhere">
-                      {{ getRosterAssetName(candidate.asset) }} ·
-                      {{ getRosterAssetTeamLabel(candidate.asset) }}
-                    </option>
-                  }
-                </select>
-
-                @if (row.lockReason) {
-                  <p
-                    [id]="getFutureLineupSlotSelectId(row.slot) + '-help'"
-                    class="lineup-slot-help rr-field-hint"
-                  >
-                    {{ row.lockReason }}
-                  </p>
-                }
-              </article>
-            }
-          </div>
-
-          @if (futureLineupOwned) {
-            @if (futureLineupHasChanges) {
-              <div
-                id="lineup-unsaved-lineup-note"
-                class="lineup-change-cycle-note rr-notice rr-notice--info"
-                role="status"
-                aria-live="polite"
-              >
-                <strong>Save or reset before you switch, refresh, or leave.</strong>
-              </div>
-            }
-
-            <div class="lineup-planner-actions rr-dialog__actions">
-              <button
-                type="button"
-                class="rr-button rr-button--primary"
-                (click)="saveFutureLineup()"
-                [disabled]="!canSaveFutureLineup()"
-              >
-                {{ getFutureLineupSaveLabel() }}
-              </button>
-              <button
-                type="button"
-                class="rr-button rr-button--quiet"
-                (click)="resetFutureLineupDraft()"
-                [disabled]="!canResetFutureLineup()"
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                class="rr-button rr-button--quiet lineup-clear-button"
-                (click)="clearFutureLineup()"
-                [disabled]="!canClearFutureLineup()"
-              >
-                {{ getFutureLineupClearLabel() }}
-              </button>
-            </div>
-          }
-        } @else {
-          <div class="lineup-planner-state rr-state" role="status">Loading</div>
-        }
+        <a class="lineup-board-jump rr-button rr-button--primary" href="#selected-matchup-roster">
+          Roster
+        </a>
       }
     </section>
 
@@ -534,15 +412,23 @@
       </section>
     }
 
-    <section class="roster-section rr-card rr-card--padded">
+    <section id="selected-matchup-roster" class="roster-section rr-card rr-card--padded">
       <div class="section-heading rr-section-heading">
         <div>
-          <span class="eyebrow">Active Roster</span>
-          <h2>Roster Board</h2>
+          <span class="eyebrow">
+            {{ isSelectedFutureLineupCurrent() ? 'Active Roster' : 'Selected Matchup' }}
+          </span>
+          <h2>
+            {{
+              isSelectedFutureLineupCurrent()
+                ? 'Roster Board'
+                : 'Matchup ' + selectedFutureLineupCycleNumber() + ' Roster'
+            }}
+          </h2>
         </div>
 
         <p>
-          {{ rosterFilledCount() }} / {{ rosterTotalCount() }} active · Bench
+          {{ displayedRosterFilledCount() }} / {{ rosterTotalCount() }} active · Bench
           {{ benchFilledCount() }} / {{ benchTotalCount() }} · Injured Reserve (IR)
           {{ irFilledCount() }} / {{ irTotalCount() }}
         </p>
@@ -550,11 +436,36 @@
 
       <p class="roster-display-order-note">{{ getRosterDisplayOrderLabel() }}</p>
 
+      @if (!isSelectedFutureLineupCurrent() && futureLineupOwned && selectedFutureLineupPlan()) {
+        <div
+          class="lineup-planner-actions rr-dialog__actions"
+          aria-label="Selected matchup lineup plan actions"
+        >
+          @if (futureLineupHasChanges) {
+            <button
+              type="button"
+              class="rr-button rr-button--quiet"
+              (click)="resetFutureLineupDraft()"
+              [disabled]="!canResetFutureLineup()"
+            >
+              Reset
+            </button>
+          }
+          <button
+            type="button"
+            class="rr-button rr-button--quiet lineup-clear-button"
+            (click)="clearFutureLineup()"
+            [disabled]="!canClearFutureLineup()"
+          >
+            {{ getFutureLineupClearLabel() }}
+          </button>
+        </div>
+      }
+
       <div class="availability-policy-note rr-notice rr-notice--info">
-        <strong>Injured Reserve (IR) eligibility:</strong>
-        Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve can be moved to an
-        Injured Reserve (IR) slot. Day-to-Day, suspended, active, and unverified players remain on
-        the active roster.
+        <strong>IR:</strong>
+        Only players listed as Out, Injured Reserve, or Long-Term Injured Reserve can use IR.
+        Day-to-Day and all other players stay active.
       </div>
 
       @if (rosterMoveMessage()) {
@@ -569,13 +480,13 @@
         </div>
       }
 
-      @if (scoringLoading()) {
+      @if (isSelectedFutureLineupCurrent() && scoringLoading()) {
         <div class="roster-scoring-note rr-notice rr-notice--info">
           Loading current matchup player stats...
         </div>
       }
 
-      @if (scoringError()) {
+      @if (isSelectedFutureLineupCurrent() && scoringError()) {
         <div class="roster-scoring-note warning-note rr-notice rr-notice--warning">
           {{ scoringError() }}
         </div>
@@ -606,8 +517,17 @@
                       [class.suspended-player-card]="
                         slot.asset ? isRosterAssetSuspended(slot.asset) : false
                       "
-                      (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset)"
+                      (click)="
+                        slot.asset &&
+                        handleRosterCardSurfaceClick($event, slot.asset, 'matchup', slot.slotId)
+                      "
                     >
+                      @if (slot.nextPlannedAssetLabel) {
+                        <div class="pending-slot-move-pill future-lineup-move-pill">
+                          {{ slot.nextPlannedAssetLabel }}
+                        </div>
+                      }
+
                       @if (slot.asset; as asset) {
                         @if (hasRosterAssetAlert(asset)) {
                           <div
@@ -637,6 +557,23 @@
                           </div>
                         }
 
+                        @if (slot.futureStartDate; as startDate) {
+                          <div
+                            class="lineup-slot-start roster-card-start rr-badge"
+                            [class.rr-badge--success]="startDate.confidence === 'saved'"
+                            [class.rr-badge--warning]="startDate.confidence === 'projected'"
+                            [class.rr-badge--info]="startDate.confidence === 'pending'"
+                            [attr.aria-label]="getFutureLineupStartAriaLabel(slot)"
+                          >
+                            <span>{{ startDate.eyebrow }}</span>
+                            @if (startDate.dateTime) {
+                              <time [attr.datetime]="startDate.dateTime">{{ startDate.label }}</time>
+                            } @else {
+                              <strong>{{ startDate.label }}</strong>
+                            }
+                          </div>
+                        }
+
                         <app-asset-portrait
                           class="fantasy-player-logo"
                           [asset]="getRosterAssetPortrait(asset)"
@@ -647,8 +584,10 @@
                           role="link"
                           tabindex="0"
                           [attr.aria-label]="'View details for ' + getRosterAssetName(asset)"
-                          (click)="$event.stopPropagation(); openRosterAssetDetail(asset)"
-                          (keydown)="handleRosterIdentityKeydown($event, asset)"
+                          (click)="$event.stopPropagation(); openRosterAssetDetail(asset, slot.slotId)"
+                          (keydown)="
+                            handleRosterIdentityKeydown($event, asset, 'matchup', slot.slotId)
+                          "
                         >
                           <strong>{{ getRosterAssetName(asset) }}</strong>
 
@@ -748,9 +687,25 @@
                         }
                       } @else {
                         <div class="empty-slot-copy">
-                          <strong>Open {{ group.position }} Slot</strong>
-                          <span>Choose an available {{ group.position }} player.</span>
-                          @if (isOwnTeam()) {
+                          @if (slot.assignmentPending) {
+                            <strong>Assignment pending</strong>
+                            <button
+                              type="button"
+                              class="roster-empty-find-action rr-button rr-button--quiet"
+                              (click)="loadFutureLineupTimingEvidence()"
+                              [disabled]="futureLineupTimingLoading()"
+                            >
+                              {{ futureLineupTimingLoading() ? 'Checking…' : 'Retry check' }}
+                            </button>
+                          } @else {
+                            <strong>Open {{ group.position }} Slot</strong>
+                            <span>Choose an available {{ group.position }} player.</span>
+                          }
+                          @if (
+                            !slot.assignmentPending &&
+                            isOwnTeam() &&
+                            isSelectedFutureLineupCurrent()
+                          ) {
                             <button
                               type="button"
                               class="roster-empty-find-action rr-button rr-button--primary"
@@ -785,8 +740,17 @@
                     [class.suspended-player-card]="
                       slot.asset ? isRosterAssetSuspended(slot.asset) : false
                     "
-                    (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset)"
+                    (click)="
+                      slot.asset &&
+                      handleRosterCardSurfaceClick($event, slot.asset, 'matchup', slot.slotId)
+                    "
                   >
+                    @if (slot.nextPlannedAssetLabel) {
+                      <div class="pending-slot-move-pill future-lineup-move-pill">
+                        {{ slot.nextPlannedAssetLabel }}
+                      </div>
+                    }
+
                     @if (slot.asset; as asset) {
                       @if (isRosterAssetInjured(asset)) {
                         <div class="player-injury-banner">
@@ -804,6 +768,23 @@
                         </div>
                       }
 
+                      @if (slot.futureStartDate; as startDate) {
+                        <div
+                          class="lineup-slot-start roster-card-start rr-badge"
+                          [class.rr-badge--success]="startDate.confidence === 'saved'"
+                          [class.rr-badge--warning]="startDate.confidence === 'projected'"
+                          [class.rr-badge--info]="startDate.confidence === 'pending'"
+                          [attr.aria-label]="getFutureLineupStartAriaLabel(slot)"
+                        >
+                          <span>{{ startDate.eyebrow }}</span>
+                          @if (startDate.dateTime) {
+                            <time [attr.datetime]="startDate.dateTime">{{ startDate.label }}</time>
+                          } @else {
+                            <strong>{{ startDate.label }}</strong>
+                          }
+                        </div>
+                      }
+
                       <app-asset-portrait
                         class="fantasy-player-logo"
                         [asset]="getRosterAssetPortrait(asset)"
@@ -814,8 +795,10 @@
                         role="link"
                         tabindex="0"
                         [attr.aria-label]="'View details for ' + getRosterAssetName(asset)"
-                        (click)="$event.stopPropagation(); openRosterAssetDetail(asset)"
-                        (keydown)="handleRosterIdentityKeydown($event, asset)"
+                        (click)="$event.stopPropagation(); openRosterAssetDetail(asset, slot.slotId)"
+                        (keydown)="
+                          handleRosterIdentityKeydown($event, asset, 'matchup', slot.slotId)
+                        "
                       >
                         <strong>{{ getRosterAssetName(asset) }}</strong>
 
@@ -912,9 +895,25 @@
                       }
                     } @else {
                       <div class="empty-slot-copy">
-                        <strong>Open D Slot</strong>
-                        <span>Choose an available defenseman.</span>
-                        @if (isOwnTeam()) {
+                        @if (slot.assignmentPending) {
+                          <strong>Assignment pending</strong>
+                          <button
+                            type="button"
+                            class="roster-empty-find-action rr-button rr-button--quiet"
+                            (click)="loadFutureLineupTimingEvidence()"
+                            [disabled]="futureLineupTimingLoading()"
+                          >
+                            {{ futureLineupTimingLoading() ? 'Checking…' : 'Retry check' }}
+                          </button>
+                        } @else {
+                          <strong>Open D Slot</strong>
+                          <span>Choose an available defenseman.</span>
+                        }
+                        @if (
+                          !slot.assignmentPending &&
+                          isOwnTeam() &&
+                          isSelectedFutureLineupCurrent()
+                        ) {
                           <button
                             type="button"
                             class="roster-empty-find-action rr-button rr-button--primary"
@@ -946,8 +945,17 @@
                     [class.suspended-player-card]="
                       slot.asset ? isRosterAssetSuspended(slot.asset) : false
                     "
-                    (click)="slot.asset && handleRosterCardSurfaceClick($event, slot.asset)"
+                    (click)="
+                      slot.asset &&
+                      handleRosterCardSurfaceClick($event, slot.asset, 'matchup', slot.slotId)
+                    "
                   >
+                    @if (slot.nextPlannedAssetLabel) {
+                      <div class="pending-slot-move-pill future-lineup-move-pill">
+                        {{ slot.nextPlannedAssetLabel }}
+                      </div>
+                    }
+
                     @if (slot.asset; as asset) {
                       @if (isRosterAssetInjured(asset)) {
                         <div class="player-injury-banner">
@@ -965,6 +973,23 @@
                         </div>
                       }
 
+                      @if (slot.futureStartDate; as startDate) {
+                        <div
+                          class="lineup-slot-start roster-card-start rr-badge"
+                          [class.rr-badge--success]="startDate.confidence === 'saved'"
+                          [class.rr-badge--warning]="startDate.confidence === 'projected'"
+                          [class.rr-badge--info]="startDate.confidence === 'pending'"
+                          [attr.aria-label]="getFutureLineupStartAriaLabel(slot)"
+                        >
+                          <span>{{ startDate.eyebrow }}</span>
+                          @if (startDate.dateTime) {
+                            <time [attr.datetime]="startDate.dateTime">{{ startDate.label }}</time>
+                          } @else {
+                            <strong>{{ startDate.label }}</strong>
+                          }
+                        </div>
+                      }
+
                       <app-asset-portrait
                         class="fantasy-player-logo"
                         [asset]="getRosterAssetPortrait(asset)"
@@ -975,8 +1000,10 @@
                         role="link"
                         tabindex="0"
                         [attr.aria-label]="'View details for ' + getRosterAssetName(asset)"
-                        (click)="$event.stopPropagation(); openRosterAssetDetail(asset)"
-                        (keydown)="handleRosterIdentityKeydown($event, asset)"
+                        (click)="$event.stopPropagation(); openRosterAssetDetail(asset, slot.slotId)"
+                        (keydown)="
+                          handleRosterIdentityKeydown($event, asset, 'matchup', slot.slotId)
+                        "
                       >
                         <strong>{{ getRosterAssetName(asset) }}</strong>
 
@@ -1073,9 +1100,25 @@
                       }
                     } @else {
                       <div class="empty-slot-copy">
-                        <strong>Open G Slot</strong>
-                        <span>Choose an available team goalie unit.</span>
-                        @if (isOwnTeam()) {
+                        @if (slot.assignmentPending) {
+                          <strong>Assignment pending</strong>
+                          <button
+                            type="button"
+                            class="roster-empty-find-action rr-button rr-button--quiet"
+                            (click)="loadFutureLineupTimingEvidence()"
+                            [disabled]="futureLineupTimingLoading()"
+                          >
+                            {{ futureLineupTimingLoading() ? 'Checking…' : 'Retry check' }}
+                          </button>
+                        } @else {
+                          <strong>Open G Slot</strong>
+                          <span>Choose an available team goalie unit.</span>
+                        }
+                        @if (
+                          !slot.assignmentPending &&
+                          isOwnTeam() &&
+                          isSelectedFutureLineupCurrent()
+                        ) {
                           <button
                             type="button"
                             class="roster-empty-find-action rr-button rr-button--primary"
@@ -1106,11 +1149,12 @@
       </div>
 
       <p class="bench-cycle-guidance rr-guidance-new-only">
-        @if (isOwnTeam()) {
-          Bench scores and circles do not count. Starts keep fair timing; played games are never
-          backfilled.
+        @if (!isSelectedFutureLineupCurrent()) {
+          Current bench.
+        } @else if (isOwnTeam()) {
+          Bench points do not count. Started games are never backfilled.
         } @else {
-          Bench scores and circles count only after the asset starts.
+          Bench points count after a start.
         }
       </p>
 
@@ -1222,7 +1266,7 @@
               <div class="empty-slot-copy">
                 <strong>Open Bench {{ slot.slotNumber }}</strong>
                 <span>Any skater or team goalie unit</span>
-                @if (isOwnTeam()) {
+                @if (isOwnTeam() && isSelectedFutureLineupCurrent()) {
                   <button
                     type="button"
                     class="roster-empty-find-action rr-button rr-button--primary"
@@ -1311,7 +1355,7 @@
                   }
                 </div>
 
-                @if (isOwnTeam()) {
+                @if (isOwnTeam() && isSelectedFutureLineupCurrent()) {
                   <div class="ir-slot-primary-actions">
                     <button
                       type="button"
@@ -1338,7 +1382,7 @@
     <app-action-sheet
       [open]="isOwnTeam() && rosterManagerOpen()"
       [title]="getRosterManagerTitle()"
-      eyebrow="Manage Roster Spot"
+      [eyebrow]="getRosterManagerEyebrow()"
       [description]="getRosterManagerDescription()"
       [busy]="isRosterOperationPending()"
       closeLabel="Close roster actions"
@@ -1424,19 +1468,9 @@
 
     <app-action-sheet
       [open]="isOwnTeam() && activeBenchPickerOpen()"
-      [title]="
-        isActiveBenchPickerInjuryReplacement() ? 'Replace Injured Player Now' : 'Swap with Bench'
-      "
-      [eyebrow]="
-        isActiveBenchPickerInjuryReplacement()
-          ? 'Immediate Injury Replacement'
-          : 'Active Lineup Change'
-      "
-      [description]="
-        isActiveBenchPickerInjuryReplacement()
-          ? 'Choose the compatible bench player who should take only this slot’s remaining future games. All games and points already started stay protected.'
-          : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary. A current Day-to-Day, Out, IR, or LTIR report can qualify the pairing for the protected immediate-injury route.'
-      "
+      [title]="getActiveBenchPickerTitle()"
+      [eyebrow]="getActiveBenchPickerEyebrow()"
+      [description]="getActiveBenchPickerDescription()"
       [busy]="isRosterOperationPending()"
       closeLabel="Close bench player choices"
       dialogId="active-bench-picker-title"
@@ -1451,13 +1485,13 @@
               <strong>{{ getRosterAssetName(activeSwapAsset) }}</strong>
               <small>
                 {{ getRosterAssetTeamLabel(activeSwapAsset) }} · {{ activeSwapSlot.position }} Slot
-                {{ activeSwapSlot.slotNumber }} · {{ getRosterAssetGameProgress(activeSwapAsset) }}
+                {{ activeSwapSlot.slotNumber }} · {{ getRosterSlotGameProgress(activeSwapSlot) }}
               </small>
             </div>
           </section>
 
           @if (getActiveBenchSwapCandidates().length > 0) {
-            <div class="active-bench-picker-list" aria-label="Compatible bench players">
+            <div class="active-bench-picker-list" aria-label="Compatible matchup starters">
               @for (benchSlot of getActiveBenchSwapCandidates(); track benchSlot.slotId) {
                 @if (benchSlot.asset; as benchAsset) {
                   <button
@@ -1470,11 +1504,21 @@
                     <span>
                       <strong>{{ getRosterAssetName(benchAsset) }}</strong>
                       <small>
-                        {{ getRosterAssetTeamLabel(benchAsset) }} · {{ benchAsset.position }} ·
-                        Bench
-                        {{ benchSlot.slotNumber }}
+                        {{ getFutureSwapCandidateSourceLabel(benchSlot, activeSwapSlot.slotId) }}
                       </small>
-                      <small>Six-game progress: {{ getRosterAssetGameProgress(benchAsset) }}</small>
+                      <small>
+                        {{ isFutureRosterAction() ? 'Selected matchup: ' : 'Six-game progress: ' }}
+                        {{ getBenchSwapCandidateProgress(benchSlot) }}
+                      </small>
+                      @if (
+                        isFutureRosterAction() &&
+                        benchAsset.eligibleFromCycleNumber &&
+                        benchAsset.eligibleFromCycleNumber > (rosterActionCycleNumber() ?? 0)
+                      ) {
+                        <small>
+                          Eligible Matchup {{ benchAsset.eligibleFromCycleNumber }}
+                        </small>
+                      }
                     </span>
                     <em aria-hidden="true">›</em>
                   </button>
@@ -1483,12 +1527,7 @@
             </div>
           } @else {
             <div class="active-bench-picker-empty rr-notice rr-notice--info" role="status">
-              <strong>No matching bench player is available.</strong>
-              <span>
-                Your bench does not currently contain an unreserved
-                {{ activeSwapSlot.position }} player who can swap into this spot. The active player
-                has not been changed.
-              </span>
+              <strong>No eligible {{ activeSwapSlot.position }} player.</strong>
             </div>
           }
         }
@@ -1854,18 +1893,9 @@
           >
             <header class="ir-activation-dialog-header rr-dialog__header">
               <div>
-                <span class="eyebrow">{{
-                  isPendingBenchSwapInjuryReplacement()
-                    ? 'Injury Replacement'
-                    : 'Fair Lineup Change'
-                }}</span>
+                <span class="eyebrow">{{ getBenchSwapDialogEyebrow() }}</span>
                 <h2 id="bench-swap-title">Start {{ getRosterAssetName(benchSwapAsset) }}</h2>
-                <p>
-                  Choose a matching active slot. Normal swaps follow six-game timing. Only players
-                  listed as Day-to-Day, Out, Injured Reserve, or Long-Term Injured Reserve can be
-                  replaced immediately. The server verifies that status again before changing the
-                  roster.
-                </p>
+                <p>{{ getBenchSwapDialogDescription() }}</p>
               </div>
               <button
                 type="button"
@@ -1885,10 +1915,14 @@
               />
               <div>
                 <strong>{{ getRosterAssetName(benchSwapAsset) }}</strong>
-                <span
-                  >{{ getRosterAssetTeamLabel(benchSwapAsset) }} · {{ benchSwapAsset.position }} ·
-                  Bench {{ benchSwapSlot.slotNumber }}</span
-                >
+                <span>
+                  {{
+                    getFutureSwapCandidateSourceLabel(
+                      benchSwapSlot,
+                      benchSwapTargetSlotId()
+                    )
+                  }}
+                </span>
               </div>
             </div>
 

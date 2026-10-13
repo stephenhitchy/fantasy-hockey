@@ -126,19 +126,50 @@ qualify. The bounded recovery sweep supplies liveness without adding a new
 listener or Firestore index.
 
 B2G is the future-matchup lineup candidate layered after B2F. My Team lets a
-manager select any future regular-season matchup, save one complete active
-lineup, and review either an exact materialized first-game date or a clearly
-labelled nominal NHL-block date for each independent roster-slot window. The
-nominal date may precede that slot's real six-game boundary. The authenticated,
-revisioned callable is the only plan read/write authority; plan and bounded
-per-cycle mutation-state documents remain private.
-Each slot applies only at its real six-game boundary, rereads the current
-roster and exact plan inside the materialization transaction, gives an ordinary
-pending roster move precedence, and uses only an exact preflight fallback. A
-post-preflight plan or roster race aborts that boundary transaction for a fresh
-retry instead of committing a missing pick or expected window. Plans are not
-consumed by Historical Replay and do not extend to playoffs. The save authority
-also proves that an absent target is strictly later than the
+manager select the current or any future regular-season matchup and keeps the
+complete roster-board presentation on screen. Future cards show that exact
+matchup's assignment, score, game markers, later planned starter, and either
+an exact materialized first-game date or a clearly labelled nominal NHL-block
+date. The nominal date may precede that slot's real six-game boundary. Future
+Manage / Move actions reuse the current active/bench sheets and save one exact
+choice at a time; add/drop and IR remain current-roster actions. The
+authenticated, revisioned callable is the only plan read/write authority;
+plan and bounded per-cycle mutation-state documents remain private.
+
+Older overlapping matchups use bounded owner-pick and owner-window reads for
+their own cycle instead of borrowing the newest physical roster. Expected
+slots with missing exact evidence render as **Assignment pending** and fail
+closed; only a selected-cycle omission plus a still-empty physical slot is
+presented as an authoritative open slot.
+
+When both exact assignments are untouched, the selected-matchup assignment
+changes immediately; if either assignment started, the selected matchup stays
+intact and the incoming player's expected start moves to the next fair
+matchup. A compatible bench player may fill a physically empty active slot
+through the same flow. That request carries a nullable outgoing binding and
+succeeds only while the physical target is still empty and the exact target
+cycle has no pick or window. Eligible bench-player NHL teams are included in
+the bounded timing schedule set so incoming evidence is not omitted.
+The narrow swap path also supports Matchup 1 after that cycle exists: an exact
+untouched assignment changes atomically, while a started assignment queues the
+next fair matchup. Preseason Matchup 1 remains read-only, and normal full-plan
+save/clear authority still excludes cycle 1.
+
+Each slot otherwise applies only at its real six-game boundary, rereads the
+current roster and exact plan inside the materialization transaction, gives an
+ordinary pending roster move precedence, and uses only exact preflight
+evidence. A selected already-materialized occupied assignment may change only
+when both exact player assignments still have zero games and points, no start
+or scoring evidence, complete league-sized unique frozen game IDs, and fresh
+NHL puck-drop evidence.
+Saved unmaterialized swaps can be replaced or reversed without claiming the
+physical roster already moved, while only exact current active/bench ownership
+can authorize a materialized rewrite. A post-preflight scoring contract,
+frozen-ID, plan, roster, or provider race returns a timing conflict for refresh
+and reconfirmation instead of committing a missing pick or expected window.
+No path moves a started game, earned point, or six-game ownership boundary.
+Plans are not consumed by Historical Replay and do not extend to playoffs.
+The save authority also proves that an absent target is strictly later than the
 latest valid materialized cycle, so a missing past document cannot accept a
 stale reservation. The latest source-controlled
 product gate for this line is `npm run verify:batchb2g`, followed by
@@ -232,9 +263,17 @@ must not automatically rewrite production scores.
 
 ## Current verified release posture
 
-- Production Hosting manifest: exact source
-  `6aacd7df6d63ae523e334388ecbb8e60a967912a`, Release Candidate 65,
+- Production Hosting manifest checked on 2026-10-12: exact source
+  `cc39319177670a0b9ce2fb0d0d18daf53eea634c`, Release Candidate 65,
   Production Scoring V4, Projection V11.
+- Recent operator-provided targeted Functions deployment logs identify clean
+  source `412c3b8b1705478c992db5e79d847c8c943a6308`, which is divergent from the
+  B2G Hosting/source line. Until fresh per-Function provenance proves otherwise,
+  release B2G in its documented three stages from one verified clean commit:
+  the seven plan-consuming automation entry points, then
+  `manageFutureMatchupLineups`, then `hosting:app`. ACTIVE inventory alone does
+  not prove exact source, and selectors must not be broadened merely to make
+  the runtime uniform.
 - Deployed Production Function inventory: 107 expected by the currently live
   source and 107 matched, with no missing,
   unexpected, duplicate, or region-mismatched exports after the D1M release.

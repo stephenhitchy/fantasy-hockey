@@ -1065,7 +1065,13 @@ function clearFrozenProjectionFields(asset: DraftableAsset): DraftableAsset {
   return copy;
 }
 
-async function resolveIncomingProjectionForCycle(
+/**
+ * Refreshes one roster asset against the exact target-cycle projection.
+ * Future-lineup authority reuses this path when an untouched materialized
+ * window is reassigned, so both roster-move entry points freeze projections
+ * with the same evidence instead of maintaining competing implementations.
+ */
+export async function resolveIncomingProjectionForCycle(
   leagueId: string,
   cycleNumber: number,
   incomingAsset: DraftableAsset,
@@ -1468,7 +1474,7 @@ function getStartedScheduledGameIds(input: {
     if (!game) {
       throw new HttpsError(
         'failed-precondition',
-        `The NHL schedule is missing frozen game ${gameId}. No injury replacement was applied.`,
+        `The NHL schedule is missing frozen game ${gameId}. No roster move was applied.`,
       );
     }
 
@@ -1489,7 +1495,7 @@ function getStartedScheduledGameIds(input: {
     if (startMilliseconds === null) {
       throw new HttpsError(
         'failed-precondition',
-        `NHL game ${gameId} is missing its puck-drop time. No injury replacement was applied.`,
+        `NHL game ${gameId} is missing its puck-drop time. No roster move was applied.`,
       );
     }
 
@@ -1499,6 +1505,111 @@ function getStartedScheduledGameIds(input: {
   }
 
   return startedGameIds;
+}
+
+export interface UntouchedRosterSwapScheduleEvidence {
+  startMillisecondsByGameId: Record<string, number>;
+  startedReason: 'outgoing-started' | 'incoming-started' | null;
+  startedGameIds: number[];
+}
+
+/**
+ * Verifies the frozen outgoing (when replacing an occupied slot) and incoming
+ * target games against fresh NHL schedules. The returned puck-drop map is
+ * checked again immediately before the Firestore transaction writes, closing
+ * the scorer-refresh race without making the browser authoritative for game
+ * state.
+ */
+export async function loadUntouchedRosterSwapScheduleEvidence(input: {
+  outgoingTeamAbbreviation?: string;
+  outgoingScheduledGameIds?: readonly number[];
+  incomingTeamAbbreviation: string;
+  incomingScheduledGameIds: readonly number[];
+  boundaryMilliseconds: number;
+}): Promise<UntouchedRosterSwapScheduleEvidence> {
+  const outgoingTeamAbbreviation =
+    input.outgoingTeamAbbreviation?.trim().toUpperCase() ?? '';
+  const outgoingScheduledGameIds = input.outgoingScheduledGameIds ?? [];
+  const hasOutgoingAssignment = outgoingTeamAbbreviation.length > 0;
+  if (
+    input.incomingScheduledGameIds.length === 0 ||
+    hasOutgoingAssignment !== (input.outgoingScheduledGameIds !== undefined) ||
+    (hasOutgoingAssignment && outgoingScheduledGameIds.length === 0)
+  ) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The selected matchup does not have complete frozen NHL game evidence yet.',
+    );
+  }
+
+  const teamAbbreviations = [
+    ...new Set([
+      ...(hasOutgoingAssignment ? [outgoingTeamAbbreviation] : []),
+      input.incomingTeamAbbreviation.trim().toUpperCase(),
+    ]),
+  ];
+  const schedulesByTeam = new Map(
+    await Promise.all(
+      teamAbbreviations.map(async (teamAbbreviation) => [
+        teamAbbreviation,
+        await loadRosterMoveScheduleForTeam(teamAbbreviation),
+      ] as const),
+    ),
+  );
+  const outgoingSchedule = hasOutgoingAssignment
+    ? schedulesByTeam.get(outgoingTeamAbbreviation) ?? []
+    : [];
+  const incomingSchedule =
+    schedulesByTeam.get(input.incomingTeamAbbreviation.trim().toUpperCase()) ?? [];
+  const outgoingStarted = getStartedScheduledGameIds({
+    scheduledGameIds: outgoingScheduledGameIds,
+    schedule: outgoingSchedule,
+    boundaryMilliseconds: input.boundaryMilliseconds,
+  });
+  const incomingStarted = getStartedScheduledGameIds({
+    scheduledGameIds: input.incomingScheduledGameIds,
+    schedule: incomingSchedule,
+    boundaryMilliseconds: input.boundaryMilliseconds,
+  });
+
+  const scheduledGames = [
+    ...outgoingScheduledGameIds.map((gameId) => ({
+      gameId,
+      schedule: outgoingSchedule,
+    })),
+    ...input.incomingScheduledGameIds.map((gameId) => ({
+      gameId,
+      schedule: incomingSchedule,
+    })),
+  ];
+  const startMillisecondsByGameId: Record<string, number> = {};
+
+  for (const { gameId, schedule } of scheduledGames) {
+    const game = schedule.find((candidate) => candidate.id === gameId);
+    const startMilliseconds = game
+      ? getScheduleGameStartMilliseconds(game)
+      : null;
+    if (startMilliseconds === null) {
+      throw new HttpsError(
+        'failed-precondition',
+        `NHL game ${gameId} is missing exact puck-drop evidence. No roster move was applied.`,
+      );
+    }
+    startMillisecondsByGameId[String(gameId)] = startMilliseconds;
+  }
+
+  return {
+    startMillisecondsByGameId,
+    startedReason:
+      outgoingStarted.size > 0
+        ? 'outgoing-started'
+        : incomingStarted.size > 0
+          ? 'incoming-started'
+          : null,
+    startedGameIds: [
+      ...new Set([...outgoingStarted, ...incomingStarted]),
+    ].sort((left, right) => left - right),
+  };
 }
 
 function selectFutureInjuryReplacementGames(input: {

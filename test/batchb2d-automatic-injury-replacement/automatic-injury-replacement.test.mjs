@@ -581,7 +581,8 @@ test('source contracts keep automation bounded, retryable, and independent of sc
     /protected immediate-injury route while every started game and point stays preserved/i,
   );
   assert.match(
-    teamTemplate,
+    teamSource,
     /Day-to-Day,[\s\S]*?Out,[\s\S]*?Injured Reserve,[\s\S]*?Long-Term Injured Reserve can be[\s\S]*?replaced immediately/i,
   );
+  assert.match(teamTemplate, /<p>\{\{ getBenchSwapDialogDescription\(\) \}\}<\/p>/);
 });

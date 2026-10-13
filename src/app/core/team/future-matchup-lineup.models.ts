@@ -55,10 +55,33 @@ export interface ClearFutureMatchupLineupPlanRequest {
   requestId: string;
 }
 
+export type FutureMatchupLineupSwapMode = 'immediate' | 'queued';
+
+export type FutureMatchupLineupSwapTimingReason =
+  | 'selected-matchup-untouched'
+  | 'requested-matchup-materialized'
+  | 'outgoing-started'
+  | 'incoming-started'
+  | 'incoming-not-yet-eligible';
+
+export interface SwapFutureMatchupLineupRequest {
+  leagueId: string;
+  operation: 'swap';
+  requestedCycleNumber: number;
+  expectedEffectiveCycleNumber: number;
+  activeSlotId: string;
+  benchSlotId: string;
+  expectedRevision: number;
+  requestId: string;
+  expectedOutgoingAssetKey: string | null;
+  expectedIncomingAssetKey: string;
+}
+
 export type ManageFutureMatchupLineupsRequest =
   | ListFutureMatchupLineupPlansRequest
   | SaveFutureMatchupLineupPlanRequest
-  | ClearFutureMatchupLineupPlanRequest;
+  | ClearFutureMatchupLineupPlanRequest
+  | SwapFutureMatchupLineupRequest;
 
 export interface ListFutureMatchupLineupPlansResult {
   operation: 'list';
@@ -77,10 +100,25 @@ export interface ClearFutureMatchupLineupPlanResult {
   revision: number;
 }
 
+export interface SwapFutureMatchupLineupResult {
+  operation: 'swap';
+  mode: FutureMatchupLineupSwapMode;
+  requestedCycleNumber: number;
+  effectiveCycleNumber: number;
+  timingReason: FutureMatchupLineupSwapTimingReason;
+  plan: FutureMatchupLineupPlanView;
+  effectiveStart: {
+    cycleNumber: number;
+    evidence: 'lineup-plan-boundary';
+    reason: string;
+  };
+}
+
 export type ManageFutureMatchupLineupsResult =
   | ListFutureMatchupLineupPlansResult
   | SaveFutureMatchupLineupPlanResult
-  | ClearFutureMatchupLineupPlanResult;
+  | ClearFutureMatchupLineupPlanResult
+  | SwapFutureMatchupLineupResult;
 
 export interface SaveFutureMatchupLineupPlanInput {
   leagueId: string;
@@ -97,8 +135,14 @@ export interface ClearFutureMatchupLineupPlanInput {
   requestId: string;
 }
 
+export type SwapFutureMatchupLineupInput = Omit<
+  SwapFutureMatchupLineupRequest,
+  'operation'
+>;
+
 export type FutureMatchupLineupErrorReason =
   | 'revision-conflict'
+  | 'swap-timing-conflict'
   | 'pending-roster-move'
   | 'cycle-started'
   | 'cycle-state-invalid'
@@ -128,4 +172,7 @@ export interface FutureMatchupLineupErrorDetails {
   requestedRosterSlotId?: string;
   reservedRosterSlotId?: string;
   reservedCycleNumber?: number;
+  effectiveCycleNumber?: number;
+  mode?: FutureMatchupLineupSwapMode;
+  timingReason?: FutureMatchupLineupSwapTimingReason;
 }

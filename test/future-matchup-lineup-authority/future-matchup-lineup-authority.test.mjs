@@ -9,8 +9,11 @@ const requireFunctions = createRequire(
 const {
   createFutureMatchupLineupActivationAuditDocumentId,
   createFutureMatchupLineupAssignmentHash,
+  buildFutureMatchupResetWindow,
   deriveFutureMatchupLineupPlanStatus,
+  futureMatchupWindowOwnershipStarted,
   normalizeFutureMatchupLineupPlan,
+  requireUntouchedFutureMatchupWindow,
   resolveFutureLineupSlotAtBoundary,
   validateFutureMatchupLineupSlots,
 } = requireFunctions(
@@ -123,6 +126,129 @@ test('future-lineup audit IDs preserve distinct custom Firebase UID identities',
       ownerId: 'manager:a',
     }),
   );
+});
+
+test('selected-matchup swaps distinguish untouched windows from every durable start marker', () => {
+  const untouched = {
+    ownerId: 'owner-a',
+    rosterSlotId: 'C-1',
+    cycleNumber: 2,
+    position: 'C',
+    assetKey: 'skater-1',
+    asset: { assetKey: 'skater-1' },
+    status: 'scheduled',
+    scheduledGameIds: [1, 2, 3, 4, 5, 6],
+    scheduledGameDates: [],
+    scheduledGameLabels: [],
+    gamesPlayed: 0,
+    actualGamesPlayed: 0,
+    fantasyPoints: 0,
+    completedGameIds: [],
+    liveGameIds: [],
+    appearanceGameIds: [],
+    incompleteFinalGameIds: [],
+    gameScores: {},
+    gameStates: {},
+    startedAt: null,
+    completedAt: null,
+  };
+
+  assert.equal(futureMatchupWindowOwnershipStarted(untouched), false);
+  assert.deepEqual(
+    requireUntouchedFutureMatchupWindow({
+      value: untouched,
+      identity: {
+        ownerId: 'owner-a',
+        rosterSlotId: 'C-1',
+        cycleNumber: 2,
+        assetKey: 'skater-1',
+      },
+    }),
+    untouched,
+  );
+
+  for (const startedEvidence of [
+    { status: 'active' },
+    { startedAt: '2026-10-12T20:00:00.000Z' },
+    { gamesPlayed: 1 },
+    { actualGamesPlayed: 1 },
+    { fantasyPoints: 1 },
+    { completedGameIds: [1] },
+    { liveGameIds: [1] },
+    { appearanceGameIds: [1] },
+    { incompleteFinalGameIds: [1] },
+    { gameScores: { 1: 0 } },
+    { gameInputCompleteness: { 1: { complete: true } } },
+    { scoringAssetKeyByGameId: { 1: 'skater-1' } },
+    { injuryReplacementWindow: { transactionId: 'protected-boundary' } },
+    { gameStates: { 1: 'live' } },
+  ]) {
+    const started = { ...untouched, ...startedEvidence };
+    assert.equal(futureMatchupWindowOwnershipStarted(started), true);
+    assert.throws(
+      () => requireUntouchedFutureMatchupWindow({
+        value: started,
+        identity: {
+          ownerId: 'owner-a',
+          rosterSlotId: 'C-1',
+          cycleNumber: 2,
+          assetKey: 'skater-1',
+        },
+      }),
+      /not an exact untouched assignment/,
+    );
+  }
+
+  assert.throws(
+    () => requireUntouchedFutureMatchupWindow({
+      value: { ...untouched, gameScores: undefined },
+      identity: {
+        ownerId: 'owner-a',
+        rosterSlotId: 'C-1',
+        cycleNumber: 2,
+        assetKey: 'skater-1',
+      },
+    }),
+    /not an exact untouched assignment/,
+  );
+});
+
+test('selected-matchup reset windows discard stale ownership and preserve no started score', () => {
+  const reset = buildFutureMatchupResetWindow({
+    previous: {
+      id: 'owner-a__C-1__cycle-2',
+      createdAt: '2026-10-12T19:00:00.000Z',
+      scheduledGameIds: [1, 2, 3],
+      scheduleTeamAbbreviation: 'SEA',
+    },
+    asset: {
+      assetKey: 'skater-2',
+      assetType: 'skater',
+      position: 'C',
+      player: {
+        id: 2,
+        fullName: 'Incoming Player',
+        position: 'C',
+        nhlTeamAbbreviation: 'SJS',
+      },
+      frozenCycleProjectionPoints: 44.2,
+    },
+    ownerId: 'owner-a',
+    rosterSlotId: 'C-1',
+    cycleNumber: 2,
+    playerWindowContinuity: { continuityId: 'incoming-continuity' },
+    nowIso: '2026-10-12T20:00:00.000Z',
+  });
+
+  assert.equal(reset.assetKey, 'skater-2');
+  assert.equal(reset.status, 'scheduled');
+  assert.deepEqual(reset.scheduledGameIds, []);
+  assert.deepEqual(reset.completedGameIds, []);
+  assert.deepEqual(reset.liveGameIds, []);
+  assert.equal(reset.fantasyPoints, 0);
+  assert.equal(reset.startedAt, null);
+  assert.equal(reset.frozenProjectionPoints, 44.2);
+  assert.equal(reset.createdAt, '2026-10-12T19:00:00.000Z');
 });
 
 function skater(id, position = 'C', rosterStatus = 'active') {
@@ -429,14 +555,24 @@ test('persisted resolution evidence requires an explicit authoritative asset', (
 
 test('server wiring keeps plans private and consumes them in both regular rollover paths', async () => {
   const root = new URL('../../', import.meta.url);
-  const [authority, cycleService, functionsIndex, rules] = await Promise.all([
+  const [authority, rosterMoves, cycleService, functionsIndex, rules] = await Promise.all([
     readFile(new URL('functions/src/future-matchup-lineup.ts', root), 'utf8'),
+    readFile(new URL('functions/src/roster-moves.ts', root), 'utf8'),
     readFile(new URL('functions/src/shared/core/cycle/cycle.service.ts', root), 'utf8'),
     readFile(new URL('functions/src/index.ts', root), 'utf8'),
     readFile(new URL('firestore.rules', root), 'utf8'),
   ]);
 
   assert.match(authority, /manageFutureMatchupLineups = onCall/);
+  assert.match(authority, /operation === 'swap'/);
+  assert.match(authority, /data\['expectedOutgoingAssetKey'\] === null/);
+  assert.match(authority, /'physical-promotion'/);
+  assert.match(authority, /verifiedPromotionScheduleByCycle/);
+  assert.match(authority, /swap-timing-conflict/);
+  assert.match(authority, /future-lineup-swap-/);
+  assert.match(authority, /getReachedAutomaticInjuryReplacementOwnershipBoundaryGameIds/);
+  assert.match(rosterMoves, /export async function resolveIncomingProjectionForCycle/);
+  assert.match(rosterMoves, /loadUntouchedRosterSwapScheduleEvidence/);
   assert.match(authority, /lineupPlans/);
   assert.match(authority, /cycle-\$\{cycleNumber\}/);
   assert.match(authority, /lineupPlanMutationState/);

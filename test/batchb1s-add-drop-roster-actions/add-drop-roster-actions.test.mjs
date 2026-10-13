@@ -108,9 +108,9 @@ test('the active-first swap sheet shows compatible bench choices or a truthful e
   assert.match(source, /!this\.isBenchSlotReservedForActiveSwap\(slot\)/);
   assert.match(source, /this\.beginBenchSwap\(candidate\.slotId, activeSlot\.slotId\)/);
   assert.match(source, /benchSwapRestrictedTargetSlotId/);
-  assert.match(template, /\[title\]="[\s\S]*?'Swap with Bench'/);
-  assert.match(template, /No matching bench player is available/);
-  assert.match(template, /The active player[\s\S]*has not been changed/);
+  assert.match(template, /\[title\]="getActiveBenchPickerTitle\(\)"/);
+  assert.match(source, /getActiveBenchPickerTitle\(\)[\s\S]*?'Swap with Bench'/);
+  assert.match(template, /No eligible[\s\S]*activeSwapSlot\.position[\s\S]*player/);
   assert.match(styles, /\.active-bench-picker-option\s*\{/);
   assert.match(styles, /grid-template-columns:\s*3\.5rem minmax\(0, 1fr\) auto/);
 });

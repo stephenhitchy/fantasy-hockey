@@ -234,7 +234,11 @@ test('client routes injury add/drop and injury bench swap through explicit serve
     teamSettings,
     /private isActiveSlotEligibleForImmediateInjuryReplacement[\s\S]{0,400}getOpenIrSlotCount/,
   );
-  assert.match(teamTemplate, /Day-to-Day, Out, Injured Reserve, or Long-Term Injured Reserve/);
+  assert.match(
+    teamSettings,
+    /Day-to-Day, Out, Injured Reserve, or Long-Term Injured Reserve can be replaced immediately/,
+  );
+  assert.match(teamTemplate, /<p>\{\{ getBenchSwapDialogDescription\(\) \}\}<\/p>/);
   assert.match(teamTemplate, /moves to Bench/);
 });
 

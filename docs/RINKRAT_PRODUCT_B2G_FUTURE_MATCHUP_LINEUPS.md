@@ -10,43 +10,81 @@ player windows make several fantasy matchups visible at once: the manager can
 select a matchup, review its opponent, set the desired active players, and see
 when each roster slot is expected to begin contributing.
 
-The current matchup remains a read-only score view. Editing is limited to a
-future regular-season matchup because already started games, points, and
-player-window ownership are immutable.
+The selector keeps the current matchup and each future regular-season matchup
+in one place. The selected matchup uses the same full roster-board cards and
+Manage / Move interaction as the ordinary My Team view. Current-matchup
+actions retain their existing roster authority. Future-matchup actions are
+limited to active/bench lineup choices, and no action may move a started game,
+earned point, or player-window ownership boundary.
 
 ## Manager experience
 
 The My Team page adds one matchup selector backed by the deterministic
-regular-season schedule. For a selected future matchup it shows the complete
-active lineup, each slot's current or planned player, the player's start-date
-evidence, and whether the slot is editable, planned, already applied, or in a
-visible conflict state.
+regular-season schedule. Selecting a matchup keeps the complete roster board
+on screen instead of replacing it with a compact form. Each active card shows
+the player assigned to that exact matchup, that matchup's score and six-game
+markers, an exact saved start or clearly labelled nominal NHL-block start, and
+any later planned starter. The bench remains explicit about current ownership
+until a planned move actually reaches its server-owned boundary.
+
+For an older overlapping matchup, the board uses that cycle's bounded owner
+pick and window reads instead of borrowing the newest physical roster. If the
+cycle says a slot should exist but neither exact source identifies its player,
+or a present pick and window identify different players, the card says
+**Assignment pending** and offers a retry rather than presenting the newest
+player as historical fact. A genuinely open slot is shown as open
+only when the selected cycle omits it from the owner's expected-slot set, the
+physical persistent slot is still empty, and no selected-cycle pick or window
+contradicts that state. Missing or malformed cycle metadata fails closed.
 
 A future plan may keep the current player in a persistent active slot or
 replace that player with a compatible player who is currently on the bench.
-An active player cannot be moved directly between persistent active slots, an
-IR player is not a planning candidate, and an occupied active slot cannot be
-saved empty. Those restrictions keep a plan deterministic while different
-slots cross their six-game boundaries at different times.
+The selected card's **Manage / Move** sheet reuses the current roster flow for
+player detail and active/bench choice, but does not expose add/drop or IR as a
+matchup-local action. An active player cannot be moved directly between
+persistent active slots, an IR player is not a planning candidate, and an
+occupied active slot cannot be saved empty. Those restrictions keep a plan
+deterministic while different slots cross their six-game boundaries at
+different times.
 
-The browser exposes loading, retry, saving, saved, conflict, stale-revision,
-and navigation-away behavior. When previewing a later matchup, it composes any
-earlier saved future plans in cycle order so the manager sees the expected
-carry-forward roster; each saved plan remains a complete independent snapshot
-and is still revalidated at its own boundary. The browser uses bounded reads
-rather than a new Firestore listener. The server remains the authority for
-every saved plan and every eventual roster change.
+A compatible bench player may also fill an active slot that is physically
+empty. That request binds a `null` outgoing asset rather than inventing a
+placeholder player. The server accepts that nullable binding only while the
+exact persistent active slot is still physically empty and the selected
+matchup still has no pick or scoring window for it. The browser cannot use the
+empty-slot path to replace an assigned player or erase a started assignment.
 
-An unsaved draft disables matchup switching and manual refresh until the
-manager saves it or chooses **Reset changes**. The same method-level guards
-protect programmatic calls, and the page explains why navigation is paused.
-This prevents a slow authority refresh from silently replacing an edit.
+The browser exposes loading, confirmation, retry, saved, timing-conflict,
+stale-revision, stale-tab, and navigation-away behavior. Each confirmed move
+is saved atomically; there is no unsaved multi-slot browser draft in the full-
+board flow. When previewing a later matchup, the board composes earlier saved
+plans in cycle order so the manager sees the expected carry-forward roster;
+each saved plan remains a complete independent snapshot and is revalidated at
+its own boundary. A currently owned bench player who is already the projected
+starter is not offered as a no-op swap candidate. Before any slot materializes,
+the manager can clear the saved plan from the selected roster board and return
+to the current-roster projection. If the server discovers that one or more
+additional overlapping matchups have already crossed their boundary, the UI
+retains the server's exact suggested effective cycle for the same player pair, refreshes,
+and requires a new confirmation instead of repeating the stale estimate. The
+browser uses bounded reads rather than a new Firestore listener. The server
+remains the authority for every saved plan and every eventual roster change.
+
+Matchup 1 follows the same selected-card swap contract once its regular-season
+cycle has actually materialized. Before that cycle document exists, its roster
+board is read-only and explains that lineup changes unlock when the season
+matchup starts. Normal full-plan save and clear operations remain future-only;
+only the narrow selected-matchup swap may manage a materialized Matchup 1. An
+untouched exact pick/window can change atomically, while any started assignment
+preserves Matchup 1 and moves the incoming player's expected start to the next
+fair matchup.
 
 ## Private authority and storage
 
 The authenticated callable `manageFutureMatchupLineups` owns all list, save,
-and clear operations. It verifies the signed-in manager's current membership
-and team ownership and shares the existing `executeSecureRosterAction` App
+clear, and selected-matchup swap operations. It verifies the signed-in
+manager's current membership and team ownership and shares the existing
+`executeSecureRosterAction` App
 Check canary classification. It rejects an incomplete Draft, Historical
 Replay, playoffs, past periods, malformed full-lineup assignments, pending
 roster moves, stale revisions, reused request IDs with different payloads,
@@ -74,12 +112,25 @@ locked while untouched planned slots in the same partial or conflicted overlappi
 matchup may still be edited. A plan can be cleared only before any target slot
 has materialized or acquired a roster pick.
 
-An already-open target matchup accepts a new save only while its preceding
-regular-season matchup is still active, because that preceding matchup's
-asynchronous slot rollovers are the remaining consumer for untouched target
-slots. Once the predecessor is complete or unavailable, the target matchup is
-read-only even if an empty slot never received a pick; the callable fails with
-`cycle-started` instead of saving a plan that no worker could consume.
+The callable also owns the active-to-bench `swap` intent used by the selected-
+matchup **Manage / Move** flow. The request binds the requested cycle, the
+browser's expected effective cycle, both exact roster slots, the incoming
+asset key, the occupied slot's outgoing asset key or `null` for a physical
+empty-slot promotion, the effective plan revision, and one stable request ID.
+The browser's expected cycle is only a stale-evidence guard: the server
+independently classifies the selected cycle and rejects a mismatch with
+`swap-timing-conflict` instead of letting the browser choose a competitive
+boundary.
+
+An already-open target matchup accepts a normal full-plan save only while its
+preceding regular-season matchup is still active, because that preceding
+matchup's asynchronous slot rollovers are the remaining consumer for untouched
+target slots. Once the predecessor is complete or unavailable, the target
+matchup is read-only for normal saves even if an empty slot never received a
+pick; the callable fails with `cycle-started` instead of saving a plan that no
+worker could consume. The narrowly scoped `swap` operation is different: it
+may retarget an already-materialized occupied slot only under the exact
+untouched-window proof described below.
 
 When a target cycle does not exist yet, the save transaction also reads the
 latest materialized cycle and validates its exact document identity, number,
@@ -96,15 +147,68 @@ otherwise compete for one bench player.
 
 ## Per-slot boundary behavior
 
-Future plans do not rewrite a current roster window and do not wait for every
-player on a team to finish together. Each planned slot is consumed only when
-that persistent slot reaches its real six-game boundary and its next
+Normal future plans do not rewrite a started roster window and do not wait for
+every player on a team to finish together. Each planned slot is consumed only
+when that persistent slot reaches its real six-game boundary and its next
 regular-season window is about to be created. Both the ordinary next-cycle
 path and the overlapping fast-slot rollover path use the same plan authority.
-The lock begins when that persistent slot receives its target roster pick; it
-does not wait for the player's first NHL puck drop. Conversely, the existence
-of an overlapping cycle does not blanket-lock the other slots that are still
-explicitly `planned`.
+The existence of an overlapping cycle does not blanket-lock the other slots
+that are still explicitly `planned`.
+
+For an explicit selected-matchup active-to-bench swap, materialization by
+itself is not treated as game ownership. When both exact assignments remain
+untouched, the selected-matchup plan changes immediately. If that selected
+matchup is already materialized, the server may also rewrite its occupied
+assignment only when all of the following remain true in one Firestore
+transaction:
+
+- the manager still owns the exact active and bench assets in the exact slots;
+- no normal pending roster move reserves either boundary;
+- the exact target pick still owns the outgoing asset;
+- the exact target scoring window is present, scheduled, identity-matched, and
+  contains zero games, zero points, no live/final or scoring evidence, and no
+  injury-replacement ownership;
+- the incoming asset has no pick or scoring window in that cycle;
+- the cycle's frozen outgoing and incoming NHL game IDs each contain exactly
+  the league-required number of unique positive IDs, and a fresh schedule
+  fetch proves every one remains before puck drop; and
+- a final clock check immediately before writes proves none of those games
+  crossed puck drop while the request was being verified.
+
+The transaction rereads the league's required-game contract and both frozen
+ID sequences. Any scoring-contract change, missing or duplicate ID, or
+difference from the preflight evidence aborts before a roster, pick, window,
+plan, receipt, or audit write can occur.
+
+An empty-active-slot promotion has no outgoing player to verify. Its nullable
+outgoing binding is valid only when the exact physical active slot is empty,
+the exact incoming player is still in the submitted bench slot, and the target
+cycle has no pick or scoring window for that active slot. The target cycle
+must still provide one complete league-sized set of unique frozen NHL game IDs
+for the incoming player's current team. Fresh provider evidence and the final
+transaction clock check must prove that none of those incoming games started.
+The transaction rereads the empty target, frozen IDs, and roster ownership;
+any pick, window, player, schedule, or puck-drop change aborts before the plan
+or receipt is written.
+
+Missing or malformed evidence never means zero. If either occupied-slot
+assignment has started, the empty slot's incoming assignment has started, an
+assignment is already owned elsewhere, or the selected target is otherwise
+unavailable, the server preserves the selected matchup and searches forward
+through overlapping regular-season cycles for the next fair eligible cycle.
+It either saves the complete plan there or applies the same exact untouched
+proof to an already-materialized later cycle. Fresh provider puck-drop
+evidence that contradicts a stale scheduled window returns a
+`swap-timing-conflict` with the authoritative next cycle; the browser must
+refresh and reconfirm, and the stale window is never rewritten. The successful
+response states `immediate` or `queued`, requested and effective cycle numbers,
+the timing reason, the saved plan, and a human-readable effective-start reason.
+The board then shows that later matchup as the incoming player's expected
+start. An unmaterialized A-to-B plan can be changed to B-to-C or safely
+reversed to A without pretending the physical roster has already moved. For
+an older overlapping matchup, the exact saved pick and window may identify the
+displayed outgoing player, but only exact current physical active/bench
+ownership can authorize an immediate materialized rewrite.
 
 At that boundary the transaction rereads the exact plan revision and
 assignment hash, the authoritative roster, the target roster pick, and the
@@ -131,9 +235,12 @@ pick. Plans created after rollover preflight likewise force a fresh attempt,
 including plans that fill an otherwise-empty active slot. A successful empty-
 slot promotion is added to the target cycle's expected-window set, so matchup
 completion waits for its full six games. The contract never silently
-substitutes zero, steals a bench player from another slot, rewrites an existing
-target pick, or moves a started game. Historical Replay explicitly disables
-plan consumption, and playoff windows remain outside this first contract.
+substitutes zero, steals a bench player from another slot, or moves a started
+game. The only existing target pick it may rewrite is the exact selected-
+matchup pick covered by the untouched proof above; the roster, pick, scoring
+window, complete plan, bounded idempotency receipt, and deterministic audit are
+committed atomically. Historical Replay explicitly disables plan consumption,
+and playoff windows remain outside this first contract.
 An existing malformed plan or owner/cycle identity mismatch also aborts both
 materialization paths visibly instead of being treated as an absent plan.
 
@@ -158,20 +265,30 @@ audit timestamps is presented as the player's first game. The callable
 deliberately returns no plan-level target-start timestamp because independent
 slots in one matchup can start on different dates.
 
-The schedule preview uses bounded cached NHL requests, and exact window reads
-load only the signed-in owner's selected-cycle document. There is no new
-listener fanout. A failed schedule request remains visible as nominal or
-pending evidence and does not become competitive authority. Saving performs a
-fresh bounded plan-and-window authority read first; if anything changed, the
-page preserves compatible unsaved choices, refreshes locked slots, and asks the
-manager to review before submitting. Roster changes trigger the same bounded
-window reread. Ambiguous save or clear failures retain one stable request ID so
-the explicit retry can replay the exact mutation safely.
+The schedule preview uses bounded cached NHL requests. Exact window reads load
+only the signed-in owner's selected-cycle document, and one bounded owner-pick
+query confirms the selected cycle's slot identities; duplicate or malformed
+slot evidence fails visibly. Its bounded team set
+includes the selected assignments and every currently eligible bench player's
+NHL team, deduplicated and required to remain within the existing 32-team cap,
+so an open-slot promotion or swap does not appear safe merely because the
+incoming bench schedule was omitted. There is no new listener fanout. A failed
+schedule request remains visible as nominal or pending evidence and does not
+become competitive authority. Saving performs a fresh bounded plan-and-window
+authority read first; if anything changed, the page preserves compatible
+unsaved choices, refreshes locked slots, and asks the manager to review before
+submitting. Roster changes trigger the same bounded window reread. Ambiguous
+save or clear failures retain one stable request ID so the explicit retry can
+replay the exact mutation safely.
 
 ## Scope and protected contracts
 
-B2G changes regular-season roster authority only at a future persistent-slot
-boundary chosen in advance by the manager. It does not change Production
+B2G changes regular-season roster authority only at a manager-selected
+persistent-slot boundary. An occupied selected assignment can change only
+before either exact player reaches NHL game ownership; an empty-slot promotion
+requires that the incoming assignment has not started and that no target pick
+or window exists. Otherwise the next fair cycle is authoritative. It does not
+change Production
 Scoring V4 values, Projection V11 formulas or hashes, the six-game allowance,
 seventh-game rollover, started-window ownership, injury-replacement ownership,
 Draft authority, waivers, IR timing, standings, playoff authority, historical
@@ -187,22 +304,26 @@ The focused suite is:
 npm run test:batchb2g
 ```
 
-The current B2G suite contains 63 tests.
-
 It builds Functions, then runs
 `test/future-matchup-lineup-core/*.test.mjs`,
 `test/future-matchup-lineup-authority/*.test.mjs`, and
 `test/future-matchup-lineup-ui/*.test.mjs` inside the Firestore emulator. The
-core coverage protects matchup selection, slot-bound active and bench
+core coverage protects matchup selection, selected-cycle open-versus-missing
+slot evidence, slot-bound active and bench
 candidates, immutable windows, full-lineup validation, exact-versus-nominal
 date precedence, stable game IDs, bounded one-owner reads, and the
 no-new-listener contract. The authority coverage protects assignment hashes,
 revision and request replay, private membership checks, cross-cycle
 reservations, partial materialization, pending-move precedence, conflict
 fallbacks, post-preflight races in both rollover paths, empty-slot expected-
-window accounting, and regular-season-only gating. The UI coverage protects the
-compact current score view, future-only editor, labeled native controls,
-per-slot date semantics, mobile layout primitives, and complete async states.
+window accounting, selected-cycle untouched swaps, stale provider puck-drop
+evidence, nullable-outgoing empty-slot promotions, atomic
+roster/pick/window/plan/audit commits, exact request replay, and regular-season-
+only gating. The UI coverage protects the
+current score view, complete selected-matchup roster-board reuse, future-only
+active/bench actions, labelled native controls, per-slot date semantics,
+eligible-bench schedule evidence, multi-overlap timing reconciliation, mobile
+layout primitives, and complete async states.
 
 The new inherited release gate is:
 
@@ -249,6 +370,17 @@ No Rule, index, TTL, queue, Scheduler, App Check configuration, migration, or
 Production data write belongs to this rollout. Existing leagues need no
 backfill; they have no plan until a manager explicitly saves one.
 
+Do not use the earlier incremental B2G assumption for the current Production
+posture. At the 2026-10-12 review, the live Hosting manifest identifies source
+`cc39319177670a0b9ce2fb0d0d18daf53eea634c`, while the operator-provided
+targeted Functions deployment logs identify clean source
+`412c3b8b1705478c992db5e79d847c8c943a6308`. Those sources are divergent, and
+Function inventory or ACTIVE status does not prove one exact deployed source.
+Use the complete staged sequence above from one verified clean commit unless a
+fresh per-Function source audit first proves that every listed consumer already
+has the reviewed B2G boundary contract. Do not broaden any selector merely to
+make the runtime uniform.
+
 ## Rollback
 
 The preferred rollback is Hosting-only: restore the preceding Hosting release
@@ -262,4 +394,7 @@ Do not delete plan, mutation-state, transaction-audit, roster-pick, or window
 documents. Restoring older cycle consumers makes any unconsumed plan inert;
 already materialized roster windows and swaps remain authoritative and must
 not be reversed. A forward fix may safely resume remaining planned slots after
-the exact saved evidence passes again.
+the exact saved evidence passes again. If a future per-Function source audit
+proves an incremental selected-matchup release safe, restore Hosting first and
+then restore the preceding `manageFutureMatchupLineups` revision; do not
+manually undo an atomic swap that already committed.

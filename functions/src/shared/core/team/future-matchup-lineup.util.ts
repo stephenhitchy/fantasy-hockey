@@ -5,6 +5,7 @@ import {
   FantasyRoster,
   RosterAsset,
 } from './roster.models';
+import { DraftableAsset } from '../draft/draft.models';
 
 export const FUTURE_MATCHUP_LINEUP_SCHEMA_VERSION = 1;
 
@@ -66,6 +67,13 @@ export interface FutureLineupBoundaryResolution {
   reason: FutureMatchupLineupConflictReason | null;
 }
 
+export interface FutureMatchupUntouchedWindowIdentity {
+  ownerId: string;
+  rosterSlotId: string;
+  cycleNumber: number;
+  assetKey: string;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -80,6 +88,173 @@ function asPositiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
     ? value
     : 0;
+}
+
+function asFiniteNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/**
+ * A selected-matchup swap may rewrite only a window with no ownership event.
+ * This deliberately checks every durable scoring/start marker instead of
+ * assuming a zero score means the player has not played.
+ */
+export function futureMatchupWindowOwnershipStarted(value: unknown): boolean {
+  const window = asRecord(value);
+  const status = asNonEmptyString(window['status']);
+  const gameStates = asRecord(window['gameStates']);
+
+  return status === 'active' ||
+    status === 'complete' ||
+    window['startedAt'] != null ||
+    window['completedAt'] != null ||
+    asFiniteNumber(window['gamesPlayed']) !== 0 ||
+    asFiniteNumber(window['actualGamesPlayed']) !== 0 ||
+    asFiniteNumber(window['fantasyPoints']) !== 0 ||
+    asArray(window['completedGameIds']).length > 0 ||
+    asArray(window['liveGameIds']).length > 0 ||
+    asArray(window['appearanceGameIds']).length > 0 ||
+    asArray(window['incompleteFinalGameIds']).length > 0 ||
+    Object.keys(asRecord(window['gameScores'])).length > 0 ||
+    Object.keys(asRecord(window['gameInputCompleteness'])).length > 0 ||
+    Object.keys(asRecord(window['scoringAssetKeyByGameId'])).length > 0 ||
+    window['injuryReplacementWindow'] != null ||
+    Object.values(gameStates).some(
+      (state) => state === 'live' || state === 'final',
+    );
+}
+
+export function requireUntouchedFutureMatchupWindow(input: {
+  value: unknown;
+  identity: FutureMatchupUntouchedWindowIdentity;
+}): Record<string, unknown> {
+  const window = asRecord(input.value);
+  const asset = asRecord(window['asset']);
+  const exactZeroFields = [
+    'gamesPlayed',
+    'actualGamesPlayed',
+    'fantasyPoints',
+  ];
+  const exactEmptyArrayFields = [
+    'completedGameIds',
+    'liveGameIds',
+    'appearanceGameIds',
+  ];
+  const gameStates = asRecord(window['gameStates']);
+
+  if (
+    asNonEmptyString(window['ownerId']) !== input.identity.ownerId ||
+    asNonEmptyString(window['rosterSlotId']) !== input.identity.rosterSlotId ||
+    asPositiveInteger(window['cycleNumber']) !== input.identity.cycleNumber ||
+    asNonEmptyString(window['assetKey']) !== input.identity.assetKey ||
+    asNonEmptyString(asset['assetKey']) !== input.identity.assetKey ||
+    asNonEmptyString(window['status']) !== 'scheduled' ||
+    !Array.isArray(window['scheduledGameIds']) ||
+    !Array.isArray(window['scheduledGameDates']) ||
+    !Array.isArray(window['scheduledGameLabels']) ||
+    exactZeroFields.some((field) => window[field] !== 0) ||
+    exactEmptyArrayFields.some(
+      (field) => !Array.isArray(window[field]) || window[field].length > 0,
+    ) ||
+    (window['incompleteFinalGameIds'] !== undefined &&
+      (!Array.isArray(window['incompleteFinalGameIds']) ||
+        window['incompleteFinalGameIds'].length > 0)) ||
+    !window['gameStates'] ||
+    typeof window['gameStates'] !== 'object' ||
+    Array.isArray(window['gameStates']) ||
+    Object.values(gameStates).some((state) => state !== 'scheduled') ||
+    !window['gameScores'] ||
+    typeof window['gameScores'] !== 'object' ||
+    Array.isArray(window['gameScores']) ||
+    Object.keys(asRecord(window['gameScores'])).length > 0 ||
+    futureMatchupWindowOwnershipStarted(window)
+  ) {
+    throw new Error(
+      `Future matchup window ${input.identity.ownerId}/` +
+        `${input.identity.rosterSlotId}/cycle-${input.identity.cycleNumber} ` +
+        'is not an exact untouched assignment.',
+    );
+  }
+
+  return window;
+}
+
+/**
+ * Rebuilds an exact scheduled window after authority has proved that no game,
+ * point, or start marker belongs to the previous player. Started windows never
+ * reach this helper.
+ */
+export function buildFutureMatchupResetWindow(input: {
+  previous: unknown;
+  asset: DraftableAsset;
+  ownerId: string;
+  rosterSlotId: string;
+  cycleNumber: number;
+  playerWindowContinuity: unknown;
+  nowIso: string;
+}): Record<string, unknown> {
+  const previous = asRecord(input.previous);
+
+  return {
+    ...previous,
+    id:
+      asNonEmptyString(previous['id']) ||
+      `${input.ownerId}__${input.rosterSlotId}__cycle-${input.cycleNumber}`,
+    ownerId: input.ownerId,
+    rosterSlotId: input.rosterSlotId,
+    cycleNumber: input.cycleNumber,
+    position: input.asset.position,
+    assetKey: input.asset.assetKey,
+    asset: input.asset,
+    status: 'scheduled',
+    scheduledGameIds: [],
+    scheduledGameDates: [],
+    scheduledGameLabels: [],
+    scheduleTeamAbbreviation: null,
+    sourceTeamAbbreviationByGameId: {},
+    teamIdentityChanged: false,
+    playerWindowContinuity: input.playerWindowContinuity,
+    injuryReplacementWindow: null,
+    scoringAssetKeyByGameId: {},
+    completedGameIds: [],
+    liveGameIds: [],
+    appearanceGameIds: [],
+    incompleteFinalGameIds: [],
+    gameInputCompleteness: {},
+    gameScores: {},
+    gameStates: {},
+    scheduledGames: 0,
+    gamesPlayed: 0,
+    actualGamesPlayed: 0,
+    gamesLeft: 0,
+    fantasyPoints: 0,
+    frozenProjectionPoints:
+      input.asset.frozenCycleProjectionPoints ??
+      input.asset.projectedCyclePoints ??
+      null,
+    frozenProjectionVersion: input.asset.frozenProjectionVersion ?? null,
+    frozenProjectionSource: input.asset.frozenProjectionSource ?? null,
+    frozenProjectionSnapshotId:
+      input.asset.frozenProjectionSnapshotId ??
+      input.asset.sharedProjectionSnapshotId ??
+      null,
+    frozenProjectionGeneratedAt:
+      input.asset.frozenProjectionGeneratedAt ??
+      input.asset.projectionGeneratedAt ??
+      null,
+    frozenProjectionFrozenAt: input.nowIso,
+    frozenProjectionTargetGameIds: [],
+    firstScheduledGameDate: null,
+    lastScheduledGameDate: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: previous['createdAt'] ?? input.nowIso,
+    updatedAt: input.nowIso,
+  };
 }
 
 function isSlotResolution(value: unknown): value is FutureMatchupLineupSlotResolution {

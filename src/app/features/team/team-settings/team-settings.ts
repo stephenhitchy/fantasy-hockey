@@ -35,6 +35,7 @@ import { defaultScoringRules } from '../../../core/scoring/scoring-rules';
 
 import {
   CycleSchedulePreviewCycle,
+  getCycleOwnerRosterPicksOnce,
   listenToCycleMatchups,
   listenToCycleRosterPicks,
   listenToEarliestUnfinishedOwnerMatchup,
@@ -107,6 +108,7 @@ import { isImmediateInjuryMoveStatus } from '../../../core/player/player-injury-
 import { getOrCreateFantasyRoster, listenToFantasyRoster } from '../../../core/team/roster.service';
 import {
   type FutureMatchupLineupPlanView,
+  type SwapFutureMatchupLineupRequest,
   type FutureMatchupLineupSlotInput,
   type FutureMatchupLineupSlotView,
 } from '../../../core/team/future-matchup-lineup.models';
@@ -114,21 +116,35 @@ import {
   clearFutureMatchupLineupPlan,
   createFutureMatchupLineupRequestId,
   isFutureMatchupLineupRevisionConflict,
+  isFutureMatchupLineupSwapTimingConflict,
   listFutureMatchupLineupPlans,
   loadFutureMatchupLineupOptionContext,
   loadFutureMatchupNhlSchedules,
   loadFutureMatchupOwnerWindows,
+  normalizeFutureMatchupLineupError,
   saveFutureMatchupLineupPlan,
+  swapFutureMatchupLineup,
 } from '../../../core/team/future-matchup-lineup.service';
 import {
   buildFutureMatchupLineupCandidates,
   buildFutureMatchupLineupOptions,
   buildFutureMatchupProjectedLineup,
+  getFutureMatchupSwapIntentKey,
+  hasFutureMatchupWindowStarted,
   isFutureMatchupCandidateCompatible,
+  resolveFutureMatchupSwapEffectiveCycle,
   resolveFutureMatchupSlotDateState,
   resolveFutureMatchupSourceEvidence,
+  resolveSelectedMatchupAssignmentIdentity,
+  resolveSelectedMatchupSlotExpectation,
+  resolveSelectedMatchupSlotScoreState,
   selectFutureMatchupProjectedGames,
+  selectRelevantFutureMatchupAuthorityPlans,
+  shouldUseLiveSelectedMatchupScoring,
+  shouldUseSelectedMatchupRosterAuthority,
   type FutureMatchupLineupOption,
+  type FutureMatchupSwapEffectiveCycleOverride,
+  type FutureMatchupSwapIntent,
   validateFutureMatchupLineupDraft,
 } from '../../../core/team/future-matchup-lineup.util';
 import { getUserProfile, UserProfile } from '../../../core/user/user.service';
@@ -214,8 +230,15 @@ interface RosterSlotGameMarker {
 }
 
 interface ActiveRosterDisplaySlot extends ActiveRosterSlot {
+  assignmentPending: boolean;
+  displayCycleNumber: number | null;
+  futureStartDate: FutureLineupStartDatePresentation | null;
   gameMarkers: RosterSlotGameMarker[];
   injuryReplacementPresentation: InjuryReplacementPresentation | null;
+  nextPlannedAssetLabel: string;
+  selectedPick: DraftPick | null;
+  selectedWindow: FantasyAssetCycleWindow | null;
+  useLiveCurrentScoring: boolean;
   windowLabel: string;
 }
 
@@ -242,11 +265,12 @@ interface FutureLineupEditorRow {
 }
 
 interface PendingFutureLineupMutation {
-  operation: 'save' | 'clear';
+  operation: 'save' | 'clear' | 'swap';
   cycleNumber: number;
   expectedRevision: number;
   requestId: string;
   slotsKey: string;
+  swapRequest?: Readonly<SwapFutureMatchupLineupRequest>;
 }
 
 import { getHistoricalScoringTestDate } from '../../../core/cycle/cycle-runtime.config';
@@ -292,6 +316,7 @@ export class TeamSettings implements OnDestroy {
   futureLineupSchedulePreview = signal<CycleSchedulePreviewCycle[]>([]);
   futureLineupNhlSeason = signal('');
   futureLineupWindows = signal<FantasyAssetCycleWindow[]>([]);
+  futureLineupRosterPicks = signal<DraftPick[]>([]);
   futureLineupSchedulesByTeam = signal<Readonly<Record<string, NhlTeamSeasonGame[]>>>({});
   futureLineupSourceNhlBlockNumber = signal<number | null>(null);
   futureLineupTargetGameIdsByTeam = signal<Readonly<Record<string, number[]>>>({});
@@ -337,6 +362,8 @@ export class TeamSettings implements OnDestroy {
   rosterDropSlotId = signal('');
   rosterManagerArea = signal<RosterManagementArea | null>(null);
   rosterManagerSlotId = signal('');
+  rosterActionCycleNumber = signal<number | null>(null);
+  rosterActionUsesSelectedMatchupAuthority = signal(false);
 
   readonly rosterPositions: RosterPositionGroup[] = [
     { position: 'LW', label: 'Left Wing' },
@@ -369,6 +396,8 @@ export class TeamSettings implements OnDestroy {
   private futureLineupSelectionTouched = false;
   private futureLineupInitialLoadStarted = false;
   private pendingFutureLineupMutation: PendingFutureLineupMutation | null = null;
+  private readonly futureSwapEffectiveCycleOverride =
+    signal<FutureMatchupSwapEffectiveCycleOverride | null>(null);
   private readonly routeSubscription: Subscription;
 
   readonly isOwnTeam = computed(() => {
@@ -422,6 +451,14 @@ export class TeamSettings implements OnDestroy {
     }
 
     return roster.activeSlots.filter((slot) => slot.asset !== null).length;
+  });
+
+  readonly displayedRosterFilledCount = computed(() => {
+    if (!this.getSelectedFutureLineupMatchupOption()) {
+      return this.rosterFilledCount();
+    }
+
+    return this.getFutureRosterDisplaySlots().filter((slot) => slot.asset !== null).length;
   });
 
   readonly rosterTotalCount = computed(() => this.roster()?.activeSlots.length ?? 0);
@@ -521,6 +558,32 @@ export class TeamSettings implements OnDestroy {
       return null;
     }
 
+    if (this.isFutureRosterAction()) {
+      const requestedCycleNumber = this.rosterActionCycleNumber();
+      const effectiveCycleNumber = this.getExpectedFutureSwapCycleNumber();
+      const activeName = activeAsset ? this.getRosterAssetName(activeAsset) : 'the open slot';
+
+      if (!requestedCycleNumber || !effectiveCycleNumber) {
+        return null;
+      }
+
+      const appliesToSelected = requestedCycleNumber === effectiveCycleNumber;
+      return {
+        tone: appliesToSelected ? 'ready' : 'waiting',
+        matchupLabel: `Matchup ${effectiveCycleNumber}`,
+        headline: appliesToSelected
+          ? activeAsset
+            ? `Both players are still untouched in Matchup ${requestedCycleNumber}`
+            : `This open-slot start is ready for Matchup ${requestedCycleNumber}`
+          : `This lineup change starts in the next fair matchup window`,
+        detail: appliesToSelected
+          ? activeAsset
+            ? `${this.getRosterAssetName(benchAsset)} can replace ${activeName} in the selected matchup. The server verifies both exact game windows again before applying it.`
+            : `${this.getRosterAssetName(benchAsset)} can fill the open slot in the selected matchup. The server verifies the incoming game window again before applying it.`
+          : `${activeAsset ? `${activeName} or ` : ''}${this.getRosterAssetName(benchAsset)} has already crossed the selected matchup boundary. Matchup ${requestedCycleNumber} stays unchanged, and the incoming player’s expected start moves to Matchup ${effectiveCycleNumber}.`,
+      };
+    }
+
     if (this.isPendingBenchSwapInjuryReplacement()) {
       const activeName = activeAsset ? this.getRosterAssetName(activeAsset) : 'The injured starter';
       const currentCycleNumber = this.latestCycle()?.cycleNumber;
@@ -557,7 +620,9 @@ export class TeamSettings implements OnDestroy {
     }
 
     if (area === 'active') {
-      return roster.activeSlots.find((slot) => slot.slotId === slotId)?.asset ?? null;
+      return this.isFutureRosterAction()
+        ? this.getSelectedRosterDisplaySlot(slotId)?.asset ?? null
+        : roster.activeSlots.find((slot) => slot.slotId === slotId)?.asset ?? null;
     }
 
     if (area === 'bench') {
@@ -578,6 +643,77 @@ export class TeamSettings implements OnDestroy {
 
     if (!area || !slotId) {
       return [];
+    }
+
+    if (this.isFutureRosterAction()) {
+      const busy = this.isRosterOperationPending();
+      const lineupBlockReason = this.getFutureLineupEditBlockReason();
+      const actions: RosterManagementAction[] = asset
+        ? [{
+            id: 'view',
+            label: this.hasSelectedMatchupScoringDetail(slotId)
+              ? 'View Scoring Detail'
+              : 'View Player Detail',
+            detail: this.hasSelectedMatchupScoringDetail(slotId)
+              ? 'Open this player’s scoring detail for the selected matchup.'
+              : 'Open player information while this matchup assignment is still projected.',
+            tone: 'secondary',
+            enabled: !busy,
+            disabledReason: busy ? 'Wait for the current roster action to finish.' : null,
+          }]
+        : [];
+
+      if (area === 'active' && asset) {
+        const compatibleBenchPlayers = this.getFutureSwapBenchCandidates(
+          asset.position,
+          slotId,
+        );
+        actions.push({
+          id: 'swap-with-bench',
+          label: 'Change Matchup Starter',
+          detail: 'Choose a matching lineup option for this matchup. Untouched players change here; otherwise the move starts in the next fair matchup window.',
+          tone: 'primary',
+          enabled: !busy && !lineupBlockReason && compatibleBenchPlayers.length > 0,
+          disabledReason: busy
+            ? 'Wait for the current roster action to finish.'
+            : lineupBlockReason ||
+              (compatibleBenchPlayers.length === 0
+                ? `No compatible ${asset.position} bench player is available.`
+                : null),
+        });
+        if (this.isFuturePlannedOpenSlotAssignment(slotId)) {
+          actions.push({
+            id: 'keep-open',
+            label: 'Leave This Slot Open',
+            detail: 'Remove this planned starter while preserving every other saved matchup assignment.',
+            tone: 'secondary',
+            enabled: !busy && !lineupBlockReason,
+            disabledReason: busy
+              ? 'Wait for the current roster action to finish.'
+              : lineupBlockReason,
+          });
+        }
+      } else if (area === 'bench' && asset) {
+        const alreadyPlannedToStart = this.isFutureLineupProjectedStarter(asset);
+        const matchingSlots = this.getFutureSwapActiveTargets(asset);
+        actions.push({
+          id: 'start',
+          label: 'Move into Starting Lineup',
+          detail: 'Choose a matching active slot in this matchup. Started assignments remain unchanged and move the expected start to the next fair matchup.',
+          tone: 'primary',
+          enabled: !busy && !lineupBlockReason && matchingSlots.length > 0,
+          disabledReason: busy
+            ? 'Wait for the current roster action to finish.'
+            : lineupBlockReason ||
+              (alreadyPlannedToStart
+                ? `${this.getRosterAssetName(asset)} is already scheduled to start in the selected matchup.`
+                : matchingSlots.length === 0
+                  ? `No ${asset.position} starting slot is available.`
+                  : null),
+        });
+      }
+
+      return actions;
     }
 
     const activeSlot =
@@ -754,6 +890,7 @@ export class TeamSettings implements OnDestroy {
     this.futureLineupSchedulePreview.set([]);
     this.futureLineupNhlSeason.set('');
     this.futureLineupWindows.set([]);
+    this.futureLineupRosterPicks.set([]);
     this.futureLineupSchedulesByTeam.set({});
     this.futureLineupSourceNhlBlockNumber.set(null);
     this.futureLineupTargetGameIdsByTeam.set({});
@@ -771,6 +908,7 @@ export class TeamSettings implements OnDestroy {
     this.futureLineupSelectionTouched = false;
     this.futureLineupInitialLoadStarted = false;
     this.pendingFutureLineupMutation = null;
+    this.clearFutureSwapEffectiveCycleOverride();
     this.futureLineupLoadGeneration += 1;
     this.futureLineupMutationGeneration += 1;
     this.futureLineupTimingGeneration += 1;
@@ -902,7 +1040,23 @@ export class TeamSettings implements OnDestroy {
   }
 
   get currentFutureLineupMatchup(): FantasyMatchup | null {
-    return this.currentMatchup();
+    const selectedCycleNumber = this.selectedFutureLineupCycleNumber();
+    const navigationMatchup = this.currentMatchup();
+
+    if (navigationMatchup?.cycleNumber === selectedCycleNumber) {
+      return navigationMatchup;
+    }
+
+    return this.latestMatchups().find(
+      (matchup) =>
+        matchup.cycleNumber === selectedCycleNumber &&
+        (matchup.teamAOwnerId === this.viewedOwnerId() ||
+          matchup.teamBOwnerId === this.viewedOwnerId()),
+    ) ?? null;
+  }
+
+  get selectedFutureLineupOpponentOwnerId(): string | null {
+    return this.getSelectedFutureLineupMatchupOption()?.opponentOwnerId ?? null;
   }
 
   get futureLineupEditorVisible(): boolean {
@@ -986,7 +1140,11 @@ export class TeamSettings implements OnDestroy {
     }
 
     if (!plan) {
-      return this.isOwnTeam() ? 'Unsaved lineup preview' : 'Read-only preview';
+      if (selectedOption?.timing === 'open') {
+        return this.isOwnTeam() ? 'In-progress lineup' : 'Read-only lineup';
+      }
+
+      return this.isOwnTeam() ? 'Projected lineup' : 'Read-only preview';
     }
 
     switch (plan.status) {
@@ -1023,7 +1181,7 @@ export class TeamSettings implements OnDestroy {
       return `Read-only preview for Matchup ${option.cycleNumber} against ${opponentName}. Private future changes are not shown before they take effect.`;
     }
 
-    return `Plan the active lineup for Matchup ${option.cycleNumber} against ${opponentName}. The server rechecks ownership and every six-game boundary when you save.`;
+    return `Manage the active lineup for Matchup ${option.cycleNumber} against ${opponentName}. The server rechecks both players, exact NHL puck-drop times, and every six-game boundary when you confirm a move.`;
   }
 
   selectFutureLineupCycle(value: number | string | null): void {
@@ -1040,18 +1198,23 @@ export class TeamSettings implements OnDestroy {
       cycleNumber === this.selectedFutureLineupCycleNumber() ||
       this.futureLineupDirty() ||
       this.futureLineupLoading() ||
-      this.futureLineupSaving()
+      this.futureLineupSaving() ||
+      this.hasPendingFutureLineupSwap() ||
+      this.isRosterOperationPending()
     ) {
       return;
     }
 
     this.futureLineupSelectionTouched = true;
+    this.closeAllRosterManagementState();
+    this.clearFutureSwapEffectiveCycleOverride();
     this.selectedFutureLineupCycleNumber.set(cycleNumber);
     this.futureLineupMessage.set('');
     this.futureLineupError.set('');
     this.pendingFutureLineupMutation = null;
     this.futureLineupTimingGeneration += 1;
     this.futureLineupWindows.set([]);
+    this.futureLineupRosterPicks.set([]);
     this.futureLineupSchedulesByTeam.set({});
     this.futureLineupSourceNhlBlockNumber.set(null);
     this.futureLineupTargetGameIdsByTeam.set({});
@@ -1270,7 +1433,12 @@ export class TeamSettings implements OnDestroy {
       return true;
     }
 
-    if (this.futureLineupWindows().some((window) => window.rosterSlotId === slot.slotId)) {
+    if (
+      this.futureLineupWindows().some(
+        (window) =>
+          window.rosterSlotId === slot.slotId && hasFutureMatchupWindowStarted(window),
+      )
+    ) {
       return true;
     }
 
@@ -1279,8 +1447,7 @@ export class TeamSettings implements OnDestroy {
       return true;
     }
 
-    const plannedSlot = this.getFutureLineupSlotResolution(slot);
-    return Boolean(plannedSlot && plannedSlot.resolution !== 'planned');
+    return false;
   }
 
   shouldShowFutureLineupEditor(): boolean {
@@ -1290,7 +1457,7 @@ export class TeamSettings implements OnDestroy {
       return false;
     }
 
-    return option.timing === 'future';
+    return option.timing !== 'current';
   }
 
   getFutureLineupSlotLockReason(slot: ActiveRosterSlot): string {
@@ -1299,8 +1466,13 @@ export class TeamSettings implements OnDestroy {
       return globalReason;
     }
 
-    if (this.futureLineupWindows().some((window) => window.rosterSlotId === slot.slotId)) {
-      return 'The lineup boundary for this matchup has passed. This assignment is fixed even if its NHL games have not started.';
+    if (
+      this.futureLineupWindows().some(
+        (window) =>
+          window.rosterSlotId === slot.slotId && hasFutureMatchupWindowStarted(window),
+      )
+    ) {
+      return 'At least one game in this slot has started. This matchup stays fixed, and a new move begins in the next fair matchup window.';
     }
 
     const projectedSlot = this.getFutureLineupProjectedSlot(slot.slotId);
@@ -1311,21 +1483,7 @@ export class TeamSettings implements OnDestroy {
       );
     }
 
-    const plannedSlot = this.getFutureLineupSlotResolution(slot);
-
-    if (!plannedSlot || plannedSlot.resolution === 'planned') {
-      return '';
-    }
-
-    if (plannedSlot.reason?.trim()) {
-      return plannedSlot.reason;
-    }
-
-    if (plannedSlot.resolution === 'conflict') {
-      return 'This assignment is fixed for this matchup. Other planned slots can still be edited.';
-    }
-
-    return 'This slot has already materialized for the selected matchup and cannot be changed.';
+    return '';
   }
 
   private getFutureLineupProjectedSlot(slotId: string) {
@@ -1348,12 +1506,38 @@ export class TeamSettings implements OnDestroy {
     );
   }
 
-  getFutureLineupStartDate(slot: ActiveRosterSlot): FutureLineupStartDatePresentation {
-    const assetKey = this.futureLineupDraftAssignments()[slot.slotId] ?? null;
-    const asset = assetKey ? this.getFutureLineupAssetByKey(assetKey) : null;
-    const teamAbbreviation = asset ? this.getFutureLineupScheduleTeam(asset) : null;
-    const savedWindow =
+  getFutureLineupStartDate(
+    slot: ActiveRosterSlot,
+    displayedAsset?: RosterAsset | null,
+  ): FutureLineupStartDatePresentation {
+    const savedWindowCandidate =
       this.futureLineupWindows().find((window) => window.rosterSlotId === slot.slotId) ?? null;
+    const selectedOption = this.getSelectedFutureLineupMatchupOption();
+    const plannedSlot = this.selectedFutureLineupPlan()?.slots.find(
+      (candidate) => candidate.rosterSlotId === slot.slotId,
+    ) ?? null;
+    const projectedAsset = this.getFutureLineupProjectedSlot(slot.slotId)?.asset ?? null;
+    const projectedAssetKey = this.getRosterAssetKey(projectedAsset) || null;
+    const displayedAssetKey =
+      displayedAsset === undefined ? null : this.getRosterAssetKey(displayedAsset) || null;
+    const savedWindow =
+      displayedAsset === undefined || savedWindowCandidate?.assetKey === displayedAssetKey
+        ? savedWindowCandidate
+        : null;
+    const assetKey = displayedAsset === undefined
+      ? selectedOption?.materialized
+        ? savedWindow?.assetKey ??
+          (plannedSlot?.resolution === 'planned'
+            ? this.futureLineupDraftAssignments()[slot.slotId] ?? projectedAssetKey
+            : projectedAssetKey)
+        : this.futureLineupDraftAssignments()[slot.slotId] ?? projectedAssetKey
+      : displayedAssetKey;
+    const asset = displayedAsset === undefined
+      ? savedWindow?.asset ?? (assetKey
+        ? this.getFutureLineupAssetByKey(assetKey) ?? projectedAsset
+        : null)
+      : displayedAsset;
+    const teamAbbreviation = asset ? this.getFutureLineupScheduleTeam(asset) : null;
     let projectedGames: NhlTeamSeasonGame[] = [];
 
     if (teamAbbreviation) {
@@ -1405,7 +1589,9 @@ export class TeamSettings implements OnDestroy {
   }
 
   getFutureLineupStartAriaLabel(slot: ActiveRosterSlot): string {
-    const startDate = this.getFutureLineupStartDate(slot);
+    const startDate = this.isFutureDisplaySlot(slot)
+      ? slot.futureStartDate ?? this.getFutureLineupStartDate(slot, slot.asset)
+      : this.getFutureLineupStartDate(slot);
     return `${startDate.eyebrow}: ${startDate.label}.`;
   }
 
@@ -1419,27 +1605,20 @@ export class TeamSettings implements OnDestroy {
       return 'Choose a matchup before editing its lineup.';
     }
 
-    if (this.isSelectedFutureLineupCurrent()) {
-      return 'The current matchup is managed through the roster board below. Choose a future matchup to plan ahead.';
-    }
-
     const selectedOption = this.getSelectedFutureLineupMatchupOption();
-    const selectedCycle = this.futureLineupOptionCycles().find(
-      (cycle) => cycle.cycleNumber === selectedCycleNumber,
-    );
-    const precedingCycle = this.futureLineupOptionCycles().find(
-      (cycle) => cycle.cycleNumber === selectedCycleNumber - 1,
-    );
     if (
-      selectedOption?.materialized &&
-      selectedCycle?.status === 'active' &&
-      precedingCycle?.status !== 'active'
+      selectedCycleNumber === 1 &&
+      selectedOption &&
+      !selectedOption.materialized
     ) {
-      return 'This matchup has already become the current roster boundary. Use the roster board below for legal moves.';
+      return 'Matchup 1 lineup changes become available when the season matchup starts.';
     }
 
-    if (selectedCycleNumber === 1) {
-      return 'Matchup 1 began with the drafted lineup. Use the roster board below for any legal current-roster move.';
+    if (
+      this.isSelectedFutureLineupCurrent() &&
+      !this.rosterActionUsesSelectedMatchupAuthority()
+    ) {
+      return 'The current matchup is managed through the roster board below. Choose a future matchup to plan ahead.';
     }
 
     if (this.futureLineupTimingLoading() && !this.futureLineupWindowsConfirmed()) {
@@ -1493,6 +1672,7 @@ export class TeamSettings implements OnDestroy {
       (this.futureLineupDirty() || !this.selectedFutureLineupPlan()) &&
       !this.futureLineupLoading() &&
       !this.futureLineupSaving() &&
+      !this.hasPendingFutureLineupSwap() &&
       !this.getFutureLineupEditBlockReason() &&
       !this.getFutureLineupValidationMessage(),
     );
@@ -1500,7 +1680,10 @@ export class TeamSettings implements OnDestroy {
 
   canResetFutureLineup(): boolean {
     return (
-      this.futureLineupDirty() && !this.futureLineupTimingLoading() && !this.futureLineupSaving()
+      this.futureLineupDirty() &&
+      !this.futureLineupTimingLoading() &&
+      !this.futureLineupSaving() &&
+      !this.hasPendingFutureLineupSwap()
     );
   }
 
@@ -1515,6 +1698,7 @@ export class TeamSettings implements OnDestroy {
       plan.status === 'planned' &&
       !this.futureLineupLoading() &&
       !this.futureLineupSaving() &&
+      !this.hasPendingFutureLineupSwap() &&
       !this.getFutureLineupEditBlockReason(),
     );
   }
@@ -1530,6 +1714,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   getFutureLineupErrorRetryLabel(): string {
+    if (this.hasPendingFutureLineupSwap() && !this.futureLineupStale()) {
+      return 'Retry move';
+    }
+
     if (this.pendingFutureLineupMutation?.operation === 'save' && !this.futureLineupStale()) {
       return 'Retry save';
     }
@@ -1542,6 +1730,11 @@ export class TeamSettings implements OnDestroy {
   }
 
   async retryFutureLineupError(): Promise<void> {
+    if (this.hasPendingFutureLineupSwap() && !this.futureLineupStale()) {
+      await this.retryPendingFutureLineupSwap();
+      return;
+    }
+
     if (this.pendingFutureLineupMutation?.operation === 'save' && !this.futureLineupStale()) {
       await this.saveFutureLineup();
       return;
@@ -1553,6 +1746,13 @@ export class TeamSettings implements OnDestroy {
     }
 
     await this.loadFutureMatchupLineupPlans();
+  }
+
+  hasPendingFutureLineupSwap(): boolean {
+    return Boolean(
+      this.pendingFutureLineupMutation?.operation === 'swap' &&
+      this.pendingFutureLineupMutation.swapRequest,
+    );
   }
 
   getFutureLineupClearLabel(): string {
@@ -1824,18 +2024,9 @@ export class TeamSettings implements OnDestroy {
 
     this.futureLineupTimingError.set('');
 
-    if (this.isSelectedFutureLineupCurrent()) {
-      this.futureLineupWindows.set([]);
-      this.futureLineupWindowsConfirmed.set(true);
-      this.futureLineupSchedulesByTeam.set({});
-      this.futureLineupSourceNhlBlockNumber.set(null);
-      this.futureLineupTargetGameIdsByTeam.set({});
-      this.futureLineupTimingLoading.set(false);
-      return;
-    }
-
     if (!cycleNumber || !ownerId || !draft || !season) {
       this.futureLineupWindows.set([]);
+      this.futureLineupRosterPicks.set([]);
       this.futureLineupWindowsConfirmed.set(false);
       this.futureLineupSchedulesByTeam.set({});
       this.futureLineupSourceNhlBlockNumber.set(null);
@@ -1853,10 +2044,13 @@ export class TeamSettings implements OnDestroy {
       let windows = reuseLoadedWindows ? this.futureLineupWindows() : [];
 
       if (!reuseLoadedWindows) {
-        const ownerWindows = await withOperationDeadline(
-          loadFutureMatchupOwnerWindows(this.leagueId, cycleNumber, ownerId),
+        const [ownerWindows, ownerRosterPicks] = await withOperationDeadline(
+          Promise.all([
+            loadFutureMatchupOwnerWindows(this.leagueId, cycleNumber, ownerId),
+            getCycleOwnerRosterPicksOnce(this.leagueId, cycleNumber, ownerId),
+          ]),
           30_000,
-          'The saved player dates were not confirmed within the safety window. Retry the date check.',
+          'The selected matchup assignments and player dates were not confirmed within the safety window. Retry the date check.',
         );
 
         if (
@@ -1868,8 +2062,10 @@ export class TeamSettings implements OnDestroy {
 
         windows = ownerWindows?.windows ?? [];
         this.futureLineupWindows.set(windows);
+        this.futureLineupRosterPicks.set(ownerRosterPicks);
         this.futureLineupWindowsConfirmed.set(true);
         this.resetFutureLineupDraftFromServer({ preserveDirty: true });
+        this.clearFutureSwapEffectiveCycleOverrideIfIntentChanged();
       }
 
       const cycle =
@@ -1888,11 +2084,32 @@ export class TeamSettings implements OnDestroy {
       this.futureLineupSourceNhlBlockNumber.set(sourceEvidence.sourceNhlBlockNumber);
       this.futureLineupTargetGameIdsByTeam.set(sourceEvidence.targetGameIdsByTeam);
 
+      const assignmentAssets = Object.values(this.futureLineupDraftAssignments())
+        .map((assetKey) => (assetKey ? this.getFutureLineupAssetByKey(assetKey) : null))
+        .filter((asset): asset is RosterAsset => Boolean(asset));
+      const selectedPickAssets = this.futureLineupRosterPicks()
+        .map((pick) => pick.asset)
+        .filter((asset): asset is DraftableAsset => Boolean(asset));
+      const eligibleBenchAssets = (this.roster()?.benchSlots ?? [])
+        .map((slot) => slot.asset)
+        .filter(
+          (asset): asset is RosterAsset =>
+            Boolean(asset) && (asset?.eligibleFromCycleNumber ?? 1) <= cycleNumber,
+        );
+      const eligibleActiveAssets = (this.roster()?.activeSlots ?? [])
+        .map((slot) => slot.asset)
+        .filter(
+          (asset): asset is RosterAsset =>
+            Boolean(asset) && (asset?.eligibleFromCycleNumber ?? 1) <= cycleNumber,
+        );
       const teamAbbreviations = [
         ...new Set(
-          Object.values(this.futureLineupDraftAssignments())
-            .map((assetKey) => (assetKey ? this.getFutureLineupAssetByKey(assetKey) : null))
-            .filter((asset): asset is RosterAsset => Boolean(asset))
+          [
+            ...selectedPickAssets,
+            ...assignmentAssets,
+            ...eligibleActiveAssets,
+            ...eligibleBenchAssets,
+          ]
             .map((asset) => this.getFutureLineupScheduleTeam(asset))
             .filter((team): team is string => Boolean(team)),
         ),
@@ -1963,12 +2180,16 @@ export class TeamSettings implements OnDestroy {
   }
 
   private getCurrentFutureLineupCycleNumber(): number {
-    return this.currentNavigationMatchup()?.cycleNumber ?? this.latestCycle()?.cycleNumber ?? 1;
+    return this.latestCycle()?.cycleNumber ?? this.currentNavigationMatchup()?.cycleNumber ?? 1;
   }
 
   private syncDefaultFutureLineupSelection(): boolean {
     const options = this.getFutureLineupMatchupOptions();
     const selectedCycleNumber = this.selectedFutureLineupCycleNumber();
+
+    if (this.isRosterOperationPending() || this.hasPendingFutureLineupSwap()) {
+      return false;
+    }
 
     if (
       this.futureLineupSelectionTouched &&
@@ -1984,9 +2205,12 @@ export class TeamSettings implements OnDestroy {
       null;
 
     if (defaultCycleNumber !== selectedCycleNumber) {
+      this.closeAllRosterManagementState();
       this.futureLineupTimingGeneration += 1;
+      this.clearFutureSwapEffectiveCycleOverride();
       this.selectedFutureLineupCycleNumber.set(defaultCycleNumber);
       this.futureLineupWindows.set([]);
+      this.futureLineupRosterPicks.set([]);
       this.futureLineupSchedulesByTeam.set({});
       this.futureLineupSourceNhlBlockNumber.set(null);
       this.futureLineupTargetGameIdsByTeam.set({});
@@ -2094,9 +2318,11 @@ export class TeamSettings implements OnDestroy {
     cycleNumber: number,
   ): string {
     const baseCycleNumber = this.getCurrentFutureLineupCycleNumber();
-    const relevantPlans = plans
-      .filter((plan) => plan.cycleNumber > baseCycleNumber && plan.cycleNumber <= cycleNumber)
-      .sort((first, second) => first.cycleNumber - second.cycleNumber)
+    const relevantPlans = selectRelevantFutureMatchupAuthorityPlans(
+      plans,
+      baseCycleNumber,
+      cycleNumber,
+    )
       .map((plan) => ({
         cycleNumber: plan.cycleNumber,
         revision: plan.revision,
@@ -2133,12 +2359,14 @@ export class TeamSettings implements OnDestroy {
   private async loadFreshFutureLineupAuthority(cycleNumber: number): Promise<{
     plans: FutureMatchupLineupPlanView[];
     windows: FantasyAssetCycleWindow[];
+    rosterPicks: DraftPick[];
   }> {
     const ownerId = this.viewedOwnerId();
-    const [plans, ownerWindows] = await withOperationDeadline(
+    const [plans, ownerWindows, rosterPicks] = await withOperationDeadline(
       Promise.all([
         listFutureMatchupLineupPlans(this.leagueId),
         loadFutureMatchupOwnerWindows(this.leagueId, cycleNumber, ownerId),
+        getCycleOwnerRosterPicksOnce(this.leagueId, cycleNumber, ownerId),
       ]),
       45_000,
       'The latest lineup authority was not confirmed within the safety window. Retry when the connection is stable.',
@@ -2147,6 +2375,7 @@ export class TeamSettings implements OnDestroy {
     return {
       plans: [...plans].sort((first, second) => first.cycleNumber - second.cycleNumber),
       windows: ownerWindows?.windows ?? [],
+      rosterPicks,
     };
   }
 
@@ -2154,14 +2383,17 @@ export class TeamSettings implements OnDestroy {
     authority: {
       plans: FutureMatchupLineupPlanView[];
       windows: FantasyAssetCycleWindow[];
+      rosterPicks: DraftPick[];
     },
     preserveDirty: boolean,
   ): void {
     this.futureLineupPlans.set(authority.plans);
     this.futureLineupWindows.set(authority.windows);
+    this.futureLineupRosterPicks.set(authority.rosterPicks);
     this.futureLineupWindowsConfirmed.set(true);
     this.futureLineupStale.set(false);
     this.resetFutureLineupDraftFromServer({ preserveDirty });
+    this.clearFutureSwapEffectiveCycleOverrideIfIntentChanged();
   }
 
   private getFutureLineupCycleAuthoritySignature(cycle: FantasyCycle | null): string {
@@ -2281,7 +2513,7 @@ export class TeamSettings implements OnDestroy {
     return assets.find((asset) => this.getRosterAssetKey(asset) === assetKey) ?? null;
   }
 
-  private getFutureLineupScheduleTeam(asset: RosterAsset): string | null {
+  private getFutureLineupScheduleTeam(asset: RosterAsset | DraftableAsset): string | null {
     const teamAbbreviation = this.getRosterAssetTeamLabel(asset).trim().toUpperCase();
     return /^[A-Z0-9]{2,4}$/.test(teamAbbreviation) ? teamAbbreviation : null;
   }
@@ -2306,6 +2538,9 @@ export class TeamSettings implements OnDestroy {
   private closeAllRosterManagementState(): void {
     this.rosterManagerArea.set(null);
     this.rosterManagerSlotId.set('');
+    this.clearFutureSwapEffectiveCycleOverride();
+    this.rosterActionCycleNumber.set(null);
+    this.rosterActionUsesSelectedMatchupAuthority.set(false);
     this.irActivationSlotId.set('');
     this.irActivationTargetSlotId.set('');
     this.irActivationBenchSlotId.set('');
@@ -2370,6 +2605,7 @@ export class TeamSettings implements OnDestroy {
         this.clearLiveDataWarning('Roster');
         this.roster.set(roster);
         this.resetFutureLineupDraftFromServer({ preserveDirty: true });
+        this.clearFutureSwapEffectiveCycleOverrideIfIntentChanged();
         if (!this.isSelectedFutureLineupCurrent() && !this.futureLineupTimingLoading()) {
           if (isOwnTeam) {
             void this.refreshFutureLineupAuthorityFromLiveChange();
@@ -2655,30 +2891,418 @@ export class TeamSettings implements OnDestroy {
   }
 
   openRosterManager(area: RosterManagementArea, slotId: string): void {
-    if (!this.isOwnTeam() || !slotId || this.isRosterOperationPending()) {
+    if (
+      !this.isOwnTeam() ||
+      !slotId ||
+      this.isRosterOperationPending() ||
+      this.hasPendingFutureLineupSwap()
+    ) {
       return;
     }
 
+    this.clearFutureSwapEffectiveCycleOverride();
+    const selectedOption = this.getSelectedFutureLineupMatchupOption();
+    this.rosterActionUsesSelectedMatchupAuthority.set(
+      this.shouldUseSelectedMatchupRosterAuthorityForAction(
+        selectedOption,
+        area,
+        slotId,
+      ),
+    );
+    this.rosterActionCycleNumber.set(
+      area !== 'ir' && selectedOption
+        ? selectedOption.cycleNumber
+        : this.latestCycle()?.cycleNumber ?? this.currentMatchup()?.cycleNumber ?? null,
+    );
     this.rosterManagerArea.set(area);
     this.rosterManagerSlotId.set(slotId);
   }
 
-  closeRosterManager(): void {
+  isFutureRosterAction(): boolean {
+    const cycleNumber = this.rosterActionCycleNumber();
+    return Boolean(this.rosterActionUsesSelectedMatchupAuthority() && cycleNumber);
+  }
+
+  private shouldUseSelectedMatchupRosterAuthorityForAction(
+    option: FutureMatchupLineupOption | null,
+    area: RosterManagementArea,
+    slotId: string,
+  ): boolean {
+    const roster = this.roster();
+
+    if (!option || !roster) {
+      return false;
+    }
+
+    const planResolutionBySlotId = new Map(
+      (this.selectedFutureLineupPlan()?.slots ?? []).map(
+        (slot) => [slot.rosterSlotId, slot.resolution] as const,
+      ),
+    );
+    const managedAsset = area === 'bench'
+      ? roster.benchSlots.find((slot) => slot.slotId === slotId)?.asset ?? null
+      : null;
+
+    return shouldUseSelectedMatchupRosterAuthority({
+      timing: option.timing,
+      area,
+      slotId,
+      windowsConfirmed: this.futureLineupWindowsConfirmed(),
+      managedAssetKey: this.getRosterAssetKey(managedAsset) || null,
+      managedAssetPosition: managedAsset?.position ?? null,
+      selectedActiveSlots: this.getFutureRosterDisplaySlots().map((slot) => ({
+        slotId: slot.slotId,
+        position: slot.position,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+        resolution: planResolutionBySlotId.get(slot.slotId) ?? null,
+      })),
+      physicalActiveSlots: roster.activeSlots.map((slot) => ({
+        slotId: slot.slotId,
+        position: slot.position,
+        assetKey: this.getRosterAssetKey(slot.asset) || null,
+      })),
+    });
+  }
+
+  private getFutureSwapBenchCandidates(
+    position: DraftPosition,
+    activeSlotId = '',
+  ): BenchRosterSlot[] {
+    const projectedAssetKeys = this.getFutureProjectedActiveAssetKeys();
+    const roster = this.roster();
+    const physicalCandidates = (roster?.benchSlots ?? []).filter((slot) =>
+      Boolean(
+        slot.asset &&
+        slot.asset.position === position &&
+        !this.isBenchSlotReservedForActiveSwap(slot) &&
+        !projectedAssetKeys.has(this.getRosterAssetKey(slot.asset)),
+      ),
+    );
+
+    if (!activeSlotId || !roster) {
+      return physicalCandidates;
+    }
+
+    const plannedSlot = this.selectedFutureLineupPlan()?.slots.find(
+      (slot) => slot.rosterSlotId === activeSlotId,
+    ) ?? null;
+    const projectedSlot = this.getSelectedRosterDisplaySlot(activeSlotId);
+    const physicalActiveSlot = roster.activeSlots.find(
+      (slot) => slot.slotId === activeSlotId,
+    ) ?? null;
+    const projectedAssetKey = this.getRosterAssetKey(projectedSlot?.asset);
+    const physicalActiveAssetKey = this.getRosterAssetKey(physicalActiveSlot?.asset);
+
+    if (
+      plannedSlot?.resolution !== 'planned' ||
+      !plannedSlot.assetKey ||
+      plannedSlot.assetKey !== projectedAssetKey ||
+      !physicalActiveSlot?.asset ||
+      physicalActiveSlot.position !== position ||
+      !physicalActiveAssetKey ||
+      projectedAssetKeys.has(physicalActiveAssetKey) ||
+      (physicalActiveSlot.asset.eligibleFromCycleNumber ?? 1) >
+        (this.rosterActionCycleNumber() ?? 0)
+    ) {
+      return physicalCandidates;
+    }
+
+    const plannedAssetBenchSlots = roster.benchSlots.filter(
+      (slot) =>
+        this.getRosterAssetKey(slot.asset) === plannedSlot.assetKey &&
+        !this.isBenchSlotReservedForActiveSwap(slot),
+    );
+
+    if (plannedAssetBenchSlots.length !== 1) {
+      return physicalCandidates;
+    }
+
+    return [
+      ...physicalCandidates,
+      {
+        ...plannedAssetBenchSlots[0],
+        asset: physicalActiveSlot.asset,
+      },
+    ];
+  }
+
+  isFuturePlannedReversalCandidate(
+    candidate: BenchRosterSlot,
+    activeSlotId: string,
+  ): boolean {
+    if (!this.isFutureRosterAction() || !candidate.asset || !activeSlotId) {
+      return false;
+    }
+
+    const roster = this.roster();
+    const physicalActiveSlot = roster?.activeSlots.find(
+      (slot) => slot.slotId === activeSlotId,
+    ) ?? null;
+    const physicalBenchSlot = roster?.benchSlots.find(
+      (slot) => slot.slotId === candidate.slotId,
+    ) ?? null;
+    const plannedSlot = this.selectedFutureLineupPlan()?.slots.find(
+      (slot) => slot.rosterSlotId === activeSlotId,
+    ) ?? null;
+
+    return Boolean(
+      physicalActiveSlot?.asset &&
+      physicalBenchSlot?.asset &&
+      plannedSlot?.resolution === 'planned' &&
+      plannedSlot.assetKey === this.getRosterAssetKey(physicalBenchSlot.asset) &&
+      this.getRosterAssetKey(candidate.asset) ===
+        this.getRosterAssetKey(physicalActiveSlot.asset) &&
+      plannedSlot.assetKey !== this.getRosterAssetKey(candidate.asset),
+    );
+  }
+
+  getFutureSwapCandidateSourceLabel(
+    candidate: BenchRosterSlot,
+    activeSlotId: string,
+  ): string {
+    if (this.isFuturePlannedReversalCandidate(candidate, activeSlotId)) {
+      return 'Current roster starter · Restore for this matchup';
+    }
+
+    return candidate.asset
+      ? `${this.getRosterAssetTeamLabel(candidate.asset)} · ${candidate.asset.position} · Bench ${candidate.slotNumber}`
+      : `Bench ${candidate.slotNumber}`;
+  }
+
+  private isFuturePlannedOpenSlotAssignment(activeSlotId: string): boolean {
+    const physicalSlot = this.roster()?.activeSlots.find(
+      (slot) => slot.slotId === activeSlotId,
+    ) ?? null;
+    const plannedSlot = this.selectedFutureLineupPlan()?.slots.find(
+      (slot) => slot.rosterSlotId === activeSlotId,
+    ) ?? null;
+    const selectedWindow = this.futureLineupWindows().find(
+      (window) => window.rosterSlotId === activeSlotId,
+    ) ?? null;
+
+    return Boolean(
+      !physicalSlot?.asset &&
+      !selectedWindow &&
+      plannedSlot?.resolution === 'planned' &&
+      plannedSlot.assetKey,
+    );
+  }
+
+  private hasSelectedPlannedAssignment(activeSlotId: string): boolean {
+    return this.selectedFutureLineupPlan()?.slots.some(
+      (slot) =>
+        slot.rosterSlotId === activeSlotId &&
+        slot.resolution === 'planned' &&
+        Boolean(slot.assetKey),
+    ) ?? false;
+  }
+
+  private clearFuturePlannedOpenSlot(activeSlotId: string): void {
+    if (!this.isFuturePlannedOpenSlotAssignment(activeSlotId)) {
+      return;
+    }
+
+    this.futureLineupDraftAssignments.update((assignments) => ({
+      ...assignments,
+      [activeSlotId]: null,
+    }));
+    this.closeRosterManager();
+    void this.saveFutureLineup();
+  }
+
+  private getFutureSwapActiveTargets(asset: RosterAsset): ActiveRosterDisplaySlot[] {
+    const incomingAssetKey = this.getRosterAssetKey(asset);
+
+    if (!incomingAssetKey || this.isFutureLineupProjectedStarter(asset)) {
+      return [];
+    }
+
+    return this.getFutureDisplayPositionSlots(asset.position).filter(
+      (slot) =>
+        !slot.assignmentPending &&
+        (!slot.asset || this.getRosterAssetKey(slot.asset) !== incomingAssetKey),
+    );
+  }
+
+  private isFutureLineupProjectedStarter(asset: RosterAsset): boolean {
+    const assetKey = this.getRosterAssetKey(asset);
+
+    return Boolean(assetKey && this.getFutureProjectedActiveAssetKeys().has(assetKey));
+  }
+
+  private getFutureProjectedActiveAssetKeys(): Set<string> {
+    return new Set(
+      this.getFutureRosterDisplaySlots()
+        .map((slot) => this.getRosterAssetKey(slot.asset))
+        .filter((assetKey) => Boolean(assetKey)),
+    );
+  }
+
+  private hasProjectedNhlBlockStarted(asset: RosterAsset | null): boolean | null {
+    if (!asset) {
+      return null;
+    }
+
+    const projectedGames = this.getFutureProjectedGamesForAsset(asset);
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+    if (projectedGames.length !== requiredGames) {
+      return null;
+    }
+
+    return projectedGames.some((game) => this.hasProjectedNhlGameStarted(game));
+  }
+
+  private hasProjectedNhlGameStarted(game: NhlTeamSeasonGame): boolean {
+    const state = String(game.gameState ?? '').toUpperCase();
+    const startMilliseconds = game.startTimeUTC
+      ? Date.parse(game.startTimeUTC)
+      : Number.NaN;
+    const hasFinalScores =
+      typeof game.homeTeam.score === 'number' && typeof game.awayTeam.score === 'number';
+
+    return (
+      state === 'LIVE' ||
+      state === 'CRIT' ||
+      state === 'FINAL' ||
+      state === 'OFF' ||
+      hasFinalScores ||
+      (Number.isFinite(startMilliseconds) && startMilliseconds <= Date.now())
+    );
+  }
+
+  private getFutureSwapIntent(
+    benchSlot: BenchRosterSlot | null = this.getPendingBenchSwapSlot(),
+    activeSlot: ActiveRosterSlot | null = this.getBenchSwapTargetSlots().find(
+      (slot) => slot.slotId === this.benchSwapTargetSlotId(),
+    ) ?? null,
+  ): FutureMatchupSwapIntent | null {
+    const requestedCycleNumber = this.rosterActionCycleNumber();
+    const outgoingAssetKey = this.getRosterAssetKey(activeSlot?.asset) || null;
+    const incomingAssetKey = this.getRosterAssetKey(benchSlot?.asset);
+
+    if (
+      !requestedCycleNumber ||
+      !activeSlot ||
+      !benchSlot ||
+      !incomingAssetKey
+    ) {
+      return null;
+    }
+
+    return {
+      requestedCycleNumber,
+      activeSlotId: activeSlot.slotId,
+      benchSlotId: benchSlot.slotId,
+      outgoingAssetKey,
+      incomingAssetKey,
+    };
+  }
+
+  private clearFutureSwapEffectiveCycleOverride(): void {
+    this.futureSwapEffectiveCycleOverride.set(null);
+  }
+
+  private clearFutureSwapEffectiveCycleOverrideIfIntentChanged(): void {
+    const override = this.futureSwapEffectiveCycleOverride();
+    const intent = this.getFutureSwapIntent();
+
+    if (
+      override &&
+      (!intent ||
+        getFutureMatchupSwapIntentKey(override) !== getFutureMatchupSwapIntentKey(intent))
+    ) {
+      this.clearFutureSwapEffectiveCycleOverride();
+    }
+  }
+
+  private getExpectedFutureSwapCycleNumber(): number | null {
+    if (!this.isFutureRosterAction()) {
+      return null;
+    }
+
+    const requestedCycleNumber = this.rosterActionCycleNumber();
+    const benchSlot = this.getPendingBenchSwapSlot();
+    const activeSlot = this.getBenchSwapTargetSlots().find(
+      (slot) => slot.slotId === this.benchSwapTargetSlotId(),
+    );
+
+    if (!requestedCycleNumber || !benchSlot?.asset || !activeSlot) {
+      return null;
+    }
+
+    const activeAssetKey = this.getRosterAssetKey(activeSlot.asset) || null;
+    const selectedWindow = this.futureLineupWindows().find(
+      (window) =>
+        window.rosterSlotId === activeSlot.slotId &&
+        activeAssetKey !== null &&
+        window.assetKey === activeAssetKey,
+    );
+    const outgoingStarted = activeSlot.asset
+      ? selectedWindow
+        ? hasFutureMatchupWindowStarted(selectedWindow) ||
+          this.hasProjectedNhlBlockStarted(activeSlot.asset)
+        : this.hasProjectedNhlBlockStarted(activeSlot.asset)
+      : selectedWindow
+        ? null
+        : false;
+    const incomingStarted = this.hasProjectedNhlBlockStarted(benchSlot.asset);
+
+    if (outgoingStarted === null || incomingStarted === null) {
+      return null;
+    }
+
+    const earliestEligibleCycle = Math.max(
+      requestedCycleNumber,
+      benchSlot.asset.eligibleFromCycleNumber ?? requestedCycleNumber,
+    );
+    const predictedEffectiveCycleNumber = outgoingStarted || incomingStarted
+      ? Math.max(requestedCycleNumber + 1, earliestEligibleCycle)
+      : earliestEligibleCycle;
+
+    return resolveFutureMatchupSwapEffectiveCycle({
+      predictedEffectiveCycleNumber,
+      intent: this.getFutureSwapIntent(benchSlot, activeSlot),
+      override: this.futureSwapEffectiveCycleOverride(),
+    });
+  }
+
+  closeRosterManager(preserveActionContext = false): void {
     if (this.isRosterOperationPending()) {
       return;
     }
 
     this.rosterManagerArea.set(null);
     this.rosterManagerSlotId.set('');
+    if (!preserveActionContext) {
+      this.clearFutureSwapEffectiveCycleOverride();
+      this.rosterActionCycleNumber.set(null);
+      this.rosterActionUsesSelectedMatchupAuthority.set(false);
+    }
   }
 
   getRosterManagerTitle(): string {
     return this.getRosterManagerSlotLabel();
   }
 
+  getRosterManagerEyebrow(): string {
+    const cycleNumber = this.rosterActionCycleNumber();
+    return this.isFutureRosterAction() && cycleNumber
+      ? `Manage Matchup ${cycleNumber}`
+      : 'Manage Roster Spot';
+  }
+
   getRosterManagerDescription(): string {
     const asset = this.rosterManagerAsset();
     const area = this.rosterManagerArea();
+
+    if (this.isFutureRosterAction()) {
+      const cycleNumber = this.rosterActionCycleNumber();
+      return area === 'bench'
+        ? `Choose whether this bench player should start in Matchup ${cycleNumber}. The server keeps any started assignment intact and moves the expected start when needed.`
+        : `Manage this Matchup ${cycleNumber} assignment. If both players are untouched, the swap applies here; otherwise it begins in the next fair matchup window.`;
+    }
 
     if (!asset) {
       return area === 'bench'
@@ -2697,6 +3321,54 @@ export class TeamSettings implements OnDestroy {
     return 'Manage this roster spot without changing any games that have already counted.';
   }
 
+  getActiveBenchPickerTitle(): string {
+    if (this.isFutureRosterAction()) {
+      return `Choose a Matchup ${this.rosterActionCycleNumber()} Bench Player`;
+    }
+
+    return this.isActiveBenchPickerInjuryReplacement()
+      ? 'Replace Injured Player Now'
+      : 'Swap with Bench';
+  }
+
+  getActiveBenchPickerEyebrow(): string {
+    if (this.isFutureRosterAction()) {
+      return 'Selected Matchup Lineup';
+    }
+
+    return this.isActiveBenchPickerInjuryReplacement()
+      ? 'Immediate Injury Replacement'
+      : 'Active Lineup Change';
+  }
+
+  getActiveBenchPickerDescription(): string {
+    if (this.isFutureRosterAction()) {
+      return `Choose the compatible bench player for this exact Matchup ${this.rosterActionCycleNumber()} slot. If both assignments are untouched, the server changes the selected matchup; if either has started, it preserves this matchup and schedules the next fair one.`;
+    }
+
+    return this.isActiveBenchPickerInjuryReplacement()
+      ? 'Choose the compatible bench player who should take only this slot’s remaining future games. All games and points already started stay protected.'
+      : 'Choose a compatible bench player for this exact active roster spot. RinkRat will verify whether the swap happens now or at the next fair matchup boundary. A current Day-to-Day, Out, IR, or LTIR report can qualify the pairing for the protected immediate-injury route.';
+  }
+
+  getBenchSwapDialogEyebrow(): string {
+    if (this.isFutureRosterAction()) {
+      return `Matchup ${this.rosterActionCycleNumber()} Lineup Change`;
+    }
+
+    return this.isPendingBenchSwapInjuryReplacement()
+      ? 'Injury Replacement'
+      : 'Fair Lineup Change';
+  }
+
+  getBenchSwapDialogDescription(): string {
+    if (this.isFutureRosterAction()) {
+      return `Choose the exact active slot for Matchup ${this.rosterActionCycleNumber()}. Untouched assignments apply to this matchup. If a selected assignment has started, this matchup stays unchanged and the incoming player’s expected start moves to the next fair matchup.`;
+    }
+
+    return 'Choose a matching active slot. Normal swaps follow six-game timing. Only players listed as Day-to-Day, Out, Injured Reserve, or Long-Term Injured Reserve can be replaced immediately. The server verifies that status again before changing the roster.';
+  }
+
   getRosterManagerSlotLabel(): string {
     const area = this.rosterManagerArea();
     const slotId = this.rosterManagerSlotId();
@@ -2707,7 +3379,9 @@ export class TeamSettings implements OnDestroy {
     }
 
     if (area === 'active') {
-      const slot = roster.activeSlots.find((candidate) => candidate.slotId === slotId);
+      const slot = this.isFutureRosterAction()
+        ? this.getSelectedRosterDisplaySlot(slotId)
+        : roster.activeSlots.find((candidate) => candidate.slotId === slotId);
       return slot ? `${slot.position} Slot ${slot.slotNumber}` : slotId;
     }
 
@@ -2727,12 +3401,20 @@ export class TeamSettings implements OnDestroy {
       return this.getRosterManagerSlotLabel();
     }
 
-    return `${this.getRosterAssetTeamLabel(asset)} · ${asset.position} · ${this.getRosterManagerSlotLabel()}`;
+    const matchupLabel = this.isFutureRosterAction()
+      ? ` · Matchup ${this.rosterActionCycleNumber()}`
+      : '';
+    return `${this.getRosterAssetTeamLabel(asset)} · ${asset.position} · ${this.getRosterManagerSlotLabel()}${matchupLabel}`;
   }
 
   getRosterManagerPendingMoveText(): string {
     if (this.rosterManagerArea() !== 'active') {
       return '';
+    }
+
+    if (this.isFutureRosterAction()) {
+      return this.getSelectedRosterDisplaySlot(this.rosterManagerSlotId())
+        ?.nextPlannedAssetLabel ?? '';
     }
 
     const slot = this.roster()?.activeSlots.find(
@@ -2764,7 +3446,7 @@ export class TeamSettings implements OnDestroy {
       case 'view':
         this.closeRosterManager();
         if (asset) {
-          this.openRosterAssetDetail(asset);
+          this.openRosterAssetDetail(asset, area === 'active' ? slotId : '');
         }
         return;
 
@@ -2783,12 +3465,16 @@ export class TeamSettings implements OnDestroy {
 
       case 'swap-with-bench':
       case 'replace-injured-now':
-        this.closeRosterManager();
+        this.closeRosterManager(true);
         this.beginActiveBenchSwapPicker(slotId);
         return;
 
+      case 'keep-open':
+        this.clearFuturePlannedOpenSlot(slotId);
+        return;
+
       case 'start':
-        this.closeRosterManager();
+        this.closeRosterManager(true);
         this.beginBenchSwap(slotId);
         return;
 
@@ -3473,7 +4159,10 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    const activeSlot = this.roster()?.activeSlots.find((slot) => slot.slotId === activeSlotId);
+    this.clearFutureSwapEffectiveCycleOverride();
+    const activeSlot = this.isFutureRosterAction()
+      ? this.getSelectedRosterDisplaySlot(activeSlotId)
+      : this.roster()?.activeSlots.find((slot) => slot.slotId === activeSlotId);
 
     const promotableQueuedBenchSlot = activeSlot
       ? this.getPromotableQueuedBenchSwapSlot(activeSlot)
@@ -3499,6 +4188,9 @@ export class TeamSettings implements OnDestroy {
     }
 
     this.activeBenchPickerSlotId.set('');
+    this.clearFutureSwapEffectiveCycleOverride();
+    this.rosterActionCycleNumber.set(null);
+    this.rosterActionUsesSelectedMatchupAuthority.set(false);
   }
 
   getPendingActiveBenchSwapSlot(): ActiveRosterSlot | null {
@@ -3508,10 +4200,16 @@ export class TeamSettings implements OnDestroy {
       return null;
     }
 
-    return this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null;
+    return this.isFutureRosterAction()
+      ? this.getSelectedRosterDisplaySlot(slotId)
+      : this.roster()?.activeSlots.find((slot) => slot.slotId === slotId) ?? null;
   }
 
   isActiveBenchPickerInjuryReplacement(): boolean {
+    if (this.isFutureRosterAction()) {
+      return false;
+    }
+
     const activeSlot = this.getPendingActiveBenchSwapSlot();
 
     return Boolean(
@@ -3526,16 +4224,18 @@ export class TeamSettings implements OnDestroy {
       return [];
     }
 
-    if (activeSlot.pendingMove) {
+    if (!this.isFutureRosterAction() && activeSlot.pendingMove) {
       const queuedBenchSlot = this.getPromotableQueuedBenchSwapSlot(activeSlot);
       return queuedBenchSlot ? [queuedBenchSlot] : [];
     }
 
-    return this.getBenchSlots().filter(
-      (slot) =>
-        slot.asset?.position === activeSlot.position &&
-        !this.isBenchSlotReservedForActiveSwap(slot),
-    );
+    return this.isFutureRosterAction()
+      ? this.getFutureSwapBenchCandidates(activeSlot.position, activeSlot.slotId)
+      : this.getBenchSlots().filter(
+          (slot) =>
+            slot.asset?.position === activeSlot.position &&
+            !this.isBenchSlotReservedForActiveSwap(slot),
+        );
   }
 
   private isActiveSlotEligibleForImmediateInjuryReplacement(slot: ActiveRosterSlot): boolean {
@@ -3638,18 +4338,31 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    const benchSlot = this.roster()?.benchSlots.find((slot) => slot.slotId === benchSlotId);
+    this.clearFutureSwapEffectiveCycleOverride();
+    const preferredFutureTarget = this.isFutureRosterAction() && preferredActiveSlotId
+      ? this.getSelectedRosterDisplaySlot(preferredActiveSlotId)
+      : null;
+    const benchSlot = preferredFutureTarget
+      ? this.getFutureSwapBenchCandidates(
+          preferredFutureTarget.position,
+          preferredFutureTarget.slotId,
+        ).find((slot) => slot.slotId === benchSlotId)
+      : this.roster()?.benchSlots.find((slot) => slot.slotId === benchSlotId);
     if (!benchSlot?.asset) {
       this.rosterMoveError.set('That bench slot is empty.');
       return;
     }
 
-    const targets = this.getPositionSlots(benchSlot.asset.position).filter(
-      (slot) => !slot.pendingMove || this.isExactPromotableQueuedBenchSwap(slot, benchSlot),
-    );
+    const targets = this.isFutureRosterAction()
+      ? this.getFutureSwapActiveTargets(benchSlot.asset)
+      : this.getPositionSlots(benchSlot.asset.position).filter(
+          (slot) => !slot.pendingMove || this.isExactPromotableQueuedBenchSwap(slot, benchSlot),
+        );
     if (targets.length === 0) {
       this.rosterMoveError.set(
-        `No ${benchSlot.asset.position} active slot is available for a scheduled swap.`,
+        this.isFutureRosterAction() && this.isFutureLineupProjectedStarter(benchSlot.asset)
+          ? `${this.getRosterAssetName(benchSlot.asset)} is already scheduled to start in the selected matchup. Choose another bench player or clear the saved plan.`
+          : `No ${benchSlot.asset.position} active slot is available for a scheduled swap.`,
       );
       return;
     }
@@ -3669,16 +4382,19 @@ export class TeamSettings implements OnDestroy {
     }
 
     this.clearBenchSwapDialogState();
+    this.rosterActionCycleNumber.set(null);
   }
 
   private clearBenchSwapDialogState(): void {
     this.benchSwapTimingGeneration += 1;
+    this.clearFutureSwapEffectiveCycleOverride();
     this.benchSwapSlotId.set('');
     this.benchSwapTargetSlotId.set('');
     this.benchSwapRestrictedTargetSlotId.set('');
     this.benchSwapTimingPreview.set(null);
     this.benchSwapTimingLoading.set(false);
     this.benchSwapTimingError.set('');
+    this.rosterActionUsesSelectedMatchupAuthority.set(false);
     this.scheduleViewportOverlayRepair();
   }
 
@@ -3709,15 +4425,29 @@ export class TeamSettings implements OnDestroy {
 
   getPendingBenchSwapSlot(): BenchRosterSlot | null {
     const slotId = this.benchSwapSlotId();
+    const restrictedTargetSlotId = this.benchSwapRestrictedTargetSlotId();
+    const restrictedTarget = this.isFutureRosterAction() && restrictedTargetSlotId
+      ? this.getSelectedRosterDisplaySlot(restrictedTargetSlotId)
+      : null;
+
+    if (restrictedTarget) {
+      return this.getFutureSwapBenchCandidates(
+        restrictedTarget.position,
+        restrictedTarget.slotId,
+      ).find((slot) => slot.slotId === slotId) ?? null;
+    }
+
     return this.roster()?.benchSlots.find((slot) => slot.slotId === slotId) ?? null;
   }
 
   getBenchSwapTargetSlots(): ActiveRosterSlot[] {
     const benchSlot = this.getPendingBenchSwapSlot();
     const targets = benchSlot?.asset
-      ? this.getPositionSlots(benchSlot.asset.position).filter(
-          (slot) => !slot.pendingMove || this.isExactPromotableQueuedBenchSwap(slot, benchSlot),
-        )
+      ? this.isFutureRosterAction()
+        ? this.getFutureSwapActiveTargets(benchSlot.asset)
+        : this.getPositionSlots(benchSlot.asset.position).filter(
+            (slot) => !slot.pendingMove || this.isExactPromotableQueuedBenchSwap(slot, benchSlot),
+          )
       : [];
     const restrictedTargetSlotId = this.benchSwapRestrictedTargetSlotId();
 
@@ -3728,13 +4458,89 @@ export class TeamSettings implements OnDestroy {
 
   selectBenchSwapTarget(slotId: string): void {
     if (this.getBenchSwapTargetSlots().some((slot) => slot.slotId === slotId)) {
+      if (slotId !== this.benchSwapTargetSlotId()) {
+        this.clearFutureSwapEffectiveCycleOverride();
+      }
       this.benchSwapTargetSlotId.set(slotId);
       void this.refreshBenchSwapTimingPreview();
     }
   }
 
   retryBenchSwapTiming(): void {
+    const override = this.futureSwapEffectiveCycleOverride();
+    if (this.isFutureRosterAction() && override && !override.authorityRefreshed) {
+      void this.refreshFutureSwapEffectiveCycleOverride(override);
+      return;
+    }
+
     void this.refreshBenchSwapTimingPreview();
+  }
+
+  private async refreshFutureSwapEffectiveCycleOverride(
+    override: FutureMatchupSwapEffectiveCycleOverride,
+  ): Promise<boolean> {
+    const intent = this.getFutureSwapIntent();
+    const overrideKey = getFutureMatchupSwapIntentKey(override);
+
+    if (!intent || getFutureMatchupSwapIntentKey(intent) !== overrideKey) {
+      this.clearFutureSwapEffectiveCycleOverride();
+      return false;
+    }
+
+    const timingGeneration = ++this.benchSwapTimingGeneration;
+    this.benchSwapTimingLoading.set(true);
+    this.benchSwapTimingError.set('');
+
+    try {
+      const authority = await this.loadFreshFutureLineupAuthority(
+        override.requestedCycleNumber,
+      );
+      const liveIntent = this.getFutureSwapIntent();
+      if (
+        timingGeneration !== this.benchSwapTimingGeneration ||
+        !liveIntent ||
+        getFutureMatchupSwapIntentKey(liveIntent) !== overrideKey
+      ) {
+        return false;
+      }
+
+      this.applyFreshFutureLineupAuthority(authority, true);
+      const refreshedIntent = this.getFutureSwapIntent();
+      const currentOverride = this.futureSwapEffectiveCycleOverride();
+      if (
+        !refreshedIntent ||
+        !currentOverride ||
+        getFutureMatchupSwapIntentKey(refreshedIntent) !== overrideKey ||
+        getFutureMatchupSwapIntentKey(currentOverride) !== overrideKey ||
+        currentOverride.effectiveCycleNumber !== override.effectiveCycleNumber
+      ) {
+        this.clearFutureSwapEffectiveCycleOverride();
+        return false;
+      }
+
+      this.futureSwapEffectiveCycleOverride.set({
+        ...override,
+        authorityRefreshed: true,
+      });
+      this.futureLineupStale.set(false);
+      this.futureLineupError.set('');
+      this.rosterMoveError.set('');
+      void this.loadFutureLineupTimingEvidence(true);
+      return true;
+    } catch (error: unknown) {
+      if (timingGeneration === this.benchSwapTimingGeneration) {
+        this.benchSwapTimingError.set(
+          error instanceof Error
+            ? error.message
+            : 'The updated matchup timing could not be refreshed. Retry before confirming.',
+        );
+      }
+      return false;
+    } finally {
+      if (timingGeneration === this.benchSwapTimingGeneration) {
+        this.benchSwapTimingLoading.set(false);
+      }
+    }
   }
 
   private async refreshBenchSwapTimingPreview(): Promise<void> {
@@ -3744,6 +4550,18 @@ export class TeamSettings implements OnDestroy {
     );
 
     if (!benchSlot?.asset || !targetSlot || !this.userId) {
+      return;
+    }
+
+    if (this.isFutureRosterAction()) {
+      this.benchSwapTimingGeneration += 1;
+      this.benchSwapTimingPreview.set(null);
+      this.benchSwapTimingLoading.set(false);
+      this.benchSwapTimingError.set(
+        this.getExpectedFutureSwapCycleNumber() === null
+          ? 'Exact NHL start evidence is incomplete for one of these players. Retry the matchup date check before confirming.'
+          : '',
+      );
       return;
     }
 
@@ -3796,6 +4614,23 @@ export class TeamSettings implements OnDestroy {
   }
 
   canConfirmBenchSwap(): boolean {
+    if (this.isFutureRosterAction()) {
+      return Boolean(
+        this.isOwnTeam() &&
+        this.getPendingBenchSwapSlot()?.asset &&
+        this.getBenchSwapTargetSlots().some(
+          (slot) => slot.slotId === this.benchSwapTargetSlotId(),
+        ) &&
+        this.getExpectedFutureSwapCycleNumber() !== null &&
+        !this.benchSwapTimingError() &&
+        !this.benchSwapTimingLoading() &&
+        !this.futureLineupTimingLoading() &&
+        this.futureLineupWindowsConfirmed() &&
+        this.clientHealth.competitiveActionsReady() &&
+        !this.rosterMoveLoading(),
+      );
+    }
+
     return Boolean(
       this.isOwnTeam() &&
       this.getPendingBenchSwapSlot()?.asset &&
@@ -3808,6 +4643,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   isPendingBenchSwapInjuryReplacement(): boolean {
+    if (this.isFutureRosterAction()) {
+      return false;
+    }
+
     const benchAsset = this.getPendingBenchSwapSlot()?.asset ?? null;
     const targetSlot = this.getBenchSwapTargetSlots().find(
       (slot) => slot.slotId === this.benchSwapTargetSlotId(),
@@ -3838,6 +4677,11 @@ export class TeamSettings implements OnDestroy {
 
     if (!benchSlot?.asset || !targetSlot) {
       this.rosterMoveError.set('Choose a valid bench player or goalie unit and an active slot.');
+      return;
+    }
+
+    if (this.isFutureRosterAction()) {
+      await this.confirmFutureMatchupBenchSwap(benchSlot, targetSlot);
       return;
     }
 
@@ -3943,6 +4787,323 @@ export class TeamSettings implements OnDestroy {
         this.rosterOperationGeneration += 1;
       }
       this.clearBenchSwapDialogState();
+      this.rosterActionCycleNumber.set(null);
+      this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
+    }
+  }
+
+  private async confirmFutureMatchupBenchSwap(
+    benchSlot: BenchRosterSlot,
+    targetSlot: ActiveRosterSlot,
+  ): Promise<void> {
+    const requestedCycleNumber = this.rosterActionCycleNumber();
+    const expectedEffectiveCycleNumber = this.getExpectedFutureSwapCycleNumber();
+    const outgoingAssetKey = this.getRosterAssetKey(targetSlot.asset) || null;
+    const incomingAssetKey = this.getRosterAssetKey(benchSlot.asset);
+
+    if (
+      !requestedCycleNumber ||
+      !expectedEffectiveCycleNumber ||
+      !incomingAssetKey
+    ) {
+      this.benchSwapTimingError.set(
+        'RinkRat must verify the exact matchup assignment before this move can be confirmed.',
+      );
+      return;
+    }
+
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const mutationGeneration = ++this.futureLineupMutationGeneration;
+    const actionHandle = this.actionMonitor.begin('lineup-swap');
+    let actionOutcome: 'success' | 'error' | 'uncertain' | 'cancelled' = 'error';
+
+    this.rosterMoveLoading.set(true);
+    this.futureLineupSaving.set(true);
+    this.rosterMoveError.set('');
+    this.futureLineupError.set('');
+    this.futureLineupMessage.set('');
+
+    try {
+      const freshAuthority = await this.loadFreshFutureLineupAuthority(requestedCycleNumber);
+      if (
+        operationGeneration !== this.rosterOperationGeneration ||
+        mutationGeneration !== this.futureLineupMutationGeneration
+      ) {
+        actionOutcome = 'cancelled';
+        return;
+      }
+
+      this.applyFreshFutureLineupAuthority(freshAuthority, true);
+      const refreshedTarget = this.getBenchSwapTargetSlots().find(
+        (slot) => slot.slotId === targetSlot.slotId,
+      );
+      const refreshedBench = this.getPendingBenchSwapSlot();
+      const refreshedEffectiveCycleNumber = this.getExpectedFutureSwapCycleNumber();
+
+      if (
+        !refreshedTarget ||
+        !refreshedBench?.asset ||
+        (this.getRosterAssetKey(refreshedTarget.asset) || null) !== outgoingAssetKey ||
+        this.getRosterAssetKey(refreshedBench.asset) !== incomingAssetKey ||
+        refreshedEffectiveCycleNumber !== expectedEffectiveCycleNumber
+      ) {
+        this.benchSwapTimingError.set(
+          'The matchup timing or roster changed while this confirmation was open. Review the refreshed players and timing, then confirm again.',
+        );
+        actionOutcome = 'cancelled';
+        return;
+      }
+
+      const expectedRevision =
+        this.futureLineupPlans().find(
+          (plan) => plan.cycleNumber === expectedEffectiveCycleNumber,
+        )?.revision ?? 0;
+      const mutationKey = JSON.stringify({
+        requestedCycleNumber,
+        expectedEffectiveCycleNumber,
+        activeSlotId: targetSlot.slotId,
+        benchSlotId: benchSlot.slotId,
+        outgoingAssetKey,
+        incomingAssetKey,
+      });
+      const pendingMutation = this.pendingFutureLineupMutation;
+      const requestId =
+        pendingMutation?.operation === 'swap' &&
+        pendingMutation.cycleNumber === expectedEffectiveCycleNumber &&
+        pendingMutation.expectedRevision === expectedRevision &&
+        pendingMutation.slotsKey === mutationKey
+          ? pendingMutation.requestId
+          : createFutureMatchupLineupRequestId();
+      const swapRequest: SwapFutureMatchupLineupRequest = {
+        leagueId: this.leagueId,
+        operation: 'swap',
+        requestedCycleNumber,
+        expectedEffectiveCycleNumber,
+        activeSlotId: targetSlot.slotId,
+        benchSlotId: benchSlot.slotId,
+        expectedRevision,
+        requestId,
+        expectedOutgoingAssetKey: outgoingAssetKey,
+        expectedIncomingAssetKey: incomingAssetKey,
+      };
+
+      this.pendingFutureLineupMutation = {
+        operation: 'swap',
+        cycleNumber: expectedEffectiveCycleNumber,
+        expectedRevision,
+        requestId,
+        slotsKey: mutationKey,
+        swapRequest,
+      };
+
+      const result = await this.runBoundedRosterOperation(
+        swapFutureMatchupLineup(swapRequest),
+        'The matchup lineup swap',
+      );
+
+      if (
+        operationGeneration !== this.rosterOperationGeneration ||
+        mutationGeneration !== this.futureLineupMutationGeneration
+      ) {
+        actionOutcome = 'cancelled';
+        return;
+      }
+
+      this.replaceFutureLineupPlan(result.plan);
+      this.pendingFutureLineupMutation = null;
+      this.futureLineupStale.set(false);
+      this.resetFutureLineupDraftFromServer();
+      const incomingName = this.getRosterAssetName(benchSlot.asset);
+      const outgoingName = targetSlot.asset ? this.getRosterAssetName(targetSlot.asset) : null;
+      const message = result.mode === 'immediate'
+        ? outgoingName
+          ? `${incomingName} replaced ${outgoingName} in Matchup ${result.effectiveCycleNumber}. Both exact game assignments were untouched, so the selected matchup changed without moving any started game or point.`
+          : `${incomingName} filled the open ${targetSlot.position} slot in Matchup ${result.effectiveCycleNumber}. The incoming game assignment was untouched, so no started game or point moved.`
+        : outgoingName
+          ? `${incomingName} is scheduled to replace ${outgoingName} in Matchup ${result.effectiveCycleNumber}. Matchup ${requestedCycleNumber} stays unchanged because at least one assignment had started. The incoming player’s expected start now follows Matchup ${result.effectiveCycleNumber}.`
+          : `${incomingName} is scheduled for the open ${targetSlot.position} slot in Matchup ${result.effectiveCycleNumber}. Matchup ${requestedCycleNumber} stays unchanged because the incoming assignment had started.`;
+
+      this.rosterMoveMessage.set(message);
+      this.futureLineupMessage.set(message);
+      this.clearBenchSwapDialogState();
+      this.rosterActionCycleNumber.set(null);
+
+      try {
+        const refreshedAuthority = await this.loadFreshFutureLineupAuthority(
+          requestedCycleNumber,
+        );
+        if (
+          operationGeneration === this.rosterOperationGeneration &&
+          mutationGeneration === this.futureLineupMutationGeneration
+        ) {
+          this.applyFreshFutureLineupAuthority(refreshedAuthority, false);
+          void this.loadFutureLineupTimingEvidence(true);
+        }
+      } catch {
+        this.futureLineupTimingError.set(
+          'The move was saved, but its latest matchup dates could not be refreshed. Use Refresh before making another change.',
+        );
+      }
+
+      actionOutcome = 'success';
+    } catch (error: unknown) {
+      if (
+        operationGeneration !== this.rosterOperationGeneration ||
+        mutationGeneration !== this.futureLineupMutationGeneration
+      ) {
+        actionOutcome = 'cancelled';
+        return;
+      }
+
+      const normalizedError = normalizeFutureMatchupLineupError(error);
+      const authoritativeEffectiveCycleNumber =
+        normalizedError.details.reason === 'swap-timing-conflict'
+          ? normalizedError.details.effectiveCycleNumber ?? null
+          : null;
+      if (
+        authoritativeEffectiveCycleNumber &&
+        authoritativeEffectiveCycleNumber >= requestedCycleNumber
+      ) {
+        const override: FutureMatchupSwapEffectiveCycleOverride = {
+          requestedCycleNumber,
+          activeSlotId: targetSlot.slotId,
+          benchSlotId: benchSlot.slotId,
+          outgoingAssetKey,
+          incomingAssetKey,
+          effectiveCycleNumber: authoritativeEffectiveCycleNumber,
+          authorityRefreshed: false,
+        };
+        this.futureSwapEffectiveCycleOverride.set(override);
+        this.pendingFutureLineupMutation = null;
+        this.futureLineupStale.set(true);
+
+        if (await this.refreshFutureSwapEffectiveCycleOverride(override)) {
+          this.futureLineupMessage.set(
+            `The server found Matchup ${authoritativeEffectiveCycleNumber} as the next fair window. Review the updated timing, then confirm this exact swap again.`,
+          );
+          actionOutcome = 'cancelled';
+          return;
+        }
+      }
+
+      const failure = this.getRosterOperationError(
+        normalizedError,
+        'Unable to apply this matchup lineup swap.',
+      );
+      this.rosterMoveError.set(failure.message);
+      this.futureLineupError.set(failure.message);
+      this.futureLineupStale.set(
+        isFutureMatchupLineupRevisionConflict(error) ||
+        isFutureMatchupLineupSwapTimingConflict(error),
+      );
+      actionOutcome = failure.outcome;
+      if (failure.outcome === 'uncertain') {
+        this.clearBenchSwapDialogState();
+        this.rosterActionCycleNumber.set(null);
+      }
+    } finally {
+      if (operationGeneration === this.rosterOperationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
+      if (mutationGeneration === this.futureLineupMutationGeneration) {
+        this.futureLineupSaving.set(false);
+      }
+      this.rosterMoveLoading.set(false);
+      actionHandle.finish(actionOutcome);
+    }
+  }
+
+  private async retryPendingFutureLineupSwap(): Promise<void> {
+    const pendingMutation = this.pendingFutureLineupMutation;
+    const request = pendingMutation?.operation === 'swap'
+      ? pendingMutation.swapRequest
+      : undefined;
+
+    if (!request || this.futureLineupSaving() || this.rosterMoveLoading()) {
+      return;
+    }
+
+    const operationGeneration = ++this.rosterOperationGeneration;
+    const mutationGeneration = ++this.futureLineupMutationGeneration;
+    const actionHandle = this.actionMonitor.begin('lineup-swap');
+    let actionOutcome: 'success' | 'error' | 'uncertain' | 'cancelled' = 'error';
+
+    this.rosterMoveLoading.set(true);
+    this.futureLineupSaving.set(true);
+    this.rosterMoveError.set('');
+    this.futureLineupError.set('');
+
+    try {
+      const result = await this.runBoundedRosterOperation(
+        swapFutureMatchupLineup(request),
+        'The matchup lineup swap retry',
+      );
+
+      if (
+        operationGeneration !== this.rosterOperationGeneration ||
+        mutationGeneration !== this.futureLineupMutationGeneration
+      ) {
+        actionOutcome = 'cancelled';
+        return;
+      }
+
+      this.replaceFutureLineupPlan(result.plan);
+      this.pendingFutureLineupMutation = null;
+      this.futureLineupStale.set(false);
+      this.resetFutureLineupDraftFromServer();
+      const message = `The original lineup move is confirmed for Matchup ${result.effectiveCycleNumber}.`;
+      this.rosterMoveMessage.set(message);
+      this.futureLineupMessage.set(message);
+
+      try {
+        const refreshedAuthority = await this.loadFreshFutureLineupAuthority(
+          request.requestedCycleNumber,
+        );
+        if (
+          operationGeneration === this.rosterOperationGeneration &&
+          mutationGeneration === this.futureLineupMutationGeneration
+        ) {
+          this.applyFreshFutureLineupAuthority(refreshedAuthority, false);
+          void this.loadFutureLineupTimingEvidence(true);
+        }
+      } catch {
+        this.futureLineupTimingError.set(
+          'The move was confirmed, but its latest matchup dates could not be refreshed. Use Refresh before making another change.',
+        );
+      }
+
+      actionOutcome = 'success';
+    } catch (error: unknown) {
+      if (
+        operationGeneration !== this.rosterOperationGeneration ||
+        mutationGeneration !== this.futureLineupMutationGeneration
+      ) {
+        actionOutcome = 'cancelled';
+        return;
+      }
+
+      const failure = this.getRosterOperationError(
+        normalizeFutureMatchupLineupError(error),
+        'Unable to confirm the original matchup lineup move.',
+      );
+      this.rosterMoveError.set(failure.message);
+      this.futureLineupError.set(failure.message);
+      const stale =
+        isFutureMatchupLineupRevisionConflict(error) ||
+        isFutureMatchupLineupSwapTimingConflict(error);
+      this.futureLineupStale.set(stale);
+      if (failure.outcome !== 'uncertain') {
+        this.pendingFutureLineupMutation = null;
+      }
+      actionOutcome = failure.outcome;
+    } finally {
+      if (operationGeneration === this.rosterOperationGeneration) {
+        this.rosterOperationGeneration += 1;
+      }
+      if (mutationGeneration === this.futureLineupMutationGeneration) {
+        this.futureLineupSaving.set(false);
+      }
       this.rosterMoveLoading.set(false);
       actionHandle.finish(actionOutcome);
     }
@@ -4277,16 +5438,211 @@ export class TeamSettings implements OnDestroy {
   }
 
   getPositionSlotsForDisplay(position: DraftPosition): ActiveRosterDisplaySlot[] {
+    const selectedOption = this.getSelectedFutureLineupMatchupOption();
+    const displaySlots = selectedOption
+      ? this.getFutureRosterDisplaySlots()
+      : this.getPositionSlots(position).map((slot): ActiveRosterDisplaySlot => ({
+          ...slot,
+          assignmentPending: false,
+          displayCycleNumber: this.currentMatchup()?.cycleNumber ?? null,
+          futureStartDate: null,
+          gameMarkers: this.getRosterSlotGameMarkers(slot),
+          injuryReplacementPresentation: this.getRosterSlotInjuryReplacementPresentation(slot),
+          nextPlannedAssetLabel: '',
+          selectedPick: null,
+          selectedWindow: null,
+          useLiveCurrentScoring: true,
+          windowLabel: this.getRosterSlotWindowLabel(slot),
+        }));
+
     return orderRosterEntriesForDisplay(
-      this.getPositionSlots(position),
+      displaySlots.filter((slot) => slot.position === position),
       (slot) => (slot.asset ? this.getRosterDisplayAsset(slot.asset) : null),
       this.rosterDisplayPhase(),
-    ).map((slot) => ({
-      ...slot,
-      gameMarkers: this.getRosterSlotGameMarkers(slot),
-      injuryReplacementPresentation: this.getRosterSlotInjuryReplacementPresentation(slot),
-      windowLabel: this.getRosterSlotWindowLabel(slot),
-    }));
+    );
+  }
+
+  private getFutureRosterDisplaySlots(): ActiveRosterDisplaySlot[] {
+    const roster = this.roster();
+    const cycleNumber = this.selectedFutureLineupCycleNumber();
+    const selectedOption = this.getSelectedFutureLineupMatchupOption();
+
+    if (!roster || !cycleNumber || !selectedOption) {
+      return [];
+    }
+
+    const projectedBySlotId = new Map(
+      buildFutureMatchupProjectedLineup({
+        cycleNumber,
+        roster,
+        plan: this.selectedFutureLineupPlan(),
+        plans: this.futureLineupPlans(),
+        baseCycleNumber: this.getCurrentFutureLineupCycleNumber(),
+        windows: this.futureLineupWindows(),
+      }).map((slot) => [slot.rosterSlotId, slot] as const),
+    );
+
+    return roster.activeSlots.map((sourceSlot): ActiveRosterDisplaySlot => {
+      const projected = projectedBySlotId.get(sourceSlot.slotId) ?? null;
+      const selectedWindow =
+        this.futureLineupWindows().find(
+          (window) => window.rosterSlotId === sourceSlot.slotId,
+        ) ?? null;
+      const plannedSlot = this.selectedFutureLineupPlan()?.slots.find(
+        (slot) => slot.rosterSlotId === sourceSlot.slotId,
+      ) ?? null;
+      const selectedPick = this.getSelectedCycleRosterPick(sourceSlot.slotId);
+      const livePick = this.getRosterSlotCyclePick(sourceSlot);
+      const livePickAsset =
+        selectedOption.timing === 'current' &&
+        this.latestCycle()?.cycleNumber === cycleNumber &&
+        plannedSlot?.resolution !== 'planned'
+          ? (livePick?.asset as RosterAsset | null | undefined) ?? null
+          : null;
+      const selectedCycle = this.futureLineupOptionCycles().find(
+        (cycle) => cycle.cycleNumber === cycleNumber,
+      ) ?? null;
+      const selectedSlotExpectation = resolveSelectedMatchupSlotExpectation({
+        expectedRosterSlotIdsByOwner: selectedCycle?.expectedRosterSlotIdsByOwner,
+        ownerId: this.viewedOwnerId(),
+        rosterSlotId: sourceSlot.slotId,
+        physicalSlotHasAsset: Boolean(sourceSlot.asset),
+      });
+      // Current slow slots may render their projected identity until their exact
+      // window arrives. Earlier overlapping matchups must instead prove the
+      // selected-cycle pick/window, or prove that the slot was legitimately
+      // omitted because it was open.
+      const assignmentIdentity = resolveSelectedMatchupAssignmentIdentity({
+        timing: selectedOption.timing,
+        plannedResolution: plannedSlot?.resolution ?? null,
+        selectedSlotExpectation,
+        livePickAssetKey: this.getRosterAssetKey(livePickAsset) || null,
+        selectedPickAssetKey: this.getRosterAssetKey(selectedPick?.asset) || null,
+        selectedWindowAssetKey: selectedWindow?.assetKey ?? null,
+        projectedAssetKey: projected?.assetKey ?? null,
+      });
+      const asset = (
+        assignmentIdentity.source === 'live-pick'
+          ? livePickAsset
+          : assignmentIdentity.source === 'selected-pick'
+            ? selectedPick?.asset ?? null
+            : assignmentIdentity.source === 'selected-window'
+              ? selectedWindow?.asset ?? null
+              : assignmentIdentity.source.startsWith('projected-')
+                ? projected?.asset ?? null
+                : null
+      ) as RosterAsset | null;
+      const assetKey = this.getRosterAssetKey(asset);
+      const exactSelectedPick =
+        assetKey && this.getRosterAssetKey(selectedPick?.asset) === assetKey
+          ? selectedPick
+          : null;
+      const exactSelectedWindow =
+        assetKey && selectedWindow?.assetKey === assetKey ? selectedWindow : null;
+      const useLiveCurrentScoring = shouldUseLiveSelectedMatchupScoring({
+        timing: selectedOption.timing,
+        selectedCycleNumber: cycleNumber,
+        latestCycleNumber: this.latestCycle()?.cycleNumber ?? null,
+        displayedAssetKey: assetKey || null,
+        livePickAssetKey: this.getRosterAssetKey(livePick?.asset) || null,
+      });
+      const liveDisplaySlot: ActiveRosterSlot = {
+        ...sourceSlot,
+        asset,
+      };
+      const injuryReplacementPresentation = useLiveCurrentScoring
+        ? this.getRosterSlotInjuryReplacementPresentation(liveDisplaySlot)
+        : exactSelectedWindow && assetKey
+          ? buildReconciledInjuryReplacementPresentation({
+              source: exactSelectedWindow,
+              ownerId: this.viewedOwnerId(),
+              rosterSlotId: sourceSlot.slotId,
+              currentAssetKey: assetKey,
+              injuryReplacementWindows: [exactSelectedWindow.injuryReplacementWindow],
+            })
+          : null;
+
+      return {
+        ...sourceSlot,
+        asset,
+        pendingMove: null,
+        assignmentPending:
+          assignmentIdentity.source === 'pending' && selectedOption.timing === 'open',
+        displayCycleNumber: cycleNumber,
+        futureStartDate: this.getFutureLineupStartDate(sourceSlot, asset),
+        gameMarkers: useLiveCurrentScoring
+          ? this.getRosterSlotGameMarkers(liveDisplaySlot)
+          : this.getFutureRosterSlotGameMarkers(sourceSlot, asset, exactSelectedWindow),
+        injuryReplacementPresentation,
+        nextPlannedAssetLabel: this.getNextFutureLineupAssignmentLabel(
+          sourceSlot.slotId,
+          assetKey || null,
+          cycleNumber,
+        ),
+        selectedPick: exactSelectedPick,
+        selectedWindow: exactSelectedWindow,
+        useLiveCurrentScoring,
+        windowLabel: useLiveCurrentScoring
+          ? this.getRosterSlotWindowLabel(liveDisplaySlot)
+          : this.getFutureRosterSlotWindowLabel(sourceSlot, asset, exactSelectedWindow),
+      };
+    });
+  }
+
+  private getSelectedRosterDisplaySlot(slotId: string): ActiveRosterDisplaySlot | null {
+    for (const group of this.rosterPositions) {
+      const slot = this.getPositionSlotsForDisplay(group.position).find(
+        (candidate) => candidate.slotId === slotId,
+      );
+      if (slot) {
+        return slot;
+      }
+    }
+
+    return null;
+  }
+
+  private getFutureDisplayPositionSlots(position: DraftPosition): ActiveRosterDisplaySlot[] {
+    return this.getPositionSlotsForDisplay(position);
+  }
+
+  private getNextFutureLineupAssignmentLabel(
+    rosterSlotId: string,
+    selectedAssetKey: string | null,
+    selectedCycleNumber: number,
+  ): string {
+    const nextAssignment = [...this.futureLineupPlans()]
+      .filter((plan) => plan.cycleNumber > selectedCycleNumber)
+      .sort((first, second) => first.cycleNumber - second.cycleNumber)
+      .map((plan) => ({
+        cycleNumber: plan.cycleNumber,
+        slot: plan.slots.find((candidate) => candidate.rosterSlotId === rosterSlotId) ?? null,
+      }))
+      .find(({ slot }) => {
+        if (!slot) {
+          return false;
+        }
+        const effectiveAssetKey =
+          slot.resolution !== 'planned' && slot.resolvedAssetKey !== undefined
+            ? slot.resolvedAssetKey
+            : slot.assetKey;
+        return effectiveAssetKey !== selectedAssetKey;
+      });
+
+    if (!nextAssignment?.slot) {
+      return '';
+    }
+
+    const assetKey =
+      nextAssignment.slot.resolution !== 'planned' &&
+      nextAssignment.slot.resolvedAssetKey !== undefined
+        ? nextAssignment.slot.resolvedAssetKey
+        : nextAssignment.slot.assetKey;
+    const asset = assetKey ? this.getFutureLineupAssetByKey(assetKey) : null;
+
+    return asset
+      ? `Matchup ${nextAssignment.cycleNumber}: ${this.getRosterAssetName(asset)} is scheduled to start.`
+      : `This slot changes in Matchup ${nextAssignment.cycleNumber}.`;
   }
 
   getRosterDisplayOrderLabel(): string {
@@ -4550,7 +5906,7 @@ export class TeamSettings implements OnDestroy {
   }
 
   getCurrentMatchupStatusText(): string {
-    const matchup = this.currentMatchup();
+    const matchup = this.currentFutureLineupMatchup;
 
     if (!this.latestCycle() && !matchup) {
       return 'No matchup has started yet.';
@@ -4568,7 +5924,10 @@ export class TeamSettings implements OnDestroy {
   }
 
   getCycleLabel(): string {
-    const cycleNumber = this.currentMatchup()?.cycleNumber ?? this.latestCycle()?.cycleNumber;
+    const cycleNumber =
+      this.selectedFutureLineupCycleNumber() ??
+      this.latestCycle()?.cycleNumber ??
+      this.currentMatchup()?.cycleNumber;
 
     return cycleNumber ? `Matchup ${cycleNumber}` : 'Current Matchup';
   }
@@ -4764,13 +6123,35 @@ export class TeamSettings implements OnDestroy {
     return null;
   }
 
-  openRosterAssetDetail(asset: unknown): void {
+  private hasSelectedMatchupScoringDetail(activeSlotId: string): boolean {
+    const selectedOption = this.getSelectedFutureLineupMatchupOption();
+    const displaySlot = activeSlotId
+      ? this.getSelectedRosterDisplaySlot(activeSlotId)
+      : null;
+
+    return Boolean(
+      selectedOption?.materialized &&
+      displaySlot &&
+      (displaySlot.selectedWindow || displaySlot.selectedPick || displaySlot.useLiveCurrentScoring),
+    );
+  }
+
+  openRosterAssetDetail(asset: unknown, activeSlotId = ''): void {
     const projectionAsset = this.getRosterAssetProjection(asset);
-    const cycleNumber = this.latestCycle()?.cycleNumber ?? 1;
 
     if (!projectionAsset) {
       return;
     }
+
+    const selectedOption = activeSlotId
+      ? this.getSelectedFutureLineupMatchupOption()
+      : null;
+    if (selectedOption && !this.hasSelectedMatchupScoringDetail(activeSlotId)) {
+      this.openRosterAssetIntel(asset);
+      return;
+    }
+
+    const cycleNumber = selectedOption?.cycleNumber ?? this.latestCycle()?.cycleNumber ?? 1;
 
     void this.router.navigate(
       ['/leagues', this.leagueId, 'cycles', cycleNumber, 'assets', projectionAsset.assetKey],
@@ -4796,6 +6177,7 @@ export class TeamSettings implements OnDestroy {
     event: MouseEvent,
     asset: unknown,
     detailContext: 'matchup' | 'player-intel' = 'matchup',
+    activeSlotId = '',
   ): void {
     const target = event.target;
 
@@ -4811,13 +6193,14 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    this.openRosterAssetDetail(asset);
+    this.openRosterAssetDetail(asset, activeSlotId);
   }
 
   handleRosterIdentityKeydown(
     event: KeyboardEvent,
     asset: unknown,
     detailContext: 'matchup' | 'player-intel' = 'matchup',
+    activeSlotId = '',
   ): void {
     if (event.key !== 'Enter' && event.key !== ' ') {
       return;
@@ -4830,7 +6213,7 @@ export class TeamSettings implements OnDestroy {
       return;
     }
 
-    this.openRosterAssetDetail(asset);
+    this.openRosterAssetDetail(asset, activeSlotId);
   }
 
   getProjectedCycle(asset: unknown): number | null {
@@ -4884,6 +6267,30 @@ export class TeamSettings implements OnDestroy {
     );
   }
 
+  private getSelectedCycleRosterPick(rosterSlotId: string): DraftPick | null {
+    const selectedCycleNumber = this.selectedFutureLineupCycleNumber();
+    const isLatestSelected =
+      selectedCycleNumber !== null &&
+      selectedCycleNumber === this.latestCycle()?.cycleNumber;
+    const isSelectedCycleSlot = (pick: DraftPick): boolean =>
+      pick.ownerId === this.viewedOwnerId() &&
+      pick.rosterSlotId === rosterSlotId &&
+      (pick.snapshotCycleNumber ?? selectedCycleNumber) === selectedCycleNumber;
+    // A successful selected-matchup mutation is followed by this bounded exact
+    // read before the shared live listener is guaranteed to converge.
+    const exactSelectedPick = this.futureLineupRosterPicks().find(
+      isSelectedCycleSlot,
+    );
+
+    if (exactSelectedPick || !isLatestSelected) {
+      return exactSelectedPick ?? null;
+    }
+
+    return this.cycleRosterPicks().find(
+      isSelectedCycleSlot,
+    ) ?? null;
+  }
+
   getRosterSlotScoreSummary(slot: ActiveRosterSlot): CycleAssetScoreSummary | null {
     if (!slot.asset) {
       return null;
@@ -4921,18 +6328,42 @@ export class TeamSettings implements OnDestroy {
   }
 
   getRosterSlotCurrentCycleScore(slot: ActiveRosterSlot): number | null {
+    if (this.isFutureDisplaySlot(slot)) {
+      return this.getSelectedMatchupSlotScoreState(slot).score;
+    }
+
     return this.getRosterSlotScoreSummary(slot)?.currentScore ?? null;
   }
 
   getRosterSlotGamesPlayed(slot: ActiveRosterSlot): number | null {
+    if (this.isFutureDisplaySlot(slot)) {
+      return this.getSelectedMatchupSlotScoreState(slot).gamesPlayed;
+    }
+
     return this.getRosterSlotScoreSummary(slot)?.gamesPlayed ?? null;
   }
 
   getRosterSlotGamesLeft(slot: ActiveRosterSlot): number | null {
+    if (this.isFutureDisplaySlot(slot)) {
+      return this.getSelectedMatchupSlotScoreState(slot).gamesLeft;
+    }
+
     return this.getRosterSlotScoreSummary(slot)?.gamesLeft ?? null;
   }
 
   getRosterSlotGameProgress(slot: ActiveRosterSlot): string {
+    if (this.isFutureDisplaySlot(slot)) {
+      const scoreState = this.getSelectedMatchupSlotScoreState(slot);
+      if (scoreState.gamesPlayed === null) {
+        return '—';
+      }
+
+      const requiredGames =
+        this.league()?.scoringRules?.requiredGamesPerCycle ??
+        defaultScoringRules.requiredGamesPerCycle;
+      return `${scoreState.gamesPlayed} / ${requiredGames}`;
+    }
+
     const summary = this.getRosterSlotScoreSummary(slot);
 
     if (!summary) {
@@ -4943,6 +6374,158 @@ export class TeamSettings implements OnDestroy {
       this.league()?.scoringRules?.requiredGamesPerCycle ??
       defaultScoringRules.requiredGamesPerCycle;
     return `${summary.gamesPlayed} / ${requiredGames}`;
+  }
+
+  private getSelectedMatchupSlotScoreState(slot: ActiveRosterDisplaySlot) {
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+
+    return resolveSelectedMatchupSlotScoreState({
+      useLiveCurrentScoring: slot.useLiveCurrentScoring,
+      liveSummary: slot.useLiveCurrentScoring
+        ? this.getRosterSlotScoreSummary(slot)
+        : null,
+      selectedWindow: slot.selectedWindow,
+      materialized: this.getSelectedFutureLineupMatchupOption()?.materialized === true,
+      hasPlannedAssignment: this.hasSelectedPlannedAssignment(slot.slotId),
+      requiredGames,
+    });
+  }
+
+  private isFutureDisplaySlot(slot: ActiveRosterSlot): slot is ActiveRosterDisplaySlot {
+    return 'displayCycleNumber' in slot &&
+      Boolean(this.getSelectedFutureLineupMatchupOption()) &&
+      slot.displayCycleNumber === this.selectedFutureLineupCycleNumber();
+  }
+
+  private getFutureProjectedGamesForAsset(asset: RosterAsset | null): NhlTeamSeasonGame[] {
+    const teamAbbreviation = asset ? this.getFutureLineupScheduleTeam(asset) : null;
+    const sourceNhlBlockNumber = this.futureLineupSourceNhlBlockNumber();
+
+    if (!teamAbbreviation || !sourceNhlBlockNumber) {
+      return [];
+    }
+
+    try {
+      return selectFutureMatchupProjectedGames({
+        schedule: this.futureLineupSchedulesByTeam()[teamAbbreviation] ?? [],
+        targetGameIds: this.futureLineupTargetGameIdsByTeam()[teamAbbreviation],
+        sourceNhlBlockNumber,
+        requiredGamesPerCycle:
+          this.league()?.scoringRules?.requiredGamesPerCycle ??
+          defaultScoringRules.requiredGamesPerCycle,
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  getBenchSwapCandidateProgress(slot: BenchRosterSlot): string {
+    if (!this.isFutureRosterAction()) {
+      return this.getRosterAssetGameProgress(slot.asset);
+    }
+
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+    const projectedGames = this.getFutureProjectedGamesForAsset(slot.asset);
+
+    if (projectedGames.length !== requiredGames) {
+      return 'schedule pending';
+    }
+
+    const startedGames = projectedGames.filter((game) =>
+      this.hasProjectedNhlGameStarted(game),
+    ).length;
+    return `${startedGames} / ${requiredGames} games started`;
+  }
+
+  private getFutureRosterSlotGameMarkers(
+    slot: ActiveRosterSlot,
+    asset: RosterAsset | null,
+    window: FantasyAssetCycleWindow | null,
+  ): RosterSlotGameMarker[] {
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+    const projectedGames = window ? [] : this.getFutureProjectedGamesForAsset(asset);
+
+    return Array.from({ length: requiredGames }, (_, index) => {
+      if (window) {
+        const gameId = window.scheduledGameIds[index] ?? null;
+        const state = resolveCycleWindowGameMarkerState({
+          gameId,
+          completedGameIds: window.completedGameIds,
+          appearanceGameIds: window.appearanceGameIds,
+          liveGameIds: window.liveGameIds,
+          gameStates: window.gameStates,
+          actualGamesPlayed: window.actualGamesPlayed,
+        });
+        const gameDate = window.scheduledGameDates[index] ?? null;
+        const gameLabel = window.scheduledGameLabels[index] ?? 'Schedule pending';
+        const dateLabel = gameDate
+          ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
+          : 'date pending';
+
+        return {
+          index: index + 1,
+          status: state.status,
+          title: `Game ${index + 1}: ${gameLabel} · ${dateLabel} · ${state.statusLabel}`,
+          ariaLabel: `Game ${index + 1}, ${gameLabel}, ${dateLabel}, ${state.statusLabel}`,
+          replacementBoundary: false,
+          currentOwner: false,
+        };
+      }
+
+      const game = projectedGames[index] ?? null;
+      const gameDate = game?.gameDate ?? null;
+      const dateLabel = gameDate
+        ? new Date(`${gameDate}T12:00:00`).toLocaleDateString()
+        : 'date pending';
+      const gameLabel = game
+        ? `${game.awayTeam.abbrev} at ${game.homeTeam.abbrev}`
+        : 'Schedule pending';
+      const state = String(game?.gameState ?? '').toUpperCase();
+      const markerStatus: RosterSlotGameMarker['status'] = !game
+        ? 'unavailable'
+        : state === 'LIVE' || state === 'CRIT'
+          ? 'live'
+          : this.hasProjectedNhlGameStarted(game)
+            ? 'unavailable'
+            : 'upcoming';
+      const evidenceLabel = !game
+        ? 'schedule pending'
+        : markerStatus === 'live'
+          ? 'live; exact scoring pending'
+          : markerStatus === 'unavailable'
+            ? 'started; exact scoring pending'
+            : 'upcoming';
+
+      return {
+        index: index + 1,
+        status: markerStatus,
+        title: `Projected game ${index + 1}: ${gameLabel} · ${dateLabel} · ${evidenceLabel}`,
+        ariaLabel: `Projected game ${index + 1}, ${gameLabel}, ${dateLabel}, ${evidenceLabel}`,
+        replacementBoundary: false,
+        currentOwner: false,
+      };
+    });
+  }
+
+  private getFutureRosterSlotWindowLabel(
+    slot: ActiveRosterSlot,
+    asset: RosterAsset | null,
+    window: FantasyAssetCycleWindow | null,
+  ): string {
+    const requiredGames =
+      this.league()?.scoringRules?.requiredGamesPerCycle ??
+      defaultScoringRules.requiredGamesPerCycle;
+    const playerName = asset ? this.getRosterAssetName(asset) : `${slot.position} slot`;
+
+    return window
+      ? `${playerName}, Matchup ${window.cycleNumber}: ${window.gamesPlayed} played and ${window.gamesLeft} left.`
+      : `${playerName}: projected ${requiredGames}-game assignment; exact ownership begins only after the server materializes this matchup.`;
   }
 
   getRosterSlotGameMarkers(slot: ActiveRosterSlot): RosterSlotGameMarker[] {
@@ -5009,13 +6592,22 @@ export class TeamSettings implements OnDestroy {
       return null;
     }
 
-    return (
-      this.roster()?.activeSlots.find((slot) => slot.slotId === this.rosterManagerSlotId()) ?? null
-    );
+    return this.isFutureRosterAction()
+      ? this.getSelectedRosterDisplaySlot(this.rosterManagerSlotId())
+      : this.roster()?.activeSlots.find(
+          (slot) => slot.slotId === this.rosterManagerSlotId(),
+        ) ?? null;
   }
 
   get rosterManagerInjuryReplacementPresentation(): InjuryReplacementPresentation | null {
     const activeSlot = this.getRosterManagerActiveSlot();
+    if (
+      activeSlot &&
+      this.isFutureDisplaySlot(activeSlot) &&
+      !activeSlot.useLiveCurrentScoring
+    ) {
+      return activeSlot.injuryReplacementPresentation;
+    }
     return activeSlot ? this.getRosterSlotInjuryReplacementPresentation(activeSlot) : null;
   }
 

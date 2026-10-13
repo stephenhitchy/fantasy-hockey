@@ -114,7 +114,9 @@ test('roster cards separate details navigation from Manage or Add actions with v
   assert.match(template, /role="link"[\s\S]*?tabindex="0"/);
   assert.ok(
     (
-      template.match(/\(click\)="\$event\.stopPropagation\(\); openRosterAssetDetail\(asset\)"/g) ??
+      template.match(
+        /\(click\)="\$event\.stopPropagation\(\); openRosterAssetDetail\(asset(?:, slot\.slotId)?\)"/g,
+      ) ??
       []
     ).length >= 4,
   );

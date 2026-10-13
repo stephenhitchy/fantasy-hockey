@@ -8,6 +8,7 @@ export type RosterManagementActionId =
   | 'review-scheduled'
   | 'replace-injured-now'
   | 'swap-with-bench'
+  | 'keep-open'
   | 'start'
   | 'move-to-ir'
   | 'activate'

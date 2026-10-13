@@ -153,6 +153,13 @@ test('the eligible injury path bypasses ordinary timing and dispatches the immed
     /effectiveCycleNumber: healthySwapTimingPreview\?\.effectiveCycleNumber \?\? null[\s\S]*?effectiveLabel: healthySwapTimingPreview/,
   );
   assert.match(action, /case 'replace-injured-now':[\s\S]*beginActiveBenchSwapPicker\(slotId\)/);
-  assert.match(template, /isActiveBenchPickerInjuryReplacement\(\)[\s\S]*Replace Injured Player Now/);
-  assert.match(template, /remaining future games[\s\S]*games and points already started stay protected/i);
+  assert.match(template, /\[title\]="getActiveBenchPickerTitle\(\)"/);
+  assert.match(
+    source,
+    /getActiveBenchPickerTitle\(\)[\s\S]*?isActiveBenchPickerInjuryReplacement\(\)[\s\S]*?'Replace Injured Player Now'/,
+  );
+  assert.match(
+    source,
+    /getActiveBenchPickerDescription\(\)[\s\S]*?remaining future games[\s\S]*?games and points already started stay protected/i,
+  );
 });

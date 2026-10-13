@@ -34,6 +34,10 @@ import {
   type ManageFutureMatchupLineupsRequest,
   type ManageFutureMatchupLineupsResult,
   type SaveFutureMatchupLineupPlanInput,
+  type SwapFutureMatchupLineupInput,
+  type SwapFutureMatchupLineupRequest,
+  type SwapFutureMatchupLineupResult,
+  type FutureMatchupLineupSwapTimingReason,
 } from './future-matchup-lineup.models';
 
 const MAX_SCHEDULE_TEAMS = 32;
@@ -49,8 +53,16 @@ const SLOT_RESOLUTIONS = new Set<FutureMatchupLineupSlotResolution>([
   'unchanged',
   'conflict',
 ]);
+const SWAP_TIMING_REASONS = new Set<FutureMatchupLineupSwapTimingReason>([
+  'selected-matchup-untouched',
+  'requested-matchup-materialized',
+  'outgoing-started',
+  'incoming-started',
+  'incoming-not-yet-eligible',
+]);
 const ERROR_REASONS = new Set<FutureMatchupLineupErrorReason>([
   'revision-conflict',
+  'swap-timing-conflict',
   'pending-roster-move',
   'cycle-started',
   'cycle-state-invalid',
@@ -273,6 +285,19 @@ function getErrorDetails(value: unknown): FutureMatchupLineupErrorDetails {
       details['reservedCycleNumber'] > 0
     ? details['reservedCycleNumber']
     : undefined;
+  const effectiveCycleNumber = typeof details['effectiveCycleNumber'] === 'number' &&
+      Number.isSafeInteger(details['effectiveCycleNumber']) &&
+      details['effectiveCycleNumber'] > 0
+    ? details['effectiveCycleNumber']
+    : undefined;
+  const mode = details['mode'] === 'immediate' || details['mode'] === 'queued'
+    ? details['mode']
+    : undefined;
+  const timingReason = SWAP_TIMING_REASONS.has(
+    details['timingReason'] as FutureMatchupLineupSwapTimingReason,
+  )
+    ? details['timingReason'] as FutureMatchupLineupSwapTimingReason
+    : undefined;
 
   return {
     reason,
@@ -287,6 +312,9 @@ function getErrorDetails(value: unknown): FutureMatchupLineupErrorDetails {
       ? { reservedRosterSlotId: optionalString('reservedRosterSlotId') }
       : {}),
     ...(reservedCycleNumber === undefined ? {} : { reservedCycleNumber }),
+    ...(effectiveCycleNumber === undefined ? {} : { effectiveCycleNumber }),
+    ...(mode === undefined ? {} : { mode }),
+    ...(timingReason === undefined ? {} : { timingReason }),
   };
 }
 
@@ -323,6 +351,10 @@ export function normalizeFutureMatchupLineupError(
 export function isFutureMatchupLineupRevisionConflict(error: unknown): boolean {
   const normalized = normalizeFutureMatchupLineupError(error);
   return normalized.code === 'aborted' && normalized.details.reason === 'revision-conflict';
+}
+
+export function isFutureMatchupLineupSwapTimingConflict(error: unknown): boolean {
+  return normalizeFutureMatchupLineupError(error).details.reason === 'swap-timing-conflict';
 }
 
 function normalizeLeagueId(leagueId: string): string {
@@ -425,6 +457,69 @@ export async function clearFutureMatchupLineupPlan(
     }
 
     return response.data;
+  } catch (error: unknown) {
+    throw normalizeFutureMatchupLineupError(error);
+  }
+}
+
+export async function swapFutureMatchupLineup(
+  input: SwapFutureMatchupLineupInput,
+): Promise<SwapFutureMatchupLineupResult> {
+  try {
+    const request: SwapFutureMatchupLineupRequest = {
+      operation: 'swap',
+      leagueId: normalizeLeagueId(input.leagueId),
+      requestedCycleNumber: requirePositiveInteger(
+        input.requestedCycleNumber,
+        'requested matchup number',
+      ),
+      expectedEffectiveCycleNumber: requirePositiveInteger(
+        input.expectedEffectiveCycleNumber,
+        'expected effective matchup number',
+      ),
+      activeSlotId: requireNonEmptyString(input.activeSlotId, 'active slot'),
+      benchSlotId: requireNonEmptyString(input.benchSlotId, 'bench slot'),
+      expectedRevision: requireNonNegativeInteger(
+        input.expectedRevision,
+        'expected revision',
+      ),
+      requestId: requireNonEmptyString(input.requestId, 'request id'),
+      expectedOutgoingAssetKey:
+        input.expectedOutgoingAssetKey === null
+          ? null
+          : requireNonEmptyString(input.expectedOutgoingAssetKey, 'outgoing asset'),
+      expectedIncomingAssetKey: requireNonEmptyString(
+        input.expectedIncomingAssetKey,
+        'incoming asset',
+      ),
+    };
+    const response = await manageFutureMatchupLineupsCallable(request);
+    const result = response.data;
+
+    if (
+      result.operation !== 'swap' ||
+      (result.mode !== 'immediate' && result.mode !== 'queued') ||
+      !Number.isSafeInteger(result.requestedCycleNumber) ||
+      result.requestedCycleNumber < 1 ||
+      !Number.isSafeInteger(result.effectiveCycleNumber) ||
+      result.effectiveCycleNumber < result.requestedCycleNumber ||
+      !SWAP_TIMING_REASONS.has(result.timingReason) ||
+      result.effectiveStart?.evidence !== 'lineup-plan-boundary' ||
+      result.effectiveStart.cycleNumber !== result.effectiveCycleNumber ||
+      typeof result.effectiveStart.reason !== 'string' ||
+      !result.effectiveStart.reason.trim()
+    ) {
+      throw new Error('The future-lineup swap response is malformed.');
+    }
+
+    return {
+      ...result,
+      plan: normalizeFutureMatchupLineupPlanView(result.plan),
+      effectiveStart: {
+        ...result.effectiveStart,
+        reason: result.effectiveStart.reason.trim(),
+      },
+    };
   } catch (error: unknown) {
     throw normalizeFutureMatchupLineupError(error);
   }

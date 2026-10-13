@@ -1108,6 +1108,31 @@ export async function getCycleRosterPicksOnce(
   return snapshot.docs.map((pickDoc) => pickDoc.data() as DraftPick);
 }
 
+/** Bounded selected-matchup read; avoids loading every manager's roster picks. */
+export async function getCycleOwnerRosterPicksOnce(
+  leagueId: string,
+  cycleNumber: number,
+  ownerId: string,
+): Promise<DraftPick[]> {
+  const ownerPicksQuery = query(
+    getCycleRosterPicksRef(leagueId, cycleNumber),
+    where('ownerId', '==', ownerId),
+    limit(32),
+  );
+  const snapshot = await getDocs(ownerPicksQuery);
+  const picks = snapshot.docs.map((pickDoc) => pickDoc.data() as DraftPick);
+  const slotIds = new Set<string>();
+
+  for (const pick of picks) {
+    if (!pick.rosterSlotId || slotIds.has(pick.rosterSlotId)) {
+      throw new Error('The selected matchup has invalid roster-slot assignment evidence.');
+    }
+    slotIds.add(pick.rosterSlotId);
+  }
+
+  return picks;
+}
+
 export async function getCycleMatchupsOnce(
   leagueId: string,
   cycleNumber: number,

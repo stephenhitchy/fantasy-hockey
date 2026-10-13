@@ -25,9 +25,13 @@ const {
 } = requireFunctions(
   './lib/shared/core/team/future-matchup-lineup.util.js',
 );
+const nhlApi = requireFunctions(
+  './lib/shared/core/nhl/nhl-api.service.js',
+);
 const firebaseAdminCompat = requireFunctions(
   './lib/shared/core/firebase-admin-compat.js',
 );
+const serverFirebase = requireFunctions('./lib/shared/core/firebase.js');
 const { deleteApp, initializeApp } = requireFunctions('firebase-admin/app');
 const { getFirestore } = requireFunctions('firebase-admin/firestore');
 
@@ -136,6 +140,209 @@ function requestedSlots(roster, replacements = {}) {
   }));
 }
 
+async function seedMaterializedGoalieSwap(t, options = {}) {
+  const cycleNumber = options.cycleNumber ?? 2;
+  const cycleId = `cycle-${cycleNumber}`;
+  const roster = buildRoster();
+  const outgoing = roster.activeSlots.find((slot) => slot.slotId === 'G-1').asset;
+  const incoming = goalie('VAN', 'benched');
+  roster.benchSlots[4] = {
+    slotId: 'B-5',
+    slotNumber: 5,
+    asset: incoming,
+  };
+  await db.doc(
+    `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+  ).set(roster);
+  const futureGames = (team, firstId) => Array.from({ length: 6 }, (_, index) => ({
+    id: firstId + index,
+    gameDate: `2099-10-${String(index + 1).padStart(2, '0')}`,
+    startTimeUTC: `2099-10-${String(index + 1).padStart(2, '0')}T20:00:00.000Z`,
+    gameType: 2,
+    gameState: 'FUT',
+    homeTeam: { abbrev: team },
+    awayTeam: { abbrev: team === 'SEA' ? 'VAN' : 'SEA' },
+  }));
+  const outgoingGames = futureGames('SEA', 101);
+  const outgoingFrozenGameIds = options.outgoingGameIds ??
+    [101, 102, 103, 104, 105, 106];
+  const incomingFrozenGameIds = options.incomingGameIds ??
+    [201, 202, 203, 204, 205, 206];
+  if (options.outgoingStarted === true) {
+    outgoingGames[0] = {
+      ...outgoingGames[0],
+      gameDate: '2026-10-11',
+      startTimeUTC: '2026-10-11T20:00:00.000Z',
+      gameState: 'FINAL',
+    };
+  }
+  t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async (team) =>
+    team.toUpperCase() === 'SEA'
+      ? outgoingGames
+      : futureGames('VAN', 201),
+  );
+  await Promise.all([
+    db.doc(`leagues/${leagueId}/cycles/${cycleId}`).set({
+      id: cycleId,
+      cycleNumber,
+      phase: 'regular_season',
+      status: 'active',
+      ...(options.omitCycleExpectedRosterSlotIds === true
+        ? {}
+        : {
+            expectedRosterSlotIdsByOwner: {
+              [ownerId]: options.cycleExpectedRosterSlotIds ?? ['G-1'],
+            },
+          }),
+      sourceNhlTargetGameIdsByTeam: {
+        SEA: outgoingFrozenGameIds,
+        VAN: incomingFrozenGameIds,
+      },
+    }),
+    db.doc(
+      `leagues/${leagueId}/cycles/${cycleId}/rosterPicks/${ownerId}__G-1`,
+    ).set({
+      overallPick: 14,
+      round: 1,
+      pickInRound: 14,
+      ownerId,
+      rosterSlotId: 'G-1',
+      cycleWindowId: `${ownerId}__G-1__${cycleId}`,
+      snapshotCycleNumber: cycleNumber,
+      sourceNhlBlockNumber: cycleNumber,
+      sourceNhlTargetGameIds: outgoingFrozenGameIds,
+      sourceNhlTargetGameIdsByTeam: {
+        SEA: outgoingFrozenGameIds,
+        VAN: incomingFrozenGameIds,
+      },
+      asset: outgoing,
+      ...(options.pickInjuryReplacementWindow === undefined
+        ? {}
+        : {
+            injuryReplacementWindow:
+              options.pickInjuryReplacementWindow,
+          }),
+    }),
+    db.doc(
+      `leagues/${leagueId}/cycles/${cycleId}/teamWindows/${ownerId}`,
+    ).set({
+      id: ownerId,
+      ownerId: options.teamWindowsOwnerId ?? ownerId,
+      cycleNumber: options.teamWindowsCycleNumber ?? cycleNumber,
+      ...(options.omitExpectedRosterSlotIds === true
+        ? {}
+        : {
+            expectedRosterSlotIds:
+              options.expectedRosterSlotIds ?? ['G-1'],
+          }),
+      windows: [{
+        id: `${ownerId}__G-1__${cycleId}`,
+        ownerId,
+        rosterSlotId: 'G-1',
+        cycleNumber,
+        position: 'G',
+        assetKey: 'goalie-unit-SEA',
+        asset: outgoing,
+        status: 'scheduled',
+        scheduledGameIds: outgoingFrozenGameIds,
+        scheduledGameDates: [],
+        scheduledGameLabels: [],
+        completedGameIds: [],
+        liveGameIds: [],
+        appearanceGameIds: [],
+        incompleteFinalGameIds: [],
+        gameScores: {},
+        gameStates: {},
+        gamesPlayed: 0,
+        actualGamesPlayed: 0,
+        fantasyPoints: 0,
+        startedAt: null,
+        completedAt: null,
+      }, ...(options.additionalWindows ?? [])],
+      completedWindowCount: 0,
+      totalWindowCount: 1,
+      status: 'scheduled',
+    }),
+  ]);
+
+  return { outgoing, incoming };
+}
+
+async function assertMaterializedGoalieSwapUnchanged() {
+  const [savedRoster, savedPick, savedWindows, savedPlan, mutationState, audit] =
+    await Promise.all([
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+      db.doc(`leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__G-1`).get(),
+      db.doc(`leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`).get(),
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`).get(),
+      db.doc(
+        `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+      ).get(),
+      db.collection(`leagues/${leagueId}/transactions`).get(),
+    ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1')
+      .asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-5')
+      .asset.assetKey,
+    'goalie-unit-VAN',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-SEA');
+  assert.equal(
+    savedWindows.data().windows.find((window) => window.rosterSlotId === 'G-1')
+      .assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPlan.exists, false);
+  assert.equal(mutationState.exists, false);
+  assert.equal(audit.empty, true);
+}
+
+async function seedEmptyActiveSlotPromotion(t, options = {}) {
+  const roster = buildRoster();
+  roster.activeSlots.find((slot) => slot.slotId === 'C-1').asset = null;
+  await db.doc(
+    `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+  ).set(roster);
+  const frozenGameIds = options.incomingGameIds ??
+    [301, 302, 303, 304, 305, 306];
+  const schedule = frozenGameIds.map((gameId, index) => ({
+    id: gameId,
+    gameDate: `2099-11-${String(index + 1).padStart(2, '0')}`,
+    startTimeUTC: `2099-11-${String(index + 1).padStart(2, '0')}T20:00:00.000Z`,
+    gameType: 2,
+    gameState: 'FUT',
+    homeTeam: { abbrev: 'SEA' },
+    awayTeam: { abbrev: 'VAN' },
+  }));
+  if (options.incomingStarted === true && schedule.length > 0) {
+    schedule[0] = {
+      ...schedule[0],
+      gameDate: '2026-10-11',
+      startTimeUTC: '2026-10-11T20:00:00.000Z',
+      gameState: 'FINAL',
+    };
+  }
+  t.mock.method(
+    nhlApi,
+    'getCurrentNhlPlayerTeamIdentity',
+    async (playerId) => ({ playerId, teamAbbreviation: 'SEA' }),
+  );
+  t.mock.method(nhlApi, 'getNhlTeamSeasonSchedule', async () => schedule);
+  await db.doc(`leagues/${leagueId}/cycles/cycle-2`).set({
+    id: 'cycle-2',
+    cycleNumber: 2,
+    phase: 'regular_season',
+    status: 'active',
+    sourceNhlTargetGameIdsByTeam: { SEA: frozenGameIds },
+  });
+
+  return roster;
+}
+
 async function seedLeague() {
   const batch = db.batch();
   batch.set(db.doc(`leagues/${leagueId}`), { id: leagueId });
@@ -193,6 +400,26 @@ async function interceptNextCompatTransaction(beforeTransaction, action) {
   } finally {
     firebaseAdminCompat.runTransaction = originalRunTransaction;
     assert.equal(intercepted, true, 'expected to intercept the rollover transaction');
+  }
+}
+
+async function interceptNextFutureLineupTransaction(beforeTransaction, action) {
+  const originalRunTransaction = serverFirebase.db.runTransaction;
+  let intercepted = false;
+  serverFirebase.db.runTransaction = async (...args) => {
+    if (!intercepted) {
+      intercepted = true;
+      serverFirebase.db.runTransaction = originalRunTransaction;
+      await beforeTransaction();
+    }
+    return originalRunTransaction.apply(serverFirebase.db, args);
+  };
+
+  try {
+    return await action();
+  } finally {
+    serverFirebase.db.runTransaction = originalRunTransaction;
+    assert.equal(intercepted, true, 'expected to intercept the lineup transaction');
   }
 }
 
@@ -357,6 +584,1252 @@ test('save/list/clear are private, revisioned, and idempotent', async () => {
     2,
   );
   assert.equal((await call({ leagueId, operation: 'list' })).plans.length, 0);
+});
+
+test('bulk save and clear remain unavailable for Matchup 1', async () => {
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'save',
+      cycleNumber: 1,
+      expectedRevision: 0,
+      requestId: 'bulk-save-matchup-one',
+      slots: requestedSlots(buildRoster()),
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'cycle-started',
+  );
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'clear',
+      cycleNumber: 1,
+      expectedRevision: 0,
+      requestId: 'bulk-clear-matchup-one',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'cycle-started',
+  );
+});
+
+test('swap saves an unmaterialized selected matchup immediately and replays exactly', async () => {
+  const request = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-unmaterialized-cycle-two',
+    expectedOutgoingAssetKey: 'skater-4',
+    expectedIncomingAssetKey: 'skater-100',
+  };
+  const first = await call(request);
+  const replay = await call(request);
+
+  assert.deepEqual(replay, first);
+  assert.equal(first.operation, 'swap');
+  assert.equal(first.mode, 'immediate');
+  assert.equal(first.effectiveCycleNumber, 2);
+  assert.equal(first.timingReason, 'selected-matchup-untouched');
+  assert.equal(
+    first.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-100',
+  );
+  assert.equal(
+    first.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').resolution,
+    'planned',
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+    ).get()).data().receipts.length,
+    1,
+  );
+});
+
+test('swap promotes a bench player into an untouched empty active slot and replays exactly', async (t) => {
+  await seedEmptyActiveSlotPromotion(t);
+  const request = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-empty-active-slot-cycle-two',
+    expectedOutgoingAssetKey: null,
+    expectedIncomingAssetKey: 'skater-100',
+  };
+  const first = await call(request);
+  const replay = await call(request);
+
+  assert.deepEqual(replay, first);
+  assert.equal(first.mode, 'immediate');
+  assert.equal(first.effectiveCycleNumber, 2);
+  assert.equal(first.timingReason, 'selected-matchup-untouched');
+  assert.equal(
+    first.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-100',
+  );
+  assert.equal(
+    first.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').resolution,
+    'planned',
+  );
+  const [savedRoster, savedPick, savedPlan, mutationState] = await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__C-1`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+    ).get(),
+  ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'C-1').asset,
+    null,
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-1')
+      .asset.assetKey,
+    'skater-100',
+  );
+  assert.equal(savedPick.exists, false);
+  assert.equal(
+    savedPlan.data().slots.find((slot) => slot.rosterSlotId === 'C-1')
+      .resolution,
+    'planned',
+  );
+  assert.equal(mutationState.data().receipts.length, 1);
+});
+
+test('empty-slot promotion delays when the incoming frozen block already started', async (t) => {
+  await seedEmptyActiveSlotPromotion(t, { incomingStarted: true });
+  const selectedRequest = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-empty-active-slot-started-selected',
+    expectedOutgoingAssetKey: null,
+    expectedIncomingAssetKey: 'skater-100',
+  };
+
+  await assert.rejects(
+    call(selectedRequest),
+    (error) =>
+      error.code === 'aborted' &&
+      error.details?.reason === 'swap-timing-conflict' &&
+      error.details?.timingReason === 'incoming-started' &&
+      error.details?.effectiveCycleNumber === 3 &&
+      error.details?.startedGameIds?.includes(301),
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get()).exists,
+    false,
+  );
+
+  const queuedRequest = {
+    ...selectedRequest,
+    expectedEffectiveCycleNumber: 3,
+    requestId: 'swap-empty-active-slot-started-queued',
+  };
+  const queued = await call(queuedRequest);
+  const replay = await call(queuedRequest);
+
+  assert.deepEqual(replay, queued);
+  assert.equal(queued.mode, 'queued');
+  assert.equal(queued.timingReason, 'incoming-started');
+  assert.equal(queued.effectiveCycleNumber, 3);
+  assert.equal(
+    queued.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-100',
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get()).exists,
+    false,
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-3`,
+    ).get()).exists,
+    true,
+  );
+});
+
+test('empty-slot promotion fails closed on incomplete incoming frozen evidence', async (t) => {
+  await seedEmptyActiveSlotPromotion(t, {
+    incomingGameIds: [301, 302, 303, 304, 305],
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      expectedRevision: 0,
+      requestId: 'swap-empty-active-slot-incomplete-frozen-block',
+      expectedOutgoingAssetKey: null,
+      expectedIncomingAssetKey: 'skater-100',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'incomplete-frozen-game-evidence' &&
+      error.details?.assignment === 'incoming',
+  );
+  const [savedPlan, mutationState] = await Promise.all([
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+    ).get(),
+  ]);
+  assert.equal(savedPlan.exists, false);
+  assert.equal(mutationState.exists, false);
+});
+
+test('empty-slot promotion transaction rejects changed frozen game authority', async (t) => {
+  await seedEmptyActiveSlotPromotion(t);
+  const request = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-empty-active-slot-frozen-race',
+    expectedOutgoingAssetKey: null,
+    expectedIncomingAssetKey: 'skater-100',
+  };
+
+  await assert.rejects(
+    interceptNextFutureLineupTransaction(
+      () => db.doc(`leagues/${leagueId}/cycles/cycle-2`).update({
+        'sourceNhlTargetGameIdsByTeam.SEA': [401, 402, 403, 404, 405, 406],
+      }),
+      () => call(request),
+    ),
+    (error) =>
+      error.code === 'aborted' &&
+      error.details?.reason === 'swap-timing-conflict',
+  );
+  const [savedPlan, mutationState] = await Promise.all([
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+    ).get(),
+  ]);
+  assert.equal(savedPlan.exists, false);
+  assert.equal(mutationState.exists, false);
+});
+
+test('nullable outgoing authority fails closed unless the exact active slot is empty', async () => {
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      expectedRevision: 0,
+      requestId: 'swap-null-outgoing-occupied-target',
+      expectedOutgoingAssetKey: null,
+      expectedIncomingAssetKey: 'skater-100',
+    }),
+    (error) =>
+      error.code === 'aborted' &&
+      error.details?.reason === 'roster-revision-conflict',
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get()).exists,
+    false,
+  );
+});
+
+test('nullable outgoing authority rejects a stale empty-slot view after a plan fills it', async (t) => {
+  const roster = await seedEmptyActiveSlotPromotion(t);
+  await call({
+    leagueId,
+    operation: 'save',
+    cycleNumber: 2,
+    expectedRevision: 0,
+    requestId: 'fill-empty-slot-before-stale-promotion',
+    slots: requestedSlots(roster, { 'C-1': 'skater-101' }),
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      expectedRevision: 1,
+      requestId: 'stale-null-outgoing-after-plan-fill',
+      expectedOutgoingAssetKey: null,
+      expectedIncomingAssetKey: 'skater-100',
+    }),
+    (error) =>
+      error.code === 'aborted' &&
+      error.details?.reason === 'roster-revision-conflict',
+  );
+  const savedPlan = (await db.doc(
+    `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+  ).get()).data();
+  assert.equal(savedPlan.revision, 1);
+  assert.equal(
+    savedPlan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-101',
+  );
+});
+
+test('swap replaces an existing unmaterialized planned starter and replays exactly', async () => {
+  const first = await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-plan-a-to-b',
+    expectedOutgoingAssetKey: 'skater-4',
+    expectedIncomingAssetKey: 'skater-100',
+  });
+  assert.equal(first.plan.revision, 1);
+
+  const replacementRequest = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-2',
+    expectedRevision: 1,
+    requestId: 'swap-plan-b-to-c',
+    expectedOutgoingAssetKey: 'skater-100',
+    expectedIncomingAssetKey: 'skater-101',
+  };
+  const replacement = await call(replacementRequest);
+  const replay = await call(replacementRequest);
+
+  assert.deepEqual(replay, replacement);
+  assert.equal(replacement.mode, 'immediate');
+  assert.equal(replacement.plan.revision, 2);
+  assert.equal(
+    replacement.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-101',
+  );
+  const [savedRoster, mutationState] = await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+    ).get(),
+  ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'C-1').asset.assetKey,
+    'skater-4',
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-1').asset.assetKey,
+    'skater-100',
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-2').asset.assetKey,
+    'skater-101',
+  );
+  assert.equal(mutationState.data().receipts.length, 2);
+});
+
+test('swap can reverse an unmaterialized plan without moving physical roster ownership', async () => {
+  const first = await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-plan-before-reversal',
+    expectedOutgoingAssetKey: 'skater-4',
+    expectedIncomingAssetKey: 'skater-100',
+  });
+  assert.equal(first.plan.revision, 1);
+
+  const reversalRequest = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    // The submitted physical bench slot still holds planned starter B while
+    // conceptual bench player A remains physically active until materialization.
+    benchSlotId: 'B-1',
+    expectedRevision: 1,
+    requestId: 'swap-plan-b-back-to-a',
+    expectedOutgoingAssetKey: 'skater-100',
+    expectedIncomingAssetKey: 'skater-4',
+  };
+  const reversal = await call(reversalRequest);
+  const replay = await call(reversalRequest);
+
+  assert.deepEqual(replay, reversal);
+  assert.equal(reversal.mode, 'immediate');
+  assert.equal(reversal.plan.revision, 2);
+  assert.equal(
+    reversal.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-4',
+  );
+  const savedRoster = await db.doc(
+    `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+  ).get();
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'C-1').asset.assetKey,
+    'skater-4',
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-1').asset.assetKey,
+    'skater-100',
+  );
+});
+
+test('swap rejects a no-op planned player selection', async () => {
+  await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-plan-before-no-op',
+    expectedOutgoingAssetKey: 'skater-4',
+    expectedIncomingAssetKey: 'skater-100',
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      expectedRevision: 1,
+      requestId: 'swap-plan-no-op',
+      expectedOutgoingAssetKey: 'skater-100',
+      expectedIncomingAssetKey: 'skater-100',
+    }),
+    (error) =>
+      error.code === 'invalid-argument' &&
+      error.details?.reason === 'same-asset-swap',
+  );
+});
+
+test('swap queues the next fair matchup when the outgoing assignment started', async () => {
+  const roster = buildRoster();
+  const outgoing = roster.activeSlots.find((slot) => slot.slotId === 'C-1').asset;
+  await Promise.all([
+    db.doc(`leagues/${leagueId}/cycles/cycle-2`).set({
+      id: 'cycle-2',
+      cycleNumber: 2,
+      phase: 'regular_season',
+      status: 'active',
+    }),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__C-1`,
+    ).set({
+      ownerId,
+      rosterSlotId: 'C-1',
+      asset: outgoing,
+    }),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`,
+    ).set({
+      id: ownerId,
+      ownerId,
+      cycleNumber: 2,
+      expectedRosterSlotIds: ['C-1'],
+      windows: [{
+        id: `${ownerId}__C-1__cycle-2`,
+        ownerId,
+        rosterSlotId: 'C-1',
+        cycleNumber: 2,
+        position: 'C',
+        assetKey: 'skater-4',
+        asset: outgoing,
+        status: 'active',
+        scheduledGameIds: [1, 2, 3, 4, 5, 6],
+        completedGameIds: [1],
+        liveGameIds: [],
+        appearanceGameIds: [1],
+        incompleteFinalGameIds: [],
+        gameStates: { 1: 'final' },
+        gamesPlayed: 1,
+        actualGamesPlayed: 1,
+        fantasyPoints: 4.2,
+        startedAt: '2026-10-12T18:00:00.000Z',
+        completedAt: null,
+      }],
+    }),
+  ]);
+
+  const result = await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 3,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-after-outgoing-started',
+    expectedOutgoingAssetKey: 'skater-4',
+    expectedIncomingAssetKey: 'skater-100',
+  });
+
+  assert.equal(result.mode, 'queued');
+  assert.equal(result.timingReason, 'outgoing-started');
+  assert.equal(result.effectiveCycleNumber, 3);
+  assert.equal(result.plan.cycleNumber, 3);
+  assert.equal(
+    result.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-100',
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+    ).get()).data().activeSlots.find((slot) => slot.slotId === 'C-1').asset.assetKey,
+    'skater-4',
+  );
+});
+
+test('swap preserves an overlapping selected assignment when the physical roster already advanced', async () => {
+  const roster = buildRoster();
+  const selectedOutgoing = roster.activeSlots.find(
+    (slot) => slot.slotId === 'C-1',
+  ).asset;
+  roster.activeSlots.find((slot) => slot.slotId === 'C-1').asset = skater(105, 'C');
+  await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).set(roster),
+    db.doc(`leagues/${leagueId}/cycles/cycle-2`).set({
+      id: 'cycle-2',
+      cycleNumber: 2,
+      phase: 'regular_season',
+      status: 'active',
+    }),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__C-1`,
+    ).set({
+      ownerId,
+      rosterSlotId: 'C-1',
+      asset: selectedOutgoing,
+    }),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`,
+    ).set({
+      id: ownerId,
+      ownerId,
+      cycleNumber: 2,
+      expectedRosterSlotIds: ['C-1'],
+      windows: [{
+        id: `${ownerId}__C-1__cycle-2`,
+        ownerId,
+        rosterSlotId: 'C-1',
+        cycleNumber: 2,
+        position: 'C',
+        assetKey: 'skater-4',
+        asset: selectedOutgoing,
+        status: 'active',
+        scheduledGameIds: [1, 2, 3, 4, 5, 6],
+        completedGameIds: [1],
+        liveGameIds: [],
+        appearanceGameIds: [1],
+        incompleteFinalGameIds: [],
+        gameStates: { 1: 'final' },
+        gamesPlayed: 1,
+        actualGamesPlayed: 1,
+        fantasyPoints: 4.2,
+        startedAt: '2026-10-12T18:00:00.000Z',
+        completedAt: null,
+      }],
+    }),
+  ]);
+
+  const result = await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 3,
+    activeSlotId: 'C-1',
+    benchSlotId: 'B-1',
+    expectedRevision: 0,
+    requestId: 'swap-overlapping-selected-assignment',
+    expectedOutgoingAssetKey: 'skater-4',
+    expectedIncomingAssetKey: 'skater-100',
+  });
+
+  assert.equal(result.mode, 'queued');
+  assert.equal(result.timingReason, 'outgoing-started');
+  assert.equal(result.effectiveCycleNumber, 3);
+  assert.equal(
+    result.plan.slots.find((slot) => slot.rosterSlotId === 'C-1').assetKey,
+    'skater-100',
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/roster/current`,
+    ).get()).data().activeSlots.find((slot) => slot.slotId === 'C-1').asset.assetKey,
+    'skater-105',
+  );
+});
+
+test('swap atomically rewrites a materialized matchup only while both assignments are untouched', async (t) => {
+  await seedMaterializedGoalieSwap(t);
+
+  const request = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'G-1',
+    benchSlotId: 'B-5',
+    expectedRevision: 0,
+    requestId: 'swap-materialized-untouched-goalies',
+    expectedOutgoingAssetKey: 'goalie-unit-SEA',
+    expectedIncomingAssetKey: 'goalie-unit-VAN',
+  };
+  const result = await call(request);
+  const replay = await call(request);
+  assert.deepEqual(replay, result);
+  assert.equal(result.mode, 'immediate');
+  assert.equal(
+    result.plan.slots.find((slot) => slot.rosterSlotId === 'G-1').resolution,
+    'applied',
+  );
+
+  const [savedRoster, savedPick, savedWindows, audit] = await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__G-1`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`,
+    ).get(),
+    db.collection(`leagues/${leagueId}/transactions`).get(),
+  ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1').asset.assetKey,
+    'goalie-unit-VAN',
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-5').asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-VAN');
+  assert.deepEqual(savedPick.data().sourceNhlTargetGameIds, [201, 202, 203, 204, 205, 206]);
+  const savedWindow = savedWindows.data().windows.find(
+    (window) => window.rosterSlotId === 'G-1',
+  );
+  assert.equal(savedWindow.assetKey, 'goalie-unit-VAN');
+  assert.equal(savedWindow.status, 'scheduled');
+  assert.deepEqual(savedWindow.scheduledGameIds, []);
+  assert.equal(
+    audit.docs.filter((document) =>
+      Boolean(document.data().futureMatchupLineupRequestIdHash),
+    ).length,
+    1,
+  );
+});
+
+test('swap atomically rewrites a materialized untouched Matchup 1', async (t) => {
+  await seedMaterializedGoalieSwap(t, { cycleNumber: 1 });
+
+  const request = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 1,
+    expectedEffectiveCycleNumber: 1,
+    activeSlotId: 'G-1',
+    benchSlotId: 'B-5',
+    expectedRevision: 0,
+    requestId: 'swap-materialized-untouched-matchup-one',
+    expectedOutgoingAssetKey: 'goalie-unit-SEA',
+    expectedIncomingAssetKey: 'goalie-unit-VAN',
+  };
+  const result = await call(request);
+  const replay = await call(request);
+
+  assert.deepEqual(replay, result);
+  assert.equal(result.mode, 'immediate');
+  assert.equal(result.effectiveCycleNumber, 1);
+  assert.equal(result.timingReason, 'selected-matchup-untouched');
+  assert.equal(
+    result.plan.slots.find((slot) => slot.rosterSlotId === 'G-1').resolution,
+    'applied',
+  );
+
+  const [savedRoster, savedPick, savedWindows, mutationState, audit] = await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-1/rosterPicks/${ownerId}__G-1`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-1/teamWindows/${ownerId}`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-1`,
+    ).get(),
+    db.collection(`leagues/${leagueId}/transactions`).get(),
+  ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1')
+      .asset.assetKey,
+    'goalie-unit-VAN',
+  );
+  assert.equal(
+    savedRoster.data().benchSlots.find((slot) => slot.slotId === 'B-5')
+      .asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-VAN');
+  assert.equal(
+    savedWindows.data().windows.find((window) => window.rosterSlotId === 'G-1')
+      .assetKey,
+    'goalie-unit-VAN',
+  );
+  assert.equal(mutationState.data().receipts.length, 1);
+  assert.equal(
+    audit.docs.filter((document) =>
+      Boolean(document.data().futureMatchupLineupRequestIdHash),
+    ).length,
+    1,
+  );
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'clear',
+      cycleNumber: 1,
+      expectedRevision: result.plan.revision,
+      requestId: 'clear-applied-matchup-one-plan',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'cycle-started',
+  );
+  assert.equal(
+    (await db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-1`,
+    ).get()).exists,
+    true,
+  );
+});
+
+test('a Matchup 1 applied plan stays within the bounded full-season plan set', async (t) => {
+  await seedMaterializedGoalieSwap(t, { cycleNumber: 1 });
+  await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 1,
+    expectedEffectiveCycleNumber: 1,
+    activeSlotId: 'G-1',
+    benchSlotId: 'B-5',
+    expectedRevision: 0,
+    requestId: 'swap-matchup-one-before-plan-cap-check',
+    expectedOutgoingAssetKey: 'goalie-unit-SEA',
+    expectedIncomingAssetKey: 'goalie-unit-VAN',
+  });
+  const matchupOnePlan = (await db.doc(
+    `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-1`,
+  ).get()).data();
+  const batch = db.batch();
+  for (let cycleNumber = 2; cycleNumber <= 12; cycleNumber += 1) {
+    batch.set(
+      db.doc(
+        `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-${cycleNumber}`,
+      ),
+      { ...matchupOnePlan, cycleNumber },
+    );
+  }
+  await batch.commit();
+
+  const listed = await call({ leagueId, operation: 'list' });
+  assert.equal(listed.plans.length, 12);
+  assert.deepEqual(
+    listed.plans.map((plan) => plan.cycleNumber),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  );
+});
+
+test('swap keeps a started Matchup 1 assignment and queues Matchup 2', async (t) => {
+  await seedMaterializedGoalieSwap(t, { cycleNumber: 1 });
+  const windowsRef = db.doc(
+    `leagues/${leagueId}/cycles/cycle-1/teamWindows/${ownerId}`,
+  );
+  const windowsSnapshot = await windowsRef.get();
+  await windowsRef.update({
+    status: 'active',
+    windows: windowsSnapshot.data().windows.map((window) =>
+      window.rosterSlotId === 'G-1'
+        ? {
+            ...window,
+            status: 'active',
+            completedGameIds: [101],
+            appearanceGameIds: [101],
+            gameStates: { 101: 'final' },
+            gamesPlayed: 1,
+            actualGamesPlayed: 1,
+            fantasyPoints: 4.2,
+            startedAt: '2026-10-11T20:00:00.000Z',
+          }
+        : window,
+    ),
+  });
+
+  const result = await call({
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 1,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'G-1',
+    benchSlotId: 'B-5',
+    expectedRevision: 0,
+    requestId: 'swap-started-matchup-one-queues-two',
+    expectedOutgoingAssetKey: 'goalie-unit-SEA',
+    expectedIncomingAssetKey: 'goalie-unit-VAN',
+  });
+
+  assert.equal(result.mode, 'queued');
+  assert.equal(result.effectiveCycleNumber, 2);
+  assert.equal(result.timingReason, 'outgoing-started');
+  assert.equal(
+    result.plan.slots.find((slot) => slot.rosterSlotId === 'G-1').assetKey,
+    'goalie-unit-VAN',
+  );
+  const [
+    savedRoster,
+    savedPick,
+    savedWindows,
+    matchupOnePlan,
+    matchupTwoPlan,
+  ] = await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+    db.doc(
+      `leagues/${leagueId}/cycles/cycle-1/rosterPicks/${ownerId}__G-1`,
+    ).get(),
+    windowsRef.get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-1`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`,
+    ).get(),
+  ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1')
+      .asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-SEA');
+  const savedStartedWindow = savedWindows.data().windows.find(
+    (window) => window.rosterSlotId === 'G-1',
+  );
+  assert.deepEqual(savedStartedWindow.completedGameIds, [101]);
+  assert.equal(savedStartedWindow.fantasyPoints, 4.2);
+  assert.equal(matchupOnePlan.exists, false);
+  assert.equal(matchupTwoPlan.exists, true);
+});
+
+test('Matchup 1 swap fails closed until the matchup authority exists', async () => {
+  await db.doc(`leagues/${leagueId}/cycles/cycle-1`).delete();
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 1,
+      expectedEffectiveCycleNumber: 1,
+      activeSlotId: 'C-1',
+      benchSlotId: 'B-1',
+      expectedRevision: 0,
+      requestId: 'swap-unmaterialized-matchup-one',
+      expectedOutgoingAssetKey: 'skater-4',
+      expectedIncomingAssetKey: 'skater-100',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'cycle-state-invalid' &&
+      error.details?.cycleNumber === 1,
+  );
+
+  const [savedPlan, mutationState] = await Promise.all([
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-1`,
+    ).get(),
+    db.doc(
+      `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-1`,
+    ).get(),
+  ]);
+  assert.equal(savedPlan.exists, false);
+  assert.equal(mutationState.exists, false);
+});
+
+test('materialized swap fails closed when expected roster-slot evidence is missing', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    omitExpectedRosterSlotIds: true,
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-missing-expected-slots',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'team-window-state-invalid',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap fails closed when cycle and team expected slots disagree', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    cycleExpectedRosterSlotIds: ['G-1', 'C-1'],
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-cycle-team-slot-mismatch',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'team-window-state-invalid',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap fails closed when team-window owner identity disagrees', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    teamWindowsOwnerId: opponentId,
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-team-window-owner-mismatch',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'team-window-state-invalid',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap fails closed when team-window cycle identity disagrees', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    teamWindowsCycleNumber: 3,
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-team-window-cycle-mismatch',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'team-window-state-invalid',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap fails closed on duplicate expected roster-slot evidence', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    expectedRosterSlotIds: ['G-1', 'G-1'],
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-duplicate-expected-slots',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'team-window-state-invalid',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap fails closed on duplicate sibling window slot evidence', async (t) => {
+  const duplicateSiblingWindow = {
+    ownerId,
+    rosterSlotId: 'C-1',
+    cycleNumber: 2,
+    status: 'scheduled',
+  };
+  await seedMaterializedGoalieSwap(t, {
+    expectedRosterSlotIds: ['G-1', 'C-1'],
+    cycleExpectedRosterSlotIds: ['G-1', 'C-1'],
+    additionalWindows: [
+      duplicateSiblingWindow,
+      { ...duplicateSiblingWindow },
+    ],
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-duplicate-sibling-window',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'team-window-state-invalid',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap fails closed on divergent pick injury ownership', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    pickInjuryReplacementWindow: {
+      schemaVersion: 1,
+      ownerId,
+      rosterSlotId: 'G-1',
+      cycleNumber: 2,
+      segments: [],
+    },
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-divergent-pick-injury-window',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'aborted' &&
+      error.details?.reason === 'swap-timing-conflict',
+  );
+  await assertMaterializedGoalieSwapUnchanged();
+});
+
+test('materialized swap rejects a missing incoming frozen game before any write', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    incomingGameIds: [201, 202, 203, 204, 205],
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-missing-incoming-game',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'incomplete-frozen-game-evidence' &&
+      error.details?.assignment === 'incoming',
+  );
+
+  const [savedRoster, savedPick, savedWindows, savedPlan, mutationState, audit] =
+    await Promise.all([
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+      db.doc(`leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__G-1`).get(),
+      db.doc(`leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`).get(),
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`).get(),
+      db.doc(
+        `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+      ).get(),
+      db.collection(`leagues/${leagueId}/transactions`).get(),
+    ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1').asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-SEA');
+  assert.equal(
+    savedWindows.data().windows.find((window) => window.rosterSlotId === 'G-1').assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPlan.exists, false);
+  assert.equal(mutationState.exists, false);
+  assert.equal(audit.empty, true);
+});
+
+test('materialized swap rejects duplicate outgoing frozen games before any write', async (t) => {
+  await seedMaterializedGoalieSwap(t, {
+    outgoingGameIds: [101, 102, 103, 104, 105, 105],
+  });
+
+  await assert.rejects(
+    call({
+      leagueId,
+      operation: 'swap',
+      requestedCycleNumber: 2,
+      expectedEffectiveCycleNumber: 2,
+      activeSlotId: 'G-1',
+      benchSlotId: 'B-5',
+      expectedRevision: 0,
+      requestId: 'swap-materialized-duplicate-outgoing-game',
+      expectedOutgoingAssetKey: 'goalie-unit-SEA',
+      expectedIncomingAssetKey: 'goalie-unit-VAN',
+    }),
+    (error) =>
+      error.code === 'failed-precondition' &&
+      error.details?.reason === 'incomplete-frozen-game-evidence' &&
+      error.details?.assignment === 'outgoing',
+  );
+
+  const [savedRoster, savedPick, savedWindows, savedPlan, mutationState, audit] =
+    await Promise.all([
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+      db.doc(`leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__G-1`).get(),
+      db.doc(`leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`).get(),
+      db.doc(`leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`).get(),
+      db.doc(
+        `leagues/${leagueId}/teams/${ownerId}/lineupPlanMutationState/cycle-2`,
+      ).get(),
+      db.collection(`leagues/${leagueId}/transactions`).get(),
+    ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1').asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-SEA');
+  assert.equal(
+    savedWindows.data().windows.find((window) => window.rosterSlotId === 'G-1').assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPlan.exists, false);
+  assert.equal(mutationState.exists, false);
+  assert.equal(audit.empty, true);
+});
+
+test('fresh NHL puck-drop evidence never rewrites a stale scheduled window', async (t) => {
+  await seedMaterializedGoalieSwap(t, { outgoingStarted: true });
+  const request = {
+    leagueId,
+    operation: 'swap',
+    requestedCycleNumber: 2,
+    expectedEffectiveCycleNumber: 2,
+    activeSlotId: 'G-1',
+    benchSlotId: 'B-5',
+    expectedRevision: 0,
+    requestId: 'swap-provider-started-goalie',
+    expectedOutgoingAssetKey: 'goalie-unit-SEA',
+    expectedIncomingAssetKey: 'goalie-unit-VAN',
+  };
+
+  await assert.rejects(
+    call(request),
+    (error) =>
+      error.code === 'aborted' &&
+      error.details?.reason === 'swap-timing-conflict' &&
+      error.details?.timingReason === 'outgoing-started' &&
+      error.details?.effectiveCycleNumber === 3 &&
+      error.details?.startedGameIds?.includes(101),
+  );
+
+  const [savedRoster, savedPick, savedWindows, savedPlan] = await Promise.all([
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/roster/current`).get(),
+    db.doc(`leagues/${leagueId}/cycles/cycle-2/rosterPicks/${ownerId}__G-1`).get(),
+    db.doc(`leagues/${leagueId}/cycles/cycle-2/teamWindows/${ownerId}`).get(),
+    db.doc(`leagues/${leagueId}/teams/${ownerId}/lineupPlans/cycle-2`).get(),
+  ]);
+  assert.equal(
+    savedRoster.data().activeSlots.find((slot) => slot.slotId === 'G-1').asset.assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPick.data().asset.assetKey, 'goalie-unit-SEA');
+  assert.equal(
+    savedWindows.data().windows.find((window) => window.rosterSlotId === 'G-1').assetKey,
+    'goalie-unit-SEA',
+  );
+  assert.equal(savedPlan.exists, false);
 });
 
 test('cycle revisions remain monotonic across clear and recreate ABA sequences', async () => {

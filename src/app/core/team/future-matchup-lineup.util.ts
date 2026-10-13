@@ -28,7 +28,7 @@ import type {
   FutureMatchupLineupSlotResolution,
 } from './future-matchup-lineup.models';
 
-export type FutureMatchupOptionTiming = 'current' | 'future';
+export type FutureMatchupOptionTiming = 'current' | 'open' | 'future';
 
 export interface FutureMatchupLineupOption {
   cycleNumber: number;
@@ -43,6 +43,110 @@ export interface FutureMatchupLineupOption {
   label: string;
 }
 
+export interface SelectedMatchupRosterActionSlot {
+  slotId: string;
+  position: DraftPosition;
+  assetKey: string | null;
+  resolution?: FutureMatchupLineupSlotResolution | null;
+}
+
+export interface ShouldUseSelectedMatchupRosterAuthorityInput {
+  timing: FutureMatchupOptionTiming;
+  area: 'active' | 'bench' | 'ir';
+  slotId: string;
+  windowsConfirmed: boolean;
+  managedAssetKey: string | null;
+  managedAssetPosition: DraftPosition | null;
+  selectedActiveSlots: readonly SelectedMatchupRosterActionSlot[];
+  physicalActiveSlots: readonly SelectedMatchupRosterActionSlot[];
+}
+
+export interface ShouldUseLiveSelectedMatchupScoringInput {
+  timing: FutureMatchupOptionTiming;
+  selectedCycleNumber: number;
+  latestCycleNumber: number | null;
+  displayedAssetKey: string | null;
+  livePickAssetKey: string | null;
+}
+
+export interface SelectedMatchupSlotScoreState {
+  score: number | null;
+  gamesPlayed: number | null;
+  gamesLeft: number | null;
+}
+
+export interface ResolveSelectedMatchupSlotScoreStateInput {
+  useLiveCurrentScoring: boolean;
+  liveSummary: {
+    currentScore: number;
+    gamesPlayed: number;
+    gamesLeft: number;
+  } | null;
+  selectedWindow: {
+    fantasyPoints: number;
+    gamesPlayed: number;
+    gamesLeft: number;
+  } | null;
+  materialized: boolean;
+  hasPlannedAssignment: boolean;
+  requiredGames: number;
+}
+
+export type SelectedMatchupAssignmentSource =
+  | 'live-pick'
+  | 'selected-pick'
+  | 'selected-window'
+  | 'selected-open'
+  | 'projected-plan'
+  | 'projected-current'
+  | 'projected-future'
+  | 'pending';
+
+export interface ResolveSelectedMatchupAssignmentIdentityInput {
+  timing: FutureMatchupOptionTiming;
+  plannedResolution: FutureMatchupLineupSlotResolution | null;
+  selectedSlotExpectation: 'expected' | 'omitted-empty' | 'unknown';
+  livePickAssetKey: string | null;
+  selectedPickAssetKey: string | null;
+  selectedWindowAssetKey: string | null;
+  projectedAssetKey: string | null;
+}
+
+export interface SelectedMatchupAssignmentIdentity {
+  assetKey: string | null;
+  source: SelectedMatchupAssignmentSource;
+}
+
+export function resolveSelectedMatchupSlotExpectation(input: {
+  expectedRosterSlotIdsByOwner: Record<string, string[]> | null | undefined;
+  ownerId: string;
+  rosterSlotId: string;
+  physicalSlotHasAsset: boolean;
+}): 'expected' | 'omitted-empty' | 'unknown' {
+  const expectedByOwner = input.expectedRosterSlotIdsByOwner;
+  if (
+    !expectedByOwner ||
+    !Object.prototype.hasOwnProperty.call(expectedByOwner, input.ownerId)
+  ) {
+    return 'unknown';
+  }
+
+  const ownerSlotIds = expectedByOwner[input.ownerId];
+  if (
+    !Array.isArray(ownerSlotIds) ||
+    ownerSlotIds.some((slotId) => typeof slotId !== 'string' || !slotId.trim()) ||
+    new Set(ownerSlotIds).size !== ownerSlotIds.length
+  ) {
+    return 'unknown';
+  }
+
+  if (ownerSlotIds.includes(input.rosterSlotId)) {
+    return 'expected';
+  }
+
+  return input.physicalSlotHasAsset ? 'unknown' : 'omitted-empty';
+}
+
 export interface BuildFutureMatchupLineupOptionsInput {
   ownerId: string;
   teams: readonly FantasyTeam[];
@@ -50,6 +154,181 @@ export interface BuildFutureMatchupLineupOptionsInput {
   schedulePreview: readonly CycleSchedulePreviewCycle[];
   currentMatchup: FantasyMatchup | null;
   initialNhlBlockNumber: number | null | undefined;
+}
+
+/**
+ * Keep normal current-roster actions available for slots whose selected matchup
+ * assignment still matches the physical roster. Only the exact slot (or bench
+ * asset) represented by a divergent/planned assignment uses matchup-plan
+ * authority. This prevents one unresolved slot from changing every card's
+ * management behavior on the current roster board.
+ */
+export function shouldUseSelectedMatchupRosterAuthority(
+  input: ShouldUseSelectedMatchupRosterAuthorityInput,
+): boolean {
+  if (input.area === 'ir') {
+    return false;
+  }
+
+  if (input.timing !== 'current') {
+    return true;
+  }
+
+  if (input.area === 'bench') {
+    if (
+      input.managedAssetKey &&
+      input.selectedActiveSlots.some((slot) => slot.assetKey === input.managedAssetKey)
+    ) {
+      return true;
+    }
+
+    if (!input.managedAssetPosition) {
+      return false;
+    }
+
+    return input.selectedActiveSlots.some((selectedSlot) => {
+      if (selectedSlot.position !== input.managedAssetPosition) {
+        return false;
+      }
+
+      const physicalSlot = input.physicalActiveSlots.find(
+        (slot) => slot.slotId === selectedSlot.slotId,
+      );
+      return (
+        selectedSlot.resolution === 'planned' ||
+        !physicalSlot ||
+        selectedSlot.assetKey !== physicalSlot.assetKey
+      );
+    });
+  }
+
+  const selectedSlot = input.selectedActiveSlots.find(
+    (slot) => slot.slotId === input.slotId,
+  );
+  const physicalSlot = input.physicalActiveSlots.find(
+    (slot) => slot.slotId === input.slotId,
+  );
+
+  if (!input.windowsConfirmed || !selectedSlot || !physicalSlot) {
+    return true;
+  }
+
+  return (
+    selectedSlot.resolution === 'planned' ||
+    selectedSlot.assetKey !== physicalSlot.assetKey
+  );
+}
+
+export function shouldUseLiveSelectedMatchupScoring(
+  input: ShouldUseLiveSelectedMatchupScoringInput,
+): boolean {
+  return Boolean(
+    input.timing === 'current' &&
+    input.latestCycleNumber === input.selectedCycleNumber &&
+    input.displayedAssetKey &&
+    input.displayedAssetKey === input.livePickAssetKey,
+  );
+}
+
+export function resolveSelectedMatchupAssignmentIdentity(
+  input: ResolveSelectedMatchupAssignmentIdentityInput,
+): SelectedMatchupAssignmentIdentity {
+  if (input.timing === 'current') {
+    if (input.plannedResolution === 'planned') {
+      return {
+        assetKey: input.projectedAssetKey,
+        source: input.projectedAssetKey ? 'projected-plan' : 'pending',
+      };
+    }
+
+    const currentCandidates = [
+      ['selected-pick', input.selectedPickAssetKey],
+      ['selected-window', input.selectedWindowAssetKey],
+      ['live-pick', input.livePickAssetKey],
+      ['projected-current', input.projectedAssetKey],
+    ] as const;
+    const current = currentCandidates.find(([, assetKey]) => Boolean(assetKey));
+    return current
+      ? { source: current[0], assetKey: current[1] }
+      : input.selectedSlotExpectation === 'omitted-empty'
+        ? { source: 'selected-open', assetKey: null }
+      : { source: 'pending', assetKey: null };
+  }
+
+  if (input.timing === 'open') {
+    if (
+      input.selectedPickAssetKey &&
+      input.selectedWindowAssetKey &&
+      input.selectedPickAssetKey !== input.selectedWindowAssetKey
+    ) {
+      return { source: 'pending', assetKey: null };
+    }
+
+    const openCandidates = [
+      ['selected-pick', input.selectedPickAssetKey],
+      ['selected-window', input.selectedWindowAssetKey],
+      [
+        'projected-plan',
+        input.plannedResolution === 'planned' ? input.projectedAssetKey : null,
+      ],
+    ] as const;
+    const exact = openCandidates.find(([, assetKey]) => Boolean(assetKey));
+    return exact
+      ? { source: exact[0], assetKey: exact[1] }
+      : input.selectedSlotExpectation === 'omitted-empty'
+        ? { source: 'selected-open', assetKey: null }
+      : { source: 'pending', assetKey: null };
+  }
+
+  return {
+    assetKey: input.projectedAssetKey,
+    source: input.projectedAssetKey ? 'projected-future' : 'pending',
+  };
+}
+
+export function resolveSelectedMatchupSlotScoreState(
+  input: ResolveSelectedMatchupSlotScoreStateInput,
+): SelectedMatchupSlotScoreState {
+  if (input.useLiveCurrentScoring) {
+    return input.liveSummary
+      ? {
+          score: input.liveSummary.currentScore,
+          gamesPlayed: input.liveSummary.gamesPlayed,
+          gamesLeft: input.liveSummary.gamesLeft,
+        }
+      : { score: null, gamesPlayed: null, gamesLeft: null };
+  }
+
+  if (input.selectedWindow) {
+    return {
+      score: input.selectedWindow.fantasyPoints,
+      gamesPlayed: input.selectedWindow.gamesPlayed,
+      gamesLeft: input.selectedWindow.gamesLeft,
+    };
+  }
+
+  if (input.materialized && !input.hasPlannedAssignment) {
+    return { score: null, gamesPlayed: null, gamesLeft: null };
+  }
+
+  return { score: 0, gamesPlayed: 0, gamesLeft: input.requiredGames };
+}
+
+export function selectRelevantFutureMatchupAuthorityPlans<
+  T extends { cycleNumber: number },
+>(
+  plans: readonly T[],
+  baseCycleNumber: number,
+  selectedCycleNumber: number,
+): T[] {
+  return plans
+    .filter(
+      (plan) =>
+        plan.cycleNumber === selectedCycleNumber ||
+        (plan.cycleNumber > baseCycleNumber &&
+          plan.cycleNumber <= selectedCycleNumber),
+    )
+    .sort((first, second) => first.cycleNumber - second.cycleNumber);
 }
 
 export interface FutureMatchupLineupCandidate {
@@ -115,6 +394,50 @@ export interface ResolveFutureMatchupSlotDateStateInput {
   locale?: string;
 }
 
+export interface FutureMatchupSwapIntent {
+  requestedCycleNumber: number;
+  activeSlotId: string;
+  benchSlotId: string;
+  outgoingAssetKey: string | null;
+  incomingAssetKey: string;
+}
+
+export interface FutureMatchupSwapEffectiveCycleOverride extends FutureMatchupSwapIntent {
+  effectiveCycleNumber: number;
+  authorityRefreshed: boolean;
+}
+
+export function getFutureMatchupSwapIntentKey(
+  intent: FutureMatchupSwapIntent,
+): string {
+  return JSON.stringify({
+    requestedCycleNumber: intent.requestedCycleNumber,
+    activeSlotId: intent.activeSlotId,
+    benchSlotId: intent.benchSlotId,
+    outgoingAssetKey: intent.outgoingAssetKey,
+    incomingAssetKey: intent.incomingAssetKey,
+  });
+}
+
+export function resolveFutureMatchupSwapEffectiveCycle(input: {
+  predictedEffectiveCycleNumber: number | null;
+  intent: FutureMatchupSwapIntent | null;
+  override: FutureMatchupSwapEffectiveCycleOverride | null;
+}): number | null {
+  if (
+    !input.intent ||
+    !input.override ||
+    !input.override.authorityRefreshed ||
+    input.override.effectiveCycleNumber < input.intent.requestedCycleNumber ||
+    getFutureMatchupSwapIntentKey(input.override) !==
+      getFutureMatchupSwapIntentKey(input.intent)
+  ) {
+    return input.predictedEffectiveCycleNumber;
+  }
+
+  return input.override.effectiveCycleNumber;
+}
+
 function getMatchupsForCycle(
   schedulePreview: readonly CycleSchedulePreviewCycle[],
   cycleNumber: number,
@@ -165,11 +488,18 @@ export function buildFutureMatchupLineupOptions(
   const latestCompletedCycleNumber = input.cycles
     .filter((cycle) => cycle.status === 'complete')
     .reduce((latest, cycle) => Math.max(latest, cycle.cycleNumber), 0);
-  const currentCycleNumber = input.currentMatchup?.status === 'active' &&
+  const earliestUnfinishedCycleNumber = input.currentMatchup?.status === 'active' &&
       input.currentMatchup.phase === 'regular_season'
     ? input.currentMatchup.cycleNumber
     : null;
-  const firstSelectableCycleNumber = currentCycleNumber ?? latestCompletedCycleNumber + 1;
+  const currentCycleNumber = input.cycles
+    .filter((cycle) => cycle.status === 'active' && cycle.phase === 'regular_season')
+    .reduce(
+      (latest, cycle) => Math.max(latest, cycle.cycleNumber),
+      earliestUnfinishedCycleNumber ?? 0,
+    ) || null;
+  const firstSelectableCycleNumber =
+    earliestUnfinishedCycleNumber ?? latestCompletedCycleNumber + 1;
   const initialSourceBlock = typeof input.initialNhlBlockNumber === 'number' &&
       Number.isSafeInteger(input.initialNhlBlockNumber) && input.initialNhlBlockNumber > 0
     ? input.initialNhlBlockNumber
@@ -199,13 +529,21 @@ export function buildFutureMatchupLineupOptions(
       }
 
       const isCurrent = currentCycleNumber === previewCycle.cycleNumber;
-      const exactCurrentMatchup = isCurrent ? input.currentMatchup : null;
+      const isOpen = cycle?.status === 'active' && !isCurrent;
+      const exactCurrentMatchup =
+        input.currentMatchup?.cycleNumber === previewCycle.cycleNumber
+          ? input.currentMatchup
+          : null;
       const matchup = exactCurrentMatchup ?? previewMatchup;
       const opponentOwnerId = getOpponentOwnerId(ownerId, matchup);
       const opponentTeamName = opponentOwnerId
         ? teamNameByOwnerId.get(opponentOwnerId) ?? 'Opponent pending'
         : null;
-      const timing: FutureMatchupOptionTiming = isCurrent ? 'current' : 'future';
+      const timing: FutureMatchupOptionTiming = isCurrent
+        ? 'current'
+        : isOpen
+          ? 'open'
+          : 'future';
       const opponentLabel = opponentTeamName ? `vs ${opponentTeamName}` : 'Bye';
       const sourceNhlBlockNumber = resolveSourceNhlBlockNumber(
         cycle?.sourceNhlBlockNumber,
@@ -223,7 +561,7 @@ export function buildFutureMatchupLineupOptions(
         isBye: opponentOwnerId === null,
         sourceNhlBlockNumber,
         label: `Matchup ${previewCycle.cycleNumber} · ${opponentLabel} · ${
-          timing === 'current' ? 'Current' : 'Future'
+          timing === 'current' ? 'Current' : timing === 'open' ? 'In progress' : 'Future'
         }`,
       }];
     });
@@ -345,20 +683,45 @@ export function isFutureMatchupCandidateCompatible(
 }
 
 /**
- * A saved target-cycle window means the persistent slot assignment boundary
- * has already materialized. The NHL games themselves may still be scheduled,
- * but the player identity is immutable from that point forward.
+ * A selected-matchup assignment becomes immutable only after authoritative
+ * ownership evidence says one of its games has begun. A scheduled window is
+ * materialized, but it is still safe for the server to retarget while every
+ * score and game-ownership field remains untouched.
  */
+export function hasFutureMatchupWindowStarted(
+  window: FantasyAssetCycleWindow | null | undefined,
+): boolean {
+  return Boolean(
+    window &&
+      (
+        window.status === 'active' ||
+        window.status === 'complete' ||
+        window.startedAt != null ||
+        window.completedAt != null ||
+        window.gamesPlayed > 0 ||
+        window.actualGamesPlayed > 0 ||
+        window.fantasyPoints !== 0 ||
+        window.completedGameIds.length > 0 ||
+        window.liveGameIds.length > 0 ||
+        window.appearanceGameIds.length > 0 ||
+        Object.keys(window.gameScores).length > 0 ||
+        Object.values(window.gameStates).some(
+          (state) => state === 'live' || state === 'final',
+        )
+      )
+  );
+}
+
 export function isFutureMatchupWindowLocked(
   window: FantasyAssetCycleWindow | null | undefined,
 ): boolean {
-  return Boolean(window);
+  return hasFutureMatchupWindowStarted(window);
 }
 
 function getWindowLockReason(window: FantasyAssetCycleWindow): string {
   return window.status === 'complete' || window.completedAt != null
     ? 'This roster-slot window is complete and immutable.'
-    : 'This roster-slot lineup boundary has materialized and is immutable, even before its NHL games begin.';
+    : 'At least one game in this roster-slot window has started, so its player and earned points are immutable.';
 }
 
 export function getFutureMatchupLineupPlanForCycle(
@@ -456,6 +819,7 @@ export function buildFutureMatchupProjectedLineup(
       const planSlot = planSlotById.get(slot.slotId) ?? null;
 
       if (window) {
+        const locked = isFutureMatchupWindowLocked(window);
         return {
           rosterSlotId: slot.slotId,
           position: slot.position,
@@ -463,9 +827,9 @@ export function buildFutureMatchupProjectedLineup(
           assetKey: getRosterAssetKey(window.asset) || window.assetKey || null,
           asset: window.asset,
           origin: planSlot?.resolution === 'conflict' ? 'conflict' : 'materialized-window',
-          editable: false,
-          locked: true,
-          lockReason: planSlot?.reason ?? getWindowLockReason(window),
+          editable: !locked,
+          locked,
+          lockReason: locked ? planSlot?.reason ?? getWindowLockReason(window) : null,
           resolution: planSlot?.resolution ?? null,
           reason: planSlot?.reason ?? null,
         };
@@ -484,13 +848,9 @@ export function buildFutureMatchupProjectedLineup(
           assetKey: resolvedAssetKey,
           asset: candidate?.asset ?? null,
           origin: planSlot.resolution === 'conflict' ? 'conflict' : 'materialized-window',
-          editable: false,
-          locked: true,
-          lockReason: planSlot.reason ?? (
-            planSlot.resolution === 'conflict'
-              ? 'This assignment conflicted during materialization and is immutable.'
-              : 'This assignment has materialized and is immutable.'
-          ),
+          editable: true,
+          locked: false,
+          lockReason: null,
           resolution: planSlot.resolution,
           reason: planSlot.reason ?? null,
         };
@@ -652,7 +1012,7 @@ export function validateFutureMatchupLineupDraft(input: {
     ) ?? null;
     const lockedPlanSlot = lockedPlanSlotById.get(assignment.rosterSlotId) ?? null;
 
-    if (materializedWindow) {
+    if (materializedWindow && isFutureMatchupWindowLocked(materializedWindow)) {
       const materializedAssetKey = getRosterAssetKey(materializedWindow.asset) ||
         materializedWindow.assetKey || null;
       if (assignment.assetKey !== materializedAssetKey) {
@@ -666,7 +1026,7 @@ export function validateFutureMatchupLineupDraft(input: {
       continue;
     }
 
-    if (lockedPlanSlot) {
+    if (lockedPlanSlot && !materializedWindow) {
       const lockedAssetKey = getFutureMatchupPlanSlotEffectiveAssetKey(lockedPlanSlot);
       if (assignment.assetKey !== lockedAssetKey) {
         issues.push(`Materialized roster slot ${slot.slotId} cannot be changed.`);
@@ -801,21 +1161,6 @@ function formatIsoDate(value: string, locale: string | undefined): string {
   }).format(new Date(`${value}T12:00:00.000Z`));
 }
 
-function hasNhlGameStartEvidence(window: FantasyAssetCycleWindow): boolean {
-  return (
-    window.status === 'complete' ||
-    window.gamesPlayed > 0 ||
-    window.actualGamesPlayed > 0 ||
-    window.fantasyPoints !== 0 ||
-    window.completedGameIds.length > 0 ||
-    window.liveGameIds.length > 0 ||
-    window.appearanceGameIds.length > 0 ||
-    Object.keys(window.gameScores).length > 0 ||
-    Object.values(window.gameStates).some((state) => state !== 'scheduled') ||
-    window.completedAt != null
-  );
-}
-
 function getUtcDateForComparison(value: Date): string | null {
   return Number.isFinite(value.getTime()) ? value.toISOString().slice(0, 10) : null;
 }
@@ -846,7 +1191,7 @@ export function resolveFutureMatchupSlotDateState(
 
   if (savedStart) {
     const comparisonDate = getUtcDateForComparison(input.now ?? new Date());
-    const started = hasNhlGameStartEvidence(savedWindow!) ||
+    const started = hasFutureMatchupWindowStarted(savedWindow!) ||
       (comparisonDate !== null && savedStart < comparisonDate);
     return {
       source: 'saved',
