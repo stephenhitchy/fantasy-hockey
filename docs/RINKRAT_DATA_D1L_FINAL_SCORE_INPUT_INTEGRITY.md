@@ -22,6 +22,8 @@ D1L-A is acceptable only when all of the following are true:
 8. An older canonical publication or task cannot clear or replace a newer source version.
 9. Canonical parity reads and compares only the exact game IDs and source versions carried by its task.
 10. Direct NHL scoring remains the authoritative fallback; no completed matchup is automatically corrected.
+11. Individually valid final NHL sources must agree before a skater result is reusable or canonically settled.
+12. A completed matchup cannot advance standings when any expected raw slot score is missing, duplicate, or non-finite.
 
 ## Implemented behavior
 
@@ -58,6 +60,22 @@ hasIncompleteFinalGames
 
 The last field keeps the existing standard or exact-Canary refresh cadence active while required final input is missing.
 
+### Cross-source final convergence
+
+Structural validity alone is not enough to finalize a skater result. For an
+appeared skater, the final boxscore, non-shootout goal events in play-by-play,
+and player game-log entry must agree on goals and assists. The boxscore and
+player log must also agree on points, shots, plus/minus, and time on ice, and
+the game-log team must match the source team for that game. Internally
+inconsistent totals, such as points that do not equal goals plus assists, fail
+validation before the convergence check.
+
+A disagreement is persisted as retryable malformed final-input evidence. It
+does not write a new numeric score or complete the game. The same convergence
+gate protects canonical final settlements, so the canonical observer cannot
+freeze a player-log correction on top of conflicting boxscore or play-by-play
+facts. A later poll can complete normally after the NHL sources converge.
+
 ### Final-score reuse and safe retry
 
 A stored final score is reusable only when all of these are present:
@@ -71,6 +89,17 @@ A stored final score is reusable only when all of these are present:
 Legacy numeric finals without this evidence are fetched again while their player window is active. Completed matchups remain outside the active scoring path and are not automatically corrected. Existing server transactions, scoring fingerprints, immutable-window rules, standings guards, playoff guards, and canonical task follow-up logic remain the exact-once boundaries after a successful retry.
 A delayed incomplete scorer result cannot downgrade a slot window that a newer
 retry already completed.
+
+### Matchup and standings finalization
+
+Before a regular-season matchup score is aggregated, the server verifies the
+raw Firestore team-window document against the cycle's expected roster-slot
+identities. Every expected slot must have exactly one completed window and its
+raw `fantasyPoints` value must be a finite number. The score aggregator also
+fails closed on missing documents, duplicate expected slots, duplicate
+completed windows, or non-finite normalized scores. A failure aborts the
+Firestore transaction, leaving the matchup, cycle, and standings unchanged
+instead of substituting zero.
 
 ### Canonical final settlement
 
@@ -116,6 +145,8 @@ produce the same number.
 - A malformed fulfilled payload is incomplete just like a rejected request, with a distinct reason.
 - A missing appeared-skater entry in a successful final player-log response remains retryable.
 - A valid no-appearance result remains distinguishable from missing source data.
+- Individually valid sources that disagree remain incomplete until a later retry converges.
+- A malformed completed-window score aborts matchup and standings finalization without partial writes.
 - A duplicate canonical publication does not reset a delivered outbox entry.
 - A stale canonical publisher cannot replace the version written by a newer observer.
 - A failure reported after another worker delivered the same entry cannot return it to pending.
@@ -163,7 +194,8 @@ npm run release:verify-clean-deploy-source
 It exercises the real scorer retry and reuse path, Game 6-to-7 ownership,
 atomic publication/outbox writes, stale-writer rejection, cursor fairness,
 duplicate roster transaction activation, standings application, and playoff
-progression. The clean-deploy-source gate is expected to refuse an uncommitted
+progression. It also covers cross-source convergence and malformed raw-score
+rollback at the matchup transaction boundary. The clean-deploy-source gate is expected to refuse an uncommitted
 implementation worktree; it must pass only from the exact clean commit selected
 for release.
 

@@ -50,6 +50,7 @@ import {
   validateNhlFinalPlayerGameLog,
   validateNhlFinalPlayByPlay,
   validateNhlFinalSkaterBoxscore,
+  validateNhlFinalSkaterSourceConsistency,
   type NhlFinalInputCompleteness,
   type NhlFinalInputSourceState,
 } from '../nhl/nhl-final-input-completeness.util';
@@ -876,19 +877,41 @@ function getFinalGameInputCompleteness(input: {
         }
       : { availability: 'not-required' as const };
 
+  let validatedPlayerLogEntry: NhlPlayerGameLogEntry | undefined;
+
   if (
     input.asset.assetType === 'skater' &&
     playerLogState.availability === 'available' &&
     input.playerLogLoad
   ) {
-    playerLogState = validateNhlFinalPlayerGameLog({
+    const playerLogValidation = validateNhlFinalPlayerGameLog({
       gameLog: input.playerLogLoad.gameLog,
       gameId: input.gameId,
       appeared: Boolean(
         input.gameData?.boxscore &&
         findSkaterBoxscoreLine(input.gameData.boxscore, input.asset.player.id)
       ),
-    }).sourceState;
+    });
+
+    playerLogState = playerLogValidation.sourceState;
+    validatedPlayerLogEntry = playerLogValidation.gameLogEntry;
+  }
+
+  if (
+    input.asset.assetType === 'skater' &&
+    boxscoreState.availability === 'available' &&
+    playByPlayState.availability === 'available' &&
+    playerLogState.availability === 'available' &&
+    boxscore &&
+    input.gameData?.playByPlay
+  ) {
+    playerLogState = validateNhlFinalSkaterSourceConsistency({
+      boxscore,
+      playByPlay: input.gameData.playByPlay,
+      gameLogEntry: validatedPlayerLogEntry,
+      teamAbbreviation: assetTeamAbbreviation,
+      playerId: input.asset.player.id,
+    });
   }
   let sourceVersion = '';
   const requiredSourcesAvailable = boxscoreState.availability === 'available' &&

@@ -12,6 +12,20 @@ const {
   defaultScoringRules,
   scoringRulesV3,
 } = require('../lib/shared/core/scoring/scoring-rules.js');
+const {
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+} = require('../lib/shared/core/projection/projection-snapshot-hash.util.js');
+
+const V4_PROJECTION_HASH_SCHEMAS = new Set([
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
+]);
+const V3_PROJECTION_HASH_SCHEMAS = new Set([
+  PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION,
+  PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
+]);
 
 const projectArgument = process.argv.find((value) => value.startsWith('--project='));
 const leagueArgument = process.argv.find((value) => value.startsWith('--league='));
@@ -110,11 +124,17 @@ function inspectProjectionPointer(pointer, scoringClass) {
   if (data.generatedByAuthority !== 'server') issues.push('current projection is not server-authoritative');
   if (data.snapshotIntegrityStatus !== 'verified') issues.push('current projection integrity is not verified');
   if (!isSha256(data.snapshotContentHash)) issues.push('current projection content hash is missing');
-  if (scoringClass === 'v4' && data.snapshotHashSchemaVersion !== 2) {
-    issues.push(`current V4 projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, expected 2`);
+  if (scoringClass === 'v4' && !V4_PROJECTION_HASH_SCHEMAS.has(data.snapshotHashSchemaVersion)) {
+    issues.push(
+      `current V4 projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, ` +
+      `expected ${[...V4_PROJECTION_HASH_SCHEMAS].join(' or ')}`,
+    );
   }
-  if (scoringClass === 'v3' && ![1, 2].includes(data.snapshotHashSchemaVersion)) {
-    issues.push(`current V3 projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, expected 1 or 2`);
+  if (scoringClass === 'v3' && !V3_PROJECTION_HASH_SCHEMAS.has(data.snapshotHashSchemaVersion)) {
+    issues.push(
+      `current V3 projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, ` +
+      `expected ${[...V3_PROJECTION_HASH_SCHEMAS].join(' or ')}`,
+    );
   }
 
   return issues;

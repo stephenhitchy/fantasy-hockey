@@ -148,10 +148,14 @@ function hasValidSkaterScoringFields(
     value['position'].trim().length > 0 &&
     isNonNegativeNumber(value['goals']) &&
     isNonNegativeNumber(value['assists']) &&
+    isNonNegativeNumber(value['points']) &&
+    value['points'] === value['goals'] + value['assists'] &&
     isFiniteNumber(value['plusMinus']) &&
     isNonNegativeNumber(value['hits']) &&
     isNonNegativeNumber(value['powerPlayGoals']) &&
+    value['powerPlayGoals'] <= value['goals'] &&
     isNonNegativeNumber(value['sog']) &&
+    value['sog'] >= value['goals'] &&
     isNonNegativeNumber(value['blockedShots']) &&
     isValidTimeOnIce(value['toi']);
 }
@@ -356,14 +360,24 @@ function hasValidPlayerGameLogScoringFields(
     return false;
   }
 
-  return isNonNegativeNumber(value['goals']) &&
+  return typeof value['teamAbbrev'] === 'string' &&
+    value['teamAbbrev'].trim().length > 0 &&
+    (value['homeRoadFlag'] === 'H' || value['homeRoadFlag'] === 'R') &&
+    isNonNegativeNumber(value['goals']) &&
     isNonNegativeNumber(value['assists']) &&
+    isNonNegativeNumber(value['points']) &&
+    value['points'] === value['goals'] + value['assists'] &&
     isFiniteNumber(value['plusMinus']) &&
     isNonNegativeNumber(value['powerPlayPoints']) &&
+    value['powerPlayPoints'] <= value['points'] &&
     isNonNegativeNumber(value['gameWinningGoals']) &&
+    value['gameWinningGoals'] <= value['goals'] &&
     isNonNegativeNumber(value['otGoals']) &&
+    value['otGoals'] <= value['goals'] &&
     isNonNegativeNumber(value['shots']) &&
+    value['shots'] >= value['goals'] &&
     isNonNegativeNumber(value['shorthandedPoints']) &&
+    value['shorthandedPoints'] <= value['points'] &&
     isValidTimeOnIce(value['toi']);
 }
 
@@ -435,6 +449,77 @@ export function validateNhlFinalPlayerGameLog(input: {
     sourceState: availableSource(),
     gameLogEntry,
   };
+}
+
+export function validateNhlFinalSkaterSourceConsistency(input: {
+  boxscore: NhlGameBoxscoreResponse;
+  playByPlay: NhlGamePlayByPlayResponse;
+  gameLogEntry: NhlPlayerGameLogEntry | undefined;
+  teamAbbreviation: string;
+  playerId: number;
+}): NhlFinalInputSourceState {
+  const teamAbbreviation = input.teamAbbreviation.trim().toUpperCase();
+  const team = getValidatedBoxscoreTeam({
+    boxscore: input.boxscore,
+    teamAbbreviation,
+  });
+  const playerLine = [
+    ...(team?.forwards ?? []),
+    ...(team?.defense ?? []),
+  ].find((line) => line.playerId === input.playerId);
+  const regulationAndOvertimeGoals = (input.playByPlay.plays ?? []).filter((play) =>
+    play.typeDescKey?.trim().toLowerCase() === 'goal' &&
+    play.periodDescriptor?.periodType?.trim().toUpperCase() !== 'SO'
+  );
+  const playByPlayGoals = regulationAndOvertimeGoals.filter(
+    (play) => play.details?.scoringPlayerId === input.playerId,
+  ).length;
+  const playByPlayAssists = regulationAndOvertimeGoals.reduce(
+    (total, play) => total +
+      (play.details?.assist1PlayerId === input.playerId ? 1 : 0) +
+      (play.details?.assist2PlayerId === input.playerId ? 1 : 0),
+    0,
+  );
+
+  if (!playerLine) {
+    if (input.gameLogEntry || playByPlayGoals > 0 || playByPlayAssists > 0) {
+      return malformedSource(
+        'Final NHL sources disagreed about whether the skater appeared in the game.',
+      );
+    }
+
+    return availableSource();
+  }
+
+  if (!input.gameLogEntry) {
+    return malformedSource(
+      'Final NHL sources were missing player-log evidence for an appeared skater.',
+    );
+  }
+
+  const gameLogTeamAbbreviation = input.gameLogEntry.teamAbbrev.trim().toUpperCase();
+  const boxscoreAndPlayByPlayAgree =
+    playerLine.goals === playByPlayGoals &&
+    playerLine.assists === playByPlayAssists;
+  const boxscoreAndPlayerLogAgree =
+    playerLine.goals === input.gameLogEntry.goals &&
+    playerLine.assists === input.gameLogEntry.assists &&
+    playerLine.points === input.gameLogEntry.points &&
+    playerLine.plusMinus === input.gameLogEntry.plusMinus &&
+    playerLine.sog === input.gameLogEntry.shots &&
+    playerLine.toi.trim() === input.gameLogEntry.toi.trim();
+
+  if (
+    gameLogTeamAbbreviation !== teamAbbreviation ||
+    !boxscoreAndPlayByPlayAgree ||
+    !boxscoreAndPlayerLogAgree
+  ) {
+    return malformedSource(
+      'Final NHL boxscore, play-by-play, and player-log scoring evidence did not agree.',
+    );
+  }
+
+  return availableSource();
 }
 
 function stableNormalize(value: unknown): unknown {

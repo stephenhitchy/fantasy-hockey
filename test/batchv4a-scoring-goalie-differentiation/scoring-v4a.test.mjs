@@ -317,6 +317,15 @@ test('migration, inspection, and preseason rollback are guarded and never rewrit
   assert.doesNotMatch(migration, /writer\.(?:set|update|delete)\(\s*db\.(?:doc|collection)\(`leagues\/\$\{[^}]+\}\/cycles/);
   assert.match(inspection, /--allow-legacy-history/);
   assert.match(inspection, /Preserved V3 leagues with competition history/);
+  assert.match(
+    inspection,
+    /V4_PROJECTION_HASH_SCHEMAS = new Set\(\[\s*PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,\s*PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,\s*\]\)/,
+  );
+  assert.match(
+    inspection,
+    /scoringClass === 'v4' && !V4_PROJECTION_HASH_SCHEMAS\.has\(data\.snapshotHashSchemaVersion\)/,
+  );
+  assert.doesNotMatch(inspection, /snapshotHashSchemaVersion !== 2/);
   assert.match(inspection, /Inspection only\. No league, score, cycle, window, standing, roster, Draft, transaction, waiver, or projection was changed/);
   assert.match(rollback, /ROLLBACK_PRESEASON_ONLY/);
   assert.match(rollback, /blocked once any competition cycle exists/);
@@ -410,7 +419,7 @@ test('source-controlled scoring and private-season acceptance gates match the au
   assert.match(seasonAudit, /Audit only/);
 });
 
-test('the six-game window remains frozen and server scoring matches the D1L-E transfer-continuity baseline', async () => {
+test('the six-game window remains frozen while final-source convergence fails closed', async () => {
   const [serverSelection, clientSelection, serverScoring] = await Promise.all([
     read('functions/src/shared/core/cycle/cycle-window-selection.util.ts'),
     read('src/app/core/cycle/cycle-window-selection.util.ts'),
@@ -419,7 +428,8 @@ test('the six-game window remains frozen and server scoring matches the D1L-E tr
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), '83761b67632cd35838bb3e10a4ce5a64741926ebddb035a28503c67f440862c6');
-  assert.equal(sha256(serverScoring), 'aca5065b5ff6b807c8194203bdf3bd2d6c1e67ca169bb096c5cc4c386c503a31');
+  assert.equal(sha256(serverScoring), '3e83ee5b329897e0f42c427898ac9576cd64052c34836c0557b802f74f7fbe03');
+  assert.match(serverScoring, /validateNhlFinalSkaterSourceConsistency/);
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

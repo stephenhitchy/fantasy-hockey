@@ -278,6 +278,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
         // D1L-E persists per-slot game ownership across midseason team changes.
         'src/shared/core/cycle/player-window-continuity.util.ts',
         'src/shared/core/nhl/nhl-player-team-identity.service.ts',
+        // The V4 read-only inspector accepts both current Projection V11 hash schemas.
+        'scripts/scoring-v4-inspect.cjs',
         // D1M adds an isolated, detect-only final-score reconciliation classifier.
         'src/shared/core/nhl/final-score-reconciliation.util.ts',
         // FF1.27 intentionally fails closed on incomplete pre-Draft schedules.
@@ -305,7 +307,7 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
 
     assert.equal(
       await hashFunctionsRuntimeIntegrity({ excludedPaths: exclusions }),
-    '2970096011b4c83e4f915c368aefbe67b6517ab7d152fccbdd0671c31d3b6ba0',
+    '5409878cb517a05dd69de6d1efdb728d86b360ba5878014af1162cfa3c7ba961',
     );
 
   const [rules, engine, projection, firestoreRules, indexes] = await Promise.all([

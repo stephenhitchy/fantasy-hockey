@@ -440,24 +440,90 @@ export function getFantasyTeamCycleWindowScore(
   teamWindows: FantasyTeamCycleWindows | null | undefined,
 ): number {
   if (!teamWindows) {
-    return 0;
+    throw new Error('Cannot finalize a matchup without its team-window document.');
   }
 
-  const expectedSlotIds = new Set(teamWindows.expectedRosterSlotIds);
-  const scoreBySlotId = new Map<string, number>();
+  const expectedSlotIds = [...new Set(teamWindows.expectedRosterSlotIds)];
 
-  for (const window of teamWindows.windows) {
-    if (!expectedSlotIds.has(window.rosterSlotId)) {
-      continue;
+  if (
+    expectedSlotIds.length === 0 ||
+    expectedSlotIds.length !== teamWindows.expectedRosterSlotIds.length
+  ) {
+    throw new Error('Cannot finalize a matchup with missing or duplicate expected roster slots.');
+  }
+
+  return expectedSlotIds.reduce((total, rosterSlotId) => {
+    const matchingWindows = teamWindows.windows.filter(
+      (window) =>
+        window.rosterSlotId === rosterSlotId &&
+        window.status === 'complete',
+    );
+    const score = matchingWindows[0]?.fantasyPoints;
+
+    if (
+      matchingWindows.length !== 1 ||
+      typeof score !== 'number' ||
+      !Number.isFinite(score)
+    ) {
+      throw new Error(
+        `Cannot finalize roster slot ${rosterSlotId} without one finite completed score.`,
+      );
     }
 
-    scoreBySlotId.set(
-      window.rosterSlotId,
-      Number.isFinite(window.fantasyPoints) ? window.fantasyPoints : 0,
-    );
+    return total + score;
+  }, 0);
+}
+
+export function assertRawFantasyTeamCycleWindowScoresAreFinalizable(input: {
+  ownerId: string;
+  expectedRosterSlotIds: readonly string[];
+  rawTeamWindows: unknown;
+}): void {
+  const rawTeamWindows = input.rawTeamWindows;
+
+  if (!rawTeamWindows || typeof rawTeamWindows !== 'object' || Array.isArray(rawTeamWindows)) {
+    throw new Error(`Team ${input.ownerId} is missing its raw team-window evidence.`);
   }
 
-  return [...scoreBySlotId.values()].reduce((total, score) => total + score, 0);
+  const rawRecord = rawTeamWindows as Record<string, unknown>;
+  const rawExpectedRosterSlotIds = rawRecord['expectedRosterSlotIds'];
+  const rawWindows = rawRecord['windows'];
+  const expectedRosterSlotIds = [...new Set(input.expectedRosterSlotIds)];
+
+  if (
+    expectedRosterSlotIds.length === 0 ||
+    expectedRosterSlotIds.length !== input.expectedRosterSlotIds.length ||
+    !Array.isArray(rawExpectedRosterSlotIds) ||
+    !rawExpectedRosterSlotIds.every((value): value is string =>
+      typeof value === 'string' && value.trim().length > 0
+    ) ||
+    new Set(rawExpectedRosterSlotIds).size !== expectedRosterSlotIds.length ||
+    !expectedRosterSlotIds.every((slotId) => rawExpectedRosterSlotIds.includes(slotId)) ||
+    !Array.isArray(rawWindows)
+  ) {
+    throw new Error(`Team ${input.ownerId} has inconsistent expected roster-slot evidence.`);
+  }
+
+  for (const rosterSlotId of expectedRosterSlotIds) {
+    const matchingWindows = rawWindows.filter((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return false;
+      }
+
+      const window = value as Record<string, unknown>;
+      return window['rosterSlotId'] === rosterSlotId && window['status'] === 'complete';
+    }) as Record<string, unknown>[];
+
+    if (
+      matchingWindows.length !== 1 ||
+      typeof matchingWindows[0]['fantasyPoints'] !== 'number' ||
+      !Number.isFinite(matchingWindows[0]['fantasyPoints'])
+    ) {
+      throw new Error(
+        `Team ${input.ownerId} roster slot ${rosterSlotId} lacks one finite raw completed score.`,
+      );
+    }
+  }
 }
 
 export function listenToCycleTeamWindows(

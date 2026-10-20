@@ -26,6 +26,7 @@ import {
 import { CycleScoringResult } from './cycle-scoring.service';
 
 import {
+  assertRawFantasyTeamCycleWindowScoresAreFinalizable,
   getCycleTeamWindowsRef,
   getFantasyTeamCycleWindowScore,
   isFantasyTeamCycleWindowsComplete,
@@ -3736,7 +3737,7 @@ function legacyImmediateMoveWindowIsProvablyUntouched(
     window.appearanceGameIds.length === 0 &&
     (window.incompleteFinalGameIds?.length ?? 0) === 0 &&
     Object.keys(window.gameScores).length === 0 &&
-    Object.keys(window.gameStates).length === 0 &&
+    Object.values(window.gameStates).every((state) => state === 'scheduled') &&
     Object.keys(window.gameInputCompleteness ?? {}).length === 0
   );
 }
@@ -4802,14 +4803,24 @@ export async function reconcileRegularSeasonCycleMatchupCompletion(
     const teamWindowSnapshots = await Promise.all(
       teamWindowRefs.map((teamWindowRef) => transaction.get(teamWindowRef)),
     );
-    const teamWindowsByOwnerId = new Map(
+    const rawTeamWindowsByOwnerId = new Map(
       ownerIds.map((ownerId, index) => {
         const snapshot = teamWindowSnapshots[index];
 
         return [
           ownerId,
-          snapshot.exists()
-            ? normalizeFantasyTeamCycleWindows(ownerId, cycleNumber, snapshot.data() ?? {})
+          snapshot.exists() ? snapshot.data() ?? {} : null,
+        ] as const;
+      }),
+    );
+    const teamWindowsByOwnerId = new Map(
+      ownerIds.map((ownerId) => {
+        const rawTeamWindows = rawTeamWindowsByOwnerId.get(ownerId);
+
+        return [
+          ownerId,
+          rawTeamWindows
+            ? normalizeFantasyTeamCycleWindows(ownerId, cycleNumber, rawTeamWindows)
             : null,
         ] as const;
       }),
@@ -4840,6 +4851,25 @@ export async function reconcileRegularSeasonCycleMatchupCompletion(
       if (!teamAComplete || !teamBComplete) {
         effectiveMatchups.push(matchup);
         continue;
+      }
+
+      const assertTeamScoresAreFinalizable = (ownerId: string): void => {
+        const teamWindows = teamWindowsByOwnerId.get(ownerId);
+        const cycleExpectedRosterSlotIds = cycle.expectedRosterSlotIdsByOwner?.[ownerId] ?? [];
+
+        assertRawFantasyTeamCycleWindowScoresAreFinalizable({
+          ownerId,
+          expectedRosterSlotIds: cycleExpectedRosterSlotIds.length > 0
+            ? cycleExpectedRosterSlotIds
+            : teamWindows?.expectedRosterSlotIds ?? [],
+          rawTeamWindows: rawTeamWindowsByOwnerId.get(ownerId),
+        });
+      };
+
+      assertTeamScoresAreFinalizable(matchup.teamAOwnerId);
+
+      if (matchup.teamBOwnerId) {
+        assertTeamScoresAreFinalizable(matchup.teamBOwnerId);
       }
 
       const teamAScore = roundScore(getFantasyTeamCycleWindowScore(teamAWindows));

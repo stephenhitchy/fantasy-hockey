@@ -45,6 +45,7 @@ import {
   validateNhlFinalCanonicalBoxscore,
   validateNhlFinalPlayerGameLog,
   validateNhlFinalPlayByPlay,
+  validateNhlFinalSkaterSourceConsistency,
   type NhlFinalInputSourceState,
 } from './shared/core/nhl/nhl-final-input-completeness.util';
 import {
@@ -52,6 +53,8 @@ import {
   getGamePlayByPlay,
   getNhlScoreNow,
   getRegularSeasonGameLog,
+  type NhlGameBoxscoreResponse,
+  type NhlGamePlayByPlayResponse,
   type NhlPlayerGameLogEntry,
   NhlScoreGame,
 } from './shared/core/nhl/nhl-api.service';
@@ -226,6 +229,9 @@ async function loadFinalSettlementEntries(input: {
   playerIds: readonly number[];
   gameId: number;
   season: string;
+  boxscore: NhlGameBoxscoreResponse;
+  playByPlay: NhlGamePlayByPlayResponse;
+  teamAbbreviationByPlayerId: ReadonlyMap<number, string>;
 }): Promise<FinalSettlementLoadResult> {
   const entriesByPlayerId = new Map<number, NhlPlayerGameLogEntry>();
   const failures: FinalSettlementFailure[] = [];
@@ -242,11 +248,22 @@ async function loadFinalSettlementEntries(input: {
         gameId: input.gameId,
         appeared: true,
       });
+      const sourceState = validation.sourceState.availability === 'available'
+        ? validateNhlFinalSkaterSourceConsistency({
+            boxscore: input.boxscore,
+            playByPlay: input.playByPlay,
+            gameLogEntry: validation.gameLogEntry,
+            teamAbbreviation: input.teamAbbreviationByPlayerId.get(playerId) ?? '',
+            playerId,
+          })
+        : validation.sourceState;
 
       return {
         playerId,
-        gameLog: validation.gameLogEntry,
-        sourceState: validation.sourceState,
+        gameLog: sourceState.availability === 'available'
+          ? validation.gameLogEntry
+          : undefined,
+        sourceState,
       };
     },
     FINAL_SETTLEMENT_CONCURRENCY,
@@ -573,6 +590,11 @@ async function observeCanonicalGame(input: {
         gameId: facts.gameId,
         season: getNhlSeasonForGameDate(
           facts.startTimeUTC || facts.gameDate,
+        ),
+        boxscore,
+        playByPlay,
+        teamAbbreviationByPlayerId: new Map(
+          facts.skaters.map((entry) => [entry.playerId, entry.teamAbbreviation]),
         ),
       });
 

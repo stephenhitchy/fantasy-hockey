@@ -18,6 +18,7 @@ import {
   validateNhlFinalPlayerGameLog,
   validateNhlFinalPlayByPlay,
   validateNhlFinalSkaterBoxscore,
+  validateNhlFinalSkaterSourceConsistency,
 } from '../../functions/src/shared/core/nhl/nhl-final-input-completeness.util.ts';
 import { decideCanonicalRequestCompletion } from '../../functions/src/shared/core/live-scoring/canonical-request-completion.util.ts';
 
@@ -171,12 +172,12 @@ function historicalTradeReplayGame() {
   };
 }
 
-function validPlayByPlay() {
+function validPlayByPlay({ scoringPlayerId = 7 } = {}) {
   return {
     plays: [{
       eventId: 1,
       typeDescKey: 'goal',
-      details: { scoringPlayerId: 8, homeScore: 0, awayScore: 1 },
+      details: { scoringPlayerId, homeScore: 1, awayScore: 0 },
     }],
   };
 }
@@ -440,6 +441,31 @@ test('proven skater nonappearance remains complete while an appeared missing log
   assert.equal(appearedMissing.sourceState.availability, 'temporarily-unavailable');
 });
 
+test('individually valid final NHL sources must agree before a skater score is reusable', () => {
+  const boxscore = validBoxscore({
+    skaterOverrides: { goals: 1, points: 1, sog: 1 },
+  });
+  const playByPlay = validPlayByPlay();
+  const consistent = validateNhlFinalSkaterSourceConsistency({
+    boxscore,
+    playByPlay,
+    gameLogEntry: validPlayerLogEntry(1, { goals: 1, points: 1, shots: 1 }),
+    teamAbbreviation: 'SEA',
+    playerId: 7,
+  });
+  const inconsistent = validateNhlFinalSkaterSourceConsistency({
+    boxscore,
+    playByPlay,
+    gameLogEntry: validPlayerLogEntry(1),
+    teamAbbreviation: 'SEA',
+    playerId: 7,
+  });
+
+  assert.equal(consistent.availability, 'available');
+  assert.equal(inconsistent.availability, 'malformed');
+  assert.match(inconsistent.detail, /did not agree/i);
+});
+
 test('a legitimate zero-point final is reusable only with complete source evidence', () => {
   const evidence = assessSkater();
 
@@ -513,6 +539,31 @@ test('the real scorer retries Game 6 once and keeps Game 7 in the next window', 
     cycleTwo.windowScores['owner-a__C-1__cycle-2'].scheduledGameIds,
     [7, 8, 9, 10, 11, 12],
   );
+});
+
+test('the real scorer retries a final game until all NHL scoring sources converge', async (t) => {
+  const schedule = teamScheduleWithFinalCount(6, 1);
+  const gameLogEntry = validPlayerLogEntry(1);
+  mockDirectNhlSources(t, {
+    schedule,
+    gameLog: [gameLogEntry],
+  });
+  const first = await calculateTestCycle();
+  const firstWindow = first.windowScores['owner-a__C-1__cycle-1'];
+
+  assert.equal(firstWindow.gamesPlayed, 0);
+  assert.deepEqual(firstWindow.incompleteFinalGameIds, [1]);
+  assert.equal(firstWindow.gameScores['1'], undefined);
+  assert.equal(firstWindow.gameInputCompleteness['1'].status, 'malformed');
+
+  Object.assign(gameLogEntry, { goals: 1, points: 1, shots: 1 });
+  const retry = await calculateTestCycle({ previousResult: first });
+  const retryWindow = retry.windowScores['owner-a__C-1__cycle-1'];
+
+  assert.equal(retryWindow.gamesPlayed, 1);
+  assert.deepEqual(retryWindow.incompleteFinalGameIds, []);
+  assert.equal(retryWindow.gameInputCompleteness['1'].complete, true);
+  assert.ok(retryWindow.gameScores['1'] > 0);
 });
 
 test('schedule retries exclude a replaced asset but retain both clubs for a same-stint NHL trade', async (t) => {
@@ -637,6 +688,7 @@ test('the real scorer settles a proven nonappearance as a reusable zero', async 
   mockDirectNhlSources(t, {
     schedule,
     boxscoreByGameId: new Map([[1, validBoxscore({ appeared: false })]]),
+    playByPlayByGameId: new Map([[1, validPlayByPlay({ scoringPlayerId: 8 })]]),
     gameLog: [],
   });
   const result = await calculateTestCycle();
@@ -732,6 +784,7 @@ test('historical replay preserves a proven source-team nonappearance as a reusab
   };
   mockDirectNhlSources(t, {
     boxscoreByGameId: new Map([[1, validHistoricalTradeBoxscore({ appeared: false })]]),
+    playByPlayByGameId: new Map([[1, validPlayByPlay({ scoringPlayerId: 9 })]]),
     gameLog: [],
   });
 
@@ -1229,6 +1282,64 @@ test('duplicate matchup reconciliation applies standings exactly once', async ()
   assert.equal(matchup.data().winnerOwnerId, 'owner-a');
 });
 
+test('matchup reconciliation fails closed when a completed raw score is malformed', async () => {
+  const leagueId = `standings-malformed-${randomUUID()}`;
+  const cycleRef = firestore.doc(`leagues/${leagueId}/cycles/cycle-1`);
+  const matchupRef = cycleRef.collection('matchups').doc('matchup-1');
+
+  await Promise.all([
+    cycleRef.set({
+      id: 'cycle-1',
+      cycleNumber: 1,
+      status: 'active',
+      phase: 'regular_season',
+      matchupIds: ['matchup-1'],
+      expectedRosterSlotIdsByOwner: {
+        'owner-a': ['C-1'],
+        'owner-b': ['C-1'],
+      },
+      completedMatchupCount: 0,
+      standingsAppliedAt: null,
+    }),
+    matchupRef.set({
+      id: 'matchup-1',
+      cycleNumber: 1,
+      phase: 'regular_season',
+      teamAOwnerId: 'owner-a',
+      teamBOwnerId: 'owner-b',
+      teamAScore: 0,
+      teamBScore: 0,
+      winnerOwnerId: null,
+      status: 'active',
+    }),
+    firestore.doc(`leagues/${leagueId}/teams/owner-a`).set(fantasyTeam('owner-a')),
+    firestore.doc(`leagues/${leagueId}/teams/owner-b`).set(fantasyTeam('owner-b')),
+    cycleRef.collection('teamWindows').doc('owner-a').set(
+      completedTeamWindows('owner-a', 'not-a-score'),
+    ),
+    cycleRef.collection('teamWindows').doc('owner-b').set(
+      completedTeamWindows('owner-b', 2),
+    ),
+  ]);
+
+  await assert.rejects(
+    cycleService.reconcileRegularSeasonCycleMatchupCompletion(leagueId, 1),
+    /lacks one finite raw completed score/i,
+  );
+  const [teamA, teamB, cycle, matchup] = await Promise.all([
+    firestore.doc(`leagues/${leagueId}/teams/owner-a`).get(),
+    firestore.doc(`leagues/${leagueId}/teams/owner-b`).get(),
+    cycleRef.get(),
+    matchupRef.get(),
+  ]);
+
+  assert.equal(teamA.data().wins, 0);
+  assert.equal(teamB.data().losses, 0);
+  assert.equal(cycle.data().status, 'active');
+  assert.equal(cycle.data().standingsAppliedAt, null);
+  assert.equal(matchup.data().status, 'active');
+});
+
 test('an older incomplete scorer result cannot downgrade a completed slot window', async () => {
   const leagueId = `window-cas-${randomUUID()}`;
   const cycleRef = firestore.doc(`leagues/${leagueId}/cycles/cycle-1`);
@@ -1449,8 +1560,24 @@ test('legacy immediate roster-move reconciliation repairs only a provably untouc
       nhlTeamAbbreviation: 'CBJ',
     },
   };
-  const outgoingTargetGameIds = [1, 2, 3, 4, 5, 6];
-  const incomingTargetGameIds = [101, 102, 103, 104, 105, 106];
+  // Mirrors the production failure shape: Fantilli's pick-level IDs retained
+  // Detroit's schedule while the per-team map already held Columbus's IDs.
+  const outgoingTargetGameIds = [
+    2026020017,
+    2026020035,
+    2026020046,
+    2026020066,
+    2026020075,
+    2026020090,
+  ];
+  const incomingTargetGameIds = [
+    2026020011,
+    2026020027,
+    2026020068,
+    2026020079,
+    2026020091,
+    2026020129,
+  ];
   const sourceNhlTargetGameIdsByTeam = {
     DET: outgoingTargetGameIds,
     CBJ: incomingTargetGameIds,
@@ -1578,7 +1705,9 @@ test('legacy immediate roster-move reconciliation repairs only a provably untouc
         liveGameIds: [],
         appearanceGameIds: [],
         gameScores: {},
-        gameStates: {},
+        gameStates: Object.fromEntries(
+          outgoingTargetGameIds.map((gameId) => [String(gameId), 'scheduled']),
+        ),
         gameInputCompleteness: {},
         incompleteFinalGameIds: [],
         scheduledGames: 6,
@@ -2123,6 +2252,7 @@ test('the scorer retains settled failures and gates final reuse on complete evid
   assert.match(scorer, /classifyNhlFinalInputFailure/);
   assert.match(scorer, /isReusableNhlFinalScore/);
   assert.match(scorer, /validateNhlFinalSkaterBoxscore/);
+  assert.match(scorer, /validateNhlFinalSkaterSourceConsistency/);
   assert.match(scorer, /validateNhlFinalGoalieUnitBoxscore/);
   assert.match(scorer, /incompleteFinalGameIds\.push\(game\.id\)/);
   assert.match(scorer, /if \(!completeness\.complete\)/);
@@ -2158,6 +2288,7 @@ test('canonical writes and durable work share a transaction and exact version id
   assert.match(service, /buildCanonicalPublicationOutboxId/);
   assert.match(feed, /currentSourceVersion !== entry\.sourceVersion/);
   assert.match(feed, /outcome: 'superseded'/);
+  assert.match(feed, /validateNhlFinalSkaterSourceConsistency/);
   assert.match(
     automation,
     /canonicalParityRequestedGameIds:\s*canonicalParityLoad\s*\?\s*new Set\(canonicalParityLoad\.requestedGameIds\)/,
