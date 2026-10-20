@@ -25,6 +25,10 @@ Always verify the current local commit, working-tree state, live manifest, and
 deployed Firebase state at the beginning of release work. Do not treat the
 values in this document as a substitute for those checks.
 
+For the 2026-10-20 move to a new development computer, including preserved
+remote branches, stash recovery refs, setup commands, and private-artifact
+boundaries, read `docs/RINKRAT_COMPUTER_MIGRATION_2026_10_20.md`.
+
 ## Stack
 
 - Angular 22
