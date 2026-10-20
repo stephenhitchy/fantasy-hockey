@@ -25,7 +25,13 @@ import {
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   SHARED_PROJECTION_VERSION,
 } from '../projection/projection-snapshot.service';
-import { CURRENT_SCORING_RULES_VERSION, defaultScoringRules } from '../scoring/scoring-rules';
+import {
+  CURRENT_SCORING_RULES_VERSION,
+  SCORING_RULES_V4_VERSION,
+  SCORING_RULES_V5_VERSION,
+  defaultScoringRules,
+  normalizeScoringRulesVersion,
+} from '../scoring/scoring-rules';
 import { getLeagueTeams } from '../team/team.service';
 import { loadSecurityReadinessSnapshot } from '../security/security-readiness.service';
 import {
@@ -237,6 +243,12 @@ export async function loadReleaseReadinessSnapshot(
   const checks: ReleaseReadinessCheck[] = [];
   const requiredGamesPerCycle =
     league.scoringRules?.requiredGamesPerCycle ?? defaultScoringRules.requiredGamesPerCycle;
+  const leagueScoringRulesVersion = normalizeScoringRulesVersion(
+    league.scoringRulesVersion,
+  );
+  const leagueScoringRulesSupported =
+    leagueScoringRulesVersion === SCORING_RULES_V4_VERSION ||
+    leagueScoringRulesVersion === SCORING_RULES_V5_VERSION;
 
   checks.push(
     createCheck(
@@ -460,8 +472,8 @@ export async function loadReleaseReadinessSnapshot(
       'scoring-rules-version',
       'league',
       'Current scoring-rules version',
-      `League version ${league.scoringRulesVersion ?? 'legacy'}; application version ${CURRENT_SCORING_RULES_VERSION}.`,
-      league.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION ? 'pass' : 'warning',
+      `League version ${league.scoringRulesVersion ?? 'legacy'}; application supports V4 and opt-in V5; production default is V${CURRENT_SCORING_RULES_VERSION}.`,
+      leagueScoringRulesSupported ? 'pass' : 'warning',
       true,
     ),
   );
@@ -728,7 +740,7 @@ export async function loadReleaseReadinessSnapshot(
     projection?.snapshotIntegrityStatus === 'verified' &&
     /^[a-f0-9]{64}$/.test(projection?.snapshotContentHash ?? '') &&
     projection?.snapshotChunkHashes?.length === projection?.assetDocumentCount &&
-    projection?.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION,
+    projection?.scoringRulesVersion === leagueScoringRulesVersion,
   );
 
   checks.push(
@@ -746,7 +758,7 @@ export async function loadReleaseReadinessSnapshot(
               : 'this snapshot is missing the current server authority marker, canonical catalog validation, or deterministic root hash. Verify the current server snapshot or regenerate this target before the Draft begins.'),
       projection?.status === 'ready' &&
         projection.projectionVersion === SHARED_PROJECTION_VERSION &&
-        projection.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION &&
+        projection.scoringRulesVersion === leagueScoringRulesVersion &&
         projection.assetCount > 0
         ? projectionServerValidated
           ? projection.generationReason === 'server-emergency'
@@ -1010,4 +1022,3 @@ export async function restorePreviousReleaseReadinessProjection(
 
   return `${result.message} Save Draft settings again before starting the Draft.`;
 }
-

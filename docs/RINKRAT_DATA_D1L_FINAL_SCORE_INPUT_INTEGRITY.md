@@ -197,3 +197,13 @@ The following remain recommendations for later, separately approved work:
 - automatic corrections only after exact-once proofs cover completed windows, transactions, standings, playoffs, and Game 7 ownership.
 
 D1L-A does not implement those systems, automatically correct completed matchups, enable canonical Primary, expand Canary, or increase concurrency.
+
+## Scoring V5 compatibility addendum
+
+The saved V3/V4 Team Goalie Unit contract remains boxscore plus deterministic
+source version. A V5 Team Goalie Unit final additionally requires validated
+play-by-play, because missing play-by-play cannot prove that zero opposing
+shootout goals occurred. V5 skaters continue using the established skater
+boxscore/play-by-play/player-log/source-version contract. Failed V5 evidence is
+explicit and retryable; it is never converted to zero. Production/default V4
+reuse behavior is unchanged.

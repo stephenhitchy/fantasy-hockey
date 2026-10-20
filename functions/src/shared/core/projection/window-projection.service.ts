@@ -83,18 +83,19 @@ export async function ensureWindowProjectionBundle(
     input.leagueId,
     input.now,
   );
+  const targetSnapshot = await loadSharedProjectionSnapshotForCycle(
+    input.leagueId,
+    targetCycleNumber,
+  );
   const freshnessInput = {
     teamCount: input.teamCount,
     requiredGamesPerCycle: input.requiredGamesPerCycle,
+    scoringRulesVersion: expectedContext.scoringRulesVersion,
     targetCycleNumber,
     now: input.now,
     expectedProjectionAsOfDate: expectedContext.projectionAsOfDate,
     expectedProjectionContext: expectedContext.projectionContext,
   };
-  const targetSnapshot = await loadSharedProjectionSnapshotForCycle(
-    input.leagueId,
-    targetCycleNumber,
-  );
 
   const targetSnapshotIsFresh =
     !input.forceRefresh &&
@@ -115,7 +116,11 @@ export async function ensureWindowProjectionBundle(
   }
 
   if (input.refreshPolicy === 'saved-only') {
-    if (targetSnapshot?.metadata.status === 'ready') {
+    if (
+      targetSnapshot?.metadata.status === 'ready' &&
+      targetSnapshot.metadata.scoringRulesVersion ===
+        expectedContext.scoringRulesVersion
+    ) {
       return {
         metadata: targetSnapshot.metadata,
         assetsByKey: toAssetMap(targetSnapshot),
@@ -127,9 +132,14 @@ export async function ensureWindowProjectionBundle(
       };
     }
 
-    const currentSnapshot = await loadSharedProjectionSnapshot(
+    const loadedCurrentSnapshot = await loadSharedProjectionSnapshot(
       input.leagueId,
     ).catch(() => null);
+    const currentSnapshot =
+      loadedCurrentSnapshot?.metadata.scoringRulesVersion ===
+        expectedContext.scoringRulesVersion
+        ? loadedCurrentSnapshot
+        : null;
 
     return {
       metadata: currentSnapshot?.metadata ?? null,
@@ -150,6 +160,7 @@ export async function ensureWindowProjectionBundle(
       requiredGamesPerCycle: input.requiredGamesPerCycle,
       generationReason: 'window-boundary',
       targetCycleNumber,
+      expectedScoringRulesVersion: expectedContext.scoringRulesVersion,
     });
 
     return {
@@ -161,7 +172,11 @@ export async function ensureWindowProjectionBundle(
       errorMessage: '',
     };
   } catch (error: unknown) {
-    if (targetSnapshot?.metadata.status === 'ready') {
+    if (
+      targetSnapshot?.metadata.status === 'ready' &&
+      targetSnapshot.metadata.scoringRulesVersion ===
+        expectedContext.scoringRulesVersion
+    ) {
       return {
         metadata: targetSnapshot.metadata,
         assetsByKey: toAssetMap(targetSnapshot),
@@ -172,7 +187,14 @@ export async function ensureWindowProjectionBundle(
       };
     }
 
-    const currentSnapshot = await loadSharedProjectionSnapshot(input.leagueId).catch(() => null);
+    const loadedCurrentSnapshot = await loadSharedProjectionSnapshot(
+      input.leagueId,
+    ).catch(() => null);
+    const currentSnapshot =
+      loadedCurrentSnapshot?.metadata.scoringRulesVersion ===
+        expectedContext.scoringRulesVersion
+        ? loadedCurrentSnapshot
+        : null;
 
     return {
       metadata: currentSnapshot?.metadata ?? null,

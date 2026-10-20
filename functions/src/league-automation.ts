@@ -153,9 +153,11 @@ import {
   syncPlayoffWindowBankScores,
 } from './shared/core/playoffs/playoff-window-bank.service';
 import {
-  CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
+  SCORING_RULES_V5_VERSION,
   defaultScoringRules,
+  normalizeScoringRulesVersion,
+  resolveScoringRulesVersion,
   scoringRulesForVersion,
   ScoringRules,
 } from './shared/core/scoring/scoring-rules';
@@ -1069,10 +1071,31 @@ function normalizeCanonicalParityFacts(
   if (
     facts.schemaVersion !== CANONICAL_NHL_FACTS_SCHEMA_VERSION ||
     facts.gameId !== expectedGameId ||
+    !Number.isInteger(facts.homeTeamId) ||
+    Number(facts.homeTeamId) <= 0 ||
+    !Number.isInteger(facts.awayTeamId) ||
+    Number(facts.awayTeamId) <= 0 ||
+    facts.homeTeamId === facts.awayTeamId ||
     !Array.isArray(facts.skaters) ||
     !Array.isArray(facts.goalies) ||
     !Array.isArray(facts.goals) ||
-    !Array.isArray(facts.finalSettlements)
+    !Array.isArray(facts.finalSettlements) ||
+    !Array.isArray(facts.finalSettlementPlayerIds) ||
+    !facts.goals.every((goal) =>
+      goal &&
+      typeof goal === 'object' &&
+      typeof goal.periodType === 'string' &&
+      (
+        goal.periodType.trim().toUpperCase() !== 'SO' ||
+        (
+          Number.isInteger(goal.eventOwnerTeamId) &&
+          (
+            goal.eventOwnerTeamId === facts.homeTeamId ||
+            goal.eventOwnerTeamId === facts.awayTeamId
+          )
+        )
+      )
+    )
   ) {
     return null;
   }
@@ -4100,6 +4123,16 @@ function normalizeScoringRules(value: unknown, version: unknown): ScoringRules {
         : base.goalieSavePercentageTiers,
   };
 
+  const normalizedVersion = normalizeScoringRulesVersion(version);
+  if (normalizedVersion === SCORING_RULES_V5_VERSION) {
+    normalized.shootoutGoal = base.shootoutGoal;
+    normalized.shootoutGoalBreaksGoalieShutout =
+      base.shootoutGoalBreaksGoalieShutout;
+  } else {
+    delete normalized.shootoutGoal;
+    delete normalized.shootoutGoalBreaksGoalieShutout;
+  }
+
   /*
    * Pre-V3 documents are upgraded only to the frozen V3 defense/goalie model.
    * V3 leagues remain V3 until the guarded preseason V4 migration runs; this
@@ -4137,6 +4170,10 @@ async function getServerLeague(leagueId: string): Promise<ServerLeague | null> {
   }
 
   const data = snapshot.data() ?? {};
+  const storedScoringRulesVersion = data['scoringRulesVersion'];
+  const scoringRulesVersion = resolveScoringRulesVersion(
+    storedScoringRulesVersion,
+  );
 
   return {
     id: leagueId,
@@ -4144,12 +4181,11 @@ async function getServerLeague(leagueId: string): Promise<ServerLeague | null> {
       typeof data['commissionerId'] === 'string'
         ? data['commissionerId']
         : '',
-    scoringRules: normalizeScoringRules(data['scoringRules'], data['scoringRulesVersion']),
-    scoringRulesVersion:
-      typeof data['scoringRulesVersion'] === 'number' &&
-      data['scoringRulesVersion'] >= CURRENT_SCORING_RULES_VERSION
-        ? data['scoringRulesVersion']
-        : SCORING_RULES_V3_VERSION,
+    scoringRules: normalizeScoringRules(
+      data['scoringRules'],
+      storedScoringRulesVersion,
+    ),
+    scoringRulesVersion,
   };
 }
 

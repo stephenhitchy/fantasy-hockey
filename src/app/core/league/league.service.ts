@@ -13,9 +13,10 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, db } from '../firebase';
 import { functions } from '../firebase-functions';
 import {
-  CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
+  SCORING_RULES_V5_VERSION,
   defaultScoringRules,
+  normalizeScoringRulesVersion,
   scoringRulesForVersion,
   ScoringRules,
 } from '../scoring/scoring-rules';
@@ -269,6 +270,9 @@ export interface LeagueSummary {
 
 function normalizeLeagueScoringRules(league: Partial<League>): League {
   const storedRules = league.scoringRules;
+  const normalizedVersion = normalizeScoringRulesVersion(
+    league.scoringRulesVersion,
+  );
   const base = scoringRulesForVersion(league.scoringRulesVersion);
 
   const normalizedRules: ScoringRules = {
@@ -312,6 +316,20 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
         ? storedRules.goalieSavePercentageTiers
         : base.goalieSavePercentageTiers,
   };
+
+  /*
+   * Version-gated categories must never leak in from a stale or hand-edited
+   * stored rule map. V5 owns shootout scoring; V3/V4 continue using their
+   * exact frozen contracts even if unexpected V5 keys are present.
+   */
+  if (normalizedVersion === SCORING_RULES_V5_VERSION) {
+    normalizedRules.shootoutGoal = base.shootoutGoal;
+    normalizedRules.shootoutGoalBreaksGoalieShutout =
+      base.shootoutGoalBreaksGoalieShutout;
+  } else {
+    delete normalizedRules.shootoutGoal;
+    delete normalizedRules.shootoutGoalBreaksGoalieShutout;
+  }
 
   /*
    * Pre-V3 documents continue receiving the frozen V3 defense/goalie upgrade.
@@ -363,11 +381,7 @@ function normalizeLeagueScoringRules(league: Partial<League>): League {
         : undefined,
     matchupFormat: league.matchupFormat ?? 'cycle_matchup',
     scoringRules: normalizedRules,
-    scoringRulesVersion:
-      typeof league.scoringRulesVersion === 'number' &&
-      league.scoringRulesVersion >= CURRENT_SCORING_RULES_VERSION
-        ? league.scoringRulesVersion
-        : SCORING_RULES_V3_VERSION,
+    scoringRulesVersion: normalizedVersion ?? SCORING_RULES_V3_VERSION,
     authoritySchemaVersion:
       typeof league.authoritySchemaVersion === 'number'
         ? league.authoritySchemaVersion

@@ -16,7 +16,16 @@ import {
   type PublicScoringCalculatorPreset,
   type PublicSkaterCalculatorInput,
 } from '../../../core/scoring/public-scoring-calculator.util';
-import { CURRENT_SCORING_RULES_VERSION } from '../../../core/scoring/scoring-rules';
+import {
+  SCORING_RULES_V4_VERSION,
+  SCORING_RULES_V5_VERSION,
+  scoringRulesV4,
+  scoringRulesV5,
+} from '../../../core/scoring/scoring-rules';
+
+type CalculatorScoringRulesVersion =
+  | typeof SCORING_RULES_V4_VERSION
+  | typeof SCORING_RULES_V5_VERSION;
 
 @Component({
   selector: 'app-scoring-calculator',
@@ -26,7 +35,22 @@ import { CURRENT_SCORING_RULES_VERSION } from '../../../core/scoring/scoring-rul
   styleUrl: './scoring-calculator.css',
 })
 export class ScoringCalculator {
-  readonly scoringRulesVersion = CURRENT_SCORING_RULES_VERSION;
+  readonly scoringRulesVersion = signal<CalculatorScoringRulesVersion>(
+    SCORING_RULES_V4_VERSION,
+  );
+  readonly scoringRules = computed(() =>
+    this.scoringRulesVersion() === SCORING_RULES_V5_VERSION
+      ? scoringRulesV5
+      : scoringRulesV4,
+  );
+  readonly scoringVersionLabel = computed(() =>
+    this.scoringRulesVersion() === SCORING_RULES_V5_VERSION
+      ? 'Opt-in Scoring V5'
+      : 'Production Scoring V4',
+  );
+  readonly shootoutScoringEnabled = computed(() =>
+    this.scoringRulesVersion() === SCORING_RULES_V5_VERSION,
+  );
   readonly mode = signal<PublicScoringCalculatorMode>('forward');
   readonly skaterInput = signal<PublicSkaterCalculatorInput>({ ...DEFAULT_PUBLIC_SKATER_INPUT });
   readonly goalieInput = signal<PublicGoalieCalculatorInput>({ ...DEFAULT_PUBLIC_GOALIE_INPUT });
@@ -39,9 +63,18 @@ export class ScoringCalculator {
   readonly result = computed(() => {
     const mode = this.mode();
     return mode === 'goalie'
-      ? calculatePublicGoalieScore(this.goalieInput())
-      : calculatePublicSkaterScore(mode, this.skaterInput());
+      ? calculatePublicGoalieScore(this.goalieInput(), this.scoringRules())
+      : calculatePublicSkaterScore(mode, this.skaterInput(), this.scoringRules());
   });
+
+  selectScoringVersion(version: CalculatorScoringRulesVersion): void {
+    this.scoringRulesVersion.set(version);
+
+    if (version === SCORING_RULES_V4_VERSION) {
+      this.skaterInput.update((current) => ({ ...current, shootoutGoals: 0 }));
+      this.goalieInput.update((current) => ({ ...current, shootoutGoalsAgainst: 0 }));
+    }
+  }
 
   selectMode(mode: PublicScoringCalculatorMode): void {
     this.mode.set(mode);

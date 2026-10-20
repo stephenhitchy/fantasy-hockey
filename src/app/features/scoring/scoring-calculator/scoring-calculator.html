@@ -1,7 +1,7 @@
 <main class="scoring-calculator-page rr-page-shell">
   <header class="calculator-hero rr-card rr-card--raised rr-card--padded">
     <div>
-      <span class="eyebrow">Public tool · Exact Production Scoring V{{ scoringRulesVersion }}</span>
+      <span class="eyebrow">Public tool · Exact {{ scoringVersionLabel() }}</span>
       <h1>Scoring Calculator</h1>
       <p>
         Enter one NHL game stat line and see exactly where every RinkRat point comes from.
@@ -31,6 +31,27 @@
             <h2 id="calculator-position-title">Position</h2>
           </div>
         </header>
+
+        <div class="position-choice-grid version-choice-grid" role="group" aria-label="Scoring rules version">
+          <button
+            type="button"
+            [class.selected]="scoringRulesVersion() === 4"
+            [attr.aria-pressed]="scoringRulesVersion() === 4"
+            (click)="selectScoringVersion(4)"
+          >
+            <strong>Scoring V4</strong>
+            <span>Current production default</span>
+          </button>
+          <button
+            type="button"
+            [class.selected]="scoringRulesVersion() === 5"
+            [attr.aria-pressed]="scoringRulesVersion() === 5"
+            (click)="selectScoringVersion(5)"
+          >
+            <strong>Scoring V5</strong>
+            <span>Opt-in shootout scoring</span>
+          </button>
+        </div>
 
         <div class="position-choice-grid" role="group" aria-label="Position scoring formula">
           <button
@@ -95,6 +116,19 @@
                 (ngModelChange)="updateGoalie('saves', $event)"
               />
             </label>
+            @if (shootoutScoringEnabled()) {
+              <label class="rr-field">
+                <span>Shootout goals against</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="20"
+                  step="1"
+                  [ngModel]="goalieInput().shootoutGoalsAgainst ?? 0"
+                  (ngModelChange)="updateGoalie('shootoutGoalsAgainst', $event)"
+                />
+              </label>
+            }
             <label class="rr-field">
               <span>Shots against</span>
               <input
@@ -123,7 +157,7 @@
                 [ngModel]="goalieInput().shutout"
                 (ngModelChange)="updateGoalie('shutout', $event)"
               />
-              <span><strong>Shutout</strong><small>No goals allowed by the team goalie unit</small></span>
+              <span><strong>Regulation/OT shutout</strong><small>Scoring V5 removes the RinkRat shutout bonus if an opposing shootout attempt succeeds</small></span>
             </label>
           </div>
         } @else {
@@ -137,6 +171,9 @@
             <label class="rr-field"><span>Plus / minus</span><input type="number" min="-10" max="10" step="1" [ngModel]="skaterInput().plusMinus" (ngModelChange)="updateSkater('plusMinus', $event)" /></label>
             <label class="rr-field"><span>Power-play points</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().powerPlayPoints" (ngModelChange)="updateSkater('powerPlayPoints', $event)" /></label>
             <label class="rr-field"><span>Short-handed points</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().shortHandedPoints" (ngModelChange)="updateSkater('shortHandedPoints', $event)" /></label>
+            @if (shootoutScoringEnabled()) {
+              <label class="rr-field"><span>Shootout goals</span><input type="number" min="0" max="10" step="1" [ngModel]="skaterInput().shootoutGoals ?? 0" (ngModelChange)="updateSkater('shootoutGoals', $event)" /></label>
+            }
             <label class="rr-field"><span>Time on ice</span><input type="number" min="0" max="60" step="0.1" [ngModel]="skaterInput().timeOnIceMinutes" (ngModelChange)="updateSkater('timeOnIceMinutes', $event)" /></label>
           </div>
 
@@ -194,7 +231,7 @@
       <div class="calculator-boundary-note">
         <strong>What this calculator does not do</strong>
         <p>
-          It does not project future performance, decide roster value, or change any league. Legacy Scoring V3 leagues may retain older goalie rules.
+          It does not project future performance, decide roster value, or change any league. Scoring V5 is an explicit opt-in preview; new and existing leagues remain on Production Scoring V4 unless deliberately migrated. Legacy Scoring V3 leagues may retain older goalie rules.
         </p>
       </div>
     </aside>

@@ -61,14 +61,16 @@ export interface CanonicalNhlSkaterFinalSettlement {
 export interface CanonicalNhlGoalEvent {
   eventId: number | null; period: number | null; periodType: string;
   timeInPeriod: string; scoringPlayerId: number | null;
+  eventOwnerTeamId: number | null; goalieInNetId: number | null;
   assist1PlayerId: number | null; assist2PlayerId: number | null;
   situationCode: string; homeScore: number | null; awayScore: number | null;
 }
 export interface CanonicalNhlGameFacts {
-  schemaVersion: 2; gameId: number; gameState: 'scheduled' | 'live' | 'final';
+  schemaVersion: 3; gameId: number; gameState: 'scheduled' | 'live' | 'final';
   sourceGameState: string; sourceGameScheduleState: string; gameDate: string;
   startTimeUTC: string; period: number | null; periodType: string;
   clockTimeRemaining: string; clockRunning: boolean; inIntermission: boolean;
+  homeTeamId: number; awayTeamId: number;
   homeTeamAbbreviation: string; awayTeamAbbreviation: string;
   homeScore: number; awayScore: number; skaters: CanonicalNhlSkaterFacts[];
   goalies: CanonicalNhlGoalieFacts[]; goals: CanonicalNhlGoalEvent[];
@@ -105,7 +107,7 @@ function rawFinalGame() {
       inIntermission: false, gameDate: '2026-10-10', startTimeUTC: '2026-10-11T00:00:00Z',
     },
     boxscore: {
-      homeTeam: { abbrev: 'MIN', score: 3 }, awayTeam: { abbrev: 'WPG', score: 1 },
+      homeTeam: { id: 30, abbrev: 'MIN', score: 3 }, awayTeam: { id: 52, abbrev: 'WPG', score: 1 },
       playerByGameStats: {
         homeTeam: {
           forwards: [{ playerId: 101, name: { default: 'Home Skater' }, position: 'C', goals: 1, assists: 1, points: 2, plusMinus: 1, hits: 2, powerPlayGoals: 0, sog: 3, toi: '20:30', blockedShots: 1 }],
@@ -116,8 +118,8 @@ function rawFinalGame() {
       },
     },
     playByPlay: { plays: [
-      { eventId: 1, typeDescKey: 'goal', periodDescriptor: { number: 1, periodType: 'REG' }, timeInPeriod: '05:00', details: { scoringPlayerId: 101, assist1PlayerId: 102, situationCode: '1551', homeScore: 1, awayScore: 0 } },
-      { eventId: 2, typeDescKey: 'goal', periodDescriptor: { number: 3, periodType: 'REG' }, timeInPeriod: '19:00', details: { scoringPlayerId: 103, assist1PlayerId: 101, situationCode: '1551', homeScore: 3, awayScore: 1 } },
+      { eventId: 1, typeDescKey: 'goal', periodDescriptor: { number: 1, periodType: 'REG' }, timeInPeriod: '05:00', details: { scoringPlayerId: 101, eventOwnerTeamId: 30, goalieInNetId: 202, assist1PlayerId: 102, situationCode: '1551', homeScore: 1, awayScore: 0 } },
+      { eventId: 2, typeDescKey: 'goal', periodDescriptor: { number: 3, periodType: 'REG' }, timeInPeriod: '19:00', details: { scoringPlayerId: 103, eventOwnerTeamId: 30, goalieInNetId: 202, assist1PlayerId: 101, situationCode: '1551', homeScore: 3, awayScore: 1 } },
     ] },
   };
 }
@@ -152,7 +154,7 @@ function completeFinalInputEvidence(sourceVersion) {
     },
     teamGoalieUnit: {
       status: 'complete', complete: true, reusableFinal: true, sourceVersion,
-      requiredSources: ['boxscore', 'source-version'], failures: [],
+      requiredSources: ['boxscore', 'play-by-play', 'source-version'], failures: [],
     },
   };
 }
@@ -163,7 +165,7 @@ test('final player logs settle one canonical game record and change its final ha
   const after = parityFacts();
   const afterHash = buildCanonicalNhlGameHashes(after).finalSettlementHash;
 
-  assert.equal(CANONICAL_NHL_FACTS_SCHEMA_VERSION, 2);
+  assert.equal(CANONICAL_NHL_FACTS_SCHEMA_VERSION, 3);
   assert.equal(after.finalSettlements.length, 1);
   assert.deepEqual(after.finalSettlementPlayerIds, [101]);
   assert.deepEqual(after.finalSettlements[0], {

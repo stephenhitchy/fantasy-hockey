@@ -139,6 +139,10 @@ function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
 function getGameState(game: NhlScoreGame): string {
   return normalizedString(game.gameState).toUpperCase();
 }
@@ -172,20 +176,35 @@ function getPreviousCanonicalFacts(
 
   const candidate = facts as Partial<CanonicalNhlGameFacts>;
 
-  if (typeof candidate.gameId !== 'number' || !Number.isFinite(candidate.gameId)) {
+  if (
+    candidate.schemaVersion !== CANONICAL_NHL_FACTS_SCHEMA_VERSION ||
+    typeof candidate.gameId !== 'number' ||
+    !Number.isFinite(candidate.gameId) ||
+    !isPositiveInteger(candidate.homeTeamId) ||
+    !isPositiveInteger(candidate.awayTeamId) ||
+    candidate.homeTeamId === candidate.awayTeamId ||
+    !Array.isArray(candidate.skaters) ||
+    !Array.isArray(candidate.goalies) ||
+    !Array.isArray(candidate.goals) ||
+    !Array.isArray(candidate.finalSettlements) ||
+    !Array.isArray(candidate.finalSettlementPlayerIds) ||
+    !candidate.goals.every((goal) =>
+      goal &&
+      typeof goal === 'object' &&
+      typeof goal.periodType === 'string' &&
+      (
+        goal.periodType.trim().toUpperCase() !== 'SO' ||
+        (
+          goal.eventOwnerTeamId === candidate.homeTeamId ||
+          goal.eventOwnerTeamId === candidate.awayTeamId
+        )
+      )
+    )
+  ) {
     return null;
   }
 
-  return {
-    ...candidate,
-    schemaVersion: CANONICAL_NHL_FACTS_SCHEMA_VERSION,
-    finalSettlements: Array.isArray(candidate.finalSettlements)
-      ? candidate.finalSettlements
-      : [],
-    finalSettlementPlayerIds: Array.isArray(candidate.finalSettlementPlayerIds)
-      ? candidate.finalSettlementPlayerIds
-      : [],
-  } as CanonicalNhlGameFacts;
+  return candidate as CanonicalNhlGameFacts;
 }
 
 function getFinalSettlementStage(data: DocumentData | undefined): number {
@@ -498,11 +517,31 @@ async function observeCanonicalGame(input: {
     getGameBoxscore(input.game.id, 'near-live-canary'),
     getGamePlayByPlay(input.game.id, 'near-live-canary'),
   ]);
-  const finalBoxscoreState = validateNhlFinalCanonicalBoxscore(boxscore);
-  const finalPlayByPlayState = validateNhlFinalPlayByPlay(playByPlay);
+  const gameEndedInShootout =
+    typeof boxscore.gameOutcome?.lastPeriodType === 'string' &&
+    boxscore.gameOutcome.lastPeriodType.trim().toUpperCase() === 'SO';
+  const finalBoxscoreState = validateNhlFinalCanonicalBoxscore(boxscore, {
+    requireTeamIds: true,
+    requireGameOutcome: true,
+  });
+  const finalPlayByPlayState = validateNhlFinalPlayByPlay(playByPlay, {
+    requireShootoutTeamAttribution: true,
+    expectedShootoutTeamIds: [boxscore.homeTeam?.id, boxscore.awayTeam?.id]
+      .filter((teamId): teamId is number => Number.isInteger(teamId)),
+    requireCompletedShootout: true,
+    gameEndedInShootout,
+  });
+  const finalPlayByPlayStateV5 = validateNhlFinalPlayByPlay(playByPlay, {
+    requireShootoutTeamAttribution: true,
+    expectedShootoutTeamIds: [boxscore.homeTeam?.id, boxscore.awayTeam?.id]
+      .filter((teamId): teamId is number => Number.isInteger(teamId)),
+    requireCompletedShootout: true,
+    gameEndedInShootout,
+    ignoreShootoutAssistFields: true,
+  });
   const finalBaseSourcesComplete =
     finalBoxscoreState.availability === 'available' &&
-    finalPlayByPlayState.availability === 'available';
+    finalPlayByPlayStateV5.availability === 'available';
   let facts = buildCanonicalNhlGameFacts({
     scoreboard: {
       gameId: input.game.id,
@@ -521,14 +560,24 @@ async function observeCanonicalGame(input: {
   });
   const previousFacts = getPreviousCanonicalFacts(input.previousData);
   const firstObservedFinalAtMilliseconds = facts.gameState === 'final'
-    ? toMilliseconds(input.previousData?.['firstObservedFinalAt']) ||
-      input.nowMilliseconds
+    ? previousFacts
+      ? toMilliseconds(input.previousData?.['firstObservedFinalAt']) ||
+        input.nowMilliseconds
+      : input.nowMilliseconds
     : 0;
-  let finalSettlementStage = getFinalSettlementStage(input.previousData);
+  // A stale canonical schema must rebuild its final settlement evidence rather
+  // than borrowing checkpoint state from a document whose fact shape is no
+  // longer accepted.
+  let finalSettlementStage = previousFacts
+    ? getFinalSettlementStage(input.previousData)
+    : 0;
   let finalSettlementFailures: FinalSettlementFailure[] = [];
   const relevantFinalPlayerIds = [...new Set(
     input.finalSettlementPlayerIds
-      .filter((playerId) => facts.skaters.some((entry) => entry.playerId === playerId))
+      .filter((playerId) =>
+        facts.skaters.some((entry) => entry.playerId === playerId) ||
+        facts.goals.some((goal) => goal.scoringPlayerId === playerId)
+      )
       .map((playerId) => Math.trunc(playerId)),
   )].sort((left, right) => left - right);
 
@@ -641,10 +690,31 @@ async function observeCanonicalGame(input: {
         teamGoalieUnit: assessNhlFinalInputCompleteness({
           assetType: 'team-goalie-unit',
           boxscore: finalBoxscoreState,
-          playByPlay: { availability: 'not-required' },
+          playByPlay: finalPlayByPlayState,
           playerLog: { availability: 'not-required' },
           sourceVersion: hashes.sourceVersion,
+          requireGoaliePlayByPlay: true,
         }),
+        // Canonical NHL facts are shared by leagues on different scoring
+        // versions. Preserve the legacy V3/V4 validator above while allowing
+        // V5 parity to apply its assist-free shootout evidence contract.
+        scoringV5: {
+          skater: assessNhlFinalInputCompleteness({
+            assetType: 'skater',
+            boxscore: finalBoxscoreState,
+            playByPlay: finalPlayByPlayStateV5,
+            playerLog: finalPlayerLogState,
+            sourceVersion: hashes.sourceVersion,
+          }),
+          teamGoalieUnit: assessNhlFinalInputCompleteness({
+            assetType: 'team-goalie-unit',
+            boxscore: finalBoxscoreState,
+            playByPlay: finalPlayByPlayStateV5,
+            playerLog: { availability: 'not-required' },
+            sourceVersion: hashes.sourceVersion,
+            requireGoaliePlayByPlay: true,
+          }),
+        },
       }
     : {};
   const payload = {
@@ -1010,8 +1080,13 @@ export const pollCanonicalNhlImpactFeed = onSchedule(
           previous?.['firstObservedFinalAt'],
         );
         const finalInputIncomplete = previous?.['finalSettlementComplete'] === false;
+        const canonicalSchemaStale =
+          previous?.['schemaVersion'] !== CANONICAL_NHL_FACTS_SCHEMA_VERSION ||
+          previous?.['facts']?.['schemaVersion'] !==
+            CANONICAL_NHL_FACTS_SCHEMA_VERSION;
 
         return firstObservedFinalAt <= 0 ||
+          canonicalSchemaStale ||
           finalInputIncomplete ||
           startedAt - firstObservedFinalAt <=
             CANONICAL_NHL_FINAL_RECONCILIATION_MILLISECONDS;

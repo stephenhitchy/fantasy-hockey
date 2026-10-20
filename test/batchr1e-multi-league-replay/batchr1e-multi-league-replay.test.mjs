@@ -167,11 +167,11 @@ test('R1E scripts, documentation, and Functions-first deployment are recorded', 
 test('competitive scoring, Projection V11, Firestore rules, and indexes remain unchanged', async () => {
   assert.equal(
     await sha256('src/app/core/scoring/scoring-rules.ts'),
-    '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da',
+    'c23f8c77dd80fb0703557242a5d116eb22c3d283c130a38a38566f8f59b80c7b',
   );
   assert.equal(
     await sha256('src/app/core/scoring/scoring-engine.ts'),
-    '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3',
+    '59036bf3a036999740b5fc34b517e4602ff6c6a54af664bfca1f8327b5d24c2f',
   );
   assert.equal(
     await sha256('src/app/core/projection/projection-v11.util.ts'),
@@ -183,6 +183,6 @@ test('competitive scoring, Projection V11, Firestore rules, and indexes remain u
   );
   assert.equal(
     await sha256('firestore.indexes.json'),
-    '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13',
+    '8e2798abd1f659d752e6fad8910ac249025e140c7ec6d03e3d336d2c814d096a',
   );
 });

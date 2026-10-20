@@ -62,6 +62,10 @@ export class ScoringGuide {
   );
 
   readonly cycleGameCount = computed(() => this.rules().requiredGamesPerCycle);
+  readonly shootoutScoringEnabled = computed(() =>
+    typeof this.rules().shootoutGoal === 'number' &&
+    this.rules().shootoutGoal! > 0,
+  );
 
   readonly forwardRows = computed<ScoringRow[]>(() => {
     const rules = this.rules().forward;
@@ -100,32 +104,59 @@ export class ScoringGuide {
     ];
   });
 
-  readonly goalieRows = computed<ScoringRow[]>(() => [
-    perStatRow('Completed NHL team game', this.rules().goalieGameBase, 'Participation base for the team goalie unit'),
-    perStatRow('Save', this.rules().goalieSave, 'Every official save made by the team goalie unit'),
-    {
+  readonly goalieRows = computed<ScoringRow[]>(() => {
+    const rows: ScoringRow[] = [
+      perStatRow('Completed NHL team game', this.rules().goalieGameBase, 'Participation base for the team goalie unit'),
+      perStatRow('Save', this.rules().goalieSave, 'Every official save made by the team goalie unit'),
+      {
       label: 'Save quality',
       value: `${signedPoints(this.rules().goalieSavePercentageMinimum)} to +${formatPoints(this.rules().goalieSavePercentageMaximum)} pts`,
       note: `Starts at ${formatPoints(this.rules().goalieSavePercentageBasePoints)} points at ${(this.rules().goalieSavePercentageBaseline * 100).toFixed(1)}% save percentage. Each percentage point above or below that baseline changes the score by ${formatPoints(this.rules().goalieSavePercentagePointsPerPercentagePoint)}.`,
       term: 'save-percentage',
-    },
-    bonusRow('Win', this.rules().goalieWin, 'Awarded when the NHL team wins the game'),
-    bonusRow('Shutout', this.rules().goalieShutout, 'Stacks with the win and all other goalie scoring'),
-    {
+      },
+      bonusRow('Win', this.rules().goalieWin, 'Awarded when the NHL team wins the game'),
+      bonusRow('Shutout', this.rules().goalieShutout, 'Stacks with the win and all other goalie scoring'),
+    ];
+
+    if (this.rules().shootoutGoalBreaksGoalieShutout === true) {
+      rows.push({
+        label: 'Shootout goal against',
+        value: 'Shutout removed',
+        note: 'Shootout attempts never change saves, shots against, save percentage, or goals against. One successful opposing attempt removes only the RinkRat shutout bonus.',
+      });
+    }
+
+    rows.push({
       label: 'Maximum per NHL game',
       value: this.rules().goalieGameMaximum > 0
         ? `${formatPoints(this.rules().goalieGameMaximum)} pts`
         : 'No cap',
       note: this.rules().goalieGameMaximum > 0
         ? 'This older league keeps its saved per-game maximum.'
-        : 'Production Scoring V4 keeps the full result. Poor efficiency can score negatively, while an exceptional win or shutout is not flattened.',
-    },
-  ]);
+        : `Scoring V${this.scoringRulesVersion()} keeps the full result. Poor efficiency can score negatively, while an exceptional win or shutout is not flattened.`,
+    });
 
-  readonly commonBonusRows = computed<ScoringRow[]>(() => [
-    bonusRow('Game-winning goal', this.rules().gameWinningGoal, 'Stacks with the goal and any special-teams points', 'game-winning-goal'),
-    bonusRow('Overtime goal', this.rules().overtimeGoal, 'Stacks with the goal and game-winning-goal bonus when both apply'),
-  ]);
+    return rows;
+  });
+
+  readonly commonBonusRows = computed<ScoringRow[]>(() => {
+    const rows = [
+      bonusRow('Game-winning goal', this.rules().gameWinningGoal, 'Stacks with the goal and any special-teams points', 'game-winning-goal'),
+      bonusRow('Overtime goal', this.rules().overtimeGoal, 'Stacks with the goal and game-winning-goal bonus when both apply'),
+    ];
+
+    if (typeof this.rules().shootoutGoal === 'number') {
+      rows.push(
+        bonusRow(
+          'Shootout goal',
+          this.rules().shootoutGoal!,
+          'A separate flat bonus for each successful shootout attempt. It does not count as a goal, shot, assist, or special-teams point.',
+        ),
+      );
+    }
+
+    return rows;
+  });
 
   readonly saveQualityExamples = computed<SaveQualityExample[]>(() =>
     [0.85, 0.88, 0.9, 0.91, 0.92, 0.93, 0.95].map((percentage) => ({
@@ -149,6 +180,7 @@ export class ScoringGuide {
         shortHandedPoints: 0,
         gameWinningGoal: true,
         overtimeGoal: false,
+        shootoutGoals: 0,
         timeOnIceMinutes: 18,
       },
       this.rules(),
@@ -170,6 +202,7 @@ export class ScoringGuide {
         shortHandedPoints: 0,
         gameWinningGoal: false,
         overtimeGoal: false,
+        shootoutGoals: 0,
         timeOnIceMinutes: 23,
       },
       this.rules(),
@@ -183,6 +216,7 @@ export class ScoringGuide {
         shotsAgainst: 32,
         won: true,
         shutout: false,
+        shootoutGoalsAgainst: 0,
       },
       this.rules(),
     ),

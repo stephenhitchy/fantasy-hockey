@@ -238,9 +238,14 @@ test('Projection V11 and Draft math carry Scoring V4 identity without changing P
   assert.match(hashUtility, /PROJECTION_SNAPSHOT_LEGACY_HASH_SCHEMA_VERSION = 1/);
   assert.match(hashUtility, /PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION = 2/);
   assert.match(hashUtility, /canonical\['scoringRulesVersion'\] = input\.scoringRulesVersion/);
-  assert.match(serverSnapshot, /must be migrated to Production Scoring V\$\{CURRENT_SCORING_RULES_VERSION\}/);
-  assert.match(serverSnapshot, /before emergency Projection V\$\{SHARED_PROJECTION_VERSION\} rankings can be generated/);
-  assert.match(clientSnapshot, /metadata\.scoringRulesVersion !== CURRENT_SCORING_RULES_VERSION/);
+  assert.match(serverSnapshot, /function requireCurrentProjectionScoringRulesVersion/);
+  assert.match(serverSnapshot, /normalized !== SCORING_RULES_V4_VERSION/);
+  assert.match(serverSnapshot, /normalized !== SCORING_RULES_V5_VERSION/);
+  assert.match(clientSnapshot, /function isCurrentProjectionScoringRulesVersion/);
+  assert.match(
+    clientSnapshot,
+    /value === SCORING_RULES_V4_VERSION \|\| value === SCORING_RULES_V5_VERSION/,
+  );
   assert.match(draftPool, /uncapped Production Scoring V4 save quality, wins, and shutouts/);
   assert.doesNotMatch(draftPool, /Math\.min\([^\n]*goalieGameMaximum/);
 });
@@ -277,8 +282,7 @@ test('league creation, authority repair, scoring, Draft readiness, and projectio
 
   assert.match(lifecycle, /scoringRulesVersion: CURRENT_SCORING_RULES_VERSION/);
   assert.match(lifecycle, /Authority-schema repair must never double as a scoring migration/);
-  assert.match(lifecycle, /const scoringRulesVersion = storedScoringVersion >= CURRENT_SCORING_RULES_VERSION/);
-  assert.match(lifecycle, /: SCORING_RULES_V3_VERSION;/);
+  assert.match(lifecycle, /resolveScoringRulesVersion\(\s*input\.data\['scoringRulesVersion'\]/);
   assert.match(lifecycle, /const scoringRules = scoringRulesForVersion\(scoringRulesVersion\)/);
   assert.match(automation, /scoringRulesForVersion\(version\)/);
   assert.match(automation, /V3 leagues remain V3 until the guarded preseason V4 migration/);
@@ -307,6 +311,8 @@ test('migration, inspection, and preseason rollback are guarded and never rewrit
   assert.match(migration, /classifyScoringV4Migration/);
   assert.match(migration, /--eligible-only/);
   assert.match(migration, /will skip .* blocked league/);
+  assert.match(migration, /db\.runTransaction/);
+  assert.match(migration, /sourceScoringRulesVersionValid/);
   assert.match(migration, /projectionPointerRefs/);
   assert.match(migration, /immutableCompletedWindowsRewritten: false/);
   assert.match(migration, /projectionAssetsRewritten: false/);
@@ -318,6 +324,7 @@ test('migration, inspection, and preseason rollback are guarded and never rewrit
   assert.match(inspection, /Preserved V3 leagues with competition history/);
   assert.match(inspection, /Inspection only\. No league, score, cycle, window, standing, roster, Draft, transaction, waiver, or projection was changed/);
   assert.match(rollback, /ROLLBACK_PRESEASON_ONLY/);
+  assert.match(rollback, /db\.runTransaction/);
   assert.match(rollback, /blocked once any competition cycle exists/);
   assert.match(rollback, /projectionPointerRefs/);
   assert.match(rollback, /immutableCompletedWindowsRewritten: false/);
@@ -332,6 +339,7 @@ test('migration, inspection, and preseason rollback are guarded and never rewrit
 test('the migration classifier permits only deliberate preseason or exact disposable-test transitions', () => {
   assert.deepEqual(classifyScoringV4Migration({
     alreadyV4: false,
+    sourceScoringRulesVersion: 3,
     cycleCount: 0,
     completedCycleCount: 0,
     pickCount: 0,
@@ -341,6 +349,7 @@ test('the migration classifier permits only deliberate preseason or exact dispos
 
   assert.deepEqual(classifyScoringV4Migration({
     alreadyV4: false,
+    sourceScoringRulesVersion: 3,
     cycleCount: 1,
     completedCycleCount: 1,
     pickCount: 3,
@@ -355,6 +364,7 @@ test('the migration classifier permits only deliberate preseason or exact dispos
 
   assert.deepEqual(classifyScoringV4Migration({
     alreadyV4: false,
+    sourceScoringRulesVersion: 3,
     cycleCount: 3,
     completedCycleCount: 2,
     pickCount: 90,
@@ -364,12 +374,34 @@ test('the migration classifier permits only deliberate preseason or exact dispos
 
   assert.deepEqual(classifyScoringV4Migration({
     alreadyV4: false,
+    sourceScoringRulesVersion: 3,
     cycleCount: 0,
     completedCycleCount: 0,
     pickCount: 0,
     draftStatus: 'live',
     allowMixedHistory: true,
   }).blockers, ['draft-status-live']);
+
+  assert.deepEqual(classifyScoringV4Migration({
+    alreadyV4: false,
+    sourceScoringRulesVersion: 5,
+    cycleCount: 0,
+    completedCycleCount: 0,
+    pickCount: 0,
+    draftStatus: 'scheduled',
+    allowMixedHistory: true,
+  }).blockers, ['newer-scoring-version']);
+
+  assert.deepEqual(classifyScoringV4Migration({
+    alreadyV4: false,
+    sourceScoringRulesVersion: 0,
+    sourceScoringRulesVersionValid: false,
+    cycleCount: 0,
+    completedCycleCount: 0,
+    pickCount: 0,
+    draftStatus: 'scheduled',
+    allowMixedHistory: true,
+  }).blockers, ['invalid-scoring-version']);
 
   assert.equal(isProjectionPointerId('current'), true);
   assert.equal(isProjectionPointerId('target-cycle-12'), true);
@@ -418,7 +450,7 @@ test('the six-game window remains frozen and server scoring matches the D1L-B re
 
   assert.equal(serverSelection, clientSelection);
   assert.equal(sha256(serverSelection), 'fbd0683f7dda81406248921545a3dfaa8e247818b06366e821763615e7eb063c');
-  assert.equal(sha256(serverScoring), '60512a443916e9551a31ced8505d63d2b5dc343af5df1617a7de023f17192316');
+  assert.equal(sha256(serverScoring), 'bb0550c81d47caf5a8bcb61c670bae832e281cb13cdae8f08ef23d19ffde77a6');
 });
 
 test('RC51 release identity and inherited safety controls are preserved', async () => {

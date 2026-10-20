@@ -900,7 +900,7 @@ test('FF1.31 records narrow deployment, rollback, and protected contracts', asyn
   assert.match(packageJson.scripts['test:batchff1-15'], /emulators:exec/);
   assert.equal(
     createHash('sha256').update(scoring).digest('hex'),
-    '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da',
+    'c23f8c77dd80fb0703557242a5d116eb22c3d283c130a38a38566f8f59b80c7b',
   );
   assert.equal(
     createHash('sha256').update(projection).digest('hex'),

@@ -1,6 +1,6 @@
 # RinkRat Codebase Guide
 
-Last verified against source: 2026-09-21
+Last verified against source: 2026-09-29
 
 ## Purpose
 
@@ -37,6 +37,9 @@ Before changing code:
 These are product contracts, not implementation suggestions:
 
 - Production Scoring V4 is the production scoring system.
+- Scoring V5 shootout support exists as an opt-in, preseason-only candidate;
+  it is not the production default. See
+  `docs/RINKRAT_SCORING_V5_SHOOTOUT_SCORING.md` before changing that boundary.
 - Projection V11 is the production projection model.
 - Prospect Projection Layer V1 is an optional, disabled-by-default evidence
   adapter into Projection V11. Its contract and current data-source limitation
@@ -198,6 +201,9 @@ The main client domains are:
   release simulations.
 - `scoring/`: scoring rules and engine helpers. Treat this as protected even
   when a function appears pure.
+- `nhl/nhl-shootout.util.ts`: pure successful-shootout-event parsing shared
+  with the server copy. It never converts a shootout attempt into an ordinary
+  NHL goal, shot, assist, or goalie save.
 - `team/`: roster and team models, configuration, normalization, and reads.
 - `transactions/`: server-authority adapters and non-authoritative eligibility
   previews for roster actions.

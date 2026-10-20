@@ -615,6 +615,7 @@ function hasReusableStoredFinal(input: {
   window: FantasyAssetCycleWindow;
   gameId: number;
   score: unknown;
+  scoringRules: ScoringRules;
 }): boolean {
   const assetType = assetTypeForWindow(input.window);
 
@@ -623,6 +624,9 @@ function hasReusableStoredFinal(input: {
     gameState: input.window.gameStates[String(input.gameId)],
     score: input.score,
     completeness: input.window.gameInputCompleteness?.[String(input.gameId)],
+    requireGoaliePlayByPlay:
+      assetType === 'team-goalie-unit' &&
+      input.scoringRules.shootoutGoalBreaksGoalieShutout === true,
   });
 }
 
@@ -973,6 +977,7 @@ export function reconcileFinalizedWindow(input: {
       window: input.window,
       gameId,
       score: storedPoints,
+      scoringRules: input.scoringRules,
     })) {
       result.unverifiableGameCount += 1;
       pushFinding({

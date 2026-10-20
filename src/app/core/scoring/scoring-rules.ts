@@ -23,7 +23,15 @@ export interface GoalieSavePercentageTier {
 }
 
 export const SCORING_RULES_V3_VERSION = 3;
+export const SCORING_RULES_V4_VERSION = 4;
+export const SCORING_RULES_V5_VERSION = 5;
 export const CURRENT_SCORING_RULES_VERSION = 4;
+export const LATEST_SUPPORTED_SCORING_RULES_VERSION = SCORING_RULES_V5_VERSION;
+
+export type SupportedScoringRulesVersion =
+  | typeof SCORING_RULES_V3_VERSION
+  | typeof SCORING_RULES_V4_VERSION
+  | typeof SCORING_RULES_V5_VERSION;
 
 /** Legacy Production Scoring V3 goalie maximum. V4 is intentionally uncapped. */
 export const DEFAULT_GOALIE_GAME_MAXIMUM = 28;
@@ -37,6 +45,14 @@ export interface ScoringRules {
 
   gameWinningGoal: number;
   overtimeGoal: number;
+
+  /**
+   * Shootout successes are a separate fantasy event. Legacy V3/V4 rules omit
+   * these fields so their serialized contracts and historical fingerprints
+   * remain unchanged.
+   */
+  shootoutGoal?: number;
+  shootoutGoalBreaksGoalieShutout?: boolean;
 
   forwardToiMultiplier: number;
 
@@ -192,7 +208,7 @@ export const scoringRulesV3: ScoringRules = {
  * more separation between elite, average, and poor units without making raw
  * goalie totals comparable to skaters.
  */
-export const defaultScoringRules: ScoringRules = {
+export const scoringRulesV4: ScoringRules = {
   ...sharedSkaterRules,
   forward: {
     ...sharedSkaterRules.forward,
@@ -224,10 +240,92 @@ export const defaultScoringRules: ScoringRules = {
   goalieGameMaximum: UNLIMITED_GOALIE_GAME_MAXIMUM,
 };
 
+/**
+ * Scoring V5 adds only the isolated Shootout Goal category and the matching
+ * team-goalie-unit shutout rule. It remains opt-in until a guarded preseason
+ * migration activates it; Projection V11 and every ordinary skater/goalie
+ * value remain identical to V4.
+ */
+export const scoringRulesV5: ScoringRules = {
+  ...scoringRulesV4,
+  forward: {
+    ...scoringRulesV4.forward,
+    goal: { ...scoringRulesV4.forward.goal },
+    primaryAssist: { ...scoringRulesV4.forward.primaryAssist },
+    secondaryAssist: { ...scoringRulesV4.forward.secondaryAssist },
+  },
+  defense: {
+    ...scoringRulesV4.defense,
+    goal: { ...scoringRulesV4.defense.goal },
+    primaryAssist: { ...scoringRulesV4.defense.primaryAssist },
+    secondaryAssist: { ...scoringRulesV4.defense.secondaryAssist },
+  },
+  goalieSavePercentageTiers: scoringRulesV4.goalieSavePercentageTiers.map(
+    (tier) => ({ ...tier }),
+  ),
+  shootoutGoal: 2,
+  shootoutGoalBreaksGoalieShutout: true,
+};
+
+/** New and existing production leagues remain on V4 until explicitly migrated. */
+export const defaultScoringRules = scoringRulesV4;
+
+export function normalizeScoringRulesVersion(
+  version: unknown,
+): SupportedScoringRulesVersion | null {
+  if (
+    typeof version !== 'number' ||
+    !Number.isInteger(version)
+  ) {
+    return null;
+  }
+
+  if (
+    version === SCORING_RULES_V3_VERSION ||
+    version === SCORING_RULES_V4_VERSION ||
+    version === SCORING_RULES_V5_VERSION
+  ) {
+    return version;
+  }
+
+  return null;
+}
+
+/**
+ * Resolves stored league versions without silently translating malformed data
+ * into a different scoring contract. Missing and pre-V3 integer versions are
+ * the only legacy values allowed to inherit the frozen V3 rules.
+ */
+export function resolveScoringRulesVersion(
+  version: unknown,
+): SupportedScoringRulesVersion {
+  const normalizedVersion = normalizeScoringRulesVersion(version);
+
+  if (normalizedVersion !== null) return normalizedVersion;
+  if (version === undefined || version === null) {
+    return SCORING_RULES_V3_VERSION;
+  }
+  if (
+    typeof version === 'number' &&
+    Number.isFinite(version) &&
+    Number.isInteger(version)
+  ) {
+    if (version < SCORING_RULES_V3_VERSION) {
+      return SCORING_RULES_V3_VERSION;
+    }
+    throw new Error(`Unsupported future scoring-rules version: ${version}.`);
+  }
+
+  throw new Error('Invalid scoring-rules version.');
+}
+
 export function scoringRulesForVersion(version: unknown): ScoringRules {
-  const source =
-    typeof version === 'number' && version >= CURRENT_SCORING_RULES_VERSION
-      ? defaultScoringRules
+  const normalizedVersion = resolveScoringRulesVersion(version);
+
+  const source = normalizedVersion === SCORING_RULES_V5_VERSION
+    ? scoringRulesV5
+    : normalizedVersion === SCORING_RULES_V4_VERSION
+      ? scoringRulesV4
       : scoringRulesV3;
 
   return {

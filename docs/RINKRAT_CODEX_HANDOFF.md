@@ -1,6 +1,6 @@
 # RinkRat Codex Project Handoff
 
-Last updated: 2026-09-16
+Last updated: 2026-09-29
 
 For the current repository map, browser/server authority boundaries, workflow
 traces, and commenting standard, read `docs/RINKRAT_CODEBASE_GUIDE.md`. This
@@ -47,6 +47,17 @@ values in this document as a substitute for those checks.
 - server-authoritative Draft, roster, waiver, IR, scoring, standings, and
   playoff operations
 - team goalie units rather than individual fantasy goalies
+
+### Scoring V5 shootout candidate (not Production)
+
+The source contains a separately versioned Scoring V5 candidate for an
+explicit `shootoutGoals × 2.0` skater category and the approved team-goalie
+shutout rule. Production creation/default behavior remains pinned to Scoring
+V4, and Projection V11 has no shootout projection input. V5 can be exercised
+only through the guarded preseason V4 → V5 transition; it is blocked after a
+Draft pick, live/completed Draft, or competition-cycle history. Read
+`docs/RINKRAT_SCORING_V5_SHOOTOUT_SCORING.md` before any activation or release
+decision.
 
 ## Current scoring architecture
 

@@ -7,10 +7,12 @@ const { applicationDefault, getApps, initializeApp } = require('firebase-admin/a
 const { FieldPath, getFirestore } = require('firebase-admin/firestore');
 
 const {
-  CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
-  defaultScoringRules,
+  SCORING_RULES_V4_VERSION,
+  SCORING_RULES_V5_VERSION,
   scoringRulesV3,
+  scoringRulesV4,
+  scoringRulesV5,
 } = require('../lib/shared/core/scoring/scoring-rules.js');
 
 const projectArgument = process.argv.find((value) => value.startsWith('--project='));
@@ -75,8 +77,8 @@ async function loadLeagues(db) {
 
 function classifyRules(data) {
   if (
-    data.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION &&
-    stableJson(data.scoringRules) === stableJson(defaultScoringRules)
+    data.scoringRulesVersion === SCORING_RULES_V4_VERSION &&
+    stableJson(data.scoringRules) === stableJson(scoringRulesV4)
   ) {
     return 'v4';
   }
@@ -85,6 +87,12 @@ function classifyRules(data) {
     stableJson(data.scoringRules) === stableJson(scoringRulesV3)
   ) {
     return 'v3';
+  }
+  if (
+    data.scoringRulesVersion === SCORING_RULES_V5_VERSION &&
+    stableJson(data.scoringRules) === stableJson(scoringRulesV5)
+  ) {
+    return 'v5';
   }
   return 'invalid';
 }
@@ -97,9 +105,11 @@ function inspectProjectionPointer(pointer, scoringClass) {
   }
 
   const data = pointer.data() ?? {};
-  const expectedVersion = scoringClass === 'v4'
-    ? CURRENT_SCORING_RULES_VERSION
-    : SCORING_RULES_V3_VERSION;
+  const expectedVersion = scoringClass === 'v5'
+    ? SCORING_RULES_V5_VERSION
+    : scoringClass === 'v4'
+      ? SCORING_RULES_V4_VERSION
+      : SCORING_RULES_V3_VERSION;
   const issues = [];
 
   if (data.status !== 'ready') issues.push(`current projection status is ${data.status ?? 'missing'}, expected ready`);
@@ -110,8 +120,8 @@ function inspectProjectionPointer(pointer, scoringClass) {
   if (data.generatedByAuthority !== 'server') issues.push('current projection is not server-authoritative');
   if (data.snapshotIntegrityStatus !== 'verified') issues.push('current projection integrity is not verified');
   if (!isSha256(data.snapshotContentHash)) issues.push('current projection content hash is missing');
-  if (scoringClass === 'v4' && data.snapshotHashSchemaVersion !== 2) {
-    issues.push(`current V4 projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, expected 2`);
+  if ((scoringClass === 'v4' || scoringClass === 'v5') && data.snapshotHashSchemaVersion !== 2) {
+    issues.push(`current ${scoringClass.toUpperCase()} projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, expected 2`);
   }
   if (scoringClass === 'v3' && ![1, 2].includes(data.snapshotHashSchemaVersion)) {
     issues.push(`current V3 projection hash schema is ${data.snapshotHashSchemaVersion ?? 'missing'}, expected 1 or 2`);
@@ -124,7 +134,7 @@ async function main() {
   const db = getFirestore();
   const leagues = await loadLeagues(db);
   const issues = [];
-  const counts = { v3: 0, v4: 0, invalid: 0, mixedHistory: 0, preservedLegacyHistory: 0 };
+  const counts = { v3: 0, v4: 0, v5: 0, invalid: 0, mixedHistory: 0, preservedLegacyHistory: 0 };
 
   for (const league of leagues) {
     const data = league.data();
@@ -132,7 +142,7 @@ async function main() {
     counts[scoringClass] += 1;
 
     if (scoringClass === 'invalid') {
-      issues.push(`${league.ref.path}: scoring version/formula is neither canonical V3 nor canonical V4`);
+      issues.push(`${league.ref.path}: scoring version/formula is not canonical V3, V4, or V5`);
       continue;
     }
 
@@ -172,12 +182,14 @@ async function main() {
   console.log(`\nScoring-version inspection for ${projectId}:`);
   console.log(`- Leagues inspected: ${leagues.length}`);
   console.log(`- Canonical V4 leagues: ${counts.v4}`);
+  console.log(`- Canonical V5 leagues: ${counts.v5}`);
   console.log(`- Canonical legacy V3 leagues: ${counts.v3}`);
   console.log(`- Invalid/drifted scoring contracts: ${counts.invalid}`);
   console.log(`- Explicit mixed-history test leagues: ${counts.mixedHistory}`);
   console.log(`- Preserved V3 leagues with competition history: ${counts.preservedLegacyHistory}`);
   console.log(`- Legacy-history allowance: ${allowLegacyHistory ? 'ENABLED' : 'DISABLED'}`);
-  console.log(`- V4 rules fingerprint: ${fingerprint(defaultScoringRules)}`);
+  console.log(`- V4 rules fingerprint: ${fingerprint(scoringRulesV4)}`);
+  console.log(`- V5 rules fingerprint: ${fingerprint(scoringRulesV5)}`);
   console.log(`- V3 rules fingerprint: ${fingerprint(scoringRulesV3)}`);
   console.log(`- Inspection issues: ${issues.length}`);
 

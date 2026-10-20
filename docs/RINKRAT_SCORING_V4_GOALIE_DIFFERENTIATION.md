@@ -222,3 +222,10 @@ It does not change Firestore Rules, Firestore indexes, TTL policies, App Check M
 The original RC50 package referenced `CURRENT_SCORING_RULES_VERSION` in League HQ's last-good Draft snapshot compatibility check without importing it. Angular correctly stopped the build with TS2304. V4A.1 imports the constant from the canonical client scoring-rules module and adds a focused regression assertion.
 
 This is source wiring only. It changes no Production Scoring V4 value, legacy V3 reconstruction, Projection V11 calculation, snapshot hash, migration eligibility, six-game boundary, seventh-game rollover, or production setting.
+
+## Later Scoring V5 candidate
+
+Scoring V4 remains the production/default contract. A later, separately
+versioned shootout category is documented in
+`docs/RINKRAT_SCORING_V5_SHOOTOUT_SCORING.md`; its source support and guarded
+preseason tooling do not change any V4 value or reinterpret V4 history.

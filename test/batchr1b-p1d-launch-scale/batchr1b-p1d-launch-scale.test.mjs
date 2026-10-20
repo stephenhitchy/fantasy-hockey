@@ -333,11 +333,11 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
     read('firestore.indexes.json'),
   ]);
 
-  assert.equal(createHash('sha256').update(rules).digest('hex'), '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da');
-  assert.equal(createHash('sha256').update(engine).digest('hex'), '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3');
+  assert.equal(createHash('sha256').update(rules).digest('hex'), 'c23f8c77dd80fb0703557242a5d116eb22c3d283c130a38a38566f8f59b80c7b');
+  assert.equal(createHash('sha256').update(engine).digest('hex'), '59036bf3a036999740b5fc34b517e4602ff6c6a54af664bfca1f8327b5d24c2f');
   assert.equal(createHash('sha256').update(projection).digest('hex'), 'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9');
   assert.equal(createHash('sha256').update(firestoreRules).digest('hex'), PROTECTED_SOURCE_HASHES.firestoreRules);
-  assert.equal(createHash('sha256').update(indexes).digest('hex'), '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13');
+  assert.equal(createHash('sha256').update(indexes).digest('hex'), '8e2798abd1f659d752e6fad8910ac249025e140c7ec6d03e3d336d2c814d096a');
   assert.equal(
     await hashFunctionsRuntimeIntegrity({
       excludedPaths: new Set([
@@ -482,6 +482,6 @@ test('R1B-P1D preserves Production Scoring V3, Projection V11, Firestore authori
         'src/shared/core/projection/projection-ranking.util.ts',
       ]),
     }),
-    '57df59fffa26f826f129aca1ef694d79cd7e131fe0a5959941eb207b8ea982ea',
+    '7e768aac3be40f34df8b2c846195a222c7a0f7b07f66f29b5454380b472491bc',
   );
 });

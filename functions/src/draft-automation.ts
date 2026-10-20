@@ -67,8 +67,8 @@ import {
   updateScheduledDraftReadinessDocument,
 } from './shared/core/draft/draft-readiness-write.service';
 import {
-  CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
+  resolveScoringRulesVersion,
 } from './shared/core/scoring/scoring-rules';
 import { FantasyRoster } from './shared/core/team/roster.models';
 import {
@@ -396,9 +396,7 @@ interface VerifiedDraftProjectionSnapshot extends SharedProjectionSnapshot {
 }
 
 function normalizeLeagueScoringRulesVersion(value: unknown): number {
-  return typeof value === 'number' && value >= CURRENT_SCORING_RULES_VERSION
-    ? CURRENT_SCORING_RULES_VERSION
-    : SCORING_RULES_V3_VERSION;
+  return resolveScoringRulesVersion(value);
 }
 
 async function getLeagueScoringRulesVersion(leagueId: string): Promise<number> {
@@ -487,7 +485,7 @@ async function sealProjectionSnapshotForDraft(
 async function restoreProjectionPointers(
   leagueId: string,
   snapshot: SharedProjectionSnapshot,
-): Promise<void> {
+): Promise<boolean> {
   const pointerPayload = {
     ...snapshot.metadata,
     snapshotId: snapshot.metadata.activeSnapshotId,
@@ -496,25 +494,41 @@ async function restoreProjectionPointers(
     restoredAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const batch = db.batch();
+  return db.runTransaction(async (transaction) => {
+    const leagueRef = db.doc(`leagues/${leagueId}`);
+    const leagueSnapshot = await transaction.get(leagueRef);
+    let leagueScoringRulesVersion: number;
 
-  batch.set(
-    db.doc(`leagues/${leagueId}/projectionSnapshots/current`),
-    pointerPayload,
-    { merge: true },
-  );
-  batch.set(
-    db.doc(
-      `leagues/${leagueId}/projectionSnapshots/target-cycle-${Math.max(
-        1,
-        snapshot.metadata.targetCycleNumber,
-      )}`,
-    ),
-    pointerPayload,
-    { merge: true },
-  );
+    if (!leagueSnapshot.exists) return false;
+    try {
+      leagueScoringRulesVersion = resolveScoringRulesVersion(
+        leagueSnapshot.data()?.['scoringRulesVersion'],
+      );
+    } catch {
+      return false;
+    }
+    if (leagueScoringRulesVersion !== snapshot.metadata.scoringRulesVersion) {
+      return false;
+    }
 
-  await batch.commit();
+    transaction.set(
+      db.doc(`leagues/${leagueId}/projectionSnapshots/current`),
+      pointerPayload,
+      { merge: true },
+    );
+    transaction.set(
+      db.doc(
+        `leagues/${leagueId}/projectionSnapshots/target-cycle-${Math.max(
+          1,
+          snapshot.metadata.targetCycleNumber,
+        )}`,
+      ),
+      pointerPayload,
+      { merge: true },
+    );
+
+    return true;
+  });
 }
 
 async function loadVerifiedProjectionSnapshotById(
@@ -585,8 +599,10 @@ async function loadVerifiedDraftProjectionSnapshot(
       expectedScoringRulesVersion,
     );
 
-    if (sealedCurrent) {
-      await restoreProjectionPointers(leagueId, sealedCurrent);
+    if (
+      sealedCurrent &&
+      await restoreProjectionPointers(leagueId, sealedCurrent)
+    ) {
       return sealedCurrent;
     }
   }
@@ -634,7 +650,9 @@ async function loadVerifiedDraftProjectionSnapshot(
       continue;
     }
 
-    await restoreProjectionPointers(leagueId, verified);
+    if (!await restoreProjectionPointers(leagueId, verified)) {
+      return null;
+    }
 
     console.warn('Restored the newest verified projection snapshot for draft automation.', {
       leagueId,
@@ -1860,6 +1878,7 @@ async function prepareScheduledDraftReadiness(
 }
 
 async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
+  const leagueRef = db.doc(`leagues/${leagueId}`);
   const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
   const initialDraftSnapshot = await draftRef.get();
 
@@ -1937,9 +1956,28 @@ async function openScheduledDraftIfReady(leagueId: string): Promise<boolean> {
 
   return withContentionRetry(
     () => db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(draftRef);
+      const [leagueSnapshot, snapshot] = await Promise.all([
+        transaction.get(leagueRef),
+        transaction.get(draftRef),
+      ]);
 
-      if (!snapshot.exists) {
+      if (!leagueSnapshot.exists || !snapshot.exists) {
+        return false;
+      }
+
+      let transactionScoringRulesVersion: number;
+      try {
+        transactionScoringRulesVersion = resolveScoringRulesVersion(
+          leagueSnapshot.data()?.['scoringRulesVersion'],
+        );
+      } catch {
+        return false;
+      }
+
+      if (
+        transactionScoringRulesVersion !==
+        projection.metadata.scoringRulesVersion
+      ) {
         return false;
       }
 

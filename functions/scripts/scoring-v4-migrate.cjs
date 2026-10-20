@@ -11,8 +11,8 @@ const {
 } = require('firebase-admin/firestore');
 
 const {
-  CURRENT_SCORING_RULES_VERSION,
-  defaultScoringRules,
+  SCORING_RULES_V4_VERSION,
+  scoringRulesV4,
 } = require('../lib/shared/core/scoring/scoring-rules.js');
 const {
   classifyScoringV4Migration,
@@ -126,8 +126,23 @@ async function loadLeagues(db) {
 }
 
 function scoringMatchesV4(data) {
-  return data.scoringRulesVersion === CURRENT_SCORING_RULES_VERSION &&
-    stableJson(data.scoringRules) === stableJson(defaultScoringRules);
+  return data.scoringRulesVersion === SCORING_RULES_V4_VERSION &&
+    stableJson(data.scoringRules) === stableJson(scoringRulesV4);
+}
+
+function normalizeStoredScoringVersion(value) {
+  if (value === undefined || value === null) {
+    return { valid: true, version: 0 };
+  }
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0
+  ) {
+    return { valid: true, version: value };
+  }
+  return { valid: false, version: 0 };
 }
 
 async function inspectCompetitionState(db, leagueId) {
@@ -170,11 +185,12 @@ async function main() {
     const data = leagueDocument.data();
     const state = await inspectCompetitionState(db, leagueDocument.id);
     const alreadyV4 = scoringMatchesV4(data);
-    const currentVersion = Number.isInteger(data.scoringRulesVersion)
-      ? data.scoringRulesVersion
-      : 0;
+    const storedVersion = normalizeStoredScoringVersion(data.scoringRulesVersion);
+    const currentVersion = storedVersion.version;
     const classification = classifyScoringV4Migration({
       alreadyV4,
+      sourceScoringRulesVersion: currentVersion,
+      sourceScoringRulesVersionValid: storedVersion.valid,
       cycleCount: state.cycleCount,
       completedCycleCount: state.completedCycles,
       pickCount: state.pickCount,
@@ -204,7 +220,11 @@ async function main() {
 
     console.log(
       `${leagueDocument.id}: Scoring V${currentVersion || 'legacy'}; ` +
-      `${alreadyV4 ? 'already canonical V4' : 'V4 update required'};` + blockedLabel + ' ' +
+      `${alreadyV4
+        ? 'already canonical V4'
+        : currentVersion > SCORING_RULES_V4_VERSION
+          ? 'newer scoring version preserved'
+          : 'V4 update required'};` + blockedLabel + ' ' +
       `Draft ${state.draftStatus}; ${state.pickCount} pick(s); ` +
       `${state.cycleCount} cycle document(s), ${state.completedCycles} completed; ` +
       `${state.projectionPointerRefs.length} active pointer(s); ` +
@@ -247,81 +267,151 @@ async function main() {
     return;
   }
 
-  const writer = db.bulkWriter();
-  writer.onWriteError((error) => {
-    if (error.failedAttempts < 4) return true;
-    console.error(`Scoring V4 migration write failed at ${error.documentRef.path}: ${error.message}`);
-    return false;
-  });
-
+  let updatedLeagueCount = 0;
+  let invalidatedProjectionPointerCount = 0;
   for (const plan of updates) {
-    const previousRules = plan.data.scoringRules ?? null;
-    const mixedHistoricalScoring = plan.state.cycleCount > 0 || plan.state.pickCount > 0;
+    const result = await db.runTransaction(async (transaction) => {
+      const leagueId = plan.leagueDocument.id;
+      const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+      const [leagueDocument, cycles, draft, picks, projectionDocuments] =
+        await Promise.all([
+          transaction.get(plan.leagueDocument.ref),
+          transaction.get(db.collection(`leagues/${leagueId}/cycles`).limit(100)),
+          transaction.get(draftRef),
+          transaction.get(
+            db.collection(`leagues/${leagueId}/draft/current/picks`).limit(100),
+          ),
+          transaction.get(
+            db.collection(`leagues/${leagueId}/projectionSnapshots`)
+              .orderBy(FieldPath.documentId())
+              .limit(201),
+          ),
+        ]);
 
-    writer.set(
-      plan.leagueDocument.ref,
-      {
-        scoringRules: defaultScoringRules,
-        scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
-        scoringRulesUpdatedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+      if (!leagueDocument.exists) {
+        throw new Error(`League ${leagueId} disappeared before migration commit.`);
+      }
+      if (projectionDocuments.size > 200) {
+        throw new Error(
+          `League ${leagueId} has more than 200 projection documents; migration stopped before a partial invalidation.`,
+        );
+      }
 
-    if (plan.state.draftExists) {
-      writer.set(
-        plan.state.draftRef,
+      const data = leagueDocument.data();
+      const alreadyV4 = scoringMatchesV4(data);
+      if (alreadyV4) {
+        return { migrated: false, invalidatedProjectionPointerCount: 0 };
+      }
+      const storedVersion = normalizeStoredScoringVersion(data.scoringRulesVersion);
+      const completedCycles = cycles.docs.filter((document) => {
+        const cycle = document.data();
+        return cycle.status === 'complete' || cycle.completedAt != null ||
+          cycle.finalizedAt != null;
+      }).length;
+      const classification = classifyScoringV4Migration({
+        alreadyV4: false,
+        sourceScoringRulesVersion: storedVersion.version,
+        sourceScoringRulesVersionValid: storedVersion.valid,
+        cycleCount: cycles.size,
+        completedCycleCount: completedCycles,
+        pickCount: picks.size,
+        draftStatus: normalizeDraftStatus(draft.exists ? draft.data()?.status : null),
+        allowMixedHistory,
+      });
+
+      if (!classification.eligible) {
+        throw new Error(
+          `League ${leagueId} changed after inspection; blockers: ${formatBlockers(classification.blockers)}.`,
+        );
+      }
+
+      const projectionPointerRefs = projectionDocuments.docs
+        .filter((document) => isProjectionPointerId(document.id))
+        .map((document) => document.ref);
+      const mixedHistoricalScoring = cycles.size > 0 || picks.size > 0;
+
+      transaction.set(
+        plan.leagueDocument.ref,
         {
-          projectionPreparationRequestId: null,
-          projectionPreparationStatus: 'error',
-          serverDraftProjectionSnapshotId: null,
-          serverDraftProjectionSnapshotHash: null,
-          serverDraftProjectionAuthorityVersion: null,
-          serverDraftProjectionCatalogHash: null,
-          serverAutomationMessage:
-            'Scoring upgraded to Production V4. Regenerate and save the verified Projection V11 Draft board before opening the Draft.',
-          serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+          scoringRules: scoringRulesV4,
+          scoringRulesVersion: SCORING_RULES_V4_VERSION,
+          scoringRulesUpdatedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
-    }
 
-    plan.state.projectionPointerRefs.forEach((reference) => writer.delete(reference));
+      if (draft.exists) {
+        transaction.set(
+          draftRef,
+          {
+            projectionPreparationRequestId: null,
+            projectionPreparationStatus: 'error',
+            serverDraftReadinessStatus: null,
+            serverDraftReadinessScheduledStartAt: null,
+            serverDraftReadinessAvailabilityRevision: null,
+            serverDraftReadinessProjectionRequestId: null,
+            serverDraftReadinessProjectionSnapshotId: null,
+            serverDraftReadinessProjectionSnapshotHash: null,
+            serverDraftReadinessAttemptCount: 0,
+            serverDraftReadinessRetryAfterAt: null,
+            serverDraftReadinessMessage: null,
+            serverDraftReadinessUpdatedAt: FieldValue.serverTimestamp(),
+            serverDraftProjectionSnapshotId: null,
+            serverDraftProjectionSnapshotHash: null,
+            serverDraftProjectionAuthorityVersion: null,
+            serverDraftProjectionCatalogHash: null,
+            serverAutomationMessage:
+              'Scoring upgraded to Production V4. Regenerate and save the verified Projection V11 Draft board before opening the Draft.',
+            serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
 
-    writer.set(
-      db.doc(`leagues/${plan.leagueDocument.id}/audit/scoring-v4-upgrade`),
-      {
-        schemaVersion: 2,
-        action: 'scoring-rules-upgraded',
-        authority: AUTHORITY,
-        release: RELEASE,
-        fromVersion: plan.currentVersion,
-        toVersion: CURRENT_SCORING_RULES_VERSION,
-        previousRulesFingerprint: fingerprint(previousRules),
-        scoringRulesFingerprint: fingerprint(defaultScoringRules),
-        mixedHistoricalScoring,
-        testOnlyMixedHistoryOverride: allowMixedHistory,
-        existingDraftStatus: plan.state.draftStatus,
-        existingDraftPickCount: plan.state.pickCount,
-        existingCycleCount: plan.state.cycleCount,
-        completedCycleCount: plan.state.completedCycles,
-        invalidatedProjectionPointerCount: plan.state.projectionPointerRefs.length,
-        skaterRulesChanged: false,
-        goalieRulesChanged: true,
-        immutableCompletedWindowsRewritten: false,
-        projectionAssetsRewritten: false,
-        occurredAt: FieldValue.serverTimestamp(),
-      },
-    );
+      projectionPointerRefs.forEach((reference) => transaction.delete(reference));
+
+      transaction.set(
+        db.doc(`leagues/${leagueId}/audit/scoring-v4-upgrade`),
+        {
+          schemaVersion: 2,
+          action: 'scoring-rules-upgraded',
+          authority: AUTHORITY,
+          release: RELEASE,
+          fromVersion: storedVersion.version,
+          toVersion: SCORING_RULES_V4_VERSION,
+          previousRulesFingerprint: fingerprint(data.scoringRules ?? null),
+          scoringRulesFingerprint: fingerprint(scoringRulesV4),
+          mixedHistoricalScoring,
+          testOnlyMixedHistoryOverride: allowMixedHistory,
+          existingDraftStatus: classification.draftStatus,
+          existingDraftPickCount: picks.size,
+          existingCycleCount: cycles.size,
+          completedCycleCount: completedCycles,
+          invalidatedProjectionPointerCount: projectionPointerRefs.length,
+          skaterRulesChanged: false,
+          goalieRulesChanged: true,
+          immutableCompletedWindowsRewritten: false,
+          projectionAssetsRewritten: false,
+          occurredAt: FieldValue.serverTimestamp(),
+        },
+      );
+
+      return {
+        migrated: true,
+        invalidatedProjectionPointerCount: projectionPointerRefs.length,
+      };
+    });
+
+    if (result.migrated) updatedLeagueCount += 1;
+    invalidatedProjectionPointerCount += result.invalidatedProjectionPointerCount;
   }
-
-  await writer.close();
 
   console.log(`\nProduction Scoring V4 applied for ${projectId}:`);
   console.log(`- Leagues inspected: ${plans.length}`);
-  console.log(`- Leagues updated: ${updates.length}`);
+  console.log(`- Leagues updated: ${updatedLeagueCount}`);
+  console.log(`- Projection pointers invalidated: ${invalidatedProjectionPointerCount}`);
   console.log(`- Already V4: ${plans.filter((plan) => plan.alreadyV4).length}`);
   console.log(`- Blocked/skipped: ${blockers.length}`);
   console.log('- Current/target projection pointers were invalidated; immutable snapshot documents were retained for evidence.');

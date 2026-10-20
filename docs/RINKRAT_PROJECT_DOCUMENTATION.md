@@ -13077,3 +13077,35 @@ D1J binds the exact live build to four independent reports before the 2026–27 
 ## Operations D1J.2 — Release Evidence Repair
 
 D1J.2 stores observed due age separately from the oldest queue-eligible due age, makes Shadow observation informational, and keeps Canary/Primary backlog thresholds tied only to work that can actually dispatch. Release Readiness and the browser launch gate reject dirty or unversioned deployed source revisions before final validation, while the season-freeze CLI retains its independent clean-commit requirement. Firebase Functions and Hosting predeploy hooks verify Git cleanliness before and after builds, and legacy broad npm production deployment commands fail closed so operators use exact release selectors.
+
+## Scoring V5A — Shootout Scoring Candidate
+
+**Candidate date:** 2026-09-29
+
+**Production/default scoring:** Scoring V4
+
+**Supported opt-in scoring:** Scoring V5
+
+V5 adds one separate `shootoutGoals × 2.0` skater category. It never enters
+ordinary goals, shots, assists, special-teams points, game-winning goals,
+overtime goals, multi-goal treatment, NHL season totals, or Projection V11.
+Every successful attempt can score. Misses and saved attempts do not.
+
+Shootout attempts do not affect Team Goalie Unit saves, shots against, goals
+against, save percentage, save quality, or workload. The NHL result continues
+to own the normal win bonus. A successful opposing shootout attempt removes
+only the V5 RinkRat shutout bonus.
+
+Canonical NHL facts advance to schema 3 for stable team/event attribution, and
+V5 goalie finals require play-by-play completeness. V4 remains byte-stable and
+continues to accept its historical boxscore/source-version goalie contract.
+Projection V11 calculations are unchanged, while snapshot and request identity
+bind the exact V4/V5 scoring version.
+
+The V4→V5 migration and V5→V4 rollback are dry-run-first and preseason-only.
+They reject any cycle, Draft pick, live/completed Draft, noncanonical source,
+or mixed scoring history; invalidate only mutable projection pointers and Draft
+projection pins; and retain immutable snapshots. No deployment or league
+migration was performed. Full behavior and operations guidance is in
+`docs/RINKRAT_SCORING_V5_SHOOTOUT_SCORING.md`; verification is
+`npm run verify:batchv5a` followed by `npm run build:all`.

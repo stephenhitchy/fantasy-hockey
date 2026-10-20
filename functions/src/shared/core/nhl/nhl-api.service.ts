@@ -1,4 +1,10 @@
 import { queueNhlSharedCacheObservation } from './nhl-shared-cache.service';
+import {
+  getSkaterShootoutGoals,
+  getTeamShootoutGoals,
+} from './nhl-shootout.util';
+
+export { getSkaterShootoutGoals, getTeamShootoutGoals };
 
 const NHL_API_BASE_URL = 'https://api-web.nhle.com/v1';
 
@@ -223,6 +229,9 @@ export interface NhlScoreGame {
     running?: boolean;
     inIntermission?: boolean;
   };
+  gameOutcome?: {
+    lastPeriodType?: string;
+  };
   awayTeam: NhlScoreTeam;
   homeTeam: NhlScoreTeam;
 }
@@ -323,8 +332,11 @@ export interface NhlGoalieBoxscoreLine {
 
 export interface NhlPlayByPlayEventDetails {
   scoringPlayerId?: number;
+  shootingPlayerId?: number;
   assist1PlayerId?: number;
   assist2PlayerId?: number;
+  eventOwnerTeamId?: number;
+  goalieInNetId?: number;
   situationCode?: string;
   homeScore?: number;
   awayScore?: number;
@@ -351,6 +363,11 @@ export interface NhlAssistBreakdown {
   secondaryAssists: number;
 }
 
+export interface NhlAssistBreakdownOptions {
+  /** Scoring V5 treats shootout successes as an isolated, assist-free event. */
+  excludeShootoutGoals?: boolean;
+}
+
 export interface NhlTeamBoxscore {
   forwards?: NhlSkaterBoxscoreLine[];
   defense?: NhlSkaterBoxscoreLine[];
@@ -358,6 +375,7 @@ export interface NhlTeamBoxscore {
 }
 
 export interface NhlGameTeamSummary {
+  id?: number;
   abbrev: string;
   score: number;
 }
@@ -365,6 +383,9 @@ export interface NhlGameTeamSummary {
 export interface NhlGameBoxscoreResponse {
   homeTeam?: NhlGameTeamSummary;
   awayTeam?: NhlGameTeamSummary;
+  gameOutcome?: {
+    lastPeriodType?: string;
+  };
   playerByGameStats?: {
     homeTeam?: NhlTeamBoxscore;
     awayTeam?: NhlTeamBoxscore;
@@ -388,18 +409,31 @@ export interface TeamGoalieUnitResult {
   shotsAgainst: number;
   won: boolean;
   shutout: boolean;
+  shootoutGoalsAgainst: number;
   goalies: TeamGoalieAppearance[];
 }
 
 export function getSkaterAssistBreakdown(
   playByPlay: NhlGamePlayByPlayResponse,
-  playerId: number
+  playerId: number,
+  options: NhlAssistBreakdownOptions = {},
 ): NhlAssistBreakdown {
   let primaryAssists = 0;
   let secondaryAssists = 0;
 
-  for (const play of playByPlay.plays ?? []) {
-    if (play.typeDescKey !== 'goal') {
+  for (const play of Array.isArray(playByPlay?.plays) ? playByPlay.plays : []) {
+    if (!play || typeof play !== 'object') {
+      continue;
+    }
+
+    const periodType = typeof play.periodDescriptor?.periodType === 'string'
+      ? play.periodDescriptor.periodType.trim().toUpperCase()
+      : '';
+
+    if (
+      play.typeDescKey !== 'goal' ||
+      (options.excludeShootoutGoals === true && periodType === 'SO')
+    ) {
       continue;
     }
 
@@ -578,7 +612,8 @@ export function findGoalieBoxscoreLine(
 
 export function getTeamGoalieUnitResult(
   boxscore: NhlGameBoxscoreResponse,
-  teamAbbreviation: string
+  teamAbbreviation: string,
+  playByPlay?: NhlGamePlayByPlayResponse,
 ): TeamGoalieUnitResult | null {
   const team = teamAbbreviation.trim().toUpperCase();
 
@@ -638,6 +673,9 @@ export function getTeamGoalieUnitResult(
     shotsAgainst,
     won,
     shutout: won && opponentSummary.score === 0,
+    shootoutGoalsAgainst: playByPlay
+      ? getTeamShootoutGoals(playByPlay, opponentSummary.id)
+      : 0,
     goalies: activeGoalies.map((goalie) => ({
       name: goalie.name.default,
       starter: goalie.starter,
@@ -1173,4 +1211,3 @@ export async function getGoalieGameSummaryStats(
     cayenneExp: `seasonId=${season} and gameTypeId=2`
   });
 }
-

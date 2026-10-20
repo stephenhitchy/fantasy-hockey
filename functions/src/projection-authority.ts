@@ -18,8 +18,8 @@ import {
 } from './shared/security/firestore-document-id-policies';
 import { TRUSTED_WEB_ORIGINS } from './web-security';
 import {
-  CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
+  resolveScoringRulesVersion,
 } from './shared/core/scoring/scoring-rules';
 import { enforceAppCheckCallableCanaryForLeague } from './app-check-canary-authority';
 import { db } from './shared/core/firebase';
@@ -80,6 +80,7 @@ interface ProjectionGenerationRequestInput {
   leagueId: string;
   generationReason: SharedProjectionGenerationReason;
   targetCycleNumber?: number;
+  scoringRulesVersion?: number;
   availabilityRevision?: string | null;
 }
 
@@ -121,6 +122,7 @@ interface ProjectionRequestDocument {
   targetCycleNumber: number;
   teamCount: number;
   requiredGamesPerCycle: number;
+  scoringRulesVersion: number;
   status: 'queued' | 'processing' | 'ready' | 'error';
   payloadHash: string;
   snapshotId: string | null;
@@ -192,9 +194,14 @@ function requireProjectionIntegrityReason(value: unknown): string {
 }
 
 function normalizeLeagueScoringRulesVersion(value: unknown): number {
-  return typeof value === 'number' && value >= CURRENT_SCORING_RULES_VERSION
-    ? CURRENT_SCORING_RULES_VERSION
-    : SCORING_RULES_V3_VERSION;
+  try {
+    return resolveScoringRulesVersion(value);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : 'Invalid scoring-rules version.',
+    );
+  }
 }
 
 function isIntegrityVerifiedSnapshot(
@@ -268,6 +275,7 @@ function requestPayloadHash(
       leagueId: input.leagueId,
       generationReason: input.generationReason,
       targetCycleNumber: input.targetCycleNumber ?? null,
+      scoringRulesVersion: input.scoringRulesVersion ?? null,
       ...(input.availabilityRevision
         ? { availabilityRevision: input.availabilityRevision }
         : {}),
@@ -371,6 +379,7 @@ async function resolveProjectionRequestContext(
 ): Promise<{
   teamCount: number;
   requiredGamesPerCycle: number;
+  scoringRulesVersion: number;
   targetCycleNumber: number;
 }> {
   const [leagueSnapshot, memberSnapshot, teamSnapshot, draftSnapshot, teamsSnapshot, latestCycle] =
@@ -388,6 +397,9 @@ async function resolveProjectionRequestContext(
   }
 
   const league = leagueSnapshot.data() ?? {};
+  const scoringRulesVersion = normalizeLeagueScoringRulesVersion(
+    league['scoringRulesVersion'],
+  );
   const commissioner = league['commissionerId'] === userId;
   const platformAdmin = await isPlatformAdministrator(userId, token);
   const member = commissioner || memberSnapshot.exists || teamSnapshot.exists || platformAdmin;
@@ -439,6 +451,7 @@ async function resolveProjectionRequestContext(
         : 2,
     ),
     requiredGamesPerCycle: getLeagueRequiredGames(league),
+    scoringRulesVersion,
     targetCycleNumber,
   };
 }
@@ -454,6 +467,7 @@ function isReusableProjectionPointer(
   input: {
     teamCount: number;
     requiredGamesPerCycle: number;
+    scoringRulesVersion: number;
     targetCycleNumber: number;
     generationReason: SharedProjectionGenerationReason;
   },
@@ -462,7 +476,7 @@ function isReusableProjectionPointer(
     data['status'] !== 'ready' ||
     data['projectionVersion'] !== SHARED_PROJECTION_VERSION ||
     data['draftRankingVersion'] !== DRAFT_RANKING_MODEL_VERSION ||
-    data['scoringRulesVersion'] !== CURRENT_SCORING_RULES_VERSION ||
+    data['scoringRulesVersion'] !== input.scoringRulesVersion ||
     data['generatedByAuthority'] !== 'server' ||
     data['authoritySchemaVersion'] !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     data['catalogValidationStatus'] !== 'validated' ||
@@ -501,6 +515,7 @@ async function findReusableProjection(
   context: {
     teamCount: number;
     requiredGamesPerCycle: number;
+    scoringRulesVersion: number;
     targetCycleNumber: number;
   },
   generationReason: SharedProjectionGenerationReason,
@@ -626,12 +641,14 @@ async function queueServerProjectionSnapshotRefreshInternal(
     requestKey,
     targetCycleNumber: context.targetCycleNumber,
     availabilityRevision: input.availabilityRevision,
+    scoringRulesVersion: context.scoringRulesVersion,
   });
   const payloadHash = requestPayloadHash({
     requestId,
     leagueId,
     generationReason,
     targetCycleNumber: context.targetCycleNumber,
+    scoringRulesVersion: context.scoringRulesVersion,
     availabilityRevision: input.availabilityRevision ?? null,
   }, requestedBy);
   const requestRef = getRequestRef(requestId);
@@ -680,6 +697,7 @@ async function queueServerProjectionSnapshotRefreshInternal(
       targetCycleNumber: context.targetCycleNumber,
       teamCount: context.teamCount,
       requiredGamesPerCycle: context.requiredGamesPerCycle,
+      scoringRulesVersion: context.scoringRulesVersion,
       status: 'queued',
       payloadHash,
       snapshotId: null,
@@ -1165,6 +1183,7 @@ export const requestProjectionSnapshotGeneration = onCall(
       leagueId,
       generationReason,
       targetCycleNumber: context.targetCycleNumber,
+      scoringRulesVersion: context.scoringRulesVersion,
     }, userId);
     const reusable = await findReusableProjection(leagueId, context, generationReason);
 
@@ -1236,6 +1255,7 @@ export const requestProjectionSnapshotGeneration = onCall(
         targetCycleNumber: context.targetCycleNumber,
         teamCount: context.teamCount,
         requiredGamesPerCycle: context.requiredGamesPerCycle,
+        scoringRulesVersion: context.scoringRulesVersion,
         status: 'queued',
         payloadHash,
         snapshotId: null,
@@ -1431,6 +1451,7 @@ export const processProjectionGenerationTask = onTaskDispatched<ProjectionGenera
         leagueId: claimed.leagueId,
         teamCount: claimed.teamCount,
         requiredGamesPerCycle: claimed.requiredGamesPerCycle,
+        expectedScoringRulesVersion: claimed.scoringRulesVersion,
         generationReason: claimed.generationReason,
         targetCycleNumber: claimed.targetCycleNumber,
         requestedBy: claimed.requestedBy,

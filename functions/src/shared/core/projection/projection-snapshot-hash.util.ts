@@ -130,15 +130,19 @@ export function createServerProjectionRequestId(input: {
   requestKey: string;
   targetCycleNumber: number;
   availabilityRevision?: string | null;
+  scoringRulesVersion?: number;
 }): string {
   const legacyIdentity = [
     input.leagueId,
     input.requestKey,
     String(input.targetCycleNumber),
   ].join(':');
-  const identity = input.availabilityRevision
+  const revisionIdentity = input.availabilityRevision
     ? `${legacyIdentity}:${input.availabilityRevision}`
     : legacyIdentity;
+  const identity = typeof input.scoringRulesVersion === 'number'
+    ? `${revisionIdentity}:scoring-v${input.scoringRulesVersion}`
+    : revisionIdentity;
 
   return `${input.requestPrefix}-${sha256(identity).slice(0, 32)}`;
 }

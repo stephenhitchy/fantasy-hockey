@@ -11,10 +11,12 @@ const {
 } = require('firebase-admin/firestore');
 
 const {
-  CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
-  defaultScoringRules,
+  SCORING_RULES_V4_VERSION,
+  SCORING_RULES_V5_VERSION,
   scoringRulesV3,
+  scoringRulesV4,
+  scoringRulesV5,
 } = require('../lib/shared/core/scoring/scoring-rules.js');
 const {
   isProjectionPointerId,
@@ -115,86 +117,161 @@ async function main() {
     const data = leagueDocument.data();
     const state = await inspectState(db, leagueDocument.id);
     const alreadyV3 = scoringMatches(data, SCORING_RULES_V3_VERSION, scoringRulesV3);
-    const canonicalV4 = scoringMatches(data, CURRENT_SCORING_RULES_VERSION, defaultScoringRules);
-    const blocked = !alreadyV3 && (
+    const canonicalV4 = scoringMatches(data, SCORING_RULES_V4_VERSION, scoringRulesV4);
+    const canonicalV5 = scoringMatches(data, SCORING_RULES_V5_VERSION, scoringRulesV5);
+    const blocked = !alreadyV3 && !canonicalV5 && (
       !canonicalV4 ||
       state.cycleCount > 0 ||
       state.pickCount > 0 ||
       !['missing', 'setup', 'scheduled'].includes(state.draftStatus)
     );
-    plans.push({ leagueDocument, data, state, alreadyV3, canonicalV4, blocked });
+    plans.push({ leagueDocument, data, state, alreadyV3, canonicalV4, canonicalV5, blocked });
 
     console.log(
       `${leagueDocument.id}: Scoring V${data.scoringRulesVersion ?? 'legacy'}; ` +
-      `${alreadyV3 ? 'already canonical V3' : canonicalV4 ? 'canonical V4 rollback candidate' : 'noncanonical scoring'}; ` +
+      `${alreadyV3
+        ? 'already canonical V3'
+        : canonicalV4
+          ? 'canonical V4 rollback candidate'
+          : canonicalV5
+            ? 'newer canonical V5 preserved'
+            : 'noncanonical scoring'}; ` +
       `Draft ${state.draftStatus}; ${state.pickCount} pick(s); ${state.cycleCount} cycle document(s)` +
       `${blocked ? ' — BLOCKED' : ''}.`,
     );
   }
 
-  const blockers = plans.filter((plan) => plan.blocked);
+  const blockers = plans.filter((plan) => plan.blocked && !plan.canonicalV5);
   if (blockers.length) {
     throw new Error('Preseason rollback is blocked once any competition cycle exists and is allowed only for canonical V4 leagues with no Draft picks and no live/complete Draft.');
   }
 
-  const updates = plans.filter((plan) => !plan.alreadyV3);
+  const updates = plans.filter((plan) => plan.canonicalV4 && !plan.blocked);
   if (!apply) {
     console.log(`\nProduction Scoring V4 rollback dry run for ${projectId}:`);
     console.log(`- Leagues inspected: ${plans.length}`);
-    console.log(`- Already canonical V3: ${plans.length - updates.length}`);
+    console.log(`- Already canonical V3: ${plans.filter((plan) => plan.alreadyV3).length}`);
+    console.log(`- Newer canonical V5 preserved: ${plans.filter((plan) => plan.canonicalV5).length}`);
     console.log(`- Would restore to V3: ${updates.length}`);
     console.log('- Dry run only. No data was changed.');
     console.log(`- Set ${APPLY_GUARD}=${APPLY_VALUE} only before any Draft pick or competition cycle exists.`);
     return;
   }
 
-  const writer = db.bulkWriter();
-  writer.onWriteError((error) => error.failedAttempts < 4);
-
+  let rolledBackLeagueCount = 0;
   for (const plan of updates) {
-    writer.set(plan.leagueDocument.ref, {
-      scoringRules: scoringRulesV3,
-      scoringRulesVersion: SCORING_RULES_V3_VERSION,
-      scoringRulesUpdatedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    const rolledBack = await db.runTransaction(async (transaction) => {
+      const leagueId = plan.leagueDocument.id;
+      const draftRef = db.doc(`leagues/${leagueId}/draft/current`);
+      const [leagueDocument, cycles, draft, picks, projections] =
+        await Promise.all([
+          transaction.get(plan.leagueDocument.ref),
+          transaction.get(db.collection(`leagues/${leagueId}/cycles`).limit(1)),
+          transaction.get(draftRef),
+          transaction.get(
+            db.collection(`leagues/${leagueId}/draft/current/picks`).limit(1),
+          ),
+          transaction.get(
+            db.collection(`leagues/${leagueId}/projectionSnapshots`)
+              .orderBy(FieldPath.documentId())
+              .limit(201),
+          ),
+        ]);
 
-    if (plan.state.draftExists) {
-      writer.set(plan.state.draftRef, {
-        projectionPreparationRequestId: null,
-        projectionPreparationStatus: 'error',
-        serverDraftProjectionSnapshotId: null,
-        serverDraftProjectionSnapshotHash: null,
-        serverDraftProjectionAuthorityVersion: null,
-        serverDraftProjectionCatalogHash: null,
-        serverAutomationMessage: 'Scoring restored to V3 before competition. Regenerate and save the verified V3 Draft board.',
-        serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+      if (!leagueDocument.exists) {
+        throw new Error(`League ${leagueId} disappeared before rollback commit.`);
+      }
+      if (projections.size > 200) {
+        throw new Error(
+          `League ${leagueId} has more than 200 projection documents; rollback stopped before a partial invalidation.`,
+        );
+      }
+
+      const data = leagueDocument.data();
+      if (scoringMatches(data, SCORING_RULES_V3_VERSION, scoringRulesV3)) {
+        return false;
+      }
+      const canonicalV4 = scoringMatches(
+        data,
+        SCORING_RULES_V4_VERSION,
+        scoringRulesV4,
+      );
+      const draftStatus = normalizeDraftStatus(
+        draft.exists ? draft.data()?.status : null,
+      );
+
+      if (
+        !canonicalV4 ||
+        !cycles.empty ||
+        !picks.empty ||
+        !['missing', 'setup', 'scheduled'].includes(draftStatus)
+      ) {
+        throw new Error(
+          `League ${leagueId} changed after inspection and is no longer an eligible canonical V4 preseason rollback.`,
+        );
+      }
+
+      const projectionPointerRefs = projections.docs
+        .filter((document) => isProjectionPointerId(document.id))
+        .map((document) => document.ref);
+
+      transaction.set(plan.leagueDocument.ref, {
+        scoringRules: scoringRulesV3,
+        scoringRulesVersion: SCORING_RULES_V3_VERSION,
+        scoringRulesUpdatedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-    }
-    plan.state.projectionPointerRefs.forEach((ref) => writer.delete(ref));
 
-    writer.set(db.doc(`leagues/${plan.leagueDocument.id}/audit/scoring-v4-rollback`), {
-      schemaVersion: 2,
-      action: 'scoring-v4-rolled-back-before-competition',
-      authority: AUTHORITY,
-      release: RELEASE,
-      fromVersion: CURRENT_SCORING_RULES_VERSION,
-      toVersion: SCORING_RULES_V3_VERSION,
-      previousRulesFingerprint: fingerprint(plan.data.scoringRules ?? null),
-      restoredRulesFingerprint: fingerprint(scoringRulesV3),
-      invalidatedProjectionPointerCount: plan.state.projectionPointerRefs.length,
-      existingCycleCount: 0,
-      existingDraftPickCount: 0,
-      immutableCompletedWindowsRewritten: false,
-      projectionAssetsRewritten: false,
-      occurredAt: FieldValue.serverTimestamp(),
+      if (draft.exists) {
+        transaction.set(draftRef, {
+          projectionPreparationRequestId: null,
+          projectionPreparationStatus: 'error',
+          serverDraftReadinessStatus: null,
+          serverDraftReadinessScheduledStartAt: null,
+          serverDraftReadinessAvailabilityRevision: null,
+          serverDraftReadinessProjectionRequestId: null,
+          serverDraftReadinessProjectionSnapshotId: null,
+          serverDraftReadinessProjectionSnapshotHash: null,
+          serverDraftReadinessAttemptCount: 0,
+          serverDraftReadinessRetryAfterAt: null,
+          serverDraftReadinessMessage: null,
+          serverDraftReadinessUpdatedAt: FieldValue.serverTimestamp(),
+          serverDraftProjectionSnapshotId: null,
+          serverDraftProjectionSnapshotHash: null,
+          serverDraftProjectionAuthorityVersion: null,
+          serverDraftProjectionCatalogHash: null,
+          serverAutomationMessage: 'Scoring restored to V3 before competition. Regenerate and save the verified V3 Draft board.',
+          serverAutomationUpdatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      projectionPointerRefs.forEach((ref) => transaction.delete(ref));
+
+      transaction.set(db.doc(`leagues/${leagueId}/audit/scoring-v4-rollback`), {
+        schemaVersion: 2,
+        action: 'scoring-v4-rolled-back-before-competition',
+        authority: AUTHORITY,
+        release: RELEASE,
+        fromVersion: SCORING_RULES_V4_VERSION,
+        toVersion: SCORING_RULES_V3_VERSION,
+        previousRulesFingerprint: fingerprint(data.scoringRules ?? null),
+        restoredRulesFingerprint: fingerprint(scoringRulesV3),
+        invalidatedProjectionPointerCount: projectionPointerRefs.length,
+        existingCycleCount: 0,
+        existingDraftPickCount: 0,
+        immutableCompletedWindowsRewritten: false,
+        projectionAssetsRewritten: false,
+        occurredAt: FieldValue.serverTimestamp(),
+      });
+
+      return true;
     });
+
+    if (rolledBack) rolledBackLeagueCount += 1;
   }
 
-  await writer.close();
   console.log(`\nProduction Scoring V4 preseason rollback applied for ${projectId}:`);
-  console.log(`- Leagues restored to V3: ${updates.length}`);
+  console.log(`- Leagues restored to V3: ${rolledBackLeagueCount}`);
   console.log('- Current/target projection pointers were invalidated; immutable snapshot documents were retained.');
   console.log('- No score, cycle, window, standing, roster, Draft-pick, transaction, or waiver document was rewritten.');
 }

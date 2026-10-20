@@ -222,3 +222,13 @@ Do not alter Production Scoring V4, Projection V11, Firestore Rules, indexes, TT
 ## Next gate
 
 D1G is not the canonical-read cutover. The next phase should require repeated exact parity, explain every mismatch, and then allow one exact Internal Test Canary to consume canonical facts behind a reversible feature flag. Final score corrections and completed-window replay require their own explicit integrity proof before broader use.
+
+## Scoring V5 compatibility addendum
+
+The unactivated Scoring V5 shootout candidate advances canonical NHL facts to
+schema 3. Schema 3 retains the selected game's home/away team IDs plus goal
+owner and goalie-in-net IDs so successful `periodType: SO` attempts can be
+reconstructed independently from ordinary boxscore goals. A schema-2 record is
+treated as stale and rebuilt; a consumer that cannot use schema 3 retains the
+existing direct-NHL fallback. Canonical authority and the D1G rollout posture
+remain unchanged.

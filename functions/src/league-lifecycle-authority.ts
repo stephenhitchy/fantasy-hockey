@@ -7,8 +7,8 @@ import { db } from './shared/core/firebase';
 import { requireVerifiedRecentAuthentication } from './shared/security/auth-security.util';
 import {
   CURRENT_SCORING_RULES_VERSION,
-  SCORING_RULES_V3_VERSION,
   defaultScoringRules,
+  resolveScoringRulesVersion,
   scoringRulesForVersion,
 } from './shared/core/scoring/scoring-rules';
 import { createEmptyFantasyRoster } from './shared/core/team/roster.service';
@@ -2603,13 +2603,17 @@ function buildCanonicalLeagueDocument(input: {
    * V4 preseason migration runs. Legacy pre-V3 leagues are normalized only to
    * V3 so a generic security repair cannot rewrite competition economics.
    */
-  const storedScoringVersion = getNonNegativeInteger(
-    input.data['scoringRulesVersion'],
-    0,
-  );
-  const scoringRulesVersion = storedScoringVersion >= CURRENT_SCORING_RULES_VERSION
-    ? CURRENT_SCORING_RULES_VERSION
-    : SCORING_RULES_V3_VERSION;
+  let scoringRulesVersion: number;
+  try {
+    scoringRulesVersion = resolveScoringRulesVersion(
+      input.data['scoringRulesVersion'],
+    );
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : 'Invalid scoring-rules version.',
+    );
+  }
   const scoringRules = scoringRulesForVersion(scoringRulesVersion);
 
   return {

@@ -1,4 +1,11 @@
+import { doc, getDoc } from 'firebase/firestore';
+
 import { DraftableAsset, DraftProjection } from '../draft/draft.models';
+import { db } from '../firebase';
+import {
+  SCORING_RULES_V3_VERSION,
+  normalizeScoringRulesVersion,
+} from '../scoring/scoring-rules';
 import { createFrozenCycleProjection } from './cycle-projection.util';
 import {
   generateSharedProjectionSnapshot,
@@ -55,6 +62,21 @@ function getErrorMessage(error: unknown): string {
     : 'Unable to generate the next-window projection snapshot.';
 }
 
+async function loadLeagueScoringRulesVersion(leagueId: string): Promise<number> {
+  const snapshot = await getDoc(doc(db, 'leagues', leagueId));
+  const storedVersion = snapshot.exists()
+    ? snapshot.data()['scoringRulesVersion']
+    : null;
+  const normalized = normalizeScoringRulesVersion(storedVersion);
+
+  if (normalized !== null) return normalized;
+  if (storedVersion === undefined || storedVersion === null) {
+    return SCORING_RULES_V3_VERSION;
+  }
+
+  throw new Error('This league uses an unsupported scoring-rules version.');
+}
+
 /**
  * Returns one projection pool for one exact fantasy window number. The first
  * slot to enter a target window refreshes the pool when needed; later slots
@@ -65,16 +87,31 @@ export async function ensureWindowProjectionBundle(
   input: EnsureWindowProjectionBundleInput,
 ): Promise<WindowProjectionBundle> {
   const targetCycleNumber = Math.max(1, Math.floor(input.targetCycleNumber));
-  const freshnessInput = {
-    teamCount: input.teamCount,
-    requiredGamesPerCycle: input.requiredGamesPerCycle,
-    targetCycleNumber,
-    now: input.now,
-  };
   const targetSnapshot = await loadSharedProjectionSnapshotForCycle(
     input.leagueId,
     targetCycleNumber,
   );
+  let scoringRulesVersion: number;
+
+  try {
+    scoringRulesVersion = await loadLeagueScoringRulesVersion(input.leagueId);
+  } catch (error: unknown) {
+    return {
+      metadata: null,
+      assetsByKey: new Map(),
+      source: 'none',
+      refreshed: false,
+      usedFallback: true,
+      errorMessage: getErrorMessage(error),
+    };
+  }
+  const freshnessInput = {
+    teamCount: input.teamCount,
+    requiredGamesPerCycle: input.requiredGamesPerCycle,
+    scoringRulesVersion,
+    targetCycleNumber,
+    now: input.now,
+  };
 
   if (
     !input.forceRefresh &&
@@ -108,7 +145,10 @@ export async function ensureWindowProjectionBundle(
       errorMessage: '',
     };
   } catch (error: unknown) {
-    if (targetSnapshot?.metadata.status === 'ready') {
+    if (
+      targetSnapshot?.metadata.status === 'ready' &&
+      targetSnapshot.metadata.scoringRulesVersion === scoringRulesVersion
+    ) {
       return {
         metadata: targetSnapshot.metadata,
         assetsByKey: toAssetMap(targetSnapshot),
@@ -119,7 +159,13 @@ export async function ensureWindowProjectionBundle(
       };
     }
 
-    const currentSnapshot = await loadSharedProjectionSnapshot(input.leagueId).catch(() => null);
+    const loadedCurrentSnapshot = await loadSharedProjectionSnapshot(
+      input.leagueId,
+    ).catch(() => null);
+    const currentSnapshot = loadedCurrentSnapshot?.metadata.scoringRulesVersion ===
+      scoringRulesVersion
+      ? loadedCurrentSnapshot
+      : null;
 
     return {
       metadata: currentSnapshot?.metadata ?? null,

@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  runTransaction,
   serverTimestamp,
   writeBatch,
 } from '../firebase-admin-compat';
@@ -42,6 +43,9 @@ import {
 import {
   CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
+  SCORING_RULES_V4_VERSION,
+  SCORING_RULES_V5_VERSION,
+  normalizeScoringRulesVersion,
 } from '../scoring/scoring-rules';
 import {
   ensureCanonicalProjectionAssetCatalog,
@@ -146,6 +150,8 @@ export interface GenerateSharedProjectionSnapshotInput {
   generationRequestId?: string;
   /** Fails closed if availability changed after a server request was queued. */
   expectedAvailabilityRevision?: string;
+  /** Fails closed if scoring changed after a server request was queued. */
+  expectedScoringRulesVersion?: number;
 }
 
 export interface WindowSnapshotFreshnessInput {
@@ -187,19 +193,29 @@ function getAssetsRef(leagueId: string, snapshotId: string) {
 }
 
 function normalizeProjectionScoringRulesVersion(value: unknown): number | null {
-  if (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= SCORING_RULES_V3_VERSION &&
-    value <= CURRENT_SCORING_RULES_VERSION
-  ) {
-    return value;
-  }
+  const normalized = normalizeScoringRulesVersion(value);
+
+  if (normalized !== null) return normalized;
 
   // Projection snapshots created before Scoring V4 did not store this field.
   return value === undefined || value === null
     ? SCORING_RULES_V3_VERSION
     : null;
+}
+
+function requireCurrentProjectionScoringRulesVersion(value: unknown): number {
+  const normalized = normalizeScoringRulesVersion(value);
+
+  if (
+    normalized !== SCORING_RULES_V4_VERSION &&
+    normalized !== SCORING_RULES_V5_VERSION
+  ) {
+    throw new Error(
+      `Scoring V${String(value)} is not supported by Projection V${SHARED_PROJECTION_VERSION}.`,
+    );
+  }
+
+  return normalized;
 }
 
 function normalizeMetadata(value: Partial<SharedProjectionSnapshotMetadata>): SharedProjectionSnapshotMetadata | null {
@@ -718,44 +734,53 @@ export async function sealSharedProjectionSnapshotIntegrity(
     await batch.commit();
   }
 
-  const [currentPointerSnapshot, targetPointerSnapshot] = await Promise.all([
-    getDoc(getPointerRef(normalizedLeagueId, 'current')),
-    getDoc(
-      getPointerRef(
-        normalizedLeagueId,
-        `target-cycle-${Math.max(1, metadata.targetCycleNumber)}`,
-      ),
-    ),
-  ]);
   const pointerPayload = {
     ...sealedMetadata,
     updatedAt: serverTimestamp(),
     integrityMigratedAt: serverTimestamp(),
   };
-  const finalBatch = writeBatch(db);
+  const currentPointerRef = getPointerRef(normalizedLeagueId, 'current');
+  const targetPointerRef = getPointerRef(
+    normalizedLeagueId,
+    `target-cycle-${Math.max(1, metadata.targetCycleNumber)}`,
+  );
+  const expectedScoringRulesVersion = normalizeScoringRulesVersion(
+    metadata.scoringRulesVersion,
+  );
 
-  finalBatch.set(snapshotRef, pointerPayload, { merge: true });
-
-  if (currentPointerSnapshot.data()?.['activeSnapshotId'] === normalizedSnapshotId) {
-    finalBatch.set(
-      getPointerRef(normalizedLeagueId, 'current'),
-      pointerPayload,
-      { merge: true },
-    );
+  if (expectedScoringRulesVersion === null) {
+    throw new Error('The projection snapshot has an unsupported scoring version.');
   }
 
-  if (targetPointerSnapshot.data()?.['activeSnapshotId'] === normalizedSnapshotId) {
-    finalBatch.set(
-      getPointerRef(
-        normalizedLeagueId,
-        `target-cycle-${Math.max(1, metadata.targetCycleNumber)}`,
-      ),
-      pointerPayload,
-      { merge: true },
-    );
-  }
+  await runTransaction(db, async (transaction) => {
+    const [leagueSnapshot, currentPointerSnapshot, targetPointerSnapshot] =
+      await Promise.all([
+        transaction.get(doc(db, 'leagues', normalizedLeagueId)),
+        transaction.get(currentPointerRef),
+        transaction.get(targetPointerRef),
+      ]);
+    const leagueScoringRulesVersion = leagueSnapshot.exists()
+      ? normalizeScoringRulesVersion(
+          leagueSnapshot.data()?.['scoringRulesVersion'],
+        )
+      : null;
 
-  await finalBatch.commit();
+    if (leagueScoringRulesVersion !== expectedScoringRulesVersion) {
+      throw new Error(
+        'The league scoring version changed before projection integrity publication.',
+      );
+    }
+
+    transaction.set(snapshotRef, pointerPayload, { merge: true });
+
+    if (currentPointerSnapshot.data()?.['activeSnapshotId'] === normalizedSnapshotId) {
+      transaction.set(currentPointerRef, pointerPayload, { merge: true });
+    }
+
+    if (targetPointerSnapshot.data()?.['activeSnapshotId'] === normalizedSnapshotId) {
+      transaction.set(targetPointerRef, pointerPayload, { merge: true });
+    }
+  });
 
   const verified = await loadSharedProjectionSnapshotById(
     normalizedLeagueId,
@@ -1195,6 +1220,7 @@ async function loadHistoricalReplayProjectionContext(
 export interface ExpectedProjectionSnapshotContext {
   projectionAsOfDate: string;
   projectionContext: 'live' | 'historical-replay';
+  scoringRulesVersion: number;
 }
 
 /**
@@ -1208,18 +1234,40 @@ export async function getExpectedProjectionSnapshotContext(
   leagueId: string,
   now: Date = new Date(),
 ): Promise<ExpectedProjectionSnapshotContext> {
-  const replay = await loadHistoricalReplayProjectionContext(leagueId);
+  const [replay, leagueSnapshot] = await Promise.all([
+    loadHistoricalReplayProjectionContext(leagueId),
+    getDoc(doc(db, 'leagues', leagueId)),
+  ]);
+  const scoringRulesVersion = normalizeProjectionScoringRulesVersion(
+    leagueSnapshot.exists()
+      ? leagueSnapshot.data()?.['scoringRulesVersion']
+      : null,
+  ) ?? (
+    leagueSnapshot.exists() &&
+    (
+      leagueSnapshot.data()?.['scoringRulesVersion'] === undefined ||
+      leagueSnapshot.data()?.['scoringRulesVersion'] === null
+    )
+      ? SCORING_RULES_V3_VERSION
+      : null
+  );
+
+  if (scoringRulesVersion === null) {
+    throw new Error('This league uses an unsupported scoring-rules version.');
+  }
 
   if (replay) {
     return {
       projectionAsOfDate: replay.simulatedDate,
       projectionContext: 'historical-replay',
+      scoringRulesVersion,
     };
   }
 
   return {
     projectionAsOfDate: now.toISOString().slice(0, 10),
     projectionContext: 'live',
+    scoringRulesVersion,
   };
 }
 
@@ -1312,10 +1360,16 @@ async function generateSnapshotInternal(
   const leagueScoringVersion = leagueSnapshot.exists()
     ? leagueSnapshot.data()?.['scoringRulesVersion']
     : null;
+  const scoringRulesVersion = requireCurrentProjectionScoringRulesVersion(
+    leagueScoringVersion,
+  );
 
-  if (leagueScoringVersion !== CURRENT_SCORING_RULES_VERSION) {
+  if (
+    input.expectedScoringRulesVersion !== undefined &&
+    input.expectedScoringRulesVersion !== scoringRulesVersion
+  ) {
     throw new Error(
-      `This league must be migrated to Production Scoring V${CURRENT_SCORING_RULES_VERSION} before a new Projection V${SHARED_PROJECTION_VERSION} snapshot can be generated.`,
+      'The league scoring version changed after projection preparation was queued. Retry with the current league rules.',
     );
   }
 
@@ -1386,7 +1440,7 @@ async function generateSnapshotInternal(
     status: 'building' as const,
     projectionVersion: SHARED_PROJECTION_VERSION,
     draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
-    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    scoringRulesVersion,
     generatedAt,
     generatedAtServer: serverTimestamp(),
     generatedBy: input.requestedBy
@@ -1460,7 +1514,7 @@ async function generateSnapshotInternal(
       snapshotId,
       assets: rankedAssets,
       projectionVersion: SHARED_PROJECTION_VERSION,
-      scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+      scoringRulesVersion,
       projectionAsOfDate: context.projectionAsOfDate,
       projectionContext: context.projectionContext,
       projectionSeason: context.projectionSeason,
@@ -1517,7 +1571,7 @@ async function generateSnapshotInternal(
       status: 'ready',
       projectionVersion: SHARED_PROJECTION_VERSION,
       draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
-      scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+      scoringRulesVersion,
       generatedAt,
       generatedBy: input.requestedBy
         ? `server:projection-authority:${input.requestedBy}`
@@ -1574,28 +1628,41 @@ async function generateSnapshotInternal(
       generatedAtServer: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    const finalBatch = writeBatch(db);
+    await runTransaction(db, async (transaction) => {
+      const currentLeague = await transaction.get(
+        doc(db, 'leagues', leagueId),
+      );
+      const currentScoringVersion = currentLeague.exists()
+        ? normalizeScoringRulesVersion(
+            currentLeague.data()?.['scoringRulesVersion'],
+          )
+        : null;
 
-    finalBatch.set(snapshotRef, pointerPayload);
-    finalBatch.set(
-      doc(
-        db,
-        'leagues',
-        leagueId,
-        'projectionSnapshots',
-        `target-cycle-${targetCycleNumber}`,
-      ),
-      pointerPayload,
-    );
+      if (currentScoringVersion !== scoringRulesVersion) {
+        throw new Error(
+          'The league scoring version changed before projection publication. The stale snapshot was retained only as non-active evidence.',
+        );
+      }
 
-    if (generationReason !== 'window-boundary') {
-      finalBatch.set(
-        doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
+      transaction.set(snapshotRef, pointerPayload);
+      transaction.set(
+        doc(
+          db,
+          'leagues',
+          leagueId,
+          'projectionSnapshots',
+          `target-cycle-${targetCycleNumber}`,
+        ),
         pointerPayload,
       );
-    }
 
-    await finalBatch.commit();
+      if (generationReason !== 'window-boundary') {
+        transaction.set(
+          doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
+          pointerPayload,
+        );
+      }
+    });
 
     return {
       metadata,
@@ -1643,7 +1710,10 @@ export async function generateSharedProjectionSnapshot(
     1,
     Math.floor(input.targetCycleNumber ?? 1),
   );
-  const key = `${leagueId}::${targetCycleNumber}`;
+  const expectedScoringKey = input.expectedScoringRulesVersion === undefined
+    ? 'current'
+    : String(input.expectedScoringRulesVersion);
+  const key = `${leagueId}::${targetCycleNumber}::scoring-${expectedScoringKey}`;
   const existing = generationByLeagueAndCycle.get(key);
 
   if (existing) {
@@ -1852,10 +1922,16 @@ export async function createEmergencyDraftProjectionSnapshot(
   const leagueScoringVersion = leagueSnapshot.exists()
     ? leagueSnapshot.data()?.['scoringRulesVersion']
     : null;
+  const scoringRulesVersion = requireCurrentProjectionScoringRulesVersion(
+    leagueScoringVersion,
+  );
 
-  if (leagueScoringVersion !== CURRENT_SCORING_RULES_VERSION) {
+  if (
+    input.expectedScoringRulesVersion !== undefined &&
+    input.expectedScoringRulesVersion !== scoringRulesVersion
+  ) {
     throw new Error(
-      `This league must be migrated to Production Scoring V${CURRENT_SCORING_RULES_VERSION} before emergency Projection V${SHARED_PROJECTION_VERSION} rankings can be generated.`,
+      'The league scoring version changed after emergency projection preparation was queued.',
     );
   }
 
@@ -1980,7 +2056,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     snapshotId,
     assets: rankedAssets,
     projectionVersion: SHARED_PROJECTION_VERSION,
-    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    scoringRulesVersion,
     teamCount,
     targetCycleNumber,
     requiredGamesPerCycle,
@@ -2019,7 +2095,7 @@ export async function createEmergencyDraftProjectionSnapshot(
     status: 'ready',
     projectionVersion: SHARED_PROJECTION_VERSION,
     draftRankingVersion: DRAFT_RANKING_MODEL_VERSION,
-    scoringRulesVersion: CURRENT_SCORING_RULES_VERSION,
+    scoringRulesVersion,
     generatedAt,
     generatedBy: 'server:draft-automation',
     assetCount: rankedAssets.length,
@@ -2049,26 +2125,39 @@ export async function createEmergencyDraftProjectionSnapshot(
       ? { generationRequestId: input.generationRequestId }
       : {}),
   };
-  const finalBatch = writeBatch(db);
   const pointerPayload = {
     ...metadata,
     generatedAtServer: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
-  finalBatch.set(
-    doc(db, 'leagues', leagueId, 'projectionSnapshots', snapshotId),
-    pointerPayload,
-  );
-  finalBatch.set(
-    doc(db, 'leagues', leagueId, 'projectionSnapshots', `target-cycle-${targetCycleNumber}`),
-    pointerPayload,
-  );
-  finalBatch.set(
-    doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
-    pointerPayload,
-  );
-  await finalBatch.commit();
+  await runTransaction(db, async (transaction) => {
+    const currentLeague = await transaction.get(doc(db, 'leagues', leagueId));
+    const currentScoringVersion = currentLeague.exists()
+      ? normalizeScoringRulesVersion(
+          currentLeague.data()?.['scoringRulesVersion'],
+        )
+      : null;
+
+    if (currentScoringVersion !== scoringRulesVersion) {
+      throw new Error(
+        'The league scoring version changed before emergency projection publication. The stale snapshot cannot become active.',
+      );
+    }
+
+    transaction.set(
+      doc(db, 'leagues', leagueId, 'projectionSnapshots', snapshotId),
+      pointerPayload,
+    );
+    transaction.set(
+      doc(db, 'leagues', leagueId, 'projectionSnapshots', `target-cycle-${targetCycleNumber}`),
+      pointerPayload,
+    );
+    transaction.set(
+      doc(db, 'leagues', leagueId, 'projectionSnapshots', 'current'),
+      pointerPayload,
+    );
+  });
 
   return {
     metadata,

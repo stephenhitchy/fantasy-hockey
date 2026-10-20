@@ -125,6 +125,11 @@
   gap: 10px;
 }
 
+.version-choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 10px;
+}
+
 .position-choice-grid button,
 .preset-list button {
   min-height: 54px;

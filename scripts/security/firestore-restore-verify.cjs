@@ -42,6 +42,7 @@ async function sampleLeagueIntegrity(db, maximumSamples) {
     sixGameContracts: 0,
     scoringV3Contracts: 0,
     scoringV4Contracts: 0,
+    scoringV5Contracts: 0,
     versionedScoringContracts: 0,
     unsupportedScoringContracts: 0,
     authorityV2Contracts: 0,
@@ -56,7 +57,8 @@ async function sampleLeagueIntegrity(db, maximumSamples) {
     const scoringVersion = Number(data.scoringRulesVersion);
     if (scoringVersion === 3) totals.scoringV3Contracts += 1;
     if (scoringVersion === 4) totals.scoringV4Contracts += 1;
-    if (scoringVersion === 3 || scoringVersion === 4) {
+    if (scoringVersion === 5) totals.scoringV5Contracts += 1;
+    if (scoringVersion === 3 || scoringVersion === 4 || scoringVersion === 5) {
       totals.versionedScoringContracts += 1;
     } else {
       totals.unsupportedScoringContracts += 1;
@@ -209,6 +211,7 @@ async function main() {
     console.log(`- Sampled restored leagues: ${destinationLeagueIntegrity.sampledLeagues}`);
     console.log(`- Six-game contracts preserved: ${destinationLeagueIntegrity.sixGameContracts}`);
     console.log(`- Supported scoring contracts preserved: ${destinationLeagueIntegrity.versionedScoringContracts}`);
+    console.log(`  - Scoring V5: ${destinationLeagueIntegrity.scoringV5Contracts}`);
     console.log(`  - Scoring V4: ${destinationLeagueIntegrity.scoringV4Contracts}`);
     console.log(`  - Legacy Scoring V3: ${destinationLeagueIntegrity.scoringV3Contracts}`);
     console.log(`- Privacy-limited report: ${path.relative(projectRoot, reportPath)}`);

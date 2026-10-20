@@ -49,6 +49,7 @@ import {
   getNhlTeamSeasonSchedule,
   getRegularSeasonGameLog,
   getSkaterAssistBreakdown,
+  getSkaterShootoutGoals,
   getTeamGoalieUnitResult,
   NhlGameBoxscoreResponse,
   NhlGamePlayByPlayResponse,
@@ -909,7 +910,11 @@ export class CycleAssetDetail implements OnDestroy {
       const skaterLine = gameData
         ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
         : null;
-      const appeared = snapshotGame.appeared || Boolean(skaterLine || gameLog);
+      const shootoutGoals = (scoringRules.shootoutGoal ?? 0) !== 0 && gameData
+        ? getSkaterShootoutGoals(gameData.playByPlay, asset.player.id)
+        : 0;
+      const appeared =
+        snapshotGame.appeared || Boolean(skaterLine || gameLog || shootoutGoals > 0);
       const authoritativeScore = snapshotGame.fantasyPoints ?? 0;
 
       if (!appeared && snapshotGame.state === 'final') {
@@ -940,7 +945,7 @@ export class CycleAssetDetail implements OnDestroy {
         continue;
       }
 
-      if (!skaterLine && !gameLog) {
+      if (!skaterLine && !gameLog && shootoutGoals === 0) {
         rows.push(
           this.createSnapshotGameRow({
             gameId: snapshotGame.gameId,
@@ -972,7 +977,13 @@ export class CycleAssetDetail implements OnDestroy {
       }
 
       const assistBreakdown = gameData
-        ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
+        ? getSkaterAssistBreakdown(
+            gameData.playByPlay,
+            asset.player.id,
+            {
+              excludeShootoutGoals: (scoringRules.shootoutGoal ?? 0) !== 0,
+            },
+          )
         : {
             primaryAssists: 0,
             secondaryAssists: 0,
@@ -998,6 +1009,7 @@ export class CycleAssetDetail implements OnDestroy {
         shortHandedPoints: gameLog?.shorthandedPoints ?? 0,
         gameWinningGoal: Boolean(gameLog?.gameWinningGoals),
         overtimeGoal: Boolean(gameLog?.otGoals),
+        shootoutGoals,
         timeOnIceMinutes: this.getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi),
       };
       const breakdown = calculateSkaterGameBreakdown(stats, scoringRules);
@@ -1016,6 +1028,9 @@ export class CycleAssetDetail implements OnDestroy {
           fantasyPoints: authoritativeScore,
           statChips: [
             { label: 'G', value: stats.goals.toString() },
+            ...((scoringRules.shootoutGoal ?? 0) > 0 && (stats.shootoutGoals ?? 0) > 0
+              ? [{ label: 'SO G', value: String(stats.shootoutGoals) }]
+              : []),
             { label: '1A', value: stats.primaryAssists.toString() },
             { label: '2A', value: stats.secondaryAssists.toString() },
             { label: 'SOG', value: stats.shotsOnGoal.toString() },
@@ -1076,7 +1091,11 @@ export class CycleAssetDetail implements OnDestroy {
       const authoritativeScore = snapshotGame.fantasyPoints ?? 0;
       const gameData = await this.loadGameData(snapshotGame.gameId);
       const goalieResult = gameData
-        ? getTeamGoalieUnitResult(gameData.boxscore, asset.teamAbbreviation)
+        ? getTeamGoalieUnitResult(
+            gameData.boxscore,
+            asset.teamAbbreviation,
+            gameData.playByPlay,
+          )
         : null;
 
       if (!goalieResult) {
@@ -1117,8 +1136,13 @@ export class CycleAssetDetail implements OnDestroy {
         shotsAgainst: goalieResult.shotsAgainst,
         won: goalieResult.won,
         shutout: goalieResult.shutout,
+        shootoutGoalsAgainst: goalieResult.shootoutGoalsAgainst,
       };
       const breakdown = calculateGoalieGameBreakdown(stats, scoringRules);
+      const shutoutAwarded = goalieResult.shutout && !(
+        scoringRules.shootoutGoalBreaksGoalieShutout === true &&
+        goalieResult.shootoutGoalsAgainst > 0
+      );
 
       rows.push(
         this.createSnapshotGameRow({
@@ -1141,7 +1165,14 @@ export class CycleAssetDetail implements OnDestroy {
             { label: 'Saves', value: goalieResult.saves.toString() },
             { label: 'Shots', value: goalieResult.shotsAgainst.toString() },
             { label: 'SV%', value: `${(savePercentage * 100).toFixed(1)}%` },
-            { label: 'SO', value: goalieResult.shutout ? 'Yes' : 'No' },
+            { label: 'SO', value: shutoutAwarded ? 'Yes' : 'No' },
+            ...(scoringRules.shootoutGoalBreaksGoalieShutout === true &&
+            goalieResult.shootoutGoalsAgainst > 0
+              ? [{
+                  label: 'SO GA',
+                  value: goalieResult.shootoutGoalsAgainst.toString(),
+                }]
+              : []),
           ],
           breakdownLines: this.reconcileBreakdownLines(
             this.mapBreakdownLines(breakdown.lines),
@@ -1208,8 +1239,11 @@ export class CycleAssetDetail implements OnDestroy {
       const skaterLine = finalGameData
         ? findSkaterBoxscoreLine(finalGameData.boxscore, asset.player.id)
         : null;
+      const shootoutGoals = (scoringRules.shootoutGoal ?? 0) !== 0 && finalGameData
+        ? getSkaterShootoutGoals(finalGameData.playByPlay, asset.player.id)
+        : 0;
 
-      if (!skaterLine && !gameLog) {
+      if (!skaterLine && !gameLog && shootoutGoals === 0) {
         rows.push(
           this.createBaseGameRow(
             asset,
@@ -1237,7 +1271,13 @@ export class CycleAssetDetail implements OnDestroy {
       }
 
       const assistBreakdown = finalGameData
-        ? getSkaterAssistBreakdown(finalGameData.playByPlay, asset.player.id)
+        ? getSkaterAssistBreakdown(
+            finalGameData.playByPlay,
+            asset.player.id,
+            {
+              excludeShootoutGoals: (scoringRules.shootoutGoal ?? 0) !== 0,
+            },
+          )
         : {
             primaryAssists: 0,
             secondaryAssists: 0,
@@ -1266,6 +1306,7 @@ export class CycleAssetDetail implements OnDestroy {
         shortHandedPoints: gameLog?.shorthandedPoints ?? 0,
         gameWinningGoal: Boolean(gameLog?.gameWinningGoals),
         overtimeGoal: Boolean(gameLog?.otGoals),
+        shootoutGoals,
         timeOnIceMinutes: this.getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi),
       };
 
@@ -1284,6 +1325,9 @@ export class CycleAssetDetail implements OnDestroy {
           breakdown.total,
           [
             { label: 'G', value: stats.goals.toString() },
+            ...((scoringRules.shootoutGoal ?? 0) > 0 && (stats.shootoutGoals ?? 0) > 0
+              ? [{ label: 'SO G', value: String(stats.shootoutGoals) }]
+              : []),
             { label: '1A', value: stats.primaryAssists.toString() },
             { label: '2A', value: stats.secondaryAssists.toString() },
             { label: 'SOG', value: stats.shotsOnGoal.toString() },
@@ -1366,7 +1410,11 @@ export class CycleAssetDetail implements OnDestroy {
         continue;
       }
 
-      const goalieResult = getTeamGoalieUnitResult(finalGameData.boxscore, asset.teamAbbreviation);
+      const goalieResult = getTeamGoalieUnitResult(
+        finalGameData.boxscore,
+        asset.teamAbbreviation,
+        finalGameData.playByPlay,
+      );
 
       if (!goalieResult) {
         rows.push(
@@ -1403,9 +1451,14 @@ export class CycleAssetDetail implements OnDestroy {
         shotsAgainst: goalieResult.shotsAgainst,
         won: goalieResult.won,
         shutout: goalieResult.shutout,
+        shootoutGoalsAgainst: goalieResult.shootoutGoalsAgainst,
       };
 
       const breakdown = calculateGoalieGameBreakdown(stats, scoringRules);
+      const shutoutAwarded = goalieResult.shutout && !(
+        scoringRules.shootoutGoalBreaksGoalieShutout === true &&
+        goalieResult.shootoutGoalsAgainst > 0
+      );
 
       rows.push(
         this.createBaseGameRow(
@@ -1422,7 +1475,14 @@ export class CycleAssetDetail implements OnDestroy {
             { label: 'Saves', value: goalieResult.saves.toString() },
             { label: 'Shots', value: goalieResult.shotsAgainst.toString() },
             { label: 'SV%', value: `${(savePercentage * 100).toFixed(1)}%` },
-            { label: 'SO', value: goalieResult.shutout ? 'Yes' : 'No' },
+            { label: 'SO', value: shutoutAwarded ? 'Yes' : 'No' },
+            ...(scoringRules.shootoutGoalBreaksGoalieShutout === true &&
+            goalieResult.shootoutGoalsAgainst > 0
+              ? [{
+                  label: 'SO GA',
+                  value: goalieResult.shootoutGoalsAgainst.toString(),
+                }]
+              : []),
           ],
           this.mapBreakdownLines(breakdown.lines),
         ),

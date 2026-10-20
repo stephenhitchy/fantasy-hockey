@@ -15,10 +15,20 @@ function classifyScoringV4Migration(input) {
   const pickCount = Math.max(0, Number(input.pickCount) || 0);
   const allowMixedHistory = input.allowMixedHistory === true;
   const alreadyV4 = input.alreadyV4 === true;
+  const sourceScoringRulesVersion = Number.isInteger(input.sourceScoringRulesVersion)
+    ? input.sourceScoringRulesVersion
+    : 0;
+  const sourceScoringRulesVersionValid = input.sourceScoringRulesVersionValid !== false;
 
   const blockers = [];
 
   if (!alreadyV4) {
+    if (!sourceScoringRulesVersionValid) {
+      blockers.push('invalid-scoring-version');
+    }
+    if (sourceScoringRulesVersion > 4) {
+      blockers.push('newer-scoring-version');
+    }
     if (cycleCount > 0 && !allowMixedHistory) {
       blockers.push('competition-cycle-history');
     }
@@ -43,6 +53,8 @@ function classifyScoringV4Migration(input) {
     cycleCount,
     completedCycleCount,
     pickCount,
+    sourceScoringRulesVersion,
+    sourceScoringRulesVersionValid,
     mixedHistoryAllowed: allowMixedHistory,
   };
 }

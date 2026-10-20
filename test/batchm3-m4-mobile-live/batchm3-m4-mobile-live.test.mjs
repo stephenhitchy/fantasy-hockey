@@ -444,16 +444,16 @@ test('Game Center phone view uses perspective tabs, grouped accordions, compact 
 
 test('M3-M4 foundations still preserve scoring, Projection V11, Firestore rules, and indexes', async () => {
   const expectedHashes = new Map([
-    ['src/app/core/scoring/scoring-rules.ts', '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da'],
-    ['src/app/core/scoring/scoring-engine.ts', '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3'],
+    ['src/app/core/scoring/scoring-rules.ts', 'c23f8c77dd80fb0703557242a5d116eb22c3d283c130a38a38566f8f59b80c7b'],
+    ['src/app/core/scoring/scoring-engine.ts', '59036bf3a036999740b5fc34b517e4602ff6c6a54af664bfca1f8327b5d24c2f'],
     ['src/app/core/projection/projection-v11.util.ts', 'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9'],
     ['src/app/core/draft/draft-player-pool.service.ts', 'ab6ee7c4ea5e92966b80f928897b3c2b01b1fcc8bafe7738e67a2651cd048300'],
-    ['functions/src/shared/core/scoring/scoring-rules.ts', '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da'],
-    ['functions/src/shared/core/scoring/scoring-engine.ts', '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3'],
+    ['functions/src/shared/core/scoring/scoring-rules.ts', 'c23f8c77dd80fb0703557242a5d116eb22c3d283c130a38a38566f8f59b80c7b'],
+    ['functions/src/shared/core/scoring/scoring-engine.ts', '59036bf3a036999740b5fc34b517e4602ff6c6a54af664bfca1f8327b5d24c2f'],
     ['functions/src/shared/core/projection/projection-v11.util.ts', 'c22cce759a6e59b6f549d33c0442d1380a102443120b8620c0eea693b598bed9'],
     ['functions/src/shared/core/draft/draft-player-pool.service.ts', 'c3c2a6c4e17ab769b002333a71c96476ecabb19d5e01f38877646b91e7c093c8'],
     ['firestore.rules', PROTECTED_SOURCE_HASHES.firestoreRules],
-    ['firestore.indexes.json', '62f09a69e4e487eb9bfa1935e874d32a07e8fa0cddba48205903d62e19261a13'],
+    ['firestore.indexes.json', '8e2798abd1f659d752e6fad8910ac249025e140c7ec6d03e3d336d2c814d096a'],
   ]);
 
   for (const [file, expectedHash] of expectedHashes) {

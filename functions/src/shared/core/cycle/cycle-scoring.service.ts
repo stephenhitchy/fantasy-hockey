@@ -24,6 +24,7 @@ import {
   getNhlTeamSeasonSchedule,
   getRegularSeasonGameLog,
   getSkaterAssistBreakdown,
+  getSkaterShootoutGoals,
   getTeamGoalieUnitResult,
   NhlApiRefreshProfile,
   NhlGameBoxscoreResponse,
@@ -589,6 +590,7 @@ function getFinalGameInputCompleteness(input: {
   gameId: number;
   gameData: ScoringGameData | undefined;
   playerLogLoad: SkaterGameLogLoad | undefined;
+  scoringRules: ScoringRules;
   sourceTeamAbbreviation?: string;
   requireSourceTeamAbbreviation?: boolean;
 }): NhlFinalInputCompleteness {
@@ -606,6 +608,14 @@ function getFinalGameInputCompleteness(input: {
   const assetTeamAbbreviation = validReplaySourceTeamAbbreviation ??
     getAssetTeamAbbreviation(input.asset).trim().toUpperCase();
   const boxscore = input.gameData?.boxscore;
+  const shootoutScoringEnabled =
+    (input.scoringRules.shootoutGoal ?? 0) !== 0 ||
+    input.scoringRules.shootoutGoalBreaksGoalieShutout === true;
+  const goalieNeedsPlayByPlay = input.asset.assetType === 'team-goalie-unit' &&
+    input.scoringRules.shootoutGoalBreaksGoalieShutout === true;
+  const gameEndedInShootout =
+    typeof boxscore?.gameOutcome?.lastPeriodType === 'string' &&
+    boxscore.gameOutcome.lastPeriodType.trim().toUpperCase() === 'SO';
 
   if (input.requireSourceTeamAbbreviation && !validReplaySourceTeamAbbreviation) {
     boxscoreState = {
@@ -618,13 +628,17 @@ function getFinalGameInputCompleteness(input: {
           boxscore,
           teamAbbreviation: assetTeamAbbreviation,
           playerId: input.asset.player.id,
+          requireGameOutcome: shootoutScoringEnabled,
         })
       : validateNhlFinalGoalieUnitBoxscore({
           boxscore,
           teamAbbreviation: assetTeamAbbreviation,
+          requireTeamIds: goalieNeedsPlayByPlay,
+          requireGameOutcome: shootoutScoringEnabled,
         });
   }
-  let playByPlayState: NhlFinalInputSourceState = input.asset.assetType === 'skater'
+  let playByPlayState: NhlFinalInputSourceState =
+    input.asset.assetType === 'skater' || goalieNeedsPlayByPlay
     ? input.gameData?.playByPlayState ?? {
         availability: 'temporarily-unavailable' as const,
         detail: 'NHL play-by-play result was omitted from the scoring batch.',
@@ -632,11 +646,23 @@ function getFinalGameInputCompleteness(input: {
     : { availability: 'not-required' as const };
 
   if (
-    input.asset.assetType === 'skater' &&
+    (input.asset.assetType === 'skater' || goalieNeedsPlayByPlay) &&
     playByPlayState.availability === 'available' &&
     input.gameData?.playByPlay
   ) {
-    playByPlayState = validateNhlFinalPlayByPlay(input.gameData.playByPlay);
+    playByPlayState = validateNhlFinalPlayByPlay(
+      input.gameData.playByPlay,
+      {
+        requireShootoutTeamAttribution: shootoutScoringEnabled,
+        expectedShootoutTeamIds: shootoutScoringEnabled
+          ? [boxscore?.homeTeam?.id, boxscore?.awayTeam?.id]
+              .filter((teamId): teamId is number => Number.isInteger(teamId))
+          : undefined,
+        requireCompletedShootout: shootoutScoringEnabled,
+        gameEndedInShootout,
+        ignoreShootoutAssistFields: shootoutScoringEnabled,
+      },
+    );
   }
 
   let playerLogState: NhlFinalInputSourceState =
@@ -656,8 +682,18 @@ function getFinalGameInputCompleteness(input: {
       gameLog: input.playerLogLoad.gameLog,
       gameId: input.gameId,
       appeared: Boolean(
-        input.gameData?.boxscore &&
-        findSkaterBoxscoreLine(input.gameData.boxscore, input.asset.player.id)
+        (
+          input.gameData?.boxscore &&
+          findSkaterBoxscoreLine(input.gameData.boxscore, input.asset.player.id)
+        ) ||
+        (
+          shootoutScoringEnabled &&
+          input.gameData?.playByPlay &&
+          getSkaterShootoutGoals(
+            input.gameData.playByPlay,
+            input.asset.player.id,
+          ) > 0
+        )
       ),
     }).sourceState;
   }
@@ -669,7 +705,7 @@ function getFinalGameInputCompleteness(input: {
         playByPlayState.availability === 'available' &&
         playerLogState.availability === 'available'
       )
-    );
+    ) && (!goalieNeedsPlayByPlay || playByPlayState.availability === 'available');
 
   if (requiredSourcesAvailable) {
     try {
@@ -679,9 +715,13 @@ function getFinalGameInputCompleteness(input: {
         assetType: input.asset.assetType,
         assetKey: input.asset.assetKey,
         boxscore: input.gameData?.boxscore,
-        ...(input.asset.assetType === 'skater'
+        ...(input.asset.assetType === 'skater' || goalieNeedsPlayByPlay
           ? {
               playByPlay: input.gameData?.playByPlay,
+            }
+          : {}),
+        ...(input.asset.assetType === 'skater'
+          ? {
               playerGameLog:
                 input.playerLogLoad?.gameLogByGameId.get(input.gameId) ?? null,
               playerGameLogRetrieved: true,
@@ -703,6 +743,7 @@ function getFinalGameInputCompleteness(input: {
     playByPlay: playByPlayState,
     playerLog: playerLogState,
     sourceVersion,
+    requireGoaliePlayByPlay: goalieNeedsPlayByPlay,
   });
 }
 
@@ -740,8 +781,11 @@ function calculateSkaterGameScore(
   const skaterLine = gameData?.boxscore
     ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
     : null;
+  const shootoutGoals = (scoringRules.shootoutGoal ?? 0) !== 0 && gameData?.playByPlay
+    ? getSkaterShootoutGoals(gameData.playByPlay, asset.player.id)
+    : 0;
 
-  if (!skaterLine && !gameLog) {
+  if (!skaterLine && !gameLog && shootoutGoals === 0) {
     return {
       points: 0,
       appeared: false
@@ -749,7 +793,13 @@ function calculateSkaterGameScore(
   }
 
   const assistBreakdown = gameData?.playByPlay
-    ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
+    ? getSkaterAssistBreakdown(
+        gameData.playByPlay,
+        asset.player.id,
+        {
+          excludeShootoutGoals: (scoringRules.shootoutGoal ?? 0) !== 0,
+        },
+      )
     : {
         primaryAssists: 0,
         secondaryAssists: 0
@@ -785,6 +835,7 @@ function calculateSkaterGameScore(
       : 0,
     gameWinningGoal: gameIsFinal && Boolean(gameLog?.gameWinningGoals),
     overtimeGoal: gameIsFinal && Boolean(gameLog?.otGoals),
+    shootoutGoals,
     timeOnIceMinutes: getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi)
   };
 
@@ -811,7 +862,8 @@ function calculateGoalieUnitGameScore(
 
   const goalieResult = getTeamGoalieUnitResult(
     gameData.boxscore,
-    asset.teamAbbreviation
+    asset.teamAbbreviation,
+    gameData.playByPlay,
   );
 
   if (!goalieResult) {
@@ -825,7 +877,8 @@ function calculateGoalieUnitGameScore(
     saves: goalieResult.saves,
     shotsAgainst: goalieResult.shotsAgainst,
     won: gameIsFinal && goalieResult.won,
-    shutout: gameIsFinal && goalieResult.shutout
+    shutout: gameIsFinal && goalieResult.shutout,
+    shootoutGoalsAgainst: goalieResult.shootoutGoalsAgainst,
   };
 
   return {
@@ -840,6 +893,7 @@ function canReuseFinalGame(
   previous: CycleAssetScoreSummary | undefined,
   gameId: number,
   assetType: DraftableAsset['assetType'],
+  scoringRules: ScoringRules,
 ): boolean {
   const key = String(gameId);
 
@@ -848,6 +902,9 @@ function canReuseFinalGame(
     gameState: previous?.gameStates?.[key],
     score: previous?.gameScores?.[key],
     completeness: previous?.gameInputCompleteness?.[key],
+    requireGoaliePlayByPlay:
+      assetType === 'team-goalie-unit' &&
+      scoringRules.shootoutGoalBreaksGoalieShutout === true,
   });
 }
 
@@ -993,7 +1050,12 @@ export async function calculateCycleScoring(
 
       if (
         state === 'final' &&
-        !canReuseFinalGame(previous, game.id, pick.asset.assetType)
+        !canReuseFinalGame(
+          previous,
+          game.id,
+          pick.asset.assetType,
+          input.scoringRules,
+        )
       ) {
         gameIdsToLoad.add(game.id);
 
@@ -1090,7 +1152,12 @@ export async function calculateCycleScoring(
 
       if (
         state === 'final' &&
-        canReuseFinalGame(previous, game.id, pick.asset.assetType)
+        canReuseFinalGame(
+          previous,
+          game.id,
+          pick.asset.assetType,
+          input.scoringRules,
+        )
       ) {
         const previousScore = previous?.gameScores?.[gameIdKey] ?? 0;
         const appeared = previous?.appearanceGameIds?.includes(game.id) ?? false;
@@ -1153,6 +1220,7 @@ export async function calculateCycleScoring(
           gameId: game.id,
           gameData,
           playerLogLoad,
+          scoringRules: input.scoringRules,
           sourceTeamAbbreviation:
             input.replaySourceTeamAbbreviationByAssetGameId
               ?.[pick.asset.assetKey]

@@ -4,13 +4,12 @@ import type {
   NhlGameBoxscoreResponse,
   NhlGamePlayByPlayResponse,
   NhlGoalieBoxscoreLine,
-  NhlPlayByPlayEvent,
   NhlPlayerGameLogEntry,
   NhlSkaterBoxscoreLine,
   NhlTeamBoxscore,
 } from './nhl-api.service';
 
-export const CANONICAL_NHL_FACTS_SCHEMA_VERSION = 2;
+export const CANONICAL_NHL_FACTS_SCHEMA_VERSION = 3;
 export const CANONICAL_NHL_TOI_SETTLEMENT_INTERVAL_MILLISECONDS = 5 * 60 * 1000;
 export const CANONICAL_NHL_FINAL_RECONCILIATION_MILLISECONDS = 30 * 60 * 1000;
 
@@ -85,6 +84,8 @@ export interface CanonicalNhlGoalEvent {
   periodType: string;
   timeInPeriod: string;
   scoringPlayerId: number | null;
+  eventOwnerTeamId: number | null;
+  goalieInNetId: number | null;
   assist1PlayerId: number | null;
   assist2PlayerId: number | null;
   situationCode: string;
@@ -93,7 +94,7 @@ export interface CanonicalNhlGoalEvent {
 }
 
 export interface CanonicalNhlGameFacts {
-  schemaVersion: 2;
+  schemaVersion: 3;
   gameId: number;
   gameState: CanonicalNhlGameState;
   sourceGameState: string;
@@ -105,10 +106,14 @@ export interface CanonicalNhlGameFacts {
   clockTimeRemaining: string;
   clockRunning: boolean;
   inIntermission: boolean;
+  homeTeamId: number;
+  awayTeamId: number;
   homeTeamAbbreviation: string;
   awayTeamAbbreviation: string;
   homeScore: number;
   awayScore: number;
+  boxscoreLastPeriodType: string;
+  shootoutComplete: boolean;
   skaters: CanonicalNhlSkaterFacts[];
   goalies: CanonicalNhlGoalieFacts[];
   goals: CanonicalNhlGoalEvent[];
@@ -151,6 +156,10 @@ function finiteNumber(value: unknown, fallback = 0): number {
 
 function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 export function parseNhlTimeOnIceSeconds(value: unknown): number {
@@ -241,45 +250,51 @@ function countOrderedAssists(
 }
 
 function getPlayDetailNumber(
-  play: NhlPlayByPlayEvent,
+  play: Record<string, unknown>,
   key: string,
 ): number | null {
-  const value = play.details?.[key];
+  const details = isRecord(play['details']) ? play['details'] : {};
+  const value = details[key];
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : null;
 }
 
 function getPlayDetailString(
-  play: NhlPlayByPlayEvent,
+  play: Record<string, unknown>,
   key: string,
 ): string {
-  return normalizedString(play.details?.[key]);
+  const details = isRecord(play['details']) ? play['details'] : {};
+  return normalizedString(details[key]);
 }
 
 function normalizeGoalEvent(
-  play: NhlPlayByPlayEvent,
+  play: unknown,
 ): CanonicalNhlGoalEvent | null {
-  if (normalizedString(play.typeDescKey).toLowerCase() !== 'goal') {
+  if (
+    !isRecord(play) ||
+    normalizedString(play['typeDescKey']).toLowerCase() !== 'goal'
+  ) {
     return null;
   }
 
-  const periodDescriptor = play.periodDescriptor &&
-    typeof play.periodDescriptor === 'object'
-      ? play.periodDescriptor
-      : {};
+  const periodDescriptor = isRecord(play['periodDescriptor'])
+    ? play['periodDescriptor']
+    : {};
 
   return {
-    eventId: typeof play.eventId === 'number' && Number.isFinite(play.eventId)
-      ? play.eventId
+    eventId: typeof play['eventId'] === 'number' && Number.isFinite(play['eventId'])
+      ? play['eventId']
       : null,
-    period: typeof periodDescriptor.number === 'number' &&
-      Number.isFinite(periodDescriptor.number)
-        ? periodDescriptor.number
+    period: typeof periodDescriptor['number'] === 'number' &&
+      Number.isFinite(periodDescriptor['number'])
+        ? periodDescriptor['number']
         : null,
-    periodType: normalizedString(periodDescriptor.periodType),
-    timeInPeriod: normalizedString(play.timeInPeriod),
+    periodType: normalizedString(periodDescriptor['periodType']),
+    timeInPeriod: normalizedString(play['timeInPeriod']),
     scoringPlayerId: getPlayDetailNumber(play, 'scoringPlayerId'),
+    eventOwnerTeamId: getPlayDetailNumber(play, 'eventOwnerTeamId'),
+    goalieInNetId: getPlayDetailNumber(play, 'goalieInNetId'),
     assist1PlayerId: getPlayDetailNumber(play, 'assist1PlayerId'),
     assist2PlayerId: getPlayDetailNumber(play, 'assist2PlayerId'),
     situationCode: getPlayDetailString(play, 'situationCode'),
@@ -339,7 +354,12 @@ export function buildCanonicalNhlGameFacts(input: {
   const awayTeamAbbreviation = normalizedString(
     input.boxscore.awayTeam?.abbrev,
   ).toUpperCase();
-  const goals = (input.playByPlay.plays ?? [])
+  const homeTeamId = Math.trunc(finiteNumber(input.boxscore.homeTeam?.id));
+  const awayTeamId = Math.trunc(finiteNumber(input.boxscore.awayTeam?.id));
+  const plays = Array.isArray(input.playByPlay?.plays)
+    ? input.playByPlay.plays
+    : [];
+  const goals = plays
     .map((play) => normalizeGoalEvent(play))
     .filter((event): event is CanonicalNhlGoalEvent => event !== null)
     .sort((left, right) => {
@@ -347,6 +367,13 @@ export function buildCanonicalNhlGameFacts(input: {
       const rightEvent = right.eventId ?? Number.MAX_SAFE_INTEGER;
       return leftEvent - rightEvent;
     });
+  const shootoutComplete = plays.some((play) => {
+    if (!isRecord(play)) return false;
+    const periodDescriptor = play['periodDescriptor'];
+    return normalizedString(play['typeDescKey']).toLowerCase() === 'shootout-complete' &&
+      isRecord(periodDescriptor) &&
+      normalizedString(periodDescriptor['periodType']).toUpperCase() === 'SO';
+  });
   const homeStats = input.boxscore.playerByGameStats?.homeTeam;
   const awayStats = input.boxscore.playerByGameStats?.awayTeam;
   const skaters = [
@@ -368,6 +395,7 @@ export function buildCanonicalNhlGameFacts(input: {
   const playerIds = [...new Set([
     ...skaters.map((entry) => entry.playerId),
     ...goalies.map((entry) => entry.playerId),
+    ...goals.map((entry) => entry.scoringPlayerId ?? 0),
   ].filter((playerId) => playerId > 0))].sort((left, right) => left - right);
   const teamAbbreviations = [...new Set([
     homeTeamAbbreviation,
@@ -392,10 +420,16 @@ export function buildCanonicalNhlGameFacts(input: {
     clockTimeRemaining: normalizedString(input.scoreboard.clockTimeRemaining),
     clockRunning: input.scoreboard.clockRunning === true,
     inIntermission: input.scoreboard.inIntermission === true,
+    homeTeamId,
+    awayTeamId,
     homeTeamAbbreviation,
     awayTeamAbbreviation,
     homeScore: finiteNumber(input.boxscore.homeTeam?.score),
     awayScore: finiteNumber(input.boxscore.awayTeam?.score),
+    boxscoreLastPeriodType: normalizedString(
+      input.boxscore.gameOutcome?.lastPeriodType,
+    ).toUpperCase(),
+    shootoutComplete,
     skaters,
     goalies,
     goals,
@@ -502,10 +536,14 @@ export function buildCanonicalNhlGameHashes(
     inIntermission: facts.inIntermission,
   };
   const fantasyEvents = {
+    homeTeamId: facts.homeTeamId,
+    awayTeamId: facts.awayTeamId,
     homeTeamAbbreviation: facts.homeTeamAbbreviation,
     awayTeamAbbreviation: facts.awayTeamAbbreviation,
     homeScore: facts.homeScore,
     awayScore: facts.awayScore,
+    boxscoreLastPeriodType: facts.boxscoreLastPeriodType,
+    shootoutComplete: facts.shootoutComplete,
     skaters: fantasySkaters,
     goalies: fantasyGoalies,
     goals: facts.goals,

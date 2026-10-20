@@ -288,3 +288,12 @@ The following require separate approval and proof:
 - exact-once correction mutation across windows, Game 7 ownership, transactions, standings, and playoffs.
 
 D1M-A intentionally stops at bounded detection and administrator evidence.
+
+## Scoring V5 compatibility addendum
+
+Canonical schema 3 and exact scoring-version rules are now part of the
+detector's proof boundary. A V5 Team Goalie Unit can be compared only when its
+canonical completeness record includes boxscore, play-by-play, and source
+version; V3/V4 saved evidence keeps its historical direct-source contract.
+This remains detect-only and cannot rewrite a completed score or six-game
+window.

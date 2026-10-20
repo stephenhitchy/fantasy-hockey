@@ -15,6 +15,9 @@ import { monitorFirestoreListener } from '../observability/firestore-listener-mo
 import {
   CURRENT_SCORING_RULES_VERSION,
   SCORING_RULES_V3_VERSION,
+  SCORING_RULES_V4_VERSION,
+  SCORING_RULES_V5_VERSION,
+  normalizeScoringRulesVersion,
 } from '../scoring/scoring-rules';
 import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
 
@@ -165,19 +168,18 @@ function compareSnapshotAssetOrder(
 }
 
 function normalizeProjectionScoringRulesVersion(value: unknown): number | null {
-  if (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= SCORING_RULES_V3_VERSION &&
-    value <= CURRENT_SCORING_RULES_VERSION
-  ) {
-    return value;
-  }
+  const normalized = normalizeScoringRulesVersion(value);
+
+  if (normalized !== null) return normalized;
 
   // Projection snapshots created before Scoring V4 did not store this field.
   return value === undefined || value === null
     ? SCORING_RULES_V3_VERSION
     : null;
+}
+
+function isCurrentProjectionScoringRulesVersion(value: unknown): boolean {
+  return value === SCORING_RULES_V4_VERSION || value === SCORING_RULES_V5_VERSION;
 }
 
 function normalizeMetadata(
@@ -794,7 +796,7 @@ async function loadServerGeneratedSnapshot(
   }
 
   if (
-    snapshot.metadata.scoringRulesVersion !== CURRENT_SCORING_RULES_VERSION ||
+    !isCurrentProjectionScoringRulesVersion(snapshot.metadata.scoringRulesVersion) ||
     snapshot.metadata.generatedByAuthority !== 'server' ||
     snapshot.metadata.authoritySchemaVersion !== PROJECTION_SNAPSHOT_AUTHORITY_SCHEMA_VERSION ||
     snapshot.metadata.catalogValidationStatus !== 'validated' ||

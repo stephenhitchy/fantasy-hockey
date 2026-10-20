@@ -58,6 +58,7 @@ export interface NhlFinalInputRequirements {
   playByPlay: NhlFinalInputSourceState;
   playerLog: NhlFinalInputSourceState;
   sourceVersion: string;
+  requireGoaliePlayByPlay?: boolean;
 }
 
 const MAX_FAILURE_DETAIL_LENGTH = 180;
@@ -209,11 +210,28 @@ function hasUniqueValidPlayerIds(values: readonly unknown[]): boolean {
   return ids.every(isPositiveInteger) && new Set(ids).size === ids.length;
 }
 
+function hasValidFinalGameOutcome(boxscore: NhlGameBoxscoreResponse): boolean {
+  const lastPeriodType = boxscore.gameOutcome?.lastPeriodType;
+
+  return typeof lastPeriodType === 'string' &&
+    ['REG', 'OT', 'SO'].includes(lastPeriodType.trim().toUpperCase());
+}
+
 export function validateNhlFinalSkaterBoxscore(input: {
   boxscore: NhlGameBoxscoreResponse;
   teamAbbreviation: string;
   playerId: number;
+  requireGameOutcome?: boolean;
 }): NhlFinalInputSourceState {
+  if (
+    input.requireGameOutcome === true &&
+    !hasValidFinalGameOutcome(input.boxscore)
+  ) {
+    return malformedSource(
+      'NHL boxscore was missing the final period type required for shootout scoring.',
+    );
+  }
+
   const team = getValidatedBoxscoreTeam(input);
 
   if (!team || !Array.isArray(team.forwards) || !Array.isArray(team.defense)) {
@@ -244,7 +262,31 @@ export function validateNhlFinalSkaterBoxscore(input: {
 export function validateNhlFinalGoalieUnitBoxscore(input: {
   boxscore: NhlGameBoxscoreResponse;
   teamAbbreviation: string;
+  requireTeamIds?: boolean;
+  requireGameOutcome?: boolean;
 }): NhlFinalInputSourceState {
+  if (
+    input.requireGameOutcome === true &&
+    !hasValidFinalGameOutcome(input.boxscore)
+  ) {
+    return malformedSource(
+      'NHL boxscore was missing the final period type required for shootout scoring.',
+    );
+  }
+
+  if (
+    input.requireTeamIds === true &&
+    (
+      !isPositiveInteger(input.boxscore.homeTeam?.id) ||
+      !isPositiveInteger(input.boxscore.awayTeam?.id) ||
+      input.boxscore.homeTeam?.id === input.boxscore.awayTeam?.id
+    )
+  ) {
+    return malformedSource(
+      'NHL boxscore was missing team identifiers required to attribute shootout goals.',
+    );
+  }
+
   const team = getValidatedBoxscoreTeam(input);
 
   if (!team || !Array.isArray(team.goalies) || team.goalies.length === 0) {
@@ -268,12 +310,38 @@ export function validateNhlFinalGoalieUnitBoxscore(input: {
 
 export function validateNhlFinalCanonicalBoxscore(
   boxscore: NhlGameBoxscoreResponse,
+  options: {
+    requireTeamIds?: boolean;
+    requireGameOutcome?: boolean;
+  } = {},
 ): NhlFinalInputSourceState {
   const home = boxscore.homeTeam?.abbrev?.trim().toUpperCase() ?? '';
   const away = boxscore.awayTeam?.abbrev?.trim().toUpperCase() ?? '';
 
   if (!home || !away || home === away) {
     return malformedSource('NHL boxscore did not identify two distinct teams.');
+  }
+
+  if (
+    options.requireGameOutcome === true &&
+    !hasValidFinalGameOutcome(boxscore)
+  ) {
+    return malformedSource(
+      'NHL boxscore did not identify the final period type for shootout completeness.',
+    );
+  }
+
+  if (
+    options.requireTeamIds === true &&
+    (
+      !isPositiveInteger(boxscore.homeTeam?.id) ||
+      !isPositiveInteger(boxscore.awayTeam?.id) ||
+      boxscore.homeTeam?.id === boxscore.awayTeam?.id
+    )
+  ) {
+    return malformedSource(
+      'NHL boxscore did not identify two distinct team IDs for shootout attribution.',
+    );
   }
 
   for (const teamAbbreviation of [home, away]) {
@@ -311,6 +379,13 @@ export function validateNhlFinalCanonicalBoxscore(
 
 export function validateNhlFinalPlayByPlay(
   playByPlay: NhlGamePlayByPlayResponse,
+  options: {
+    requireShootoutTeamAttribution?: boolean;
+    expectedShootoutTeamIds?: readonly number[];
+    requireCompletedShootout?: boolean;
+    gameEndedInShootout?: boolean;
+    ignoreShootoutAssistFields?: boolean;
+  } = {},
 ): NhlFinalInputSourceState {
   if (!Array.isArray(playByPlay.plays) || playByPlay.plays.length === 0) {
     return malformedSource(
@@ -318,13 +393,37 @@ export function validateNhlFinalPlayByPlay(
     );
   }
 
+  let sawShootoutGoal = false;
+  let sawShootoutComplete = false;
+  const shootoutGoalEventIds = new Set<number>();
+
   for (const play of playByPlay.plays) {
     if (!isRecord(play)) {
       return malformedSource('NHL play-by-play contained a malformed play entry.');
     }
 
-    if (String(play['typeDescKey'] ?? '').trim().toLowerCase() !== 'goal') {
+    const typeDescKey = String(play['typeDescKey'] ?? '').trim().toLowerCase();
+    const periodDescriptor = play['periodDescriptor'];
+    const rawPeriodType = isRecord(periodDescriptor)
+      ? periodDescriptor['periodType']
+      : null;
+    const periodType = typeof rawPeriodType === 'string'
+      ? rawPeriodType.trim().toUpperCase()
+      : '';
+
+    if (typeDescKey === 'shootout-complete' && periodType === 'SO') {
+      sawShootoutComplete = true;
       continue;
+    }
+
+    if (typeDescKey !== 'goal') {
+      continue;
+    }
+
+    if (options.requireCompletedShootout === true && !periodType) {
+      return malformedSource(
+        'NHL play-by-play contained a goal without final period-type evidence.',
+      );
     }
 
     const details = play['details'];
@@ -333,6 +432,47 @@ export function validateNhlFinalPlayByPlay(
       return malformedSource(
         'NHL play-by-play contained a goal without valid scorer evidence.',
       );
+    }
+
+    if (periodType === 'SO') {
+      if (options.requireCompletedShootout === true) {
+        const eventId = play['eventId'];
+        if (!isPositiveInteger(eventId) || shootoutGoalEventIds.has(eventId)) {
+          return malformedSource(
+            'NHL play-by-play contained a missing or duplicate shootout-goal event ID.',
+          );
+        }
+        shootoutGoalEventIds.add(eventId);
+      }
+      sawShootoutGoal = true;
+    }
+
+    if (options.requireShootoutTeamAttribution === true && periodType === 'SO') {
+      const eventOwnerTeamId = details['eventOwnerTeamId'];
+
+      if (!isPositiveInteger(eventOwnerTeamId)) {
+        return malformedSource(
+          'NHL play-by-play contained a shootout goal without valid team attribution.',
+        );
+      }
+
+      if (
+        Array.isArray(options.expectedShootoutTeamIds) &&
+        !options.expectedShootoutTeamIds.includes(eventOwnerTeamId)
+      ) {
+        return malformedSource(
+          'NHL play-by-play attributed a shootout goal to a team outside this game.',
+        );
+      }
+    }
+
+    // Scoring V5 makes shootout events assist-free. Legacy V3/V4 callers omit
+    // this option so their frozen evidence-validation behavior is unchanged.
+    if (
+      periodType === 'SO' &&
+      options.ignoreShootoutAssistFields === true
+    ) {
+      continue;
     }
 
     for (const assistKey of ['assist1PlayerId', 'assist2PlayerId']) {
@@ -344,6 +484,26 @@ export function validateNhlFinalPlayByPlay(
         );
       }
     }
+  }
+
+  if (
+    options.requireCompletedShootout === true &&
+    options.gameEndedInShootout === true &&
+    (!sawShootoutGoal || !sawShootoutComplete)
+  ) {
+    return malformedSource(
+      'NHL play-by-play did not contain a complete final shootout sequence.',
+    );
+  }
+
+  if (
+    options.requireCompletedShootout === true &&
+    options.gameEndedInShootout === false &&
+    (sawShootoutGoal || sawShootoutComplete)
+  ) {
+    return malformedSource(
+      'NHL play-by-play contained shootout evidence that disagreed with the final boxscore outcome.',
+    );
   }
 
   return availableSource();
@@ -509,9 +669,13 @@ function addUnavailableSourceFailures(input: {
 export function assessNhlFinalInputCompleteness(
   input: NhlFinalInputRequirements,
 ): NhlFinalInputCompleteness {
+  const goalieNeedsPlayByPlay = input.assetType === 'team-goalie-unit' &&
+    input.requireGoaliePlayByPlay === true;
   const requiredSources: NhlFinalInputSource[] = input.assetType === 'skater'
     ? ['boxscore', 'play-by-play', 'player-log', 'source-version']
-    : ['boxscore', 'source-version'];
+    : goalieNeedsPlayByPlay
+      ? ['boxscore', 'play-by-play', 'source-version']
+      : ['boxscore', 'source-version'];
   const failures: NhlFinalInputFailure[] = [];
 
   addUnavailableSourceFailures({
@@ -520,12 +684,15 @@ export function assessNhlFinalInputCompleteness(
     failures,
   });
 
-  if (input.assetType === 'skater') {
+  if (input.assetType === 'skater' || goalieNeedsPlayByPlay) {
     addUnavailableSourceFailures({
       source: 'play-by-play',
       state: input.playByPlay,
       failures,
     });
+  }
+
+  if (input.assetType === 'skater') {
     addUnavailableSourceFailures({
       source: 'player-log',
       state: input.playerLog,
@@ -574,6 +741,7 @@ export function isReusableNhlFinalScore(input: {
   gameState: unknown;
   score: unknown;
   completeness: unknown;
+  requireGoaliePlayByPlay?: boolean;
 }): boolean {
   if (
     input.gameState !== 'final' ||
@@ -590,6 +758,8 @@ export function isReusableNhlFinalScore(input: {
   const expectedRequiredSources: NhlFinalInputSource[] =
     input.assetType === 'skater'
       ? ['boxscore', 'play-by-play', 'player-log', 'source-version']
+      : input.requireGoaliePlayByPlay === true
+        ? ['boxscore', 'play-by-play', 'source-version']
       : ['boxscore', 'source-version'];
 
   return evidence.status === 'complete' &&
@@ -620,6 +790,11 @@ function hasExactRequiredSourceContract(
     'boxscore',
     'source-version',
   ];
+  const shootoutAwareGoalieSources: NhlFinalInputSource[] = [
+    'boxscore',
+    'play-by-play',
+    'source-version',
+  ];
 
   return (
     uniqueSources.size === skaterSources.length &&
@@ -627,6 +802,9 @@ function hasExactRequiredSourceContract(
   ) || (
     uniqueSources.size === goalieSources.length &&
     goalieSources.every((source) => uniqueSources.has(source))
+  ) || (
+    uniqueSources.size === shootoutAwareGoalieSources.length &&
+    shootoutAwareGoalieSources.every((source) => uniqueSources.has(source))
   );
 }
 

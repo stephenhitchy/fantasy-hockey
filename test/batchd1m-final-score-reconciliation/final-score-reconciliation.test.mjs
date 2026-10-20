@@ -36,14 +36,20 @@ const skaterAsset = {
   },
 };
 
-function completeEvidence(sourceVersion, assetType = 'skater') {
+function completeEvidence(
+  sourceVersion,
+  assetType = 'skater',
+  { shootoutAwareGoalie = false } = {},
+) {
   return {
     status: 'complete',
     complete: true,
     reusableFinal: true,
     requiredSources: assetType === 'skater'
       ? ['boxscore', 'play-by-play', 'player-log', 'source-version']
-      : ['boxscore', 'source-version'],
+      : shootoutAwareGoalie
+        ? ['boxscore', 'play-by-play', 'source-version']
+        : ['boxscore', 'source-version'],
     sourceVersion,
     preservedPreviousScore: false,
     failures: [],
@@ -52,7 +58,7 @@ function completeEvidence(sourceVersion, assetType = 'skater') {
 
 function canonicalFacts(overrides = {}) {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     gameId: 1,
     gameState: 'final',
     sourceGameState: 'OFF',
@@ -64,6 +70,8 @@ function canonicalFacts(overrides = {}) {
     clockTimeRemaining: '00:00',
     clockRunning: false,
     inIntermission: false,
+    homeTeamId: 55,
+    awayTeamId: 23,
     homeTeamAbbreviation: 'SEA',
     awayTeamAbbreviation: 'VAN',
     homeScore: 2,
@@ -85,7 +93,11 @@ function canonicalGame(overrides = {}) {
     facts: canonicalFacts(),
     finalInputCompletenessByAssetType: {
       skater: completeEvidence(CANONICAL_SOURCE_VERSION),
-      teamGoalieUnit: completeEvidence(CANONICAL_SOURCE_VERSION, 'team-goalie-unit'),
+      teamGoalieUnit: completeEvidence(
+        CANONICAL_SOURCE_VERSION,
+        'team-goalie-unit',
+        { shootoutAwareGoalie: true },
+      ),
     },
     ...overrides,
   };

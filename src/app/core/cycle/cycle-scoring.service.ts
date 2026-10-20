@@ -14,6 +14,7 @@ import {
   getNhlTeamSeasonSchedule,
   getRegularSeasonGameLog,
   getSkaterAssistBreakdown,
+  getSkaterShootoutGoals,
   getTeamGoalieUnitResult,
   NhlGameBoxscoreResponse,
   NhlGamePlayByPlayResponse,
@@ -420,8 +421,11 @@ function calculateSkaterGameScore(
   const skaterLine = gameData
     ? findSkaterBoxscoreLine(gameData.boxscore, asset.player.id)
     : null;
+  const shootoutGoals = (scoringRules.shootoutGoal ?? 0) !== 0 && gameData
+    ? getSkaterShootoutGoals(gameData.playByPlay, asset.player.id)
+    : 0;
 
-  if (!skaterLine && !gameLog) {
+  if (!skaterLine && !gameLog && shootoutGoals === 0) {
     return {
       points: 0,
       appeared: false
@@ -429,7 +433,13 @@ function calculateSkaterGameScore(
   }
 
   const assistBreakdown = gameData
-    ? getSkaterAssistBreakdown(gameData.playByPlay, asset.player.id)
+    ? getSkaterAssistBreakdown(
+        gameData.playByPlay,
+        asset.player.id,
+        {
+          excludeShootoutGoals: (scoringRules.shootoutGoal ?? 0) !== 0,
+        },
+      )
     : {
         primaryAssists: 0,
         secondaryAssists: 0
@@ -465,6 +475,7 @@ function calculateSkaterGameScore(
       : 0,
     gameWinningGoal: gameIsFinal && Boolean(gameLog?.gameWinningGoals),
     overtimeGoal: gameIsFinal && Boolean(gameLog?.otGoals),
+    shootoutGoals,
     timeOnIceMinutes: getMinutesFromToi(skaterLine?.toi ?? gameLog?.toi)
   };
 
@@ -491,7 +502,8 @@ function calculateGoalieUnitGameScore(
 
   const goalieResult = getTeamGoalieUnitResult(
     gameData.boxscore,
-    asset.teamAbbreviation
+    asset.teamAbbreviation,
+    gameData.playByPlay,
   );
 
   if (!goalieResult) {
@@ -505,7 +517,8 @@ function calculateGoalieUnitGameScore(
     saves: goalieResult.saves,
     shotsAgainst: goalieResult.shotsAgainst,
     won: gameIsFinal && goalieResult.won,
-    shutout: gameIsFinal && goalieResult.shutout
+    shutout: gameIsFinal && goalieResult.shutout,
+    shootoutGoalsAgainst: goalieResult.shootoutGoalsAgainst,
   };
 
   return {

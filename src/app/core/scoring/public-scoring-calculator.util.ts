@@ -5,7 +5,10 @@ import {
   type GoalieGameStats,
   type SkaterGameStats,
 } from './scoring-engine';
-import { defaultScoringRules } from './scoring-rules';
+import {
+  defaultScoringRules,
+  type ScoringRules,
+} from './scoring-rules';
 
 export type PublicScoringCalculatorMode = 'forward' | 'defense' | 'goalie';
 
@@ -21,6 +24,7 @@ export interface PublicSkaterCalculatorInput {
   shortHandedPoints: number;
   gameWinningGoal: boolean;
   overtimeGoal: boolean;
+  shootoutGoals?: number;
   timeOnIceMinutes: number;
 }
 
@@ -29,6 +33,7 @@ export interface PublicGoalieCalculatorInput {
   shotsAgainst: number;
   won: boolean;
   shutout: boolean;
+  shootoutGoalsAgainst?: number;
 }
 
 export interface PublicScoringCalculatorResult {
@@ -58,6 +63,7 @@ export const DEFAULT_PUBLIC_SKATER_INPUT: PublicSkaterCalculatorInput = {
   shortHandedPoints: 0,
   gameWinningGoal: false,
   overtimeGoal: false,
+  shootoutGoals: 0,
   timeOnIceMinutes: 18,
 };
 
@@ -66,6 +72,7 @@ export const DEFAULT_PUBLIC_GOALIE_INPUT: PublicGoalieCalculatorInput = {
   shotsAgainst: 30,
   won: true,
   shutout: false,
+  shootoutGoalsAgainst: 0,
 };
 
 export const FORWARD_SCORING_PRESETS: readonly PublicScoringCalculatorPreset<PublicSkaterCalculatorInput>[] = [
@@ -85,6 +92,7 @@ export const FORWARD_SCORING_PRESETS: readonly PublicScoringCalculatorPreset<Pub
       shortHandedPoints: 0,
       gameWinningGoal: true,
       overtimeGoal: false,
+      shootoutGoals: 0,
       timeOnIceMinutes: 18,
     },
   },
@@ -104,6 +112,7 @@ export const FORWARD_SCORING_PRESETS: readonly PublicScoringCalculatorPreset<Pub
       shortHandedPoints: 0,
       gameWinningGoal: false,
       overtimeGoal: false,
+      shootoutGoals: 0,
       timeOnIceMinutes: 19,
     },
   },
@@ -126,6 +135,7 @@ export const DEFENSE_SCORING_PRESETS: readonly PublicScoringCalculatorPreset<Pub
       shortHandedPoints: 0,
       gameWinningGoal: false,
       overtimeGoal: false,
+      shootoutGoals: 0,
       timeOnIceMinutes: 24,
     },
   },
@@ -145,6 +155,7 @@ export const DEFENSE_SCORING_PRESETS: readonly PublicScoringCalculatorPreset<Pub
       shortHandedPoints: 0,
       gameWinningGoal: false,
       overtimeGoal: false,
+      shootoutGoals: 0,
       timeOnIceMinutes: 25,
     },
   },
@@ -155,19 +166,19 @@ export const GOALIE_SCORING_PRESETS: readonly PublicScoringCalculatorPreset<Publ
     id: 'goalie-efficient-win',
     label: 'Efficient win',
     detail: '28 saves on 30 shots',
-    input: { saves: 28, shotsAgainst: 30, won: true, shutout: false },
+    input: { saves: 28, shotsAgainst: 30, won: true, shutout: false, shootoutGoalsAgainst: 0 },
   },
   {
     id: 'goalie-volume-loss',
     label: 'High-volume loss',
     detail: '34 saves on 40 shots',
-    input: { saves: 34, shotsAgainst: 40, won: false, shutout: false },
+    input: { saves: 34, shotsAgainst: 40, won: false, shutout: false, shootoutGoalsAgainst: 0 },
   },
   {
     id: 'goalie-shutout',
     label: 'Shutout win',
     detail: '30 saves on 30 shots',
-    input: { saves: 30, shotsAgainst: 30, won: true, shutout: true },
+    input: { saves: 30, shotsAgainst: 30, won: true, shutout: true, shootoutGoalsAgainst: 0 },
   },
 ];
 
@@ -188,12 +199,16 @@ function invalidResult(errorMessage: string): PublicScoringCalculatorResult {
   return { valid: false, errorMessage, breakdown: EMPTY_BREAKDOWN, repeatedSixGameTotal: 0, savePercentage: null };
 }
 
-function validResult(breakdown: GamePointBreakdown, savePercentage: number | null): PublicScoringCalculatorResult {
+function validResult(
+  breakdown: GamePointBreakdown,
+  savePercentage: number | null,
+  rules: ScoringRules,
+): PublicScoringCalculatorResult {
   return {
     valid: true,
     errorMessage: '',
     breakdown,
-    repeatedSixGameTotal: Number((breakdown.total * defaultScoringRules.requiredGamesPerCycle).toFixed(2)),
+    repeatedSixGameTotal: Number((breakdown.total * rules.requiredGamesPerCycle).toFixed(2)),
     savePercentage,
   };
 }
@@ -201,7 +216,9 @@ function validResult(breakdown: GamePointBreakdown, savePercentage: number | nul
 export function calculatePublicSkaterScore(
   mode: Extract<PublicScoringCalculatorMode, 'forward' | 'defense'>,
   input: PublicSkaterCalculatorInput,
+  rules: ScoringRules = defaultScoringRules,
 ): PublicScoringCalculatorResult {
+  const shootoutGoals = input.shootoutGoals ?? 0;
   const wholeNumberFields: Array<[unknown, string, number, number]> = [
     [input.goals, 'Goals', 0, 10],
     [input.primaryAssists, 'Primary assists', 0, 10],
@@ -212,6 +229,7 @@ export function calculatePublicSkaterScore(
     [input.plusMinus, 'Plus/minus', -10, 10],
     [input.powerPlayPoints, 'Power-play points', 0, 10],
     [input.shortHandedPoints, 'Short-handed points', 0, 10],
+    [shootoutGoals, 'Shootout goals', 0, 10],
   ];
 
   for (const [value, label, minimum, maximum] of wholeNumberFields) {
@@ -236,23 +254,38 @@ export function calculatePublicSkaterScore(
     return invalidResult('An overtime goal is also game-winning. Select both bonuses.');
   }
 
-  const stats: SkaterGameStats = { position: mode === 'defense' ? 'D' : 'F', ...input };
-  return validResult(calculateSkaterGameBreakdown(stats, defaultScoringRules), null);
+  const stats: SkaterGameStats = {
+    position: mode === 'defense' ? 'D' : 'F',
+    ...input,
+    shootoutGoals,
+  };
+  return validResult(calculateSkaterGameBreakdown(stats, rules), null, rules);
 }
 
-export function calculatePublicGoalieScore(input: PublicGoalieCalculatorInput): PublicScoringCalculatorResult {
+export function calculatePublicGoalieScore(
+  input: PublicGoalieCalculatorInput,
+  rules: ScoringRules = defaultScoringRules,
+): PublicScoringCalculatorResult {
+  const shootoutGoalsAgainst = input.shootoutGoalsAgainst ?? 0;
   const savesError = validateWholeNumber(input.saves, 'Saves', 0, 100);
   if (savesError) return invalidResult(savesError);
   const shotsError = validateWholeNumber(input.shotsAgainst, 'Shots against', 0, 100);
   if (shotsError) return invalidResult(shotsError);
+  const shootoutGoalsAgainstError = validateWholeNumber(
+    shootoutGoalsAgainst,
+    'Shootout goals against',
+    0,
+    20,
+  );
+  if (shootoutGoalsAgainstError) return invalidResult(shootoutGoalsAgainstError);
   if (input.saves > input.shotsAgainst) return invalidResult('Saves cannot exceed shots against.');
   if (input.shutout && input.saves !== input.shotsAgainst) {
     return invalidResult('A shutout requires saves to equal shots against.');
   }
 
-  const stats: GoalieGameStats = { ...input };
+  const stats: GoalieGameStats = { ...input, shootoutGoalsAgainst };
   const savePercentage = input.shotsAgainst > 0 ? Number((input.saves / input.shotsAgainst).toFixed(3)) : 0;
-  return validResult(calculateGoalieGameBreakdown(stats, defaultScoringRules), savePercentage);
+  return validResult(calculateGoalieGameBreakdown(stats, rules), savePercentage, rules);
 }
 
 export function formatPublicCalculatorPoints(value: number, signed = false): string {

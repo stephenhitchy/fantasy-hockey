@@ -23,6 +23,10 @@ export interface CanonicalScoringParityGame {
   finalInputCompletenessByAssetType?: {
     skater?: unknown;
     teamGoalieUnit?: unknown;
+    scoringV5?: {
+      skater?: unknown;
+      teamGoalieUnit?: unknown;
+    };
   };
 }
 
@@ -61,10 +65,9 @@ function rounded(value: number): number {
 function hasCompleteCanonicalFinalInput(input: {
   game: CanonicalScoringParityGame;
   assetType: DraftableAsset['assetType'];
+  scoringRules: ScoringRules;
 }): boolean {
-  const evidence = input.assetType === 'skater'
-    ? input.game.finalInputCompletenessByAssetType?.skater
-    : input.game.finalInputCompletenessByAssetType?.teamGoalieUnit;
+  const evidence = getCanonicalFinalInputEvidence(input);
 
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
     return false;
@@ -74,7 +77,7 @@ function hasCompleteCanonicalFinalInput(input: {
   const requiredSources = candidate['requiredSources'];
   const expectedSources = input.assetType === 'skater'
     ? ['boxscore', 'play-by-play', 'player-log', 'source-version']
-    : ['boxscore', 'source-version'];
+    : ['boxscore', 'play-by-play', 'source-version'];
 
   return candidate['status'] === 'complete' &&
     candidate['complete'] === true &&
@@ -90,15 +93,31 @@ function hasCompleteCanonicalFinalInput(input: {
 function getCanonicalFinalInputReason(input: {
   game: CanonicalScoringParityGame;
   assetType: DraftableAsset['assetType'];
+  scoringRules: ScoringRules;
 }): string {
-  const evidence = input.assetType === 'skater'
-    ? input.game.finalInputCompletenessByAssetType?.skater
-    : input.game.finalInputCompletenessByAssetType?.teamGoalieUnit;
+  const evidence = getCanonicalFinalInputEvidence(input);
   const status = evidence && typeof evidence === 'object' && !Array.isArray(evidence)
     ? String((evidence as Record<string, unknown>)['status'] ?? '')
     : '';
 
   return `canonical-${status || 'final-input-incomplete'}`.slice(0, 100);
+}
+
+function getCanonicalFinalInputEvidence(input: {
+  game: CanonicalScoringParityGame;
+  assetType: DraftableAsset['assetType'];
+  scoringRules: ScoringRules;
+}): unknown {
+  const completeness = input.game.finalInputCompletenessByAssetType;
+  const v5Completeness = (input.scoringRules.shootoutGoal ?? 0) !== 0
+    ? completeness?.scoringV5
+    : undefined;
+
+  if (input.assetType === 'skater') {
+    return v5Completeness?.skater ?? completeness?.skater;
+  }
+
+  return v5Completeness?.teamGoalieUnit ?? completeness?.teamGoalieUnit;
 }
 
 function minutesFromSeconds(seconds: number): number {
@@ -119,11 +138,19 @@ function getFinalSettlement(
 function getCanonicalAssistBreakdown(
   facts: CanonicalNhlGameFacts,
   playerId: number,
+  excludeShootoutGoals: boolean,
 ): { primaryAssists: number; secondaryAssists: number } {
   let primaryAssists = 0;
   let secondaryAssists = 0;
 
   for (const goal of facts.goals) {
+    if (
+      excludeShootoutGoals &&
+      goal.periodType.trim().toUpperCase() === 'SO'
+    ) {
+      continue;
+    }
+
     if (goal.assist1PlayerId === playerId) {
       primaryAssists += 1;
     }
@@ -136,6 +163,58 @@ function getCanonicalAssistBreakdown(
   return { primaryAssists, secondaryAssists };
 }
 
+function countCanonicalShootoutGoals(
+  facts: CanonicalNhlGameFacts,
+  matches: (goal: CanonicalNhlGameFacts['goals'][number]) => boolean,
+): number {
+  const seenEventIds = new Set<number>();
+  let count = 0;
+
+  for (const goal of facts.goals) {
+    if (
+      goal.periodType.trim().toUpperCase() !== 'SO' ||
+      !matches(goal)
+    ) {
+      continue;
+    }
+
+    const eventId = goal.eventId;
+    if (Number.isInteger(eventId) && Number(eventId) > 0) {
+      if (seenEventIds.has(Number(eventId))) {
+        continue;
+      }
+      seenEventIds.add(Number(eventId));
+    }
+
+    // Live payloads can temporarily omit eventId. Those events remain
+    // countable because treating every missing ID as the same event would
+    // erase legitimate repeat-shooter successes.
+    count += 1;
+  }
+
+  return count;
+}
+
+function getCanonicalSkaterShootoutGoals(
+  facts: CanonicalNhlGameFacts,
+  playerId: number,
+): number {
+  return countCanonicalShootoutGoals(
+    facts,
+    (goal) => goal.scoringPlayerId === playerId,
+  );
+}
+
+function getCanonicalTeamShootoutGoals(
+  facts: CanonicalNhlGameFacts,
+  teamId: number,
+): number {
+  return countCanonicalShootoutGoals(
+    facts,
+    (goal) => goal.eventOwnerTeamId === teamId,
+  );
+}
+
 function calculateCanonicalSkaterGameScore(input: {
   asset: Extract<DraftableAsset, { assetType: 'skater' }>;
   facts: CanonicalNhlGameFacts;
@@ -145,11 +224,17 @@ function calculateCanonicalSkaterGameScore(input: {
   const line = input.facts.skaters.find(
     (entry) => entry.playerId === input.asset.player.id,
   );
+  const shootoutGoals = (input.scoringRules.shootoutGoal ?? 0) !== 0
+    ? getCanonicalSkaterShootoutGoals(
+        input.facts,
+        input.asset.player.id,
+      )
+    : 0;
   const finalSettlement = input.gameIsFinal
     ? getFinalSettlement(input.facts, input.asset.player.id)
     : null;
 
-  if (!line && !finalSettlement) {
+  if (!line && !finalSettlement && shootoutGoals === 0) {
     return {
       points: 0,
       appeared: false,
@@ -170,10 +255,15 @@ function calculateCanonicalSkaterGameScore(input: {
   const playByPlayAssists = getCanonicalAssistBreakdown(
     input.facts,
     input.asset.player.id,
+    (input.scoringRules.shootoutGoal ?? 0) !== 0,
   );
-  let primaryAssists = line?.primaryAssists ?? playByPlayAssists.primaryAssists;
-  let secondaryAssists =
-    line?.secondaryAssists ?? playByPlayAssists.secondaryAssists;
+  const excludeShootoutAssists = (input.scoringRules.shootoutGoal ?? 0) !== 0;
+  let primaryAssists = excludeShootoutAssists
+    ? playByPlayAssists.primaryAssists
+    : line?.primaryAssists ?? playByPlayAssists.primaryAssists;
+  let secondaryAssists = excludeShootoutAssists
+    ? playByPlayAssists.secondaryAssists
+    : line?.secondaryAssists ?? playByPlayAssists.secondaryAssists;
   const totalAssists = line?.assists ?? finalSettlement?.assists ?? 0;
 
   if (primaryAssists + secondaryAssists < totalAssists) {
@@ -199,6 +289,7 @@ function calculateCanonicalSkaterGameScore(input: {
       input.gameIsFinal && Boolean(finalSettlement?.gameWinningGoal),
     overtimeGoal:
       input.gameIsFinal && Boolean(finalSettlement?.overtimeGoal),
+    shootoutGoals,
     timeOnIceMinutes: minutesFromSeconds(
       input.gameIsFinal
         ? finalSettlement?.timeOnIceSeconds ?? line?.timeOnIceSeconds ?? 0
@@ -262,11 +353,18 @@ function calculateCanonicalGoalieUnitGameScore(input: {
   );
   const teamScore = isHome ? input.facts.homeScore : input.facts.awayScore;
   const opponentScore = isHome ? input.facts.awayScore : input.facts.homeScore;
+  const opponentTeamId = isHome
+    ? input.facts.awayTeamId
+    : input.facts.homeTeamId;
   const stats: GoalieGameStats = {
     saves,
     shotsAgainst,
     won: input.gameIsFinal && teamScore > opponentScore,
     shutout: input.gameIsFinal && teamScore > opponentScore && opponentScore === 0,
+    shootoutGoalsAgainst: getCanonicalTeamShootoutGoals(
+      input.facts,
+      opponentTeamId,
+    ),
   };
 
   return {
@@ -351,6 +449,7 @@ export function compareDirectAndCanonicalGameScore(input: {
     !hasCompleteCanonicalFinalInput({
       game: input.canonicalGame,
       assetType: input.asset.assetType,
+      scoringRules: input.scoringRules,
     })
   ) {
     return {
@@ -367,6 +466,7 @@ export function compareDirectAndCanonicalGameScore(input: {
       reason: getCanonicalFinalInputReason({
         game: input.canonicalGame,
         assetType: input.asset.assetType,
+        scoringRules: input.scoringRules,
       }),
     };
   }

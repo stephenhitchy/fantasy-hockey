@@ -16,6 +16,7 @@ export interface SkaterGameStats {
   shortHandedPoints: number;
   gameWinningGoal: boolean;
   overtimeGoal: boolean;
+  shootoutGoals?: number;
   timeOnIceMinutes: number;
 }
 
@@ -24,6 +25,7 @@ export interface GoalieGameStats {
   shotsAgainst: number;
   won: boolean;
   shutout: boolean;
+  shootoutGoalsAgainst?: number;
 }
 
 export interface PointBreakdownLine {
@@ -201,6 +203,21 @@ export function calculateSkaterGameBreakdown(
     addLine('Overtime Goal', rules.overtimeGoal);
   }
 
+  const shootoutGoals = Math.max(
+    0,
+    Math.trunc(stats.shootoutGoals ?? 0),
+  );
+  const shootoutGoalValue = rules.shootoutGoal ?? 0;
+
+  if (shootoutGoals > 0 && shootoutGoalValue !== 0) {
+    addLine(
+      shootoutGoals === 1
+        ? 'Shootout Goal'
+        : `Shootout Goals (${shootoutGoals} × ${shootoutGoalValue})`,
+      shootoutGoals * shootoutGoalValue,
+    );
+  }
+
   if (stats.position === 'D') {
     const toiMultiplier = clamp(
       rules.defenseToiBaseMultiplier +
@@ -274,8 +291,23 @@ export function calculateGoalieGameBreakdown(
     addLine('Win', rules.goalieWin);
   }
 
-  if (stats.shutout) {
+  const shootoutGoalsAgainst = Math.max(
+    0,
+    Math.trunc(stats.shootoutGoalsAgainst ?? 0),
+  );
+  const shootoutBrokeShutout =
+    rules.shootoutGoalBreaksGoalieShutout === true &&
+    shootoutGoalsAgainst > 0;
+
+  if (stats.shutout && !shootoutBrokeShutout) {
     addLine('Shutout', rules.goalieShutout);
+  }
+
+  if (stats.shutout && shootoutBrokeShutout) {
+    lines.push({
+      label: `Shootout Goals Against (${shootoutGoalsAgainst}; shutout broken)`,
+      points: 0,
+    });
   }
 
   const goalieGameMaximum =

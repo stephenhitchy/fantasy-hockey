@@ -326,8 +326,8 @@ test('F1 historical scoring calibration is read-only and uses the production sco
 
 test('the versioned production scoring engine and rules remain pinned to the approved V4A baseline', async () => {
   const expected = new Map([
-    ['../../src/app/core/scoring/scoring-rules.ts', '74107aa688b4a3825c52fe14003cd824485197fd3559822fab4134bff940e2da'],
-    ['../../src/app/core/scoring/scoring-engine.ts', '6f36cf76c72f8199c6a3891692844c9c830103ed618be50497b5270e259da3d3'],
+    ['../../src/app/core/scoring/scoring-rules.ts', 'c23f8c77dd80fb0703557242a5d116eb22c3d283c130a38a38566f8f59b80c7b'],
+    ['../../src/app/core/scoring/scoring-engine.ts', '59036bf3a036999740b5fc34b517e4602ff6c6a54af664bfca1f8327b5d24c2f'],
   ]);
 
   for (const [relativePath, expectedHash] of expected) {
