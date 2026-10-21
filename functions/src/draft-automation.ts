@@ -109,6 +109,10 @@ import {
   getDraftQueueStateAfterAutomaticPick,
 } from './draft-autodraft-state.util';
 import {
+  DraftAutomationHealthSummary,
+  getDraftAutomationHealthWriteDecision,
+} from './draft-automation-health.util';
+import {
   getCurrentNhlSeason,
   loadDraftSeasonWindowAnchorEvidence,
 } from './shared/core/draft/draft-player-pool.service';
@@ -3722,33 +3726,69 @@ export const runScheduledDraftAutomation = onSchedule(
 
     const failed = results.filter((result) => result.status === 'error');
     const picksMade = results.reduce((sum, result) => sum + result.picksMade, 0);
-
     const durationMilliseconds = Date.now() - startedAt;
-
-    await db.doc('appData/draftAutomation').set(
-      {
-        schemaVersion: 1,
-        status: failed.length > 0 ? 'partial-error' : 'success',
-        activeDraftCount: leagueIds.length,
-        picksMade,
-        failedDraftCount: failed.length,
-        failures: failed.slice(0, 10).map((result) => ({
-          leagueId: result.leagueId,
-          message: result.message.slice(0, 300),
-        })),
-        durationMilliseconds,
-        lastRunAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    console.info('Scheduled draft automation scan completed.', {
+    const healthSummary: DraftAutomationHealthSummary = {
+      schemaVersion: 1,
+      status: failed.length > 0 ? 'partial-error' : 'success',
       activeDraftCount: leagueIds.length,
       picksMade,
       failedDraftCount: failed.length,
-      durationMilliseconds,
+      failures: failed.slice(0, 10).map((result) => ({
+        leagueId: result.leagueId,
+        message: result.message.slice(0, 300),
+      })),
+    };
+    const healthRef = db.doc('appData/draftAutomation');
+    let healthWriteDecision = getDraftAutomationHealthWriteDecision({
+      current: healthSummary,
+      previous: null,
+      previousLastRunMilliseconds: null,
+      nowMilliseconds: Date.now(),
     });
+
+    if (
+      healthSummary.status === 'success' &&
+      healthSummary.activeDraftCount === 0 &&
+      healthSummary.picksMade === 0
+    ) {
+      try {
+        const previousHealthSnapshot = await healthRef.get();
+        const previousHealth = previousHealthSnapshot.data() ?? null;
+        healthWriteDecision = getDraftAutomationHealthWriteDecision({
+          current: healthSummary,
+          previous: previousHealth,
+          previousLastRunMilliseconds: asTimestampDate(
+            previousHealth?.['lastRunAt'],
+          )?.getTime() ?? null,
+          nowMilliseconds: Date.now(),
+        });
+      } catch (error: unknown) {
+        console.warn(
+          'Draft automation health could not be read; the completed scan will write fresh health evidence.',
+          { error },
+        );
+      }
+    }
+
+    if (healthWriteDecision.shouldWrite) {
+      await healthRef.set(
+        {
+          ...healthSummary,
+          durationMilliseconds,
+          lastRunAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      console.info('Scheduled draft automation scan completed.', {
+        activeDraftCount: leagueIds.length,
+        picksMade,
+        failedDraftCount: failed.length,
+        durationMilliseconds,
+        healthWriteReason: healthWriteDecision.reason,
+      });
+    }
   },
 );
 

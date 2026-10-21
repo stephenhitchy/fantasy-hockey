@@ -18,6 +18,11 @@ import {
 } from '../scoring/scoring-rules';
 import { DRAFT_RANKING_MODEL_VERSION } from './projection-ranking.util';
 import {
+  assertCompleteProjectionSnapshotAssetPayload,
+  detachProjectionSnapshotForConsumer,
+  ProjectionSnapshotAssetCache,
+} from './projection-snapshot-asset-cache.util';
+import {
   isSupportedProjectionSnapshotHashSchemaVersion,
   PROJECTION_SNAPSHOT_HASH_SCHEMA_VERSION,
   PROJECTION_SNAPSHOT_SCORING_HASH_SCHEMA_VERSION,
@@ -46,6 +51,7 @@ const TARGET_CYCLE_POINTER_PREFIX = 'target-cycle-';
 const generationByLeague = new Map<string, Promise<SharedProjectionSnapshot>>();
 
 const SNAPSHOT_READ_CACHE_MILLISECONDS = 15_000;
+const IMMUTABLE_SNAPSHOT_ASSET_CACHE_MAX_ENTRIES = 4;
 
 const metadataReadCache = new Map<
   string,
@@ -57,16 +63,13 @@ const snapshotReadCache = new Map<
   { loadedAt: number; value: SharedProjectionSnapshot | null }
 >();
 
-const activeSnapshotReadCache = new Map<
-  string,
-  { loadedAt: number; value: SharedProjectionSnapshot }
->();
-
 const metadataReadInFlight = new Map<string, Promise<SharedProjectionSnapshotMetadata | null>>();
 
 const snapshotReadInFlight = new Map<string, Promise<SharedProjectionSnapshot | null>>();
 
-const activeSnapshotReadInFlight = new Map<string, Promise<SharedProjectionSnapshot>>();
+const immutableSnapshotAssetCache = new ProjectionSnapshotAssetCache<DraftableAsset[]>(
+  IMMUTABLE_SNAPSHOT_ASSET_CACHE_MAX_ENTRIES,
+);
 
 export type SharedProjectionSnapshotStatus = 'building' | 'ready' | 'error';
 
@@ -184,6 +187,16 @@ function compareSnapshotAssetOrder(
     getSnapshotSortNumber(first.balancedRank) - getSnapshotSortNumber(second.balancedRank) ||
     firstName.localeCompare(secondName) ||
     first.assetKey.localeCompare(second.assetKey)
+  );
+}
+
+function assertProjectionSnapshotAssetsComplete(
+  metadata: SharedProjectionSnapshotMetadata,
+  assets: DraftableAsset[],
+): void {
+  assertCompleteProjectionSnapshotAssetPayload(
+    metadata.assetCount,
+    assets.length,
   );
 }
 
@@ -418,13 +431,15 @@ function loadProjectionSnapshotAtPointer(
   const cached = snapshotReadCache.get(cacheKey);
 
   if (cached && isRecentRead(cached.loadedAt)) {
-    return Promise.resolve(cached.value);
+    return Promise.resolve(
+      detachProjectionSnapshotForConsumer(cached.value),
+    );
   }
 
   const existingRequest = snapshotReadInFlight.get(cacheKey);
 
   if (existingRequest) {
-    return existingRequest;
+    return existingRequest.then(detachProjectionSnapshotForConsumer);
   }
 
   const request = loadProjectionSnapshotMetadataAtPointer(leagueId, pointerId)
@@ -448,33 +463,25 @@ function loadProjectionSnapshotAtPointer(
     });
 
   snapshotReadInFlight.set(cacheKey, request);
-  return request;
+  return request.then(detachProjectionSnapshotForConsumer);
 }
 
 function loadProjectionSnapshotAssets(
   leagueId: string,
   metadata: SharedProjectionSnapshotMetadata,
 ): Promise<SharedProjectionSnapshot> {
-  // Pointer reads and the live pointer listener can race during route startup.
-  // Snapshot IDs are immutable, so key the expensive chunk read by that stable
-  // identity and let every pointer share one in-flight request.
+  // Mutable pointers retain their short freshness window above. Only the
+  // immutable chunk payload lives for this tab's lifetime, bounded by an LRU
+  // so route changes do not repeatedly bill the same complete snapshot read.
   const cacheKey = getProjectionReadCacheKey(leagueId, metadata.activeSnapshotId);
-  const cached = activeSnapshotReadCache.get(cacheKey);
 
-  if (cached && isRecentRead(cached.loadedAt)) {
-    return Promise.resolve(cached.value);
-  }
+  return immutableSnapshotAssetCache.getOrLoad(
+    cacheKey,
+    async () => {
+      const assetSnapshot = await getDocs(
+        getProjectionSnapshotAssetsRef(leagueId, metadata.activeSnapshotId),
+      );
 
-  const existingRequest = activeSnapshotReadInFlight.get(cacheKey);
-
-  if (existingRequest) {
-    return existingRequest;
-  }
-
-  const request = getDocs(
-    getProjectionSnapshotAssetsRef(leagueId, metadata.activeSnapshotId),
-  )
-    .then((assetSnapshot) => {
       const assets = assetSnapshot.docs
         .flatMap((assetDocument: { data: () => unknown }) => {
           const data = assetDocument.data() as {
@@ -490,30 +497,28 @@ function loadProjectionSnapshotAssets(
         })
         .sort(compareSnapshotAssetOrder);
 
-      if (metadata.assetCount > 0 && assets.length !== metadata.assetCount) {
-        throw new Error(
-          `The shared projection snapshot is incomplete (${assets.length} of ${metadata.assetCount} assets loaded).`,
-        );
-      }
+      // A failed completeness check rejects before getOrLoad can publish the
+      // value into the page-lifetime cache.
+      assertProjectionSnapshotAssetsComplete(metadata, assets);
+      return assets;
+    },
+  ).then((assets) => {
+    try {
+      // Pointer metadata stays mutable and short-lived, so recheck even on an
+      // immutable cache hit instead of trusting the metadata from first load.
+      assertProjectionSnapshotAssetsComplete(metadata, assets);
+    } catch (error) {
+      // A malformed/incomplete result must not poison the tab-lifetime cache;
+      // the next caller gets a real Firestore retry instead of a sticky error.
+      immutableSnapshotAssetCache.delete(cacheKey);
+      throw error;
+    }
 
-      const value = {
-        metadata,
-        assets,
-      } satisfies SharedProjectionSnapshot;
-
-      activeSnapshotReadCache.set(cacheKey, {
-        loadedAt: Date.now(),
-        value,
-      });
-
-      return value;
-    })
-    .finally(() => {
-      activeSnapshotReadInFlight.delete(cacheKey);
-    });
-
-  activeSnapshotReadInFlight.set(cacheKey, request);
-  return request;
+    return detachProjectionSnapshotForConsumer({
+      metadata,
+      assets,
+    } satisfies SharedProjectionSnapshot);
+  });
 }
 
 export function loadSharedProjectionSnapshotMetadata(

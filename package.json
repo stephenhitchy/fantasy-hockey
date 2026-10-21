@@ -786,6 +786,10 @@
     "preverify:batchb2g": "npm run security:sync-repository-automation",
     "verify:batchb2g:core": "npm run verify:batchb2f:core && npm run test:batchb2g && npm run validate:release-manifest",
     "verify:batchb2g": "npm run toolchain:verify && npm run verify:batchb2g:core && npm run security:dependency-audit",
+    "test:batchb2h:run": "npm --prefix functions run build && node --no-warnings --experimental-strip-types --test --test-concurrency=1 test/batchb2h-cost-hardening/*.test.mjs",
+    "preverify:batchb2h": "npm run security:sync-repository-automation",
+    "verify:batchb2h:core": "npm run verify:batchb2g:core && npm run test:batchb2h:run && npm run security:sync-ttl-index-config -- --check && npm run validate:release-manifest",
+    "verify:batchb2h": "npm run toolchain:verify && npm run verify:batchb2h:core && npm run security:dependency-audit",
     "operations:orphan-schedule-cleanup": "node scripts/operations/cleanup-orphan-league-automation-schedules.mjs --project=nhl-fantasy-app-ab673",
     "release:verify-clean-deploy-source": "node scripts/release/verify-clean-deploy-source.mjs && node scripts/release/verify-protected-roster-runtime-contract.mjs && node scripts/release/verify-protected-live-scoring-runtime-contract.mjs"
   },

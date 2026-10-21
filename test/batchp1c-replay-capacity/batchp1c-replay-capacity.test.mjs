@@ -142,6 +142,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/league-lifecycle-authority.ts',
     'src/league-lifecycle-authority.util.ts',
     'src/league-automation.ts',
+    // B2H isolates observe-only legacy-sweep eligibility classification.
+    'src/shared/core/live-scoring/legacy-sweep-skip-observation.util.ts',
     'src/shared/core/cycle/cycle.service.ts',
     // D1D adds an exact-internal-Canary-only NHL freshness profile without changing replay.
     'src/shared/core/cycle/cycle-scoring.service.ts',
@@ -183,6 +185,8 @@ test('P1C replay paths remain isolated from later draft recovery changes inside 
     'src/shared/core/team/roster.models.ts',
     'src/draft-authority.ts',
     'src/draft-automation.ts',
+    // B2H isolates healthy zero-Draft aggregate-write coalescing.
+    'src/draft-automation-health.util.ts',
     // FF1.41 isolates effective Auto-Draft mode and exact-turn eligibility.
     'src/draft-autodraft-state.util.ts',
     // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.

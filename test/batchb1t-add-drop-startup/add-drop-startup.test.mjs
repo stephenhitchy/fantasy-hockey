@@ -27,8 +27,7 @@ test('Projection V11 chunk reads are deduplicated by immutable snapshot identity
 
   assert.ok(activeLoaderStart >= 0 && metadataExportStart > activeLoaderStart);
   assert.match(activeLoader, /metadata\.activeSnapshotId/);
-  assert.match(activeLoader, /activeSnapshotReadInFlight\.get\(cacheKey\)/);
-  assert.match(activeLoader, /activeSnapshotReadInFlight\.set\(cacheKey, request\)/);
+  assert.match(activeLoader, /immutableSnapshotAssetCache\.getOrLoad\(/);
   assert.match(activeLoader, /getProjectionSnapshotAssetsRef\(leagueId, metadata\.activeSnapshotId\)/);
   assert.match(source, /return loadProjectionSnapshotAssets\(leagueId, metadata\)/);
   assert.match(listener, /loadProjectionSnapshotAssets\(normalizedLeagueId, metadata\)/);

@@ -24,25 +24,31 @@ field below `result`. The exemption removes thousands of unused nested index
 entries without changing the snapshot body, scoring calculation, or browser
 read contract.
 
-After the index configuration finishes applying, the existing idempotent
-league-automation worker can publish the current snapshot on its next retry.
-No score, six-game window, roster assignment, or historical document is
-rewritten by the index deployment itself.
+During the original hotfix, once the index configuration finished applying,
+the existing idempotent league-automation worker could publish the current
+snapshot on its next retry. No score, six-game window, roster assignment, or
+historical document was rewritten by that index deployment itself.
 
-## Deployment and recovery
+## Current Production state and recovery
 
-First commit and verify the exact candidate so the index deployment has the
-same reproducible-source evidence as Hosting and Functions. The index target
-does not run their predeploy clean-source guard automatically. Then deploy the
-exact index configuration before retrying the affected league:
+A complete read-only Production audit on 2026-10-21 verified that the
+`liveScoring.result` exemption is already active. No index deployment is needed
+to retain this protection.
 
-```bash
-firebase deploy --project nhl-fantasy-app-ab673 --only firestore:indexes
-```
+Do not rerun the historical `firestore:indexes` deployment merely for this
+exemption. That selector reconciles the complete checked-in index and field-
+override file. The same audit found that all ten protected TTL fields inherit
+Collection-scope indexes in Production while the checked-in file specifies
+Collection Group scope. Deploying the file would therefore change 30 unrelated
+protected index-scope settings even though the scoring exemption is already
+present.
 
-Wait for the exemption to finish applying in Firestore, then allow the normal
-scoring worker to retry or use the existing authorized commissioner refresh.
-Confirm that:
+If this incident appears again, first inspect Production read-only and confirm
+that the exemption is actually absent before proposing any configuration
+change. An index deployment is allowed only after the task explicitly covers
+the full index/TTL surface and a complete live-to-source parity review proves
+every resulting change is intended. Then allow the normal scoring worker to
+retry or use the existing authorized commissioner refresh and confirm that:
 
 1. `liveScoring/control.lastError` clears;
 2. `liveScoring/cycle-{number}.refreshedAt` advances;
@@ -50,10 +56,10 @@ Confirm that:
 4. the detail page no longer needs a negative stale-snapshot reconciliation;
 5. the same NHL game remains in the same six-game slot.
 
-Rollback is removal of the exact `liveScoring.result` field override followed
-by another index-only deployment. Do not roll back while a league snapshot is
-large enough to exceed the old index-entry limit, because that would restore
-the failed-write condition.
+Rollback must restore a reviewed complete Production index/field-override
+configuration, not remove one field in isolation. Do not re-enable indexing
+below `liveScoring.result` while a league snapshot could exceed the old index-
+entry limit, because that would restore the failed-write condition.
 
 This exemption addresses the reported index-entry failure. Firestore's
 independent document-size limit still applies, so snapshot byte size remains a
@@ -61,8 +67,8 @@ separate capacity metric even though it did not cause this incident.
 
 ## Preserved contracts
 
-This hotfix changes no scoring formula, Projection V11 math, six-game ownership,
-seventh-game rollover, roster or Draft authority, Firestore Rules, TTL policy,
-App Check mode, queue mode, or worker limit. It changes one Firestore
-single-field index policy and therefore requires an index deployment; Hosting
-or Functions alone cannot fix the incident.
+The original hotfix changed no scoring formula, Projection V11 math, six-game
+ownership, seventh-game rollover, roster or Draft authority, Firestore Rules,
+TTL policy, App Check mode, queue mode, or worker limit. It historically
+changed one Firestore single-field index policy. Because that policy is now
+active in Production, the current state requires no index deployment.

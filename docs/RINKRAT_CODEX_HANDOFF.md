@@ -191,6 +191,24 @@ product gate for this line is `npm run verify:batchb2g`, followed by
 `docs/RINKRAT_PRODUCT_B2G_FUTURE_MATCHUP_LINEUPS.md` before changing its
 private plan schema, date semantics, or boundary behavior.
 
+B2H is the cost-hardening candidate layered after B2G. It preserves every
+legacy scoring pass while recording a bounded observe-only classification of
+which existing lease results might support a later pre-run skip design; the
+saved evidence carries literal `enforcementEnabled: false`. The minute Draft
+recovery scan also remains intact while identical healthy zero-Draft health
+writes and completion logs are coalesced behind a bounded heartbeat. In the
+browser, mutable Projection pointers retain their 15-second freshness policy,
+while complete immutable asset chunks use a four-entry tab-lifetime LRU keyed
+by exact league and snapshot ID. Failed or incomplete chunk loads remain
+retryable, invalid counts fail closed, and consumers receive detached copies.
+The complete 2026-10-21 read-only index audit verified that the
+source-controlled `liveScoring.result` exemption is already live. It also found
+different inherited live index scopes on all ten protected TTL fields, so B2H
+must not deploy `firestore:indexes`. The inherited gate is now
+`npm run verify:batchb2h`, followed by `npm run build:all`. Read
+`docs/RINKRAT_OPERATIONS_B2H_COST_HARDENING.md` before changing these cost,
+evidence, or rollout boundaries.
+
 B2A is the current clean-source add/drop reliability candidate and is not yet
 deployed. It replaces the interactive 32-club identity refresh with exact
 post-boundary player lookups, runs incoming/outgoing schedule checks in
@@ -885,7 +903,7 @@ lock was released.
 - Preserve targeted rollback commands.
 - FF1.29 inherits the FF1.28 `npm run verify:batchff1-12` gate. The retained
   D1N-C evidence line uses `npm run verify:batchd1ncb`. The latest product gate
-  on the B2G source line is `npm run verify:batchb2g`; follow it with
+  on the B2H source line is `npm run verify:batchb2h`; follow it with
   `npm run build:all`, `git diff --check`, and
   `npm run release:verify-clean-deploy-source` from a clean commit.
 

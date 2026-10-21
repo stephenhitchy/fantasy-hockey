@@ -521,8 +521,8 @@ log.
 ## Verification and deployment boundaries
 
 Use Node.js 22.23.1 and npm 11.17.0 through nvm. Run the smallest focused test
-while developing, then the newest source-controlled inherited gate. On the B2G
-source line that gate is `npm run verify:batchb2g`, followed by the full build,
+while developing, then the newest source-controlled inherited gate. On the B2H
+source line that gate is `npm run verify:batchb2h`, followed by the full build,
 diff checks, and clean-deploy-source verification before declaring the change
 ready.
 

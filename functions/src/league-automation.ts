@@ -101,6 +101,10 @@ import {
   type LeagueAutomationRefreshCadence,
 } from './shared/core/live-scoring/live-scoring-cadence.util';
 import {
+  classifyLegacySweepSkipObservation,
+  summarizeLegacySweepSkipObservations,
+} from './shared/core/live-scoring/legacy-sweep-skip-observation.util';
+import {
   LEAGUE_AUTOMATION_CAPACITY_MIN_SAMPLE_COUNT,
   LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MAX_P95_MILLISECONDS,
   LEAGUE_AUTOMATION_CAPACITY_PRIMARY_MIN_RELIABILITY_RATE,
@@ -273,6 +277,7 @@ interface LeagueAutomationResult {
   publishedSnapshotCount: number;
   skippedSnapshotCount: number;
   cycleOneCreated: boolean;
+  transitionOccurred: boolean;
   durationMilliseconds: number;
   nextRefreshAtMilliseconds?: number;
   refreshCadence?: LeagueAutomationRefreshCadence;
@@ -5133,6 +5138,7 @@ async function runLeagueAutomation(
       publishedSnapshotCount: 0,
       skippedSnapshotCount: 0,
       cycleOneCreated: false,
+      transitionOccurred: false,
       durationMilliseconds,
       nextRefreshAtMilliseconds: lease.nextRefreshAtMilliseconds,
       phaseTiming,
@@ -5661,6 +5667,7 @@ async function runLeagueAutomation(
       publishedSnapshotCount,
       skippedSnapshotCount,
       cycleOneCreated,
+      transitionOccurred: transitionOccurred || cycleOneCreated,
       durationMilliseconds,
       nextRefreshAtMilliseconds,
       refreshCadence,
@@ -5785,6 +5792,7 @@ async function runHistoricalReplayAutomationWithRetry(
     publishedSnapshotCount: 0,
     skippedSnapshotCount: 0,
     cycleOneCreated: false,
+    transitionOccurred: false,
     durationMilliseconds: 0,
   };
 }
@@ -8931,6 +8939,29 @@ export const runScheduledLeagueAutomation = onSchedule(
         'scheduled',
       ),
     );
+    // Observation stays downstream of the unchanged sweep: every selected
+    // league still reaches the existing lease/scoring path. A due completed
+    // pass remains ineligible until a separate design supplies pre-run NHL
+    // source/version proof; zero snapshot writes alone never authorize a skip.
+    const skipObservation = summarizeLegacySweepSkipObservations(
+      results.map((result) =>
+        result.status === 'rejected'
+          ? classifyLegacySweepSkipObservation({
+              outcome: 'failed',
+              observationStartedAtMilliseconds: startedAt,
+            })
+          : classifyLegacySweepSkipObservation({
+              outcome: result.value.status,
+              observationStartedAtMilliseconds: startedAt,
+              skipReason: result.value.skipReason,
+              nextRefreshAtMilliseconds:
+                result.value.nextRefreshAtMilliseconds,
+              publishedSnapshotCount: result.value.publishedSnapshotCount,
+              cycleOneCreated: result.value.cycleOneCreated,
+              transitionOccurred: result.value.transitionOccurred,
+            })
+      ),
+    );
     const successful = results.filter(
       (result) =>
         result.status === 'fulfilled' &&
@@ -8970,12 +9001,21 @@ export const runScheduledLeagueAutomation = onSchedule(
         legacyLastFailedLeagueIds: failedLeagueIds,
         legacyLastFailedLeagueIdsTruncated:
           failed > failedLeagueIds.length,
+        legacySkipObservation: {
+          ...skipObservation,
+          observedAt: Timestamp.fromMillis(startedAt),
+        },
         durationMilliseconds: Date.now() - startedAt,
         lastRunAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
+
+    console.info('Legacy scoring skip eligibility observation.', {
+      ...skipObservation,
+      queueMode: config.mode,
+    });
 
     results.forEach((result, index) => {
       if (result.status === 'rejected') {

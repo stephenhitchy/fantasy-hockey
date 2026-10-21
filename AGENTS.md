@@ -158,7 +158,7 @@ Run the smallest relevant focused tests while developing.
 Before declaring a change ready, run the current inherited release gate.
 The current inherited gate is:
 
-- `npm run verify:batchb2b`
+- `npm run verify:batchb2h`
 - `npm run build:all`
 
 Also run:

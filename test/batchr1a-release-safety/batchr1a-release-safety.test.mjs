@@ -280,6 +280,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/league-lifecycle-authority.ts',
     'src/league-lifecycle-authority.util.ts',
         'src/league-automation.ts',
+        // B2H isolates observe-only legacy-sweep eligibility classification.
+        'src/shared/core/live-scoring/legacy-sweep-skip-observation.util.ts',
         // D1D intentionally changes only the measured near-live scoring path.
         'src/shared/core/cycle/cycle-scoring.service.ts',
         'src/shared/core/nhl/nhl-api.service.ts',
@@ -321,6 +323,8 @@ test('competitive scoring, Projection V11, rules, indexes, and Functions unrelat
         'src/shared/core/team/roster.models.ts',
         'src/draft-authority.ts',
         'src/draft-automation.ts',
+        // B2H isolates healthy zero-Draft aggregate-write coalescing.
+        'src/draft-automation-health.util.ts',
         // FF1.41 isolates effective Auto-Draft mode and exact-turn eligibility.
         'src/draft-autodraft-state.util.ts',
         // FF1.19 adds isolated scheduled-Draft readiness evidence decisions.
